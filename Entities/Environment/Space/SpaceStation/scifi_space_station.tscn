@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://box0jmso40n32"]
+
+[ext_resource type="PackedScene" uid="uid://cdqnuo3vnxa34" path="res://Entities/Environment/Space/SpaceStation/Arts/ScifiSpaceStation.glb" id="1_vvjb0"]
+[ext_resource type="Script" uid="uid://c85es2avjjlr2" path="res://Entities/Environment/Space/SpaceStation/Components/constant_rotation/constant_rotation.gd" id="2_cyrhs"]
+
+[node name="ScifiSpaceStation" unique_id=1738447609 instance=ExtResource("1_vvjb0")]
+
+[node name="EngineConstantRotation" type="Node" parent="Sketchfab_model/LP_SpaceStation_fbx/RootNode/engine_compartment" parent_id_path=PackedInt32Array(347151450) index="112" unique_id=614714735]
+script = ExtResource("2_cyrhs")
+metadata/_custom_type_script = "uid://c85es2avjjlr2"
+
+[node name="FuelConstantRotation" type="Node" parent="Sketchfab_model/LP_SpaceStation_fbx/RootNode/fuel_compartment" parent_id_path=PackedInt32Array(1531499552) index="104" unique_id=28815647]
+script = ExtResource("2_cyrhs")
+rotation_speed = 10.0
+metadata/_custom_type_script = "uid://c85es2avjjlr2"
+
+[node name="GravityConstantRotation" type="Node" parent="Sketchfab_model/LP_SpaceStation_fbx/RootNode/gravity_compartment" parent_id_path=PackedInt32Array(1276460988) index="49" unique_id=248446256]
+script = ExtResource("2_cyrhs")
+rotation_speed = 10.0
+metadata/_custom_type_script = "uid://c85es2avjjlr2"
+
+[node name="MainGravityConstantRotation" type="Node" parent="Sketchfab_model/LP_SpaceStation_fbx/RootNode/main_gravity_compartment" parent_id_path=PackedInt32Array(1961705434) index="36" unique_id=1647509852]
+script = ExtResource("2_cyrhs")
+rotation_speed = 7.0
+metadata/_custom_type_script = "uid://c85es2avjjlr2"
+
+[node name="PlasmaConstantRotation" type="Node" parent="Sketchfab_model/LP_SpaceStation_fbx/RootNode/plasma_compartment" parent_id_path=PackedInt32Array(1346392531) index="149" unique_id=142758866]
+script = ExtResource("2_cyrhs")
+rotation_speed = 0.0
+metadata/_custom_type_script = "uid://c85es2avjjlr2"

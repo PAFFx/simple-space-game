@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://bl3dngc2rlk2o"]
+
+[ext_resource type="Texture2D" uid="uid://dbcbf6arlfvjk" path="res://Stages/LowEarthOrbit/Arts/RenderCrate-HDRI_Orbital_38_4K.hdr" id="1_43caq"]
+[ext_resource type="PackedScene" uid="uid://box0jmso40n32" path="res://Entities/Environment/Space/SpaceStation/scifi_space_station.tscn" id="2_173iw"]
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_173iw"]
+panorama = ExtResource("1_43caq")
+
+[sub_resource type="Sky" id="Sky_xy58n"]
+sky_material = SubResource("PanoramaSkyMaterial_173iw")
+
+[sub_resource type="Environment" id="Environment_uc3r4"]
+background_mode = 2
+sky = SubResource("Sky_xy58n")
+tonemap_mode = 4
+tonemap_white = 1.15
+ssr_enabled = true
+ssao_enabled = true
+ssil_enabled = true
+glow_enabled = true
+adjustment_enabled = true
+adjustment_brightness = 1.1
+adjustment_contrast = 1.1
+adjustment_saturation = 1.2
+
+[node name="LowEarthOrbit" type="Node3D" unique_id=515331433]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1761866183]
+transform = Transform3D(0.9538638, 1.3123892e-08, -0.30023968, 0.28622365, 0.3019705, 0.9093347, 0.09066355, -0.95331717, 0.28803876, 0, 0, 0)
+shadow_enabled = true
+sky_mode = 1
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1347277069]
+environment = SubResource("Environment_uc3r4")
+
+[node name="ScifiSpaceStation" parent="." unique_id=1738447609 instance=ExtResource("2_173iw")]
+transform = Transform3D(0.8140951, -0.2739733, 0.5120429, 0.31895933, 0.9477684, 0, -0.48529807, 0.16332085, 0.8589599, -210, -100, 420.5)
