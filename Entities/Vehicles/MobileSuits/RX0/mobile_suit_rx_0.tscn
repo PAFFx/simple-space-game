@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://do6axvhl118qe"]
+
+[ext_resource type="PackedScene" uid="uid://chl2k3h4lo1y" path="res://Entities/Vehicles/MobileSuits/RX0/Arts/rx-0_full_armor_unicorn_gundam.glb" id="1_vh4wn"]
+
+[node name="MobileSuitRX0" unique_id=1672338208 instance=ExtResource("1_vh4wn")]
+
+[node name="Sketchfab_model" parent="." index="0" unique_id=1230424193]
+transform = Transform3D(1, 0, 0, 0, -3.5762787e-07, 0.99999994, 0, -0.99999994, -3.5762787e-07, 0.575, -6.439406e-07, -1.8005885)
+
+[node name="FABackWeaponSystem" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment" parent_id_path=PackedInt32Array(1163105919) index="1" unique_id=621636597]
+visible = false

@@ -1,0 +1,33 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://6mmgtmadqt2h"]
+
+[ext_resource type="Texture2D" uid="uid://bka5yql5gx4k8" path="res://Entities/Vehicles/Cockpits/CockpitRX0/Arts/Textures/cockpit_Unicorn_FBX_01_lambert1_BaseColor.png" id="1_u6doq"]
+[ext_resource type="Texture2D" uid="uid://c3gat7clr66ba" path="res://Entities/Vehicles/Cockpits/CockpitRX0/Arts/Textures/cockpit_Unicorn_FBX_01_lambert1_Emission.png" id="2_4pr36"]
+[ext_resource type="Texture2D" uid="uid://cw2qv33i15nwc" path="res://Entities/Vehicles/Cockpits/CockpitRX0/Arts/Textures/Unicorn_FBX_01_lambert1_AO.png" id="2_o1huf"]
+[ext_resource type="Texture2D" uid="uid://cnvxvu47r8gpp" path="res://Entities/Vehicles/Cockpits/CockpitRX0/Arts/Textures/cockpit_Unicorn_FBX_01_lambert1_Metallic-Unicorn_FBX_01_lambert1_Roughness.png" id="3_o1huf"]
+[ext_resource type="Texture2D" uid="uid://bkt75oggvpfi1" path="res://Entities/Vehicles/Cockpits/CockpitRX0/Arts/Textures/Unicorn_FBX_01_lambert1_Height.png" id="4_4ura0"]
+[ext_resource type="Texture2D" uid="uid://c0nwkwd778xtg" path="res://Entities/Vehicles/Cockpits/CockpitRX0/Arts/Textures/cockpit_Unicorn_FBX_01_lambert1_Normal.png" id="4_57o4q"]
+
+[resource]
+resource_name = "Light_Unicorn_Texture"
+cull_mode = 2
+albedo_texture = ExtResource("1_u6doq")
+metallic = 1.0
+metallic_texture = ExtResource("3_o1huf")
+metallic_texture_channel = 2
+roughness_texture = ExtResource("3_o1huf")
+roughness_texture_channel = 1
+emission_enabled = true
+emission = Color(1, 1, 1, 1)
+emission_operator = 1
+emission_texture = ExtResource("2_4pr36")
+normal_enabled = true
+normal_texture = ExtResource("4_57o4q")
+ao_enabled = true
+ao_light_affect = 0.2
+ao_texture = ExtResource("2_o1huf")
+heightmap_enabled = true
+heightmap_scale = 0.05
+heightmap_deep_parallax = true
+heightmap_min_layers = 8
+heightmap_max_layers = 32
+heightmap_texture = ExtResource("4_4ura0")

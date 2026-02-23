@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://dra0bqx5nx1i3"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_jidcc"]
+flip_faces = true
+radius = 1.2
+height = 2.4
+
+[node name="CockpitRX0" unique_id=1058762298]
+
+[node name="Light_Unicorn_Cockpit" parent="." index="0" unique_id=1421940207]
+transform = Transform3D(-0.01, -8.7422775e-10, 3.821371e-17, 0, -4.3711387e-10, -0.01, 8.7422775e-10, -0.01, 4.3711387e-10, 0, -0.617, 0.318)
+
+[node name="PanoramicDisplay" type="MeshInstance3D" parent="." index="1" unique_id=251011203]
+mesh = SubResource("SphereMesh_jidcc")

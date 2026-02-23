@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cgshm6gnw8y6f"]
+
+[ext_resource type="PackedScene" uid="uid://c7rtp0whjjs6l" path="res://Entities/Characters/AmateYuzuriha/Arts/amate-yuzuriha.glb" id="1_s4nfd"]
+
+[node name="AmateYuzuriha" unique_id=251488810 instance=ExtResource("1_s4nfd")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
