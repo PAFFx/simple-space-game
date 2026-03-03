@@ -15,6 +15,10 @@ run/main_scene="uid://bl3dngc2rlk2o"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+Layers="*uid://bi6ju22pgh4ru"
+
 [dotnet]
 
 project/assembly_name="Simple Space Game"
