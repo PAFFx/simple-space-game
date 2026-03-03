@@ -7,5 +7,53 @@
 [node name="Sketchfab_model" parent="." index="0" unique_id=1230424193]
 transform = Transform3D(1, 0, 0, 0, -3.5762787e-07, 0.99999994, 0, -0.99999994, -3.5762787e-07, 0.575, -6.439406e-07, -1.8005885)
 
+[node name="gun_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/BeamMagnum" parent_id_path=PackedInt32Array(1833994620) index="0" unique_id=468387616]
+layers = 2
+
 [node name="FABackWeaponSystem" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment" parent_id_path=PackedInt32Array(1163105919) index="1" unique_id=621636597]
 visible = false
+
+[node name="1_003_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/FABackWeaponSystem/BackMissilePods" parent_id_path=PackedInt32Array(800786356) index="0" unique_id=2014199074]
+layers = 2
+
+[node name="BackShieldFunnel" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/FABackWeaponSystem" index="1" unique_id=264965343]
+layers = 2
+
+[node name="1_006_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/FABackWeaponSystem/FuelPodsConnector" parent_id_path=PackedInt32Array(1756994717) index="0" unique_id=172460185]
+layers = 2
+
+[node name="1_005_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/FABackWeaponSystem/LeftExternalFuelPod" parent_id_path=PackedInt32Array(1573453155) index="0" unique_id=53747473]
+layers = 2
+
+[node name="1_009_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/FABackWeaponSystem/LeftHyperBazooka" parent_id_path=PackedInt32Array(361170979) index="0" unique_id=858873439]
+layers = 2
+
+[node name="1\\_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/FABackWeaponSystem/LeftShieldFunnel" parent_id_path=PackedInt32Array(678381125) index="0" unique_id=676449952]
+layers = 2
+
+[node name="1_004_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/FABackWeaponSystem/RightExternalFuelPod" parent_id_path=PackedInt32Array(1656579274) index="0" unique_id=2024796542]
+layers = 2
+
+[node name="1_002_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/FABackWeaponSystem/RightHyperBazooka" parent_id_path=PackedInt32Array(1168118588) index="0" unique_id=1602570140]
+layers = 2
+
+[node name="1_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/FABackWeaponSystem/RightShieldFunnel" parent_id_path=PackedInt32Array(648759747) index="0" unique_id=1410170144]
+layers = 2
+
+[node name="1_007_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/LeftBeamSaber" parent_id_path=PackedInt32Array(959455893) index="0" unique_id=521166576]
+layers = 2
+
+[node name="1_008_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/Equipment/RightBeamSaber" parent_id_path=PackedInt32Array(912788104) index="0" unique_id=1772157226]
+layers = 2
+
+[node name="hand_001_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/LeftHand" parent_id_path=PackedInt32Array(1896399829) index="0" unique_id=1881511662]
+layers = 2
+
+[node name="MainBody" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode" parent_id_path=PackedInt32Array(1251812173) index="2" unique_id=1865748211]
+layers = 2
+
+[node name="hand_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/RightHand" parent_id_path=PackedInt32Array(1452010342) index="0" unique_id=1652120065]
+layers = 2
+
+[node name="MainSensorMarker" type="Marker3D" parent="." index="1" unique_id=351363675]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20.182491, -0.40296733)

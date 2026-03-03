@@ -1,14 +1,609 @@
 [gd_scene format=3 uid="uid://dra0bqx5nx1i3"]
 
-[sub_resource type="SphereMesh" id="SphereMesh_jidcc"]
-flip_faces = true
-radius = 1.2
-height = 2.4
+[ext_resource type="PackedScene" uid="uid://cfm0g70sy6e8d" path="res://Entities/Vehicles/Cockpits/CockpitRX0/Arts/cockpit.glb" id="1_82igo"]
 
-[node name="CockpitRX0" unique_id=1058762298]
+[node name="CockpitRX0" unique_id=1279700951 instance=ExtResource("1_82igo")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
-[node name="Light_Unicorn_Cockpit" parent="." index="0" unique_id=1421940207]
-transform = Transform3D(-0.01, -8.7422775e-10, 3.821371e-17, 0, -4.3711387e-10, -0.01, 8.7422775e-10, -0.01, 4.3711387e-10, 0, -0.617, 0.318)
+[node name="pCube68" parent="Light_Unicorn_Cockpit/Back_Part/Left_Helmet_attachment_01" parent_id_path=PackedInt32Array(1886283561) index="0" unique_id=1034664369]
+layers = 8
 
-[node name="PanoramicDisplay" type="MeshInstance3D" parent="." index="1" unique_id=251011203]
-mesh = SubResource("SphereMesh_jidcc")
+[node name="pCube75" parent="Light_Unicorn_Cockpit/Back_Part/Left_Helmet_attachment_01" parent_id_path=PackedInt32Array(1886283561) index="1" unique_id=1536836507]
+layers = 8
+
+[node name="pCylinder29" parent="Light_Unicorn_Cockpit/Back_Part/Left_Helmet_attachment_01" parent_id_path=PackedInt32Array(1886283561) index="2" unique_id=517252111]
+layers = 8
+
+[node name="pCube68_001" parent="Light_Unicorn_Cockpit/Back_Part/Left_Helmet_attachment_02" parent_id_path=PackedInt32Array(23723359) index="0" unique_id=419428180]
+layers = 8
+
+[node name="pCube75_001" parent="Light_Unicorn_Cockpit/Back_Part/Left_Helmet_attachment_02" parent_id_path=PackedInt32Array(23723359) index="1" unique_id=1991787528]
+layers = 8
+
+[node name="pCylinder29_001" parent="Light_Unicorn_Cockpit/Back_Part/Left_Helmet_attachment_02" parent_id_path=PackedInt32Array(23723359) index="2" unique_id=254471130]
+layers = 8
+
+[node name="pCube67" parent="Light_Unicorn_Cockpit/Back_Part/Left_shoulder_attachment" parent_id_path=PackedInt32Array(619348473) index="0" unique_id=564900844]
+layers = 8
+
+[node name="pCube72" parent="Light_Unicorn_Cockpit/Back_Part/Left_shoulder_attachment" parent_id_path=PackedInt32Array(619348473) index="1" unique_id=1961495763]
+layers = 8
+
+[node name="pCylinder21" parent="Light_Unicorn_Cockpit/Back_Part/Left_shoulder_attachment" parent_id_path=PackedInt32Array(619348473) index="2" unique_id=76130687]
+layers = 8
+
+[node name="pCylinder25" parent="Light_Unicorn_Cockpit/Back_Part/Left_shoulder_attachment" parent_id_path=PackedInt32Array(619348473) index="3" unique_id=1737657714]
+layers = 8
+
+[node name="polySurface52" parent="Light_Unicorn_Cockpit/Back_Part/Left_shoulder_attachment" parent_id_path=PackedInt32Array(619348473) index="4" unique_id=706778664]
+layers = 8
+
+[node name="pCube51" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="3" unique_id=1761456475]
+layers = 8
+
+[node name="pCube56" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="4" unique_id=1909081188]
+layers = 8
+
+[node name="pCube57" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="5" unique_id=1358089196]
+layers = 8
+
+[node name="pCube58" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="6" unique_id=1654999321]
+layers = 8
+
+[node name="pCube62" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="7" unique_id=1859919525]
+layers = 8
+
+[node name="pCube69" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="8" unique_id=1411032277]
+layers = 8
+
+[node name="pCube73" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="9" unique_id=27897549]
+layers = 8
+
+[node name="pCube86" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="10" unique_id=1236279143]
+layers = 8
+
+[node name="pCube93" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="11" unique_id=276212054]
+layers = 8
+
+[node name="pCube96" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="12" unique_id=556763833]
+layers = 8
+
+[node name="pCube97" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="13" unique_id=1567726707]
+layers = 8
+
+[node name="pCylinder15" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="14" unique_id=2082878851]
+layers = 8
+
+[node name="pCylinder22" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="15" unique_id=1235927667]
+layers = 8
+
+[node name="pCylinder24" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="16" unique_id=1643899012]
+layers = 8
+
+[node name="pCylinder27" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="17" unique_id=1345218658]
+layers = 8
+
+[node name="pCylinder31" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="18" unique_id=2029628350]
+layers = 8
+
+[node name="pCylinder32" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="19" unique_id=2144422140]
+layers = 8
+
+[node name="pCylinder33" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="20" unique_id=1183781083]
+layers = 8
+
+[node name="polySurface15" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="21" unique_id=587868626]
+layers = 8
+
+[node name="polySurface18" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="22" unique_id=1300895036]
+layers = 8
+
+[node name="polySurface19" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="23" unique_id=1195567762]
+layers = 8
+
+[node name="polySurface21" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="24" unique_id=759110606]
+layers = 8
+
+[node name="polySurface25" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="25" unique_id=13239203]
+layers = 8
+
+[node name="polySurface39" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="26" unique_id=204534432]
+layers = 8
+
+[node name="polySurface51" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="27" unique_id=667538941]
+layers = 8
+
+[node name="polySurface73" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="28" unique_id=73129754]
+layers = 8
+
+[node name="polySurface74" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="29" unique_id=1306626715]
+layers = 8
+
+[node name="polySurface76" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="30" unique_id=551245244]
+layers = 8
+
+[node name="pPlane35" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="31" unique_id=497866254]
+layers = 8
+
+[node name="pPlane44" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="32" unique_id=1051127753]
+layers = 8
+
+[node name="pPlane45" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="33" unique_id=893165360]
+layers = 8
+
+[node name="pPlane49" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="34" unique_id=856789026]
+layers = 8
+
+[node name="pPlane50" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="35" unique_id=1827963489]
+layers = 8
+
+[node name="pPlane54" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="36" unique_id=1974131700]
+layers = 8
+
+[node name="pPlane59" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="37" unique_id=267643624]
+layers = 8
+
+[node name="pPlane61" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="38" unique_id=2112614945]
+layers = 8
+
+[node name="pPlane62" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="39" unique_id=679882704]
+layers = 8
+
+[node name="pPlane63" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="40" unique_id=538502536]
+layers = 8
+
+[node name="pPlane66" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="41" unique_id=784584563]
+layers = 8
+
+[node name="pPlane73" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="42" unique_id=2110903424]
+layers = 8
+
+[node name="pPlane74" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="43" unique_id=2094906611]
+layers = 8
+
+[node name="pPlane75" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="44" unique_id=1029110832]
+layers = 8
+
+[node name="pPlane76" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="45" unique_id=696577290]
+layers = 8
+
+[node name="pPlane77" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="46" unique_id=1828984716]
+layers = 8
+
+[node name="pPlane78" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="47" unique_id=185068594]
+layers = 8
+
+[node name="pPlane79" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="48" unique_id=922179656]
+layers = 8
+
+[node name="pTorus2" parent="Light_Unicorn_Cockpit/Back_Part" parent_id_path=PackedInt32Array(529258802) index="49" unique_id=1665688399]
+layers = 8
+
+[node name="pCube98" parent="Light_Unicorn_Cockpit/Back_Part/RIght_Helmet_attachment_01" parent_id_path=PackedInt32Array(421407494) index="0" unique_id=1155805964]
+layers = 8
+
+[node name="pCube99" parent="Light_Unicorn_Cockpit/Back_Part/RIght_Helmet_attachment_01" parent_id_path=PackedInt32Array(421407494) index="1" unique_id=1074670943]
+layers = 8
+
+[node name="pCylinder36" parent="Light_Unicorn_Cockpit/Back_Part/RIght_Helmet_attachment_01" parent_id_path=PackedInt32Array(421407494) index="2" unique_id=193866347]
+layers = 8
+
+[node name="pCube68_002" parent="Light_Unicorn_Cockpit/Back_Part/RIght_Helmet_attachment_02" parent_id_path=PackedInt32Array(251892896) index="0" unique_id=1611698400]
+layers = 8
+
+[node name="pCube75_002" parent="Light_Unicorn_Cockpit/Back_Part/RIght_Helmet_attachment_02" parent_id_path=PackedInt32Array(251892896) index="1" unique_id=485210877]
+layers = 8
+
+[node name="pCylinder29_002" parent="Light_Unicorn_Cockpit/Back_Part/RIght_Helmet_attachment_02" parent_id_path=PackedInt32Array(251892896) index="2" unique_id=1286897828]
+layers = 8
+
+[node name="pCube94" parent="Light_Unicorn_Cockpit/Back_Part/Right_shoulder_attachment" parent_id_path=PackedInt32Array(740555872) index="0" unique_id=956411945]
+layers = 8
+
+[node name="pCube95" parent="Light_Unicorn_Cockpit/Back_Part/Right_shoulder_attachment" parent_id_path=PackedInt32Array(740555872) index="1" unique_id=2081113322]
+layers = 8
+
+[node name="pCylinder34" parent="Light_Unicorn_Cockpit/Back_Part/Right_shoulder_attachment" parent_id_path=PackedInt32Array(740555872) index="2" unique_id=501282654]
+layers = 8
+
+[node name="pCylinder35" parent="Light_Unicorn_Cockpit/Back_Part/Right_shoulder_attachment" parent_id_path=PackedInt32Array(740555872) index="3" unique_id=728880440]
+layers = 8
+
+[node name="polySurface75" parent="Light_Unicorn_Cockpit/Back_Part/Right_shoulder_attachment" parent_id_path=PackedInt32Array(740555872) index="4" unique_id=408095350]
+layers = 8
+
+[node name="Left_foot_pedal" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="0" unique_id=1053822694]
+layers = 8
+
+[node name="Middle_Monitor" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="1" unique_id=1345894813]
+layers = 8
+
+[node name="pCube71" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="2" unique_id=1953318720]
+layers = 8
+
+[node name="pCube77" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="3" unique_id=1933114869]
+layers = 8
+
+[node name="pCube90" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="4" unique_id=1446274920]
+layers = 8
+
+[node name="pCube91" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="5" unique_id=747358343]
+layers = 8
+
+[node name="pCylinder28" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="6" unique_id=1591338745]
+layers = 8
+
+[node name="pCylinder30" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="7" unique_id=507488197]
+layers = 8
+
+[node name="polySurface44" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="8" unique_id=1034601457]
+layers = 8
+
+[node name="polySurface46" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="9" unique_id=1319085845]
+layers = 8
+
+[node name="polySurface47" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="10" unique_id=441431835]
+layers = 8
+
+[node name="polySurface49" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="11" unique_id=988378070]
+layers = 8
+
+[node name="polySurface55" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="12" unique_id=1709963202]
+layers = 8
+
+[node name="polySurface58" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="13" unique_id=183957204]
+layers = 8
+
+[node name="polySurface64" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="14" unique_id=1818900752]
+layers = 8
+
+[node name="polySurface65" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="15" unique_id=901887158]
+layers = 8
+
+[node name="polySurface66" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="16" unique_id=1840551524]
+layers = 8
+
+[node name="polySurface67" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="17" unique_id=2020146664]
+layers = 8
+
+[node name="pPlane37" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="18" unique_id=14805584]
+layers = 8
+
+[node name="pPlane55" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="19" unique_id=903540135]
+layers = 8
+
+[node name="Right_foot_pedal" parent="Light_Unicorn_Cockpit/Front_Part" parent_id_path=PackedInt32Array(588476547) index="20" unique_id=265472417]
+layers = 8
+
+[node name="pCube15" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="0" unique_id=2000166111]
+layers = 8
+
+[node name="pCube16" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="1" unique_id=1139873606]
+layers = 8
+
+[node name="pCube17" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="2" unique_id=225391872]
+layers = 8
+
+[node name="pCube18" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="3" unique_id=1758861532]
+layers = 8
+
+[node name="pCube19" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="4" unique_id=841547680]
+layers = 8
+
+[node name="pCube20" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="5" unique_id=111221372]
+layers = 8
+
+[node name="pCube21" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="6" unique_id=1149780433]
+layers = 8
+
+[node name="pCube22" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="7" unique_id=2043669627]
+layers = 8
+
+[node name="pCube23" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="8" unique_id=1295339220]
+layers = 8
+
+[node name="pCube24" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="9" unique_id=1118190357]
+layers = 8
+
+[node name="pCube25" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="10" unique_id=1564140073]
+layers = 8
+
+[node name="pCube26" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="11" unique_id=159675176]
+layers = 8
+
+[node name="pCube27" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="12" unique_id=2067184207]
+layers = 8
+
+[node name="pCube28" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="13" unique_id=699474438]
+layers = 8
+
+[node name="pCube29" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="14" unique_id=1067590228]
+layers = 8
+
+[node name="pCube30" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="15" unique_id=785383807]
+layers = 8
+
+[node name="pCube31" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="16" unique_id=541796408]
+layers = 8
+
+[node name="pCube32" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="17" unique_id=465122742]
+layers = 8
+
+[node name="pCube33" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="18" unique_id=483300221]
+layers = 8
+
+[node name="pCube34" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="19" unique_id=1721031739]
+layers = 8
+
+[node name="pCube35" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="20" unique_id=1155138192]
+layers = 8
+
+[node name="polySurface59" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons/pCube41" parent_id_path=PackedInt32Array(1642359743) index="0" unique_id=1492743733]
+layers = 8
+
+[node name="polySurface60" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons/pCube41" parent_id_path=PackedInt32Array(1642359743) index="1" unique_id=1986778017]
+layers = 8
+
+[node name="polySurface61" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons/pCube41" parent_id_path=PackedInt32Array(1642359743) index="2" unique_id=455197304]
+layers = 8
+
+[node name="polySurface62" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons/pCube41" parent_id_path=PackedInt32Array(1642359743) index="3" unique_id=107537741]
+layers = 8
+
+[node name="polySurface63" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons/pCube41" parent_id_path=PackedInt32Array(1642359743) index="4" unique_id=330404006]
+layers = 8
+
+[node name="pCube81" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="22" unique_id=113496548]
+layers = 8
+
+[node name="pCube82" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="23" unique_id=1956223614]
+layers = 8
+
+[node name="pCube83" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="24" unique_id=1490643741]
+layers = 8
+
+[node name="pCube84" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="25" unique_id=353676154]
+layers = 8
+
+[node name="pCube85" parent="Light_Unicorn_Cockpit/Middle_part/Left_buttons" parent_id_path=PackedInt32Array(1456386268) index="26" unique_id=1966986874]
+layers = 8
+
+[node name="polySurface29" parent="Light_Unicorn_Cockpit/Middle_part/Left_Controller" parent_id_path=PackedInt32Array(1381987178) index="0" unique_id=1175444061]
+layers = 8
+
+[node name="polySurface32" parent="Light_Unicorn_Cockpit/Middle_part/Left_Controller" parent_id_path=PackedInt32Array(1381987178) index="1" unique_id=308106621]
+layers = 8
+
+[node name="polySurface34" parent="Light_Unicorn_Cockpit/Middle_part/Left_Controller" parent_id_path=PackedInt32Array(1381987178) index="2" unique_id=1552943549]
+layers = 8
+
+[node name="polySurface35" parent="Light_Unicorn_Cockpit/Middle_part/Left_Controller" parent_id_path=PackedInt32Array(1381987178) index="3" unique_id=661326257]
+layers = 8
+
+[node name="polySurface36" parent="Light_Unicorn_Cockpit/Middle_part/Left_Controller" parent_id_path=PackedInt32Array(1381987178) index="4" unique_id=788758777]
+layers = 8
+
+[node name="pPlane68" parent="Light_Unicorn_Cockpit/Middle_part/Left_Controller" parent_id_path=PackedInt32Array(1381987178) index="5" unique_id=1116910638]
+layers = 8
+
+[node name="pPlane69" parent="Light_Unicorn_Cockpit/Middle_part/Left_Controller" parent_id_path=PackedInt32Array(1381987178) index="6" unique_id=1098641]
+layers = 8
+
+[node name="pPlane70" parent="Light_Unicorn_Cockpit/Middle_part/Left_Controller" parent_id_path=PackedInt32Array(1381987178) index="7" unique_id=849113679]
+layers = 8
+
+[node name="pPlane71" parent="Light_Unicorn_Cockpit/Middle_part/Left_Controller" parent_id_path=PackedInt32Array(1381987178) index="8" unique_id=1125206846]
+layers = 8
+
+[node name="Left_Monitor" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="5" unique_id=520833676]
+layers = 8
+
+[node name="pCube80" parent="Light_Unicorn_Cockpit/Middle_part/Left_Mouse" parent_id_path=PackedInt32Array(1779946158) index="0" unique_id=1557789559]
+layers = 8
+
+[node name="polySurface77" parent="Light_Unicorn_Cockpit/Middle_part/Left_Mouse/pCube89" parent_id_path=PackedInt32Array(1683311124) index="0" unique_id=1074615207]
+layers = 8
+
+[node name="polySurface78" parent="Light_Unicorn_Cockpit/Middle_part/Left_Mouse/pCube89" parent_id_path=PackedInt32Array(1683311124) index="1" unique_id=649765430]
+layers = 8
+
+[node name="polySurface37" parent="Light_Unicorn_Cockpit/Middle_part/Left_Mouse" parent_id_path=PackedInt32Array(1779946158) index="2" unique_id=85065414]
+layers = 8
+
+[node name="polySurface38" parent="Light_Unicorn_Cockpit/Middle_part/Left_Mouse" parent_id_path=PackedInt32Array(1779946158) index="3" unique_id=1994725289]
+layers = 8
+
+[node name="pCube78" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="8" unique_id=322284635]
+layers = 8
+
+[node name="pCube92" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="9" unique_id=1867052841]
+layers = 8
+
+[node name="pCylinder37" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="11" unique_id=1295191380]
+layers = 8
+
+[node name="pCylinder38" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="12" unique_id=1117621308]
+layers = 8
+
+[node name="polySurface28" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="13" unique_id=1051963750]
+layers = 8
+
+[node name="polySurface30" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="14" unique_id=1357262812]
+layers = 8
+
+[node name="polySurface31" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="15" unique_id=1293312326]
+layers = 8
+
+[node name="polySurface56" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="16" unique_id=414826415]
+layers = 8
+
+[node name="polySurface57" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="17" unique_id=868935984]
+layers = 8
+
+[node name="polySurface68" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="18" unique_id=1862609506]
+layers = 8
+
+[node name="polySurface69" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="19" unique_id=1745985879]
+layers = 8
+
+[node name="polySurface70" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="20" unique_id=1556367869]
+layers = 8
+
+[node name="polySurface71" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="21" unique_id=169243476]
+layers = 8
+
+[node name="polySurface72" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="22" unique_id=1420636409]
+layers = 8
+
+[node name="pPlane38" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="23" unique_id=350494186]
+layers = 8
+
+[node name="pPlane81" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="28" unique_id=805927135]
+layers = 8
+
+[node name="pCube15_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="0" unique_id=1762844567]
+layers = 8
+
+[node name="pCube16_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="1" unique_id=1757542961]
+layers = 8
+
+[node name="pCube17_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="2" unique_id=2035240774]
+layers = 8
+
+[node name="pCube18_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="3" unique_id=2087377168]
+layers = 8
+
+[node name="pCube19_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="4" unique_id=426526390]
+layers = 8
+
+[node name="pCube20_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="5" unique_id=340140224]
+layers = 8
+
+[node name="pCube21_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="6" unique_id=2098722013]
+layers = 8
+
+[node name="pCube22_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="7" unique_id=1189019500]
+layers = 8
+
+[node name="pCube23_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="8" unique_id=1688679471]
+layers = 8
+
+[node name="pCube24_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="9" unique_id=1993181142]
+layers = 8
+
+[node name="pCube25_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="10" unique_id=291201308]
+layers = 8
+
+[node name="pCube26_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="11" unique_id=1935481546]
+layers = 8
+
+[node name="pCube27_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="12" unique_id=486903839]
+layers = 8
+
+[node name="pCube28_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="13" unique_id=1355049820]
+layers = 8
+
+[node name="pCube29_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="14" unique_id=1616820380]
+layers = 8
+
+[node name="pCube30_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="15" unique_id=947118046]
+layers = 8
+
+[node name="pCube31_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="16" unique_id=346434368]
+layers = 8
+
+[node name="pCube32_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="17" unique_id=24219125]
+layers = 8
+
+[node name="pCube33_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="18" unique_id=1311484684]
+layers = 8
+
+[node name="pCube34_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="19" unique_id=1711032459]
+layers = 8
+
+[node name="pCube35_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="20" unique_id=1088468879]
+layers = 8
+
+[node name="polySurface59_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons/pCube41_001" parent_id_path=PackedInt32Array(1452434399) index="0" unique_id=964046335]
+layers = 8
+
+[node name="polySurface60_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons/pCube41_001" parent_id_path=PackedInt32Array(1452434399) index="1" unique_id=47205572]
+layers = 8
+
+[node name="polySurface61_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons/pCube41_001" parent_id_path=PackedInt32Array(1452434399) index="2" unique_id=1976784125]
+layers = 8
+
+[node name="polySurface62_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons/pCube41_001" parent_id_path=PackedInt32Array(1452434399) index="3" unique_id=793195869]
+layers = 8
+
+[node name="polySurface63_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons/pCube41_001" parent_id_path=PackedInt32Array(1452434399) index="4" unique_id=1207095783]
+layers = 8
+
+[node name="pCube81_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="22" unique_id=743067638]
+layers = 8
+
+[node name="pCube82_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="23" unique_id=1452191495]
+layers = 8
+
+[node name="pCube83_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="24" unique_id=99136156]
+layers = 8
+
+[node name="pCube84_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="25" unique_id=1142954238]
+layers = 8
+
+[node name="pCube85_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_buttons" parent_id_path=PackedInt32Array(2081723196) index="26" unique_id=1656792694]
+layers = 8
+
+[node name="polySurface29_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Controller" parent_id_path=PackedInt32Array(1102724201) index="0" unique_id=796912916]
+layers = 8
+
+[node name="polySurface32_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Controller" parent_id_path=PackedInt32Array(1102724201) index="1" unique_id=1794192894]
+layers = 8
+
+[node name="polySurface34_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Controller" parent_id_path=PackedInt32Array(1102724201) index="2" unique_id=93289219]
+layers = 8
+
+[node name="polySurface35_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Controller" parent_id_path=PackedInt32Array(1102724201) index="3" unique_id=814320932]
+layers = 8
+
+[node name="polySurface36_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Controller" parent_id_path=PackedInt32Array(1102724201) index="4" unique_id=255483761]
+layers = 8
+
+[node name="pPlane68_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Controller" parent_id_path=PackedInt32Array(1102724201) index="5" unique_id=2090096620]
+layers = 8
+
+[node name="pPlane69_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Controller" parent_id_path=PackedInt32Array(1102724201) index="6" unique_id=1945726244]
+layers = 8
+
+[node name="pPlane70_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Controller" parent_id_path=PackedInt32Array(1102724201) index="7" unique_id=1929933018]
+layers = 8
+
+[node name="pPlane71_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Controller" parent_id_path=PackedInt32Array(1102724201) index="8" unique_id=1794884516]
+layers = 8
+
+[node name="Right_Monitor" parent="Light_Unicorn_Cockpit/Middle_part" parent_id_path=PackedInt32Array(321927484) index="31" unique_id=96251564]
+layers = 8
+
+[node name="pCube80_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Mouse" parent_id_path=PackedInt32Array(1363326514) index="0" unique_id=2088404185]
+layers = 8
+
+[node name="polySurface77_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Mouse/pCube89_001" parent_id_path=PackedInt32Array(1330543388) index="0" unique_id=1822259284]
+layers = 8
+
+[node name="polySurface78_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Mouse/pCube89_001" parent_id_path=PackedInt32Array(1330543388) index="1" unique_id=1498572213]
+layers = 8
+
+[node name="polySurface37_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Mouse" parent_id_path=PackedInt32Array(1363326514) index="2" unique_id=1284448309]
+layers = 8
+
+[node name="polySurface38_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Mouse" parent_id_path=PackedInt32Array(1363326514) index="3" unique_id=2122531427]
+layers = 8
+
+[node name="Left_Screen" parent="Light_Unicorn_Cockpit/Screens" parent_id_path=PackedInt32Array(880130629) index="0" unique_id=571976024]
+layers = 8
+
+[node name="Middle_Screen" parent="Light_Unicorn_Cockpit/Screens" parent_id_path=PackedInt32Array(880130629) index="1" unique_id=1848805951]
+layers = 8
+
+[node name="Right_Screen" parent="Light_Unicorn_Cockpit/Screens" parent_id_path=PackedInt32Array(880130629) index="2" unique_id=1807308698]
+layers = 8

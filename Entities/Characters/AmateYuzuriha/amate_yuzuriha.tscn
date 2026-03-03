@@ -4,3 +4,48 @@
 
 [node name="AmateYuzuriha" unique_id=251488810 instance=ExtResource("1_s4nfd")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
+
+[node name="Object_67" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="0" unique_id=1434808500]
+layers = 16
+
+[node name="Object_69" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="1" unique_id=1339590768]
+layers = 16
+
+[node name="Object_71" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="2" unique_id=356833748]
+layers = 16
+
+[node name="Object_73" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="3" unique_id=1041772112]
+layers = 16
+
+[node name="Object_75" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="4" unique_id=2117692617]
+layers = 16
+
+[node name="Object_77" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="5" unique_id=751507518]
+layers = 16
+
+[node name="Object_79" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="6" unique_id=1477329024]
+layers = 16
+
+[node name="Object_81" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="7" unique_id=1810162930]
+layers = 16
+
+[node name="Object_83" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="8" unique_id=1678083513]
+layers = 16
+
+[node name="Object_85" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="9" unique_id=1221657490]
+layers = 16
+
+[node name="Object_87" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="10" unique_id=1977317821]
+layers = 16
+
+[node name="Object_89" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="11" unique_id=659446145]
+layers = 16
+
+[node name="Object_91" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="12" unique_id=1993901259]
+layers = 16
+
+[node name="Object_93" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="13" unique_id=1775391039]
+layers = 16
+
+[node name="Object_95" parent="Sketchfab_model/0766f2bb439e4e778ef87411dcaaf17f_fbx/RootNode/Armature/Object_4/Skeleton3D" parent_id_path=PackedInt32Array(1733486316) index="14" unique_id=525226450]
+layers = 16
