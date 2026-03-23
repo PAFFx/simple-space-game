@@ -96,14 +96,18 @@ MobileSuitRX0  (mobile_suit_rx_0.tscn)
 ```
 _process() on SensorHead
   │
-  ├── viewer_camera.project_ray_normal(corner pixels)
-  │     → cast 5 rays through screen sphere
-  │     → find panoramic direction of each hit
-  │     → compute max angular half-span from viewer's look direction
+  ├── viewer_camera.project_ray_normal(9 sample pixels)
+  │     → cast rays through screen sphere (centre + 4 corners + 4 edge midpoints)
+  │     → for each hit: panoramic_dir = normalize(hit - sphere_centre)
+  │     → decompose into H and V angles via atan2 against camera local axes
+  │     → max_h_half_angle, max_v_half_angle
   │
-  ├── _camera.transform = Transform3D(looking_at(world_look), sensor_pos)
-  ├── _camera.fov       = 2 × max_half_angle + safety_margin_deg
-  └── _viewport.size    = clamp(pixels_per_degree × fov, min, max)  [if >10% change]
+  ├── _camera.transform  = Transform3D(looking_at(world_look), sensor_pos)
+  ├── _camera.fov        = 2 × max_v_half_angle + safety_margin  (vertical FOV)
+  ├── ppd                = (display_height / viewer_vfov) × quality_scale
+  ├── new_vpx            = clamp(ppd × required_vfov, min, max)
+  ├── new_hpx            = new_vpx × tan(hfov/2) / tan(vfov/2)   (perspective aspect)
+  └── _viewport.size     = Vector2i(new_hpx, new_vpx)             [if >10% change]
 
 _process() on PanoramicScreen
   │
@@ -179,13 +183,70 @@ assigned their `SENSOR_BODY_PARTS / SENSOR_WEAPONS / SENSOR_SHIELDS` layers, cal
 
 | Export | Default | Effect |
 |--------|---------|--------|
-| `pixels_per_degree` | 32 | Viewport pixels per degree of sensor FOV. Directly controls sharpness. |
-| `fov_safety_margin_degrees` | 8 | Degrees added to computed FOV. Prevents 1-frame seams during fast rotation. |
-| `min_viewport_size` | 256 | Minimum SubViewport dimension (px). Prevents zero-size on edge-case angles. |
-| `max_viewport_size` | 4096 | Cap to avoid out-of-memory at extreme FOVs. |
+| `quality_scale` | 1.0 | `1.0` = matches display resolution. `2.0` = super-sampled. `0.5` = half-res. Automatically correct across 1080p / 2K / 4K — no manual pixel math needed. |
+| `fov_safety_margin_degrees` | 2.0 | Degrees added to computed H and V FOV. Prevents 1-frame seams during fast rotation. |
+| `min_viewport_size` | 256 | Minimum for either viewport dimension. |
+| `max_viewport_size` | 4096 | Cap for either viewport dimension. |
 
-Typical in-cockpit FOV computes to ~120–130° (due to sensor being outside and above the sphere).
-At 32 px/deg that allocates ~3840–4160px, capped at 4096.
+The viewport is **rectangular**, not square. Horizontal and vertical FOV are computed
+independently using 9 frustum sample points decomposed against the camera's local axes.
+For a 16:9 display this typically produces a ~16:9 sensor viewport, saving ~44% of the
+pixels that a square viewport would waste on the vertical axis.
+
+**Typical sizes at `quality_scale = 1.0`, 1080p display, 75° player VFOV:**
+
+| Look direction | Sensor VFOV | Sensor HFOV | Viewport |
+|----------------|-------------|-------------|---------|
+| Straight up | ~63° | ~90° | ~910×640 |
+| Forward | ~90° | ~130° | ~1300×810 |
+| Straight down | ~102° | ~148° | ~1475×920 |
+
+The asymmetry (down requires more than up) is caused by the viewer being 0.34m above the
+sphere centre — frustum corners hit the far bottom wall at wider panoramic angles than the
+near top wall. See `sensor_head.md` — Angular Amplification Asymmetry for full details.
+
+---
+
+## Performance Analysis
+
+### Render passes
+
+This system uses **2 render passes** per frame:
+
+1. **Sensor pass** — SubViewport Camera3D renders the world from the mech head into a texture
+2. **Main pass** — player camera renders normally; the sphere shader samples that texture
+
+The sensor pass is the expensive one. The reprojection shader in the main pass is cheap —
+roughly 20 ALU ops plus one texture fetch per screen pixel covered by the sphere.
+
+### Why the sensor pass is justified
+
+| Approach | Passes | Works for RX-0 |
+|----------|--------|---------------|
+| Move cockpit to mech head (Armored Core style) | 1 | ✗ — cockpit must be at sensor location |
+| Render texture on flat screen | 2 | Partial — not spherical, not visible from outside |
+| **This system (spherical reprojection)** | **2** | **✓** |
+| 6-camera cubemap | 7 | ✓ but 3.5× more expensive |
+
+The single-pass "move cockpit to head" trick — used in games like Armored Core where the pilot
+pod IS the head — requires the cockpit to physically be at the sensor location. For the RX-0
+(chest cockpit, head sensor, screen visible through open hatch from third-person), the geometry
+does not permit this. The second pass is the unavoidable cost of correct parallax, third-person
+screen visibility, and a spherical display surface.
+
+### Sensor pass cost mitigations built in
+
+- **Rectangular viewport** matches required H/V coverage — no square-viewport pixel waste
+- **`cull_mask = WORLD | FX`** excludes cockpit interior (most overdraw-heavy geometry)
+- **10% resize hysteresis** prevents per-frame GPU texture reallocation
+- **`quality_scale`** lets you trade sharpness for performance without understanding internals
+
+### Further optional optimisations
+
+- **Disable sensor post-processing** (SSAO, glow, SSIL) — saves 30–50% sensor pass cost
+- **`UPDATE_ONCE` when stationary** — no movement = no new image needed
+- **`max_viewport_size = 2048`** — still 4× 1080p density, indistinguishable at screen distance
+- **`quality_scale = 0.75`** — ~44% fewer pixels than 1.0, still visually sharp
 
 ---
 

@@ -17,19 +17,27 @@ extends Node3D
 ## If null, falls back to viewer_fov + 90° static margin.
 @export var panoramic_screen: PanoramicScreen
 
-## Target render quality in pixels per degree of sensor FOV.
-## 12 px/deg → ~1080px at 90° FOV; 16 px/deg → ~1440px.
-@export var pixels_per_degree: float = 32.0
+## Render quality relative to the player's display resolution.
+## 1.0 = sensor renders at exactly display resolution (1:1 pixel ratio on screen).
+## 2.0 = 2× display resolution (super-sampled, sharper, more expensive).
+## 0.5 = half display resolution (cheaper, blurrier).
+## The actual pixels_per_degree is computed automatically from the display size and
+## viewer FOV each frame, so this stays correct across 1080p / 2K / 4K displays.
+@export var quality_scale: float = 1.0
 
 ## Safety margin added on top of the geometry-computed FOV.
 ## Covers 1-frame rotation lag and floating-point precision at sphere edges.
-@export var fov_safety_margin_degrees: float = 8.0
+@export var fov_safety_margin_degrees: float = 2.0
 
 @export var min_viewport_size: int = 256
 @export var max_viewport_size: int = 4096
 
 var _viewport: SubViewport
 var _camera: Camera3D
+
+var _dbg_last_vfov: float = 0.0
+var _dbg_last_hfov: float = 0.0
+var _dbg_last_viewport: Vector2i = Vector2i.ZERO
 
 
 func _ready() -> void:
@@ -80,29 +88,37 @@ func _update_camera() -> void:
 	var sphere_radius := panoramic_screen.screen_radius
 
 	# Sensor camera is always aimed in the viewer's look direction.
-	# The shader samples world_dir = sensor_basis * local_dir(UV2), and those directions
-	# are centred around the viewer's forward, so the sensor must face the same way.
 	# SubViewport has no spatial transform — _camera.transform IS world-space.
 	var world_look := -viewer_basis.z
 	var viewer_up  := viewer_basis.y
 	var up := viewer_up if abs(world_look.dot(viewer_up)) < 0.99 else viewer_basis.x
 	_camera.transform = Transform3D(Basis.looking_at(world_look, up), sensor_pos)
 
-	# Cast the viewer's frustum corner rays through the screen sphere.
-	# For each hit, the panoramic direction the shader will sample is the direction
-	# FROM sphere centre TO the hit point (= sensor_basis * local_dir for that fragment).
-	# The angle of that direction from world_look gives how far the sensor FOV must reach.
+	# Decompose the sensor camera's local axes for per-axis FOV computation.
+	# cam_right and cam_up are used to project panoramic directions into
+	# horizontal and vertical angular components separately.
+	var cam_basis := _camera.transform.basis
+	var cam_right := cam_basis.x          # camera local +X (rightward)
+	var cam_up    := cam_basis.y          # camera local +Y (upward)
+
+	# Sample 9 frustum points: center + 4 corners + 4 edge midpoints.
+	# Corners capture diagonal worst-case; edge midpoints isolate each axis cleanly.
 	var vp_size := viewer_camera.get_viewport().get_visible_rect().size
 	var sample_pixels: Array[Vector2] = [
-		vp_size * 0.5,
-		Vector2(0.0, 0.0),
-		Vector2(vp_size.x, 0.0),
-		Vector2(0.0, vp_size.y),
-		vp_size,
+		vp_size * 0.5,                                    # centre
+		Vector2(0.0,          0.0),                       # top-left
+		Vector2(vp_size.x,    0.0),                       # top-right
+		Vector2(0.0,          vp_size.y),                 # bottom-left
+		vp_size,                                           # bottom-right
+		Vector2(vp_size.x * 0.5, 0.0),                   # top-centre    (pure V)
+		Vector2(vp_size.x * 0.5, vp_size.y),             # bottom-centre (pure V)
+		Vector2(0.0,          vp_size.y * 0.5),           # left-centre   (pure H)
+		Vector2(vp_size.x,    vp_size.y * 0.5),          # right-centre  (pure H)
 	]
 
-	var max_half_angle := 0.0
-	var any_hit        := false
+	var max_h_half_angle := 0.0
+	var max_v_half_angle := 0.0
+	var any_hit          := false
 
 	for idx in range(sample_pixels.size()):
 		var ray_dir := viewer_camera.project_ray_normal(sample_pixels[idx])
@@ -110,29 +126,68 @@ func _update_camera() -> void:
 		if t < 0.0:
 			continue
 		any_hit = true
-		var hit           := viewer_pos + ray_dir * t
-		var panoramic_dir := (hit - sphere_center).normalized()
-		var angle         := acos(clampf(panoramic_dir.dot(world_look), -1.0, 1.0))
-		if angle > max_half_angle:
-			max_half_angle = angle
+		var panoramic_dir := (viewer_pos + ray_dir * t - sphere_center).normalized()
+
+		# Project panoramic_dir into sensor camera's local H and V planes.
+		# atan2(lateral, forward) gives the perspective angle in each axis.
+		# d_fwd > 0 means the direction is in front of the sensor camera.
+		var d_fwd := panoramic_dir.dot(world_look)
+		var h_angle: float = abs(atan2(panoramic_dir.dot(cam_right), d_fwd))
+		var v_angle: float = abs(atan2(panoramic_dir.dot(cam_up),    d_fwd))
+
+		if h_angle > max_h_half_angle:
+			max_h_half_angle = h_angle
+		if v_angle > max_v_half_angle:
+			max_v_half_angle = v_angle
 
 	if not any_hit:
-		# Viewer not looking at screen — camera is already placed, keep minimal FOV.
 		_camera.fov = 10.0
 		return
 
-	var required_fov := clampf(
-		rad_to_deg(max_half_angle) * 2.0 + fov_safety_margin_degrees,
-		10.0, 160.0
-	)
-	_camera.fov = required_fov
+	var required_vfov := clampf(
+		rad_to_deg(max_v_half_angle) * 2.0 + fov_safety_margin_degrees, 10.0, 160.0)
+	var required_hfov := clampf(
+		rad_to_deg(max_h_half_angle) * 2.0 + fov_safety_margin_degrees, 10.0, 160.0)
 
-	# Scale viewport resolution to maintain pixels_per_degree quality target.
-	# Only resize when the change exceeds 10% to avoid per-frame texture reallocation.
-	var new_size := int(clampf(pixels_per_degree * required_fov,
-			float(min_viewport_size), float(max_viewport_size)))
-	if absf(float(new_size - _viewport.size.x)) > float(_viewport.size.x) * 0.1:
-		_viewport.size = Vector2i(new_size, new_size)
+	# Camera3D.fov is vertical FOV (keep_aspect = KEEP_HEIGHT default).
+	# Horizontal FOV is derived automatically from the viewport aspect ratio.
+	_camera.fov = required_vfov
+
+	# Compute pixels_per_degree from the actual display resolution and viewer FOV.
+	# quality_scale = 1.0 gives exactly 1 sensor pixel per display pixel on the vertical axis.
+	var display_h := viewer_camera.get_viewport().get_visible_rect().size.y
+	var ppd       := (display_h / viewer_camera.fov) * quality_scale
+
+	var new_vpx := int(clampf(ppd * required_vfov, float(min_viewport_size), float(max_viewport_size)))
+	# Derive horizontal pixels from the true perspective aspect ratio, not the FOV ratio.
+	# tan(hfov/2) / tan(vfov/2) is the correct pixel aspect for a perspective camera.
+	var aspect  := tan(deg_to_rad(required_hfov * 0.5)) / tan(deg_to_rad(required_vfov * 0.5))
+	var new_hpx := int(clampf(
+			float(new_vpx) * aspect, float(min_viewport_size), float(max_viewport_size)))
+
+	# Resize only when either dimension changes by > 10%.
+	var size_changed := (
+		absf(float(new_vpx - _viewport.size.y)) > float(_viewport.size.y) * 0.1 or
+		absf(float(new_hpx - _viewport.size.x)) > float(_viewport.size.x) * 0.1
+	)
+	if size_changed:
+		_viewport.size = Vector2i(new_hpx, new_vpx)
+
+	# _debug_log(required_hfov, required_vfov, Vector2i(new_hpx, new_vpx), ppd)
+
+
+## Logs sensor FOV, player FOV, and viewport whenever any value changes by > 1°/1px.
+func _debug_log(hfov: float, vfov: float, vp: Vector2i, ppd: float) -> void:
+	if absf(hfov - _dbg_last_hfov) < 1.0 and absf(vfov - _dbg_last_vfov) < 1.0 \
+			and vp == _dbg_last_viewport:
+		return
+	_dbg_last_hfov     = hfov
+	_dbg_last_vfov     = vfov
+	_dbg_last_viewport = vp
+	var player_fov := viewer_camera.fov if viewer_camera != null else 0.0
+	var aspect     := float(vp.x) / float(vp.y) if vp.y > 0 else 0.0
+	print("[SensorHead] sensor H=%.1f° V=%.1f°  player_fov=%.1f°  viewport=%dx%d (%.2f)  ppd=%.1f" \
+		% [hfov, vfov, player_fov, vp.x, vp.y, aspect, ppd])
 
 
 ## Fallback: simple viewer-direction tracking with a wide static FOV margin.
@@ -143,7 +198,14 @@ func _update_camera_fallback() -> void:
 	var viewer_up    := viewer_basis.y
 	var up := viewer_up if abs(world_look.dot(viewer_up)) < 0.99 else viewer_basis.x
 	_camera.transform = Transform3D(Basis.looking_at(world_look, up), global_position)
-	_camera.fov = clampf(viewer_camera.fov + 90.0, 10.0, 160.0)
+	var vfov := clampf(viewer_camera.fov + 90.0, 10.0, 160.0)
+	_camera.fov = vfov
+	var display_size := viewer_camera.get_viewport().get_visible_rect().size
+	var ppd          := (display_size.y / viewer_camera.fov) * quality_scale
+	var vpx := int(clampf(ppd * vfov, float(min_viewport_size), float(max_viewport_size)))
+	var hpx := int(clampf(float(vpx) * (display_size.x / display_size.y),
+			float(min_viewport_size), float(max_viewport_size)))
+	_viewport.size = Vector2i(hpx, vpx)
 
 
 ## Returns the nearest positive ray parameter t where (ray_origin + t*ray_dir) hits the sphere.

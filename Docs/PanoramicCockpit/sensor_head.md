@@ -14,8 +14,10 @@ the cockpit display.
 
 Every frame it:
 1. Aims the sensor camera in the viewer's look direction
-2. Computes the exact sensor FOV needed using frustum-sphere geometry
-3. Resizes the viewport proportionally to maintain constant pixels-per-degree quality
+2. Casts 9 frustum rays through the screen sphere and decomposes hits into separate horizontal
+   and vertical angular spans
+3. Sets a rectangular viewport sized to exactly match the required H/V coverage at the target
+   display quality — no wasted pixels on either axis
 
 ---
 
@@ -36,24 +38,38 @@ FOV geometry computation. Set by `CockpitDisplayController._ready()`. If null, f
 to the static 90° margin path.
 
 ```gdscript
-@export var pixels_per_degree: float = 32.0
+@export var quality_scale: float = 1.0
 ```
-Target render quality. The viewport size is set to `pixels_per_degree × computed_fov` each
-frame (clamped). Higher values = sharper image, larger texture, more GPU memory and fill-rate.
-Common values: 16 (performance), 32 (quality), 48 (ultra).
+Render quality relative to the player's actual display resolution. The `pixels_per_degree`
+value is computed automatically each frame as:
+```
+ppd = (display_height_px / viewer_vfov_degrees) × quality_scale
+```
+This means `quality_scale = 1.0` always produces exactly 1 sensor pixel per display pixel
+on the vertical axis, regardless of whether the player is on 1080p, 2K, or 4K. Users never
+need to manually calculate pixels-per-degree.
+
+| `quality_scale` | Meaning |
+|----------------|---------|
+| 0.5 | Half display resolution — cheaper, visibly blurry |
+| 1.0 | Matches display resolution — good default |
+| 1.5 | 1.5× super-sampled — noticeably sharper |
+| 2.0 | 2× super-sampled — maximum quality, expensive |
 
 ```gdscript
-@export var fov_safety_margin_degrees: float = 8.0
+@export var fov_safety_margin_degrees: float = 2.0
 ```
-Degrees added to the geometry-computed FOV. Covers the 1-frame lag between viewer rotation
-and viewport update, and floating-point imprecision at sphere edges. 5–10° is a good range.
+Degrees added to the geometry-computed FOV on each axis. Covers the 1-frame lag between
+viewer rotation and viewport update, and floating-point imprecision at sphere edges. 2–8°
+is a good range; lower values give tighter viewports with a small risk of 1-frame edge seams
+during fast head movement.
 
 ```gdscript
 @export var min_viewport_size: int = 256
 @export var max_viewport_size: int = 4096
 ```
-Hard floor and ceiling for the SubViewport dimension. `min` prevents zero-size on pathological
-camera angles. `max` prevents out-of-memory on very wide FOVs.
+Hard floor and ceiling for each viewport dimension independently. `min` prevents zero-size
+on pathological camera angles. `max` caps GPU memory use at extreme FOVs.
 
 ---
 
@@ -110,32 +126,55 @@ reprojection to work without seams, the sensor camera must be able to "see" ever
 that any visible screen fragment points to.
 
 When the viewer is **inside** the sphere and the sensor is **outside** (positioned at the mech
-head, above the cockpit), viewer frustum corners that are at ±30° from forward can hit the sphere
-at points whose panoramic direction (from sphere centre) is ±60° from forward. The sensor must
-cover ±60°, not ±30°.
-
-A static margin cannot account for this — the actual overshoot depends on the viewer's FOV,
-the sphere radius, and the sensor-to-sphere-centre distance.
+head, above the cockpit), viewer frustum corners at ±30° from forward can hit the sphere at points
+whose panoramic direction (from sphere centre) is ±60° from forward. The sensor must cover ±60°,
+not ±30°. A static margin cannot account for this — the actual overshoot depends on the viewer's
+FOV, the sphere radius, and the sensor-to-sphere-centre distance.
 
 ### The geometric solution
 
-For each of 5 frustum sample points (centre + 4 corners), cast a ray from the viewer through the
-sphere. For each hit point `P`:
+For each of 9 frustum sample points, cast a ray from the viewer through the sphere. For each hit
+point `P`, the panoramic direction is:
 
 ```
 panoramic_dir = normalize(P - sphere_centre)
 ```
 
-`panoramic_dir` is the world direction that the shader will actually sample for that screen
-fragment. This equals `sensor_basis * local_dir(UV2)` for that vertex.
+This is the world direction the shader will sample for that screen fragment. Decompose it into
+the sensor camera's local horizontal and vertical planes to get separate H/V half-angles.
 
-The sensor camera (aimed in `world_look = -viewer_basis.z`) must cover `panoramic_dir` within
-its FOV. So:
+### Why separate H/V FOV?
 
+A square viewport was previously used with a single FOV value, making H pixels == V pixels. For
+a typical 16:9 display, the viewer's horizontal frustum spans ~1.78× more angular width than
+vertical. Rendering a square sensor viewport wastes ~44% of the vertical pixels while
+underallocating horizontal pixels. Separate H/V fixes this:
+
+- **Vertical FOV** drives `Camera3D.fov` (Godot's `fov` is always vertical with the default
+  `keep_aspect = KEEP_HEIGHT`)
+- **Horizontal FOV** drives the viewport width via the perspective aspect ratio formula
+- The camera derives its horizontal FOV automatically from the viewport aspect ratio
+
+### Decomposing panoramic directions into H/V angles
+
+After building the sensor camera's basis, extract its local right and up axes:
+
+```gdscript
+var cam_basis := _camera.transform.basis
+var cam_right := cam_basis.x   # camera local +X (rightward)
+var cam_up    := cam_basis.y   # camera local +Y (upward)
 ```
-half_angle = acos(dot(panoramic_dir, world_look))
-required_fov = 2 × max(half_angle across all hits) + safety_margin
+
+For each sphere hit, project the panoramic direction against these axes:
+
+```gdscript
+var d_fwd   := panoramic_dir.dot(world_look)              # depth component
+var h_angle: float = abs(atan2(panoramic_dir.dot(cam_right), d_fwd))
+var v_angle: float = abs(atan2(panoramic_dir.dot(cam_up),    d_fwd))
 ```
+
+`atan2(lateral, forward)` gives the true perspective angle in each plane — the same formula
+a pinhole camera uses to map a 3D point to a 2D sensor coordinate.
 
 ### Why aim in `world_look`, not toward the sphere hit?
 
@@ -146,33 +185,95 @@ the side of `world_look`, causing all fragments near `world_look` to fall outsid
 
 ```gdscript
 # Correct: sensor tracks viewer look direction
-var world_look := -viewer_basis.z
 _camera.transform = Transform3D(Basis.looking_at(world_look, up), sensor_pos)
 
 # Wrong: aims toward sphere surface geometry (breaks shader sampling)
 # center_dir = (hit - sensor_pos).normalized()  ← DO NOT USE
 ```
 
-### Code
+### The 9 sample points
 
 ```gdscript
-func _update_camera() -> void:
-    var world_look := -viewer_basis.z
-    _camera.transform = Transform3D(Basis.looking_at(world_look, up), sensor_pos)
-
-    # Sample 5 frustum points: centre + 4 corners
-    for idx in range(sample_pixels.size()):
-        var ray_dir := viewer_camera.project_ray_normal(sample_pixels[idx])
-        var t := _ray_sphere_intersect(viewer_pos, ray_dir, sphere_center, sphere_radius)
-        if t < 0.0:
-            continue
-        var panoramic_dir := (viewer_pos + ray_dir * t - sphere_center).normalized()
-        var angle := acos(clampf(panoramic_dir.dot(world_look), -1.0, 1.0))
-        max_half_angle = maxf(max_half_angle, angle)
-
-    required_fov = rad_to_deg(max_half_angle) * 2.0 + fov_safety_margin_degrees
-    _camera.fov = clampf(required_fov, 10.0, 160.0)
+var sample_pixels: Array[Vector2] = [
+    vp_size * 0.5,                              # centre
+    Vector2(0.0,       0.0),                    # top-left     (corner)
+    Vector2(vp_size.x, 0.0),                    # top-right    (corner)
+    Vector2(0.0,       vp_size.y),              # bottom-left  (corner)
+    vp_size,                                     # bottom-right (corner)
+    Vector2(vp_size.x * 0.5, 0.0),             # top-centre   (pure V)
+    Vector2(vp_size.x * 0.5, vp_size.y),       # bottom-centre(pure V)
+    Vector2(0.0,       vp_size.y * 0.5),        # left-centre  (pure H)
+    Vector2(vp_size.x, vp_size.y * 0.5),       # right-centre (pure H)
+]
 ```
+
+Corners capture the diagonal worst-case (both H and V at maximum simultaneously). Edge midpoints
+isolate each axis cleanly so that a pure horizontal or vertical extreme is never missed.
+
+---
+
+## Dynamic Viewport Sizing
+
+```gdscript
+# pixels_per_degree derived from actual display resolution and viewer FOV
+var display_h := viewer_camera.get_viewport().get_visible_rect().size.y
+var ppd       := (display_h / viewer_camera.fov) * quality_scale
+
+# Vertical pixels from V FOV
+var new_vpx := int(clampf(ppd * required_vfov, min_viewport_size, max_viewport_size))
+
+# Horizontal pixels from true perspective aspect ratio
+# tan(hfov/2) / tan(vfov/2) is exact; hfov/vfov would be wrong at large angles
+var aspect  := tan(deg_to_rad(required_hfov * 0.5)) / tan(deg_to_rad(required_vfov * 0.5))
+var new_hpx := int(clampf(float(new_vpx) * aspect, min_viewport_size, max_viewport_size))
+
+_viewport.size = Vector2i(new_hpx, new_vpx)
+```
+
+**Why `tan(hfov/2) / tan(vfov/2)` and not `hfov / vfov`?**
+Perspective FOV is nonlinear. At large FOVs (e.g. 150° H vs 110° V) the linear ratio gives
+the wrong pixel count. The tangent form is the exact relationship between angular field of view
+and physical sensor dimensions in a pinhole camera model.
+
+**10% hysteresis** on both dimensions prevents per-frame GPU texture reallocation. SubViewport
+resize is expensive — it deallocates and reallocates the render target. Small continuous FOV
+changes (head bob, smooth panning) would otherwise trigger this every frame.
+
+---
+
+## Angular Amplification Asymmetry
+
+Due to the viewer being offset **above** the sphere centre (0.34m in the RX-0 scene), the
+required sensor FOV is asymmetric depending on look direction:
+
+```
+Distance to TOP wall    = sphere_radius - viewer_offset = 1.2 - 0.34 = 0.86m
+Distance to BOTTOM wall = sphere_radius + viewer_offset = 1.2 + 0.34 = 1.54m
+```
+
+**Near wall (looking up):** frustum corners hit the sphere close to the viewer. The panoramic
+directions of those hit points are relatively close to the viewer's look direction →
+**deamplification** — sensor FOV can be *smaller* than player FOV.
+
+**Far wall (looking down):** corners travel further before hitting the sphere. Hit points are
+displaced more from the sphere centre axis → **amplification** — sensor FOV is notably larger
+than player FOV.
+
+For a 75° player VFOV and a 37.5° corner ray:
+
+| Look direction | Wall distance | Corner ray | Panoramic angle | Sensor VFOV needed |
+|----------------|--------------|------------|-----------------|-------------------|
+| Straight up | 0.86m | 37.5° | ~27.5° | ~63° |
+| Forward | ~1.15m | 37.5° | ~41° | ~90° |
+| Straight down | 1.54m | 37.5° | ~47° | ~102° |
+
+This asymmetry is physically correct and unavoidable — it is the geometric consequence of the
+sensor and viewer being at different positions relative to the sphere. The 9-point separate H/V
+computation handles it correctly per-axis per-frame.
+
+**Mitigation:** centering `PanoramicScreen` at the viewer's eye position (not the cockpit
+geometric centre) minimises the offset from sphere centre, reducing amplification across all
+directions and making the viewport size more uniform.
 
 ---
 
@@ -214,21 +315,77 @@ func _ray_sphere_intersect(ray_origin, ray_dir, sphere_center, sphere_radius) ->
 
 ---
 
-## Dynamic Viewport Sizing
+## Performance
+
+### Two render passes
+
+Every frame there are two full Forward+ render passes:
+
+1. **Sensor pass** — SubViewport's Camera3D renders the world into a rectangular texture
+2. **Main pass** — player camera renders the scene; the panoramic sphere shader samples the texture
+
+The sensor pass is the expensive one. The reprojection shader in the main pass is cheap (a few
+ALU ops + one texture fetch per fragment).
+
+### Sensor pass cost factors
+
+- **Viewport size:** scales quadratically. At `quality_scale = 1.0` on 1080p with 75° VFOV and
+  ~100° sensor VFOV, the viewport is roughly `1440 × 810` (about 1.16 MP) — much cheaper than
+  the old square 2048×2048 (4.2 MP).
+- **Shadow maps:** Godot re-evaluates shadow cascades for the sensor camera. For a space scene
+  this is manageable. Disabling shadow casting on the sensor camera's `Environment` saves 30–50%.
+- **Post-processing:** SSAO, glow, SSIL run per-viewport. Disabling them on the sensor viewport
+  (the feed doesn't need screen-space effects) gives further savings.
+- **Geometry:** `cull_mask = WORLD | FX` excludes the cockpit interior — the most overdraw-heavy
+  part — from the sensor render.
+
+### Comparison to single-pass "move cockpit to head"
+
+Many mech games (Armored Core series) avoid a second render pass entirely by parenting the cockpit
+mesh to the mech's head bone. The player camera lives inside that cockpit at the sensor location,
+so the player literally sees through the cockpit window. This is **1 render pass, zero shader
+overhead**.
+
+| | Move-cockpit-to-head | Spherical reprojection |
+|---|---|---|
+| Render passes | 1 | 2 |
+| Shader overhead | None | Low (fillrate only) |
+| First-person correctness | ✓ (pilot IS at sensor) | ✓ |
+| Third-person screen visibility | ✗ (cockpit is at head) | ✓ |
+| Cockpit ≠ head (Gundam chest) | ✗ | ✓ |
+| Parallax between pilot and sensor | None | Correct |
+
+The single-pass trick only works when the cockpit is physically at the head. For the RX-0 — chest
+cockpit, sensor in the head, screen visible from outside through open hatch — it doesn't apply.
+
+### Tips for reducing cost
+
+1. **Disable sensor post-processing.** Attach a minimal `Environment` to the sensor camera with
+   SSAO, glow, and DOF disabled.
+2. **Lower `quality_scale`** to 0.75 — still very sharp in practice, ~44% fewer pixels than 1.0.
+3. **Switch to `UPDATE_ONCE`** when the mech is stationary and the player isn't moving their head.
+   Flip back to `UPDATE_ALWAYS` on significant camera movement.
+4. **Reduce `max_viewport_size`** to 2048 — still 4× 1080p density, visually indistinguishable
+   from 4096 at typical viewing distances.
+
+---
+
+## Debug Logging
 
 ```gdscript
-var new_size := int(clampf(pixels_per_degree * required_fov, min_viewport_size, max_viewport_size))
-if absf(float(new_size - _viewport.size.x)) > float(_viewport.size.x) * 0.1:
-    _viewport.size = Vector2i(new_size, new_size)
+_debug_log(required_hfov, required_vfov, Vector2i(new_hpx, new_vpx), ppd)
 ```
 
-The **10% hysteresis** prevents per-frame viewport reallocation. SubViewport resize is expensive:
-it deallocates and reallocates the GPU render target. Small continuous FOV changes (camera sway,
-head bob) would otherwise trigger this every frame. With 10% hysteresis, the size changes in
-discrete steps, producing at most ~23 size levels between `min` and `max`.
+Logs only when H FOV, V FOV, or viewport size changes by more than 1°/1px — no per-frame spam.
+Output format:
+```
+[SensorHead] sensor H=156.2° V=102.4°  player_fov=75.0°  viewport=1639x921 (1.78)  ppd=14.4
+```
 
-Square viewport (`x == y`) avoids aspect-ratio bias. A 16:9 viewport would give more pixels/degree
-horizontally than vertically, causing vertical seams at a lower angular separation.
+- `H` and `V` show sensor FOV per axis — `H > V` is expected for a 16:9 display
+- `1.78` aspect ratio confirms the viewport matches the viewer's display ratio
+- `ppd` is the actual pixels-per-degree achieved — at `quality_scale=1.0` on 1080p this should
+  closely match `1080 / player_fov`
 
 ---
 
@@ -280,10 +437,12 @@ When `panoramic_screen` is null (not yet wired, or during testing):
 
 ```gdscript
 func _update_camera_fallback() -> void:
-    _camera.transform = Transform3D(Basis.looking_at(world_look, up), global_position)
     _camera.fov = clampf(viewer_camera.fov + 90.0, 10.0, 160.0)
+    # Viewport sized at display resolution × quality_scale, display aspect ratio
+    var vpx := int(clampf(ppd * vfov, min_viewport_size, max_viewport_size))
+    var hpx := int(clampf(vpx * (display_width / display_height), ...))
+    _viewport.size = Vector2i(hpx, vpx)
 ```
 
-Static 90° margin, same as the original implementation. This is a wide-but-functional fallback —
-the image will be blurrier and may have edge seams, but the system remains usable while
-`panoramic_screen` is being set up.
+Static 90° margin, same as the original implementation. The viewport is still rectangular and
+display-resolution-aware — the only degradation vs the full path is the imprecise FOV.
