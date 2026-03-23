@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Entities/Vehicles/MobileSuits/RX0/Components/cockpit_display_controller/cockpit_display_controller.gd" id="1"]
+
+[node name="CockpitDisplayController" type="Node"]
+script = ExtResource("1")

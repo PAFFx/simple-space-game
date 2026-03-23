@@ -1,9 +1,21 @@
 [gd_scene format=3 uid="uid://dra0bqx5nx1i3"]
 
 [ext_resource type="PackedScene" uid="uid://cfm0g70sy6e8d" path="res://Entities/Vehicles/Cockpits/CockpitRX0/Arts/cockpit.glb" id="1_82igo"]
+[ext_resource type="PackedScene" path="res://Common/PanoramicDisplay/panoramic_screen.tscn" id="2_j3xf6"]
+[ext_resource type="Script" uid="uid://cys5wfose225a" path="res://Entities/Vehicles/Cockpits/CockpitRX0/cockpit_rx_0.gd" id="3_opti3"]
 
-[node name="CockpitRX0" unique_id=1279700951 instance=ExtResource("1_82igo")]
+[sub_resource type="SphereMesh" id="SphereMesh_j3xf6"]
+flip_faces = true
+radius = 1.21
+height = 2.42
+
+[node name="CockpitRX0" unique_id=1279700951 node_paths=PackedStringArray("panoramic_screen") instance=ExtResource("1_82igo")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
+script = ExtResource("3_opti3")
+panoramic_screen = NodePath("MeshInstance3D/PanoramicScreen")
+
+[node name="Light_Unicorn_Cockpit" parent="." index="0" unique_id=980671453]
+transform = Transform3D(0.01, 0, 0, 0, 0, -0.01, 0, 0.01, 0, -6.7501554e-16, -0.7440896, -0.3014919)
 
 [node name="pCube68" parent="Light_Unicorn_Cockpit/Back_Part/Left_Helmet_attachment_01" parent_id_path=PackedInt32Array(1886283561) index="0" unique_id=1034664369]
 layers = 8
@@ -607,3 +619,9 @@ layers = 8
 
 [node name="Right_Screen" parent="Light_Unicorn_Cockpit/Screens" parent_id_path=PackedInt32Array(880130629) index="2" unique_id=1807308698]
 layers = 8
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." index="1" unique_id=1141796779]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0, 0)
+mesh = SubResource("SphereMesh_j3xf6")
+
+[node name="PanoramicScreen" parent="MeshInstance3D" index="0" unique_id=2063915308 instance=ExtResource("2_j3xf6")]

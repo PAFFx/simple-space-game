@@ -1,0 +1,8 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Common/PanoramicDisplay/panoramic_screen.gd" id="1"]
+
+[node name="PanoramicScreen" type="Node3D"]
+script = ExtResource("1")
+
+[node name="ScreenMesh" type="MeshInstance3D" parent="."]

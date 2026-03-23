@@ -1,6 +1,10 @@
 [gd_scene format=3 uid="uid://do6axvhl118qe"]
 
 [ext_resource type="PackedScene" uid="uid://chl2k3h4lo1y" path="res://Entities/Vehicles/MobileSuits/RX0/Arts/rx-0_full_armor_unicorn_gundam.glb" id="1_vh4wn"]
+[ext_resource type="PackedScene" path="res://Common/PanoramicDisplay/sensor_head.tscn" id="2_yt4yi"]
+[ext_resource type="PackedScene" uid="uid://dra0bqx5nx1i3" path="res://Entities/Vehicles/Cockpits/CockpitRX0/cockpit_rx_0.tscn" id="3_h8awk"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/MobileSuits/RX0/Components/cockpit_display_controller/cockpit_display_controller.tscn" id="4_55fmf"]
+[ext_resource type="PackedScene" path="res://Common/MouseLookController/mouse_look_controller.tscn" id="4_qb26d"]
 
 [node name="MobileSuitRX0" unique_id=1672338208 instance=ExtResource("1_vh4wn")]
 
@@ -57,3 +61,19 @@ layers = 2
 
 [node name="MainSensorMarker" type="Marker3D" parent="." index="1" unique_id=351363675]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20.182491, -0.40296733)
+
+[node name="SensorHead" parent="MainSensorMarker" index="0" unique_id=890699654 node_paths=PackedStringArray("viewer_camera") instance=ExtResource("2_yt4yi")]
+viewer_camera = NodePath("../../CockpitRX0/PlayerCamera3D")
+
+[node name="CockpitRX0" parent="." index="2" unique_id=1279700951 instance=ExtResource("3_h8awk")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 1.1972801e-08, 17.8086, 0.13695288)
+
+[node name="PlayerCamera3D" type="Camera3D" parent="CockpitRX0" index="2" unique_id=987902481]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 1.4032208e-08, 0.34037018, -0.16050977)
+
+[node name="MouseLookController" parent="CockpitRX0/PlayerCamera3D" index="0" unique_id=2126368666 instance=ExtResource("4_qb26d")]
+
+[node name="CockpitDisplayController" parent="." index="3" unique_id=665215457 node_paths=PackedStringArray("cockpit", "sensor_head", "viewer_camera") instance=ExtResource("4_55fmf")]
+cockpit = NodePath("../CockpitRX0")
+sensor_head = NodePath("../MainSensorMarker/SensorHead")
+viewer_camera = NodePath("../CockpitRX0/PlayerCamera3D")

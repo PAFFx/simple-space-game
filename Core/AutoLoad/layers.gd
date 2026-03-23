@@ -8,7 +8,20 @@ const PILOT := 1 << 4
 const FX := 1 << 5
 const HUD_3D := 1 << 6
 
+# Sensor-specific sub-layers for fine-grained sensor occlusion toggling.
+# Assign these to MeshInstance3D nodes IN ADDITION to VEHICLE_EXT so they
+# remain visible to the third-person camera while being individually
+# toggleable on the sensor camera via SensorHead.set_group_visible().
+const SENSOR_BODY_PARTS := 1 << 7  # Mech structural body
+const SENSOR_WEAPONS    := 1 << 8  # Weapons (beam rifles, missile pods, etc.)
+const SENSOR_SHIELDS    := 1 << 9  # Shields and armour panels
+
 const DEBUG := 1 << 19
 
 const MASK_THIRD_PERSION := WORLD | VEHICLE_EXT | FX
-const MASK_FIRST_PERSON :=  WORLD | VEHICLE_FP | COCKPIT | PILOT | FX | HUD_3D
+const MASK_FIRST_PERSON  := WORLD | VEHICLE_FP | COCKPIT | PILOT | FX | HUD_3D
+# Sensor sees world + all sensor sub-layers. Includes VEHICLE_EXT so existing
+# mech meshes (before sensor layers are assigned) still appear in the sensor view.
+# Excludes COCKPIT to prevent the panoramic screen from appearing on itself.
+const MASK_SENSOR        := WORLD | VEHICLE_EXT | FX \
+                          | SENSOR_BODY_PARTS | SENSOR_WEAPONS | SENSOR_SHIELDS
