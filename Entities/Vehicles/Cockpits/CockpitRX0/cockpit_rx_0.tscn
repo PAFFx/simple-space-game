@@ -6,8 +6,8 @@
 
 [sub_resource type="SphereMesh" id="SphereMesh_j3xf6"]
 flip_faces = true
-radius = 1.21
-height = 2.42
+radius = 1.26
+height = 2.52
 
 [node name="CockpitRX0" unique_id=1279700951 node_paths=PackedStringArray("panoramic_screen") instance=ExtResource("1_82igo")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
@@ -15,7 +15,7 @@ script = ExtResource("3_opti3")
 panoramic_screen = NodePath("MeshInstance3D/PanoramicScreen")
 
 [node name="Light_Unicorn_Cockpit" parent="." index="0" unique_id=980671453]
-transform = Transform3D(0.01, 0, 0, 0, 0, -0.01, 0, 0.01, 0, -6.7501554e-16, -0.7440896, -0.3014919)
+transform = Transform3D(0.01, 0, 0, 0, 0, -0.01, 0, 0.01, 0, -1.3855583e-15, -0.9519887, -0.3864308)
 
 [node name="pCube68" parent="Light_Unicorn_Cockpit/Back_Part/Left_Helmet_attachment_01" parent_id_path=PackedInt32Array(1886283561) index="0" unique_id=1034664369]
 layers = 8
@@ -625,3 +625,4 @@ transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0
 mesh = SubResource("SphereMesh_j3xf6")
 
 [node name="PanoramicScreen" parent="MeshInstance3D" index="0" unique_id=2063915308 instance=ExtResource("2_j3xf6")]
+screen_radius = 1.25

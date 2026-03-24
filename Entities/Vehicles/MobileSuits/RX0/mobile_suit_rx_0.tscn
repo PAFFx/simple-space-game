@@ -69,7 +69,7 @@ viewer_camera = NodePath("../../CockpitRX0/PlayerCamera3D")
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 1.1972801e-08, 17.8086, 0.13695288)
 
 [node name="PlayerCamera3D" type="Camera3D" parent="CockpitRX0" index="2" unique_id=987902481]
-transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 1.4032208e-08, 0.34037018, -0.16050977)
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 1.6962588e-08, 0.09351349, -0.19402939)
 
 [node name="MouseLookController" parent="CockpitRX0/PlayerCamera3D" index="0" unique_id=2126368666 instance=ExtResource("4_qb26d")]
 
