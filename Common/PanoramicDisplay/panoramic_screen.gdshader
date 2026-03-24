@@ -2,7 +2,7 @@ shader_type spatial;
 render_mode unshaded, cull_back, depth_draw_opaque;
 
 // The sensor camera's rendered viewport texture.
-uniform sampler2D sensor_viewport : hint_default_black, filter_linear_mipmap;
+uniform sampler2D sensor_viewport : source_color, hint_default_black, filter_linear_mipmap;
 
 // Combined (projection * view) matrix of the sensor camera, updated every frame.
 uniform mat4 sensor_view_proj;
