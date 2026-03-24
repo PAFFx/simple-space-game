@@ -1,6 +1,6 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://Common/PanoramicDisplay/panoramic_screen.gd" id="1"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/panoramic_screen.gd" id="1"]
 
 [node name="PanoramicScreen" type="Node3D"]
 script = ExtResource("1")

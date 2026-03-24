@@ -1,12 +1,12 @@
 [gd_scene format=3 uid="uid://do6axvhl118qe"]
 
 [ext_resource type="PackedScene" uid="uid://chl2k3h4lo1y" path="res://Entities/Vehicles/MobileSuits/RX0/Arts/rx-0_full_armor_unicorn_gundam.glb" id="1_vh4wn"]
-[ext_resource type="PackedScene" path="res://Common/PanoramicDisplay/sensor_head.tscn" id="2_yt4yi"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn" id="2_yt4yi"]
 [ext_resource type="PackedScene" uid="uid://dra0bqx5nx1i3" path="res://Entities/Vehicles/Cockpits/CockpitRX0/cockpit_rx_0.tscn" id="3_h8awk"]
-[ext_resource type="PackedScene" path="res://Entities/Vehicles/MobileSuits/RX0/Components/cockpit_display_controller/cockpit_display_controller.tscn" id="4_55fmf"]
-[ext_resource type="PackedScene" path="res://Common/MouseLookController/mouse_look_controller.tscn" id="4_qb26d"]
+[ext_resource type="Script" path="res://Entities/Vehicles/MobileSuits/RX0/mobile_suit_rx_0.gd" id="5_msrx0"]
 
 [node name="MobileSuitRX0" unique_id=1672338208 instance=ExtResource("1_vh4wn")]
+script = ExtResource("5_msrx0")
 
 [node name="Sketchfab_model" parent="." index="0" unique_id=1230424193]
 transform = Transform3D(1, 0, 0, 0, -3.5762787e-07, 0.99999994, 0, -0.99999994, -3.5762787e-07, 0.575, -6.439406e-07, -1.8005885)
@@ -59,21 +59,12 @@ layers = 2
 [node name="hand_1_0" parent="Sketchfab_model/FullArmorRX0_fbx/RootNode/RightHand" parent_id_path=PackedInt32Array(1452010342) index="0" unique_id=1652120065]
 layers = 2
 
-[node name="MainSensorMarker" type="Marker3D" parent="." index="1" unique_id=351363675]
+[node name="SensorHeadMount" type="Marker3D" parent="." index="1" unique_id=351363675]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20.182491, -0.40296733)
 
-[node name="SensorHead" parent="MainSensorMarker" index="0" unique_id=890699654 node_paths=PackedStringArray("viewer_camera") instance=ExtResource("2_yt4yi")]
-viewer_camera = NodePath("../../CockpitRX0/PlayerCamera3D")
+[node name="SensorHead" parent="SensorHeadMount" index="0" unique_id=890699654 instance=ExtResource("2_yt4yi")]
 
-[node name="CockpitRX0" parent="." index="2" unique_id=1279700951 instance=ExtResource("3_h8awk")]
+[node name="CockpitMount" type="Marker3D" parent="." index="2" unique_id=2034567891]
+
+[node name="CockpitRX0" parent="CockpitMount" index="0" unique_id=1279700951 instance=ExtResource("3_h8awk")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 1.1972801e-08, 17.8086, 0.13695288)
-
-[node name="PlayerCamera3D" type="Camera3D" parent="CockpitRX0" index="2" unique_id=987902481]
-transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 1.6962588e-08, 0.09351349, -0.19402939)
-
-[node name="MouseLookController" parent="CockpitRX0/PlayerCamera3D" index="0" unique_id=2126368666 instance=ExtResource("4_qb26d")]
-
-[node name="CockpitDisplayController" parent="." index="3" unique_id=665215457 node_paths=PackedStringArray("cockpit", "sensor_head", "viewer_camera") instance=ExtResource("4_55fmf")]
-cockpit = NodePath("../CockpitRX0")
-sensor_head = NodePath("../MainSensorMarker/SensorHead")
-viewer_camera = NodePath("../CockpitRX0/PlayerCamera3D")

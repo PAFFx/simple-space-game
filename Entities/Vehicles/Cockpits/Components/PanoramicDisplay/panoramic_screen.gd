@@ -6,9 +6,13 @@ extends Node3D
 ## Generates a spherical ArrayMesh with panoramic UV2 coordinates baked in,
 ## then each frame projects those directions through the SensorHead's camera
 ## to create the illusion of a full 360° display from a single sensor camera.
+##
+## sensor_head is discovered automatically by walking up to the nearest VehicleBase.
+## Set the export manually only when testing outside a full vehicle hierarchy.
 
-const _SHADER := preload("res://Common/PanoramicDisplay/panoramic_screen.gdshader")
+const _SHADER := preload("res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/Shader/panoramic_screen.gdshader")
 
+## Optional override — auto-discovered from the vehicle's SensorHead if left empty.
 @export var sensor_head: SensorHead
 
 ## Total arc angle of the cylindrical screen in radians. TAU = full 360°.
@@ -47,10 +51,13 @@ var _mask_texture: ImageTexture
 
 
 func _ready() -> void:
-	_mesh_instance.mesh = _build_mesh()
+	_mesh_instance.mesh = PanoramicMeshBuilder.build(
+		arc_angle, arc_offset, elevation_range,
+		screen_radius, arc_segments, elevation_segments
+	)
 
 	if Engine.is_editor_hint():
-		# Show a semi-transparent placeholder so the cylinder is visible and
+		# Show a semi-transparent placeholder so the sphere is visible and
 		# positionable in the editor without needing a live sensor connection.
 		var preview_mat := StandardMaterial3D.new()
 		preview_mat.albedo_color = Color(0.2, 0.6, 1.0, 0.35)
@@ -60,6 +67,7 @@ func _ready() -> void:
 		_mesh_instance.material_override = preview_mat
 		return
 
+	_auto_discover()
 	_setup_material()
 	# Visible to the first-person cockpit camera AND to outside cameras when
 	# the cockpit door is open. Excluded from the sensor mask so the screen
@@ -73,6 +81,20 @@ func _process(_delta: float) -> void:
 	_push_shader_uniforms()
 
 
+# --- Auto-discovery ---
+
+func _auto_discover() -> void:
+	if sensor_head != null:
+		return  # Manual override provided — skip discovery.
+	var vehicle := VehicleBase.find_vehicle(self)
+	if vehicle == null:
+		push_error("PanoramicScreen: no VehicleBase found in parent chain")
+		return
+	sensor_head = vehicle.get_sensor_head()
+	if sensor_head == null:
+		push_error("PanoramicScreen: no SensorHead found in vehicle")
+
+
 # --- Private ---
 
 func _rebuild_in_editor() -> void:
@@ -80,7 +102,10 @@ func _rebuild_in_editor() -> void:
 	# arc_angle, screen_radius, etc. in the Inspector.
 	if not Engine.is_editor_hint() or _mesh_instance == null:
 		return
-	_mesh_instance.mesh = _build_mesh()
+	_mesh_instance.mesh = PanoramicMeshBuilder.build(
+		arc_angle, arc_offset, elevation_range,
+		screen_radius, arc_segments, elevation_segments
+	)
 
 
 func _setup_material() -> void:
@@ -102,68 +127,6 @@ func _push_shader_uniforms() -> void:
 	_material.set_shader_parameter("sensor_view_proj", sensor_head.get_view_proj())
 	_material.set_shader_parameter("sensor_world_pos", sensor_head.get_world_pos())
 	_material.set_shader_parameter("sensor_basis",     sensor_head.get_sensor_basis())
-
-
-func _build_mesh() -> ArrayMesh:
-	var verts   := PackedVector3Array()
-	var normals := PackedVector3Array()
-	var uvs     := PackedVector2Array()   # UV0: standard wrap for optional overlays
-	var uv2s    := PackedVector2Array()   # UV2: panoramic direction (azimuth, elevation)
-	var indices := PackedInt32Array()
-
-	for row in range(elevation_segments + 1):
-		var t_elev: float = float(row) / float(elevation_segments)
-		var elevation: float = (t_elev - 0.5) * elevation_range
-
-		for col in range(arc_segments + 1):
-			var t_arc: float = float(col) / float(arc_segments)
-			var azimuth: float = arc_offset + t_arc * arc_angle
-			var cos_el: float = cos(elevation)
-
-			verts.append(Vector3(
-				screen_radius * sin(azimuth) * cos_el,
-				screen_radius * sin(elevation),
-				-screen_radius * cos(azimuth) * cos_el  # -Z is forward in Godot
-			))
-
-			# Inward-facing normals so the screen surface faces the pilot.
-			normals.append(Vector3(
-				-sin(azimuth) * cos_el,
-				-sin(elevation),
-				cos(azimuth) * cos_el
-			))
-
-			# UV0: standard spherical wrap.
-			uvs.append(Vector2(t_arc, 1.0 - t_elev))
-
-			# UV2: panoramic direction encoded as (azimuth/TAU, elevation_normalised).
-			# azimuth/TAU may be outside [0,1] if arc_offset != 0; the shader uses
-			# fract() when sampling the segment mask, and sin/cos are periodic so
-			# the direction maths is always correct.
-			uv2s.append(Vector2(azimuth / TAU, t_elev))
-
-	# Build quad indices as two triangles each.
-	for row in range(elevation_segments):
-		for col in range(arc_segments):
-			var i: int = row * (arc_segments + 1) + col
-			indices.append(i)
-			indices.append(i + arc_segments + 1)
-			indices.append(i + 1)
-			indices.append(i + 1)
-			indices.append(i + arc_segments + 1)
-			indices.append(i + arc_segments + 2)
-
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX]    = verts
-	arrays[Mesh.ARRAY_NORMAL]    = normals
-	arrays[Mesh.ARRAY_TEX_UV]    = uvs
-	arrays[Mesh.ARRAY_TEX_UV2]   = uv2s
-	arrays[Mesh.ARRAY_INDEX]     = indices
-
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return mesh
 
 
 # --- Segment mask API ---

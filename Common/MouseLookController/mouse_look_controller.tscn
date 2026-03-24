@@ -1,6 +1,0 @@
-[gd_scene format=3]
-
-[ext_resource type="Script" path="res://Common/MouseLookController/mouse_look_controller.gd" id="1"]
-
-[node name="MouseLookController" type="Node"]
-script = ExtResource("1")
