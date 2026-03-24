@@ -59,35 +59,73 @@ viewer can currently see on the screen.
 
 | Component | File | Role |
 |-----------|------|------|
-| `SensorHead` | `Common/PanoramicDisplay/sensor_head.gd` | Owns SubViewport + Camera3D. Tracks viewer direction, computes dynamic FOV, exposes texture + matrices. |
-| `PanoramicScreen` | `Common/PanoramicDisplay/panoramic_screen.gd` | Builds the spherical mesh with UV2 panoramic encoding. Pushes shader uniforms every frame. Exposes segment mask API. |
-| `panoramic_screen.gdshader` | `Common/PanoramicDisplay/panoramic_screen.gdshader` | Per-fragment: UV2 → world direction → project → sample. |
-| `CockpitRX0` | `Entities/Vehicles/Cockpits/CockpitRX0/cockpit_rx_0.gd` | Simple root script. Exposes `panoramic_screen` as a typed export for the controller to reach it from the vehicle scene. |
-| `CockpitDisplayController` | `Entities/Vehicles/MobileSuits/RX0/Components/cockpit_display_controller/cockpit_display_controller.gd` | Assembled-scene wiring: connects SensorHead ↔ PanoramicScreen at `_ready()`. |
+| `SensorHead` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.gd` | Owns SubViewport + Camera3D. Tracks viewer direction, computes dynamic FOV, exposes texture + matrices. Auto-discovers dependencies via `VehicleBase`. |
+| `PanoramicScreen` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/panoramic_screen.gd` | Builds the spherical mesh with UV2 panoramic encoding. Pushes shader uniforms every frame. Exposes segment mask API. Auto-discovers `SensorHead` via `VehicleBase`. |
+| `panoramic_screen.gdshader` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/Shader/panoramic_screen.gdshader` | Per-fragment: UV2 → world direction → project → sample. |
+| `SensorFovSolver` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/Helper/sensor_fov_solver.gd` | Pure-math helper: `solve_required_fov()` and `compute_viewport_size()`, extracted from `SensorHead`. |
+| `PanoramicMeshBuilder` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/Mesh/panoramic_mesh_builder.gd` | Pure-math helper: `build()` sphere mesh, extracted from `PanoramicScreen`. |
+| `SpatialMath` | `Common/Calculations/spatial_math.gd` | General 3D math: `ray_sphere_intersect()`. |
+| `VehicleBase` | `Core/Base/vehicle_base.gd` | Abstract vehicle root. Provides `find_vehicle()` static walk-up and `get_cockpit()` / `get_sensor_head()` accessors. |
+| `CockpitBase` | `Core/Base/cockpit_base.gd` | Abstract cockpit root. Provides `get_player_camera()` / `get_panoramic_screen()` accessors. |
+| `CockpitRX0` | `Entities/Vehicles/Cockpits/CockpitRX0/cockpit_rx_0.gd` | Extends `CockpitBase`. Implements mount getters pointing to `$CameraMount` and `$PanoramicDisplayMount`. |
+| `MobileSuitRX0` | `Entities/Vehicles/MobileSuits/RX0/mobile_suit_rx_0.gd` | Extends `VehicleBase`. Implements mount getters pointing to `$CockpitMount` and `$SensorHeadMount`. |
 
 ---
 
 ## Scene Tree Structure
 
 ```
-MobileSuitRX0  (mobile_suit_rx_0.tscn)
-├── Sketchfab_model          ← mech GLB
-├── MainSensorMarker         ← Marker3D at head pivot
-│   └── SensorHead           ← placed here; global_position = sensor world pos
-├── CockpitRX0               ← cockpit_rx_0.tscn instance
-│   ├── Light_Unicorn_Cockpit ← cockpit GLB contents
-│   ├── MeshInstance3D        ← placeholder sphere mesh (editor only)
-│   │   └── PanoramicScreen   ← the display; positioned at pilot eye level
-│   └── PlayerCamera3D        ← first-person camera
-│       └── MouseLookController
-└── CockpitDisplayController  ← wires the two trees together at runtime
+MobileSuitRX0  (mobile_suit_rx_0.tscn)   ← extends VehicleBase
+├── Sketchfab_model                        ← mech GLB
+├── SensorHeadMount  (Marker3D)            ← marks the head sensor position
+│   └── SensorHead                         ← auto-discovers cockpit via VehicleBase
+└── CockpitMount  (Marker3D)              ← marks where cockpit is placed
+    └── CockpitRX0  (cockpit_rx_0.tscn)   ← extends CockpitBase
+        ├── Light_Unicorn_Cockpit          ← cockpit GLB (layers = COCKPIT)
+        ├── PanoramicDisplayMount (Marker3D) ← positions the display sphere
+        │   └── PanoramicScreen            ← auto-discovers SensorHead via VehicleBase
+        └── CameraMount  (Marker3D)        ← positions the player camera
+            └── PlayerCamera3D
+                └── MouseLookController
 ```
 
 **Key placement rules:**
-- `SensorHead` goes under `MainSensorMarker` (the mech's head bone/pivot) so its `global_position`
+- `SensorHead` goes under `SensorHeadMount` (at the mech's head bone/pivot) so its `global_position`
   matches the real-world sensor location.
-- `PanoramicScreen` goes inside the cockpit at pilot eye level, centred in the sphere the pilot
-  sits inside.
+- `PanoramicScreen` goes under `PanoramicDisplayMount` inside the cockpit at pilot eye level,
+  centred in the sphere the pilot sits inside.
+- `PlayerCamera3D` goes under `CameraMount` so the camera position is owned by the cockpit scene.
+
+**No manual wiring required.** `SensorHead` and `PanoramicScreen` both call `_auto_discover()` in
+`_ready()`, which walks up to `MobileSuitRX0` (a `VehicleBase`) and uses the standard accessors to
+find each other.
+
+---
+
+## Auto-Discovery
+
+Both components locate their dependencies automatically using the `VehicleBase` tree walk:
+
+```
+SensorHead._ready()
+  └── _auto_discover()
+        ├── VehicleBase.find_vehicle(self)     ← walks up to MobileSuitRX0
+        ├── vehicle.get_cockpit()               ← finds CockpitRX0 under CockpitMount
+        ├── cockpit.get_player_camera()         ← finds Camera3D under CameraMount
+        └── cockpit.get_panoramic_screen()      ← finds PanoramicScreen under PanoramicDisplayMount
+
+PanoramicScreen._ready()
+  └── _auto_discover()
+        ├── VehicleBase.find_vehicle(self)     ← walks up to MobileSuitRX0
+        └── vehicle.get_sensor_head()          ← finds SensorHead under SensorHeadMount
+```
+
+The `@export var viewer_camera` and `@export var panoramic_screen` on `SensorHead`, and
+`@export var sensor_head` on `PanoramicScreen`, remain as optional overrides for testing
+outside a full vehicle hierarchy (e.g. a standalone sensor test scene).
+
+**Important:** Mount getters use `get_node()` directly (not `@onready`) so they work when called
+from a child's `_ready()`, which fires before the parent's own `_ready()`.
 
 ---
 
@@ -97,17 +135,18 @@ MobileSuitRX0  (mobile_suit_rx_0.tscn)
 _process() on SensorHead
   │
   ├── viewer_camera.project_ray_normal(9 sample pixels)
-  │     → cast rays through screen sphere (centre + 4 corners + 4 edge midpoints)
-  │     → for each hit: panoramic_dir = normalize(hit - sphere_centre)
-  │     → decompose into H and V angles via atan2 against camera local axes
-  │     → max_h_half_angle, max_v_half_angle
+  │     → SensorFovSolver.solve_required_fov(...)
+  │         → SpatialMath.ray_sphere_intersect() per sample
+  │         → max_h_half_angle, max_v_half_angle
   │
   ├── _camera.transform  = Transform3D(looking_at(world_look), sensor_pos)
   ├── _camera.fov        = 2 × max_v_half_angle + safety_margin  (vertical FOV)
-  ├── ppd                = (display_height / viewer_vfov) × quality_scale
-  ├── new_vpx            = clamp(ppd × required_vfov, min, max)
-  ├── new_hpx            = new_vpx × tan(hfov/2) / tan(vfov/2)   (perspective aspect)
-  └── _viewport.size     = Vector2i(new_hpx, new_vpx)             [if >10% change]
+  │
+  └── SensorFovSolver.compute_viewport_size(...)
+        → ppd = (display_height / viewer_vfov) × quality_scale
+        → new_vpx = clamp(ppd × required_vfov, min, max)
+        → new_hpx = new_vpx × tan(hfov/2) / tan(vfov/2)   (perspective aspect)
+        → _viewport.size = Vector2i(new_hpx, new_vpx)      [if >10% change]
 
 _process() on PanoramicScreen
   │
@@ -188,23 +227,6 @@ assigned their `SENSOR_BODY_PARTS / SENSOR_WEAPONS / SENSOR_SHIELDS` layers, cal
 | `min_viewport_size` | 256 | Minimum for either viewport dimension. |
 | `max_viewport_size` | 4096 | Cap for either viewport dimension. |
 
-The viewport is **rectangular**, not square. Horizontal and vertical FOV are computed
-independently using 9 frustum sample points decomposed against the camera's local axes.
-For a 16:9 display this typically produces a ~16:9 sensor viewport, saving ~44% of the
-pixels that a square viewport would waste on the vertical axis.
-
-**Typical sizes at `quality_scale = 1.0`, 1080p display, 75° player VFOV:**
-
-| Look direction | Sensor VFOV | Sensor HFOV | Viewport |
-|----------------|-------------|-------------|---------|
-| Straight up | ~63° | ~90° | ~910×640 |
-| Forward | ~90° | ~130° | ~1300×810 |
-| Straight down | ~102° | ~148° | ~1475×920 |
-
-The asymmetry (down requires more than up) is caused by the viewer being 0.34m above the
-sphere centre — frustum corners hit the far bottom wall at wider panoramic angles than the
-near top wall. See `sensor_head.md` — Angular Amplification Asymmetry for full details.
-
 ---
 
 ## Performance Analysis
@@ -227,12 +249,6 @@ roughly 20 ALU ops plus one texture fetch per screen pixel covered by the sphere
 | Render texture on flat screen | 2 | Partial — not spherical, not visible from outside |
 | **This system (spherical reprojection)** | **2** | **✓** |
 | 6-camera cubemap | 7 | ✓ but 3.5× more expensive |
-
-The single-pass "move cockpit to head" trick — used in games like Armored Core where the pilot
-pod IS the head — requires the cockpit to physically be at the sensor location. For the RX-0
-(chest cockpit, head sensor, screen visible through open hatch from third-person), the geometry
-does not permit this. The second pass is the unavoidable cost of correct parallax, third-person
-screen visibility, and a spherical display surface.
 
 ### Sensor pass cost mitigations built in
 

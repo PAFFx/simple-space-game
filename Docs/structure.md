@@ -1,0 +1,228 @@
+# Project Structure
+
+## Directory Overview
+
+```
+simple-space-game/
+├── Core/                          Base classes and project-wide singletons
+│   ├── AutoLoad/                  Godot autoload singletons (registered in project.godot)
+│   │   └── layers.gd              Render layer bitmask definitions (Layers.WORLD, COCKPIT, etc.)
+│   └── Base/                      Abstract base classes (interfaces)
+│       ├── vehicle_base.gd        Abstract root for all pilotable vehicles
+│       └── cockpit_base.gd        Abstract root for all cockpit interiors
+│
+├── Common/                        Reusable components with no entity-specific dependencies
+│   ├── Calculations/              Pure-math, stateless utility classes
+│   │   └── spatial_math.gd        General 3D math (ray-sphere intersection, etc.)
+│   └── Controls/                  Player input components
+│       └── MouseLookController/
+│           ├── mouse_look_controller.gd   Rotates parent Node3D from mouse input
+│           └── mouse_look_controller.tscn
+│
+├── Entities/                      All game entities (characters, vehicles, environment)
+│   ├── Characters/
+│   │   └── AmateYuzuriha/         Pilot character model
+│   │
+│   ├── Environment/
+│   │   └── Space/SpaceStation/    Space station with constant rotation components
+│   │
+│   └── Vehicles/
+│       ├── Cockpits/              All cockpit interiors
+│       │   ├── Components/        Cockpit components shared across cockpit types
+│       │   │   └── PanoramicDisplay/
+│       │   │       ├── sensor_head.gd          Sensor camera manager
+│       │   │       ├── sensor_head.tscn
+│       │   │       ├── panoramic_screen.gd     Spherical display mesh + shader control
+│       │   │       ├── panoramic_screen.tscn
+│       │   │       ├── Helper/
+│       │   │       │   └── sensor_fov_solver.gd   FOV + viewport sizing math
+│       │   │       ├── Mesh/
+│       │   │       │   └── panoramic_mesh_builder.gd  Sphere mesh generation
+│       │   │       └── Shader/
+│       │   │           └── panoramic_screen.gdshader  Reprojection shader
+│       │   │
+│       │   └── CockpitRX0/        RX-0 specific cockpit interior
+│       │       ├── cockpit_rx_0.gd    extends CockpitBase
+│       │       ├── cockpit_rx_0.tscn
+│       │       └── Arts/              Cockpit GLB import
+│       │
+│       └── MobileSuits/           All mobile suit vehicles
+│           └── RX0/               RX-0 Full Armor Unicorn Gundam
+│               ├── mobile_suit_rx_0.gd    extends VehicleBase
+│               ├── mobile_suit_rx_0.tscn
+│               └── Arts/                  Mech GLB import
+│
+├── Stages/                        Playable levels / scenes
+│   └── LowEarthOrbit/
+│       └── low_earth_orbit.tscn   Main stage (instanciates MobileSuitRX0, space station, etc.)
+│
+├── Docs/                          Architecture documentation
+│   ├── structure.md               This file
+│   └── PanoramicCockpit/          Deep-dive docs for the panoramic display system
+│
+└── addons/                        Editor plugins (gdshader, plugin_refresher, gdLinter)
+```
+
+---
+
+## Layer Architecture
+
+The project follows a strict dependency direction:
+
+```
+Stages
+  └── depends on → Entities
+                      └── depends on → Core/Base, Common, Cockpits/Components
+                                           └── depends on → Core/AutoLoad, Common/Calculations
+```
+
+- **`Core/`** has no game dependencies — only Godot built-ins.
+- **`Common/`** depends only on `Core/` (for `Layers` autoload, `VehicleBase`, `CockpitBase`).
+- **`Entities/`** depends on `Core/` and `Common/`.
+- **`Stages/`** depends on `Entities/` only — no direct component references.
+
+---
+
+## Core/Base — Abstract Interfaces
+
+Godot 4 has no interface keyword. Interfaces are implemented as base classes whose unimplemented
+virtual methods call `push_error()` at runtime.
+
+### `VehicleBase`
+
+Root script for any pilotable vehicle (mobile suit, ship, fighter, etc.).
+
+**To create a new vehicle:**
+1. Create a scene whose root node has a script extending `VehicleBase`.
+2. Add a `Marker3D` named `SensorHeadMount` — place the `SensorHead` scene as its child.
+3. Add a `Marker3D` named `CockpitMount` — place the cockpit scene as its child.
+4. Implement `get_sensor_head_mount()` and `get_cockpit_mount()` using `get_node()`.
+
+```gdscript
+class_name MyShip extends VehicleBase
+
+func get_cockpit_mount() -> Marker3D:
+    return get_node("CockpitMount") as Marker3D
+
+func get_sensor_head_mount() -> Marker3D:
+    return get_node("SensorHeadMount") as Marker3D
+```
+
+**Important:** Use `get_node()` directly — not `@onready` — so the getters work when called from
+a child's `_ready()`, which fires before the parent's own `_ready()`.
+
+### `CockpitBase`
+
+Root script for any cockpit interior.
+
+**To create a new cockpit:**
+1. Create a scene whose root node has a script extending `CockpitBase`.
+2. Add a `Marker3D` named `CameraMount` — place `PlayerCamera3D` (+ `MouseLookController`) as its child.
+3. Add a `Marker3D` named `PanoramicDisplayMount` — place the `PanoramicScreen` scene as its child.
+4. Implement `get_camera_mount()` and `get_display_mount()` using `get_node()`.
+
+```gdscript
+class_name MyCockpit extends CockpitBase
+
+func get_camera_mount() -> Marker3D:
+    return get_node("CameraMount") as Marker3D
+
+func get_display_mount() -> Marker3D:
+    return get_node("PanoramicDisplayMount") as Marker3D
+```
+
+---
+
+## Component Auto-Discovery
+
+Components (`SensorHead`, `PanoramicScreen`) find each other at `_ready()` by walking the scene
+tree — no manual export wiring needed.
+
+```
+SensorHead._ready()
+  → VehicleBase.find_vehicle(self)   walk up tree to nearest VehicleBase
+  → vehicle.get_cockpit()            first CockpitBase child of CockpitMount
+  → cockpit.get_player_camera()      first Camera3D child of CameraMount
+  → cockpit.get_panoramic_screen()   first PanoramicScreen child of PanoramicDisplayMount
+
+PanoramicScreen._ready()
+  → VehicleBase.find_vehicle(self)   walk up tree to nearest VehicleBase
+  → vehicle.get_sensor_head()        first SensorHead child of SensorHeadMount
+```
+
+Both components keep their dependencies as `@export` so they can be set manually for
+standalone testing (e.g. a test scene without a full vehicle hierarchy).
+
+---
+
+## Scene Hierarchy: Assembly Point
+
+**The vehicle scene is the assembly point.** The stage scene (`low_earth_orbit.tscn`) only
+knows about the top-level vehicle scene — it has no knowledge of cockpit internals.
+
+```
+low_earth_orbit.tscn
+  └── MobileSuitRX0  (mobile_suit_rx_0.tscn)   ← drop in and done
+        ├── SensorHeadMount/SensorHead
+        └── CockpitMount/CockpitRX0  (cockpit_rx_0.tscn)
+              ├── PanoramicDisplayMount/PanoramicScreen
+              └── CameraMount/PlayerCamera3D/MouseLookController
+```
+
+The vehicle scene assembles the cockpit, sensor, camera, and input controller. The stage just
+places the vehicle.
+
+---
+
+## Render Layers (`Core/AutoLoad/layers.gd`)
+
+| Constant | Bit | Camera masks that include it |
+|----------|-----|------------------------------|
+| `WORLD` | 1 | First-person, third-person, sensor |
+| `VEHICLE_EXT` | 2 | Third-person, sensor |
+| `VEHICLE_FP` | 4 | First-person only |
+| `COCKPIT` | 8 | First-person only — **excluded from sensor** |
+| `PILOT` | 16 | First-person only |
+| `FX` | 32 | All cameras |
+| `HUD_3D` | 64 | First-person only |
+| `SENSOR_BODY_PARTS` | 128 | Sensor only (opt-in via `set_group_visible()`) |
+| `SENSOR_WEAPONS` | 256 | Sensor only (opt-in) |
+| `SENSOR_SHIELDS` | 512 | Sensor only (opt-in) |
+
+`COCKPIT` is excluded from `MASK_SENSOR` so the panoramic screen never appears recursively
+inside its own sensor feed.
+
+---
+
+## Adding a New Vehicle / Cockpit
+
+### New cockpit for an existing vehicle type
+
+1. Create `Entities/Vehicles/Cockpits/CockpitXXX/cockpit_xxx.gd` extending `CockpitBase`.
+2. Build `cockpit_xxx.tscn` with `CameraMount` and `PanoramicDisplayMount` markers and their children.
+3. In the vehicle scene, replace the cockpit instance under `CockpitMount` with the new scene.
+4. Nothing else — auto-discovery handles the rest.
+
+### New vehicle type
+
+1. Create `Entities/Vehicles/<Category>/<Name>/<name>.gd` extending `VehicleBase`.
+2. Build the vehicle scene with `SensorHeadMount` and `CockpitMount` markers.
+3. Implement `get_sensor_head_mount()` and `get_cockpit_mount()`.
+4. Place the vehicle in any stage.
+
+### Sharing the panoramic display on a new vehicle
+
+The `PanoramicDisplay` components live in `Cockpits/Components/` — shared across all cockpit
+types. Any cockpit that extends `CockpitBase` and has a `PanoramicDisplayMount` with a
+`PanoramicScreen` child automatically works with `SensorHead`.
+
+---
+
+## Key Technical Documents
+
+| Document | Contents |
+|----------|---------|
+| `Docs/PanoramicCockpit/summary.md` | System overview, scene tree, data flow, performance |
+| `Docs/PanoramicCockpit/sensor_head.md` | FOV algorithm, SubViewport trick, dynamic viewport sizing |
+| `Docs/PanoramicCockpit/panoramic_screen.md` | UV2 encoding, mesh generation, segment mask API |
+| `Docs/PanoramicCockpit/panoramic_screen_shader.md` | Shader walkthrough, coordinate systems, artefact guide |
