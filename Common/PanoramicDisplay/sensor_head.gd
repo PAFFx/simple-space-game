@@ -72,7 +72,7 @@ func _create_camera() -> void:
 	# body parts have been assigned their own sensor sub-layers.
 	_camera.cull_mask = Layers.WORLD | Layers.FX
 	_camera.near = 0.5
-	_camera.far = 10000.0
+	_camera.far = 2000.0
 	_viewport.add_child(_camera)
 
 
