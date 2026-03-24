@@ -23,7 +23,7 @@ extends Node3D
 
 ## Safety margin added on top of the geometry-computed FOV.
 ## Covers 1-frame rotation lag and floating-point precision at sphere edges.
-@export var fov_safety_margin_degrees: float = 2.0
+@export var fov_safety_margin_degrees: float = 8.0
 
 @export var min_viewport_size: int = 256
 @export var max_viewport_size: int = 4096
