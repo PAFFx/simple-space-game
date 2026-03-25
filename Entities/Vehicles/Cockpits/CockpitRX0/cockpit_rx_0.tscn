@@ -606,13 +606,16 @@ layers = 8
 [node name="polySurface38_001" parent="Light_Unicorn_Cockpit/Middle_part/Right_Mouse" parent_id_path=PackedInt32Array(1363326514) index="3" unique_id=2122531427]
 layers = 8
 
-[node name="Left_Screen" parent="Light_Unicorn_Cockpit/Screens" parent_id_path=PackedInt32Array(880130629) index="0" unique_id=571976024]
+[node name="Screens" parent="Light_Unicorn_Cockpit" index="3" unique_id=880130629]
+visible = false
+
+[node name="Left_Screen" parent="Light_Unicorn_Cockpit/Screens" index="0" unique_id=571976024]
 layers = 8
 
-[node name="Middle_Screen" parent="Light_Unicorn_Cockpit/Screens" parent_id_path=PackedInt32Array(880130629) index="1" unique_id=1848805951]
+[node name="Middle_Screen" parent="Light_Unicorn_Cockpit/Screens" index="1" unique_id=1848805951]
 layers = 8
 
-[node name="Right_Screen" parent="Light_Unicorn_Cockpit/Screens" parent_id_path=PackedInt32Array(880130629) index="2" unique_id=1807308698]
+[node name="Right_Screen" parent="Light_Unicorn_Cockpit/Screens" index="2" unique_id=1807308698]
 layers = 8
 
 [node name="PanoramicDisplayMount" type="Marker3D" parent="." index="1" unique_id=1141796779]
