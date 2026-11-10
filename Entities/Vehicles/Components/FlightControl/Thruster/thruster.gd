@@ -1,0 +1,126 @@
+class_name Thruster
+extends Node3D
+
+## Gimballed thruster that pushes its RigidBody3D.
+##
+## Orientation: the node's -Z is the nominal THRUST direction, so the blue +Z
+## gizmo arrow in the editor shows where the exhaust plume goes.
+##
+## The FlightComputer calls set_command() then step() every physics tick. The
+## applied force follows the *actual* gimbal angle and spooled throttle, so
+## actuator lag is part of the simulation rather than hidden from the solver.
+
+@export var max_thrust: float = 150000.0          ## N
+@export_range(0.0, 60.0) var gimbal_limit_deg: float = 20.0
+@export var gimbal_rate_deg: float = 120.0        ## Max gimbal slew, deg/s
+@export var spool_up_time: float = 0.25           ## Throttle time constant rising, s
+@export var spool_down_time: float = 0.12         ## Throttle time constant falling, s
+@export_range(0.0, 0.2) var min_throttle: float = 0.02   ## Below this the thruster cuts off
+@export var enabled: bool = true
+
+@export_group("Visuals")
+@export var plume_length: float = 7.0             ## Plume length at full thrust, m
+@export var nozzle_scale: float = 1.0:
+	set(v):
+		nozzle_scale = v
+		if is_node_ready():
+			_visual.scale = Vector3.ONE * v
+
+var throttle: float = 0.0                         ## Actual spooled throttle [0, 1]
+
+var _cmd_throttle: float = 0.0
+var _cmd_dir := Vector3.FORWARD                   ## Commanded thrust dir, local to this node
+var _dir := Vector3.FORWARD                       ## Actual thrust dir, local to this node
+
+@onready var _gimbal: Node3D = $Gimbal
+@onready var _visual: Node3D = $Gimbal/Visual
+@onready var _plume: Node3D = $Gimbal/Visual/PlumePivot
+
+
+func _ready() -> void:
+	_visual.scale = Vector3.ONE * nozzle_scale
+	_set_layers(self, Layers.VEHICLE_EXT)
+	_update_visuals()
+
+
+## Current thrust in Newtons.
+func get_thrust() -> float:
+	return throttle * max_thrust if enabled else 0.0
+
+
+## Available thrust for the allocator (0 when disabled).
+func get_available_thrust() -> float:
+	return max_thrust if enabled else 0.0
+
+
+func get_cone_rad() -> float:
+	return deg_to_rad(gimbal_limit_deg)
+
+
+## Nominal thrust direction expressed in `frame`'s local axes.
+func get_axis_in(frame: Node3D) -> Vector3:
+	return (frame.global_basis.inverse() * -global_basis.z).normalized()
+
+
+## Nozzle position expressed in `frame`'s local coordinates.
+func get_position_in(frame: Node3D) -> Vector3:
+	return frame.to_local(_gimbal.global_position)
+
+
+## throttle_cmd in [0, 1]; direction is the desired thrust direction in `frame`'s axes.
+func set_command(throttle_cmd: float, direction: Vector3, frame: Node3D) -> void:
+	_cmd_throttle = clampf(throttle_cmd, 0.0, 1.0) if enabled else 0.0
+	if direction.length_squared() > 1e-8:
+		var local := (global_basis.inverse() * (frame.global_basis * direction)).normalized()
+		_cmd_dir = _clamp_to_cone(local)
+
+
+## Advances actuator dynamics and applies the resulting force to `body`.
+func step(delta: float, body: RigidBody3D, has_propellant: bool) -> void:
+	var target := _cmd_throttle if has_propellant else 0.0
+	var tau := spool_up_time if target > throttle else spool_down_time
+	throttle += (target - throttle) * (1.0 - exp(-delta / maxf(tau, 0.001)))
+	if target < min_throttle and throttle < min_throttle:
+		throttle = 0.0
+
+	var angle := _dir.angle_to(_cmd_dir)
+	if angle > 1e-5:
+		var max_step := deg_to_rad(gimbal_rate_deg) * delta
+		_dir = _dir.slerp(_cmd_dir, minf(1.0, max_step / angle)).normalized()
+	_gimbal.basis = Basis.looking_at(_dir, _pick_up(_dir))
+
+	var thrust := get_thrust()
+	if thrust > 0.0:
+		var force := -_gimbal.global_basis.z.normalized() * thrust
+		body.apply_force(force, _gimbal.global_position - body.global_position)
+	_update_visuals()
+
+
+func _clamp_to_cone(local_dir: Vector3) -> Vector3:
+	var limit := deg_to_rad(gimbal_limit_deg)
+	var angle := Vector3.FORWARD.angle_to(local_dir)
+	if angle <= limit:
+		return local_dir
+	if limit <= 0.0:
+		return Vector3.FORWARD
+	return Vector3.FORWARD.slerp(local_dir, limit / angle).normalized()
+
+
+static func _pick_up(dir: Vector3) -> Vector3:
+	return Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+
+
+func _update_visuals() -> void:
+	var t := throttle if enabled else 0.0
+	_plume.visible = t > 0.0
+	if t > 0.0:
+		var flicker := 1.0 + randf_range(-0.06, 0.06)
+		var radius := lerpf(0.6, 1.0, t)
+		_plume.scale = Vector3(radius, plume_length * t * flicker / nozzle_scale, radius)
+
+
+static func _set_layers(node: Node, layers: int) -> void:
+	if node is VisualInstance3D:
+		(node as VisualInstance3D).layers = layers
+	for child in node.get_children():
+		_set_layers(child, layers)

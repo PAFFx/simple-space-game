@@ -1,0 +1,193 @@
+class_name FlightComputer
+extends Node
+
+## Fly-by-wire flight computer. Each physics tick:
+##
+##   PilotInputSource ─► ControlLaw ─► ThrustAllocator ─► Thruster × N ─► RigidBody3D
+##     (intent)          (wrench)       (per-thruster)     (lagged force)
+##
+## Every stage is swappable: assign a different input node, ControlLaw or
+## ThrustAllocator resource in the Inspector (or via set_control_law() /
+## set_allocator() at runtime). Thrusters are discovered automatically anywhere
+## under the RigidBody3D, so they may sit on animated bones.
+
+signal propellant_depleted
+
+const G0 := 9.80665
+
+## Optional override — defaults to the first PilotInputSource child.
+@export var input_source: PilotInputSource
+@export var control_law: ControlLaw
+@export var allocator: ThrustAllocator
+## Master FCS switch. Off = all thrusters commanded to zero.
+@export var fcs_enabled: bool = true
+
+@export_group("Mass & Propellant")
+@export var dry_mass: float = 36000.0             ## kg
+@export var propellant_capacity: float = 9000.0   ## kg
+@export var propellant: float = 9000.0            ## kg
+@export var specific_impulse: float = 3000.0      ## s
+
+@export_group("Reference Frame")
+## Velocities are reported and held relative to this node (e.g. a station). Empty = world.
+@export var reference_frame: Node3D
+
+var body: RigidBody3D
+var thrusters: Array[Thruster] = []
+var state := FlightState.new()
+var last_wrench := Wrench.new()
+var acceleration_g: float = 0.0
+
+var _prev_velocity := Vector3.ZERO
+var _ref_prev_position := Vector3.ZERO
+var _ref_velocity := Vector3.ZERO
+var _ref_tracking := false
+var _depleted_emitted := false
+
+
+func _ready() -> void:
+	body = _find_body()
+	if body == null:
+		push_error("FlightComputer: no RigidBody3D ancestor found")
+		set_physics_process(false)
+		return
+	if input_source == null:
+		input_source = _find_input_source()
+	set_control_law(control_law if control_law != null else RateCommandControlLaw.new())
+	set_allocator(allocator if allocator != null else ConeProjectedAllocator.new())
+	_collect_thrusters(body)
+	body.mass = dry_mass + propellant
+	_prev_velocity = body.linear_velocity
+
+
+func set_control_law(law: ControlLaw) -> void:
+	# Duplicate so vehicles sharing a .tres never share hold/integrator state.
+	control_law = law.duplicate()
+	control_law.reset()
+
+
+func set_allocator(new_allocator: ThrustAllocator) -> void:
+	allocator = new_allocator.duplicate()
+
+
+func _physics_process(delta: float) -> void:
+	_build_state(delta)
+	var command := input_source.get_command() if input_source != null else PilotCommand.new()
+
+	if fcs_enabled:
+		last_wrench = control_law.compute(state, command)
+		var demand := allocator.allocate(state, last_wrench)
+		for i in thrusters.size():
+			thrusters[i].set_command(demand[i].length(), demand[i], body)
+	else:
+		last_wrench = Wrench.new()
+		for t in thrusters:
+			t.set_command(0.0, Vector3.ZERO, body)
+
+	var has_propellant := propellant > 0.0
+	var thrust_sum := 0.0
+	for t in thrusters:
+		t.step(delta, body, has_propellant)
+		thrust_sum += t.get_thrust()
+	_consume_propellant(thrust_sum, delta)
+
+	var accel := (body.linear_velocity - _prev_velocity) / delta
+	_prev_velocity = body.linear_velocity
+	acceleration_g = lerpf(acceleration_g, accel.length() / G0, 0.15)
+
+
+# --- Telemetry (used by the HUD) ---
+
+func get_propellant_fraction() -> float:
+	return propellant / propellant_capacity if propellant_capacity > 0.0 else 0.0
+
+
+## Current total thrust as a fraction of the combined maximum.
+func get_thrust_fraction() -> float:
+	var now := 0.0
+	var total := 0.0
+	for t in thrusters:
+		now += t.get_thrust()
+		total += t.max_thrust
+	return now / total if total > 0.0 else 0.0
+
+
+func get_mode_labels() -> PackedStringArray:
+	if not fcs_enabled:
+		return PackedStringArray(["FCS OFF"])
+	return control_law.get_mode_labels()
+
+
+# --- Private ---
+
+func _build_state(delta: float) -> void:
+	var ds := PhysicsServer3D.body_get_direct_state(body.get_rid())
+	var s := FlightState.new()
+	s.delta = delta
+	s.mass = body.mass
+	s.basis = body.global_basis.orthonormalized()
+	s.com_position = body.global_position + ds.center_of_mass
+
+	s.reference_velocity = _reference_velocity(delta)
+	s.linear_velocity = body.linear_velocity - s.reference_velocity
+	s.local_linear_velocity = s.to_local(s.linear_velocity)
+	s.angular_velocity = body.angular_velocity
+	s.local_angular_velocity = s.to_local(s.angular_velocity)
+	s.inertia_local = s.basis.transposed() * ds.inverse_inertia_tensor.inverse() * s.basis
+
+	var com_local := body.to_local(s.com_position)
+	var has_propellant := propellant > 0.0
+	for t in thrusters:
+		s.thruster_positions.append(t.get_position_in(body) - com_local)
+		s.thruster_axes.append(t.get_axis_in(body))
+		s.thruster_cone.append(t.get_cone_rad())
+		s.thruster_max.append(t.get_available_thrust() if has_propellant else 0.0)
+	s.compute_authority()
+	state = s
+
+
+func _reference_velocity(delta: float) -> Vector3:
+	if reference_frame == null:
+		return Vector3.ZERO
+	var pos := reference_frame.global_position
+	if _ref_tracking:
+		# Low-pass: the reference may move in _process, which is jittery per physics tick.
+		_ref_velocity = _ref_velocity.lerp((pos - _ref_prev_position) / delta, 0.1)
+	_ref_prev_position = pos
+	_ref_tracking = true
+	return _ref_velocity
+
+
+func _consume_propellant(thrust_sum: float, delta: float) -> void:
+	if propellant <= 0.0:
+		return
+	propellant = maxf(0.0, propellant - thrust_sum / (specific_impulse * G0) * delta)
+	var mass := dry_mass + propellant
+	if absf(body.mass - mass) > 10.0:
+		body.mass = mass
+	if propellant <= 0.0 and not _depleted_emitted:
+		_depleted_emitted = true
+		propellant_depleted.emit()
+
+
+func _find_body() -> RigidBody3D:
+	var node := get_parent()
+	while node != null:
+		if node is RigidBody3D:
+			return node as RigidBody3D
+		node = node.get_parent()
+	return null
+
+
+func _find_input_source() -> PilotInputSource:
+	for child in get_children():
+		if child is PilotInputSource:
+			return child as PilotInputSource
+	return null
+
+
+func _collect_thrusters(node: Node) -> void:
+	for child in node.get_children():
+		if child is Thruster:
+			thrusters.append(child as Thruster)
+		_collect_thrusters(child)

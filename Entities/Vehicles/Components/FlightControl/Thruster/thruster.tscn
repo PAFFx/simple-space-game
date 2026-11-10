@@ -1,0 +1,77 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.gd" id="1_thr"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_nozzle"]
+albedo_color = Color(0.16, 0.16, 0.18, 1)
+metallic = 0.8
+roughness = 0.35
+cull_mode = 2
+
+[sub_resource type="CylinderMesh" id="Mesh_nozzle"]
+material = SubResource("Mat_nozzle")
+top_radius = 0.42
+bottom_radius = 0.16
+height = 0.6
+radial_segments = 16
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="Mat_plume"]
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(0.35, 0.6, 1, 0.55)
+disable_receive_shadows = true
+
+[sub_resource type="CylinderMesh" id="Mesh_plume"]
+material = SubResource("Mat_plume")
+top_radius = 0.06
+bottom_radius = 0.38
+height = 1.0
+radial_segments = 16
+rings = 1
+cap_top = false
+cap_bottom = false
+
+[sub_resource type="StandardMaterial3D" id="Mat_core"]
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0.92, 0.85, 0.9)
+disable_receive_shadows = true
+
+[sub_resource type="CylinderMesh" id="Mesh_core"]
+material = SubResource("Mat_core")
+top_radius = 0.02
+bottom_radius = 0.22
+height = 1.0
+radial_segments = 12
+rings = 1
+cap_top = false
+cap_bottom = false
+
+[node name="Thruster" type="Node3D"]
+script = ExtResource("1_thr")
+
+[node name="Gimbal" type="Node3D" parent="."]
+
+[node name="Visual" type="Node3D" parent="Gimbal"]
+
+[node name="Nozzle" type="MeshInstance3D" parent="Gimbal/Visual"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0.3)
+mesh = SubResource("Mesh_nozzle")
+
+[node name="PlumePivot" type="Node3D" parent="Gimbal/Visual"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0.6)
+
+[node name="Plume" type="MeshInstance3D" parent="Gimbal/Visual/PlumePivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_plume")
+
+[node name="Core" type="MeshInstance3D" parent="Gimbal/Visual/PlumePivot"]
+transform = Transform3D(1, 0, 0, 0, 0.5, 0, 0, 0, 1, 0, 0.25, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_core")
