@@ -47,4 +47,5 @@ func _log_activity(devices: Array[int]) -> void:
 			var bucket := roundi(v * 4.0)
 			if _logged.get(key, 0) != bucket:
 				_logged[key] = bucket
-				print("[HotasPilotInput] joy %d (%s) axis %d = %.2f" % [device, Input.get_joy_name(device), axis, v])
+				print("[HotasPilotInput] joy %d (%s) axis %d = %.2f"
+						% [device, Input.get_joy_name(device), axis, v])

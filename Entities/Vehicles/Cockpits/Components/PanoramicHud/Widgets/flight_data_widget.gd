@@ -42,7 +42,8 @@ func _draw_right_block(fc: FlightComputer, line_h: float) -> void:
 	begin_local(side_azimuth_deg, block_elevation_deg)
 	var prop := fc.get_propellant_fraction()
 	var thr := fc.get_thrust_fraction()
-	_bar_row(0.0, "PROP", prop, hud.caution_color if prop < low_propellant_fraction else hud.primary_color)
+	var prop_color := hud.caution_color if prop < low_propellant_fraction else hud.primary_color
+	_bar_row(0.0, "PROP", prop, prop_color)
 	_bar_row(line_h, "THR", thr, hud.primary_color)
 	var modes := fc.get_mode_labels()
 	for i in modes.size():
@@ -58,7 +59,8 @@ func _bar_row(y: float, label: String, fraction: float, color: Color) -> void:
 	var h := 8.0
 	draw_rect(Rect2(x0, y - h - 2.0, w, h), hud.dim_color, false, 1.0)
 	draw_rect(Rect2(x0, y - h - 2.0, w * clampf(fraction, 0.0, 1.0), h), color, true)
-	text(Vector2(x0 + w + 6.0, y), "%3d%%" % roundi(fraction * 100.0), color, HORIZONTAL_ALIGNMENT_LEFT, 15)
+	var pct := "%3d%%" % roundi(fraction * 100.0)
+	text(Vector2(x0 + w + 6.0, y), pct, color, HORIZONTAL_ALIGNMENT_LEFT, 15)
 
 
 func _draw_attitude_readout() -> void:

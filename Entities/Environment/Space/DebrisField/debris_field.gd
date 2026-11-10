@@ -47,6 +47,7 @@ func _rebuild() -> void:
 		var r := pow(lerpf(pow(inner_radius, 3.0), pow(outer_radius, 3.0), t), 1.0 / 3.0)
 		var s := rng.randf_range(size_range.x, size_range.y)
 		var rock_scale := Vector3(s * rng.randf_range(0.6, 1.4), s * rng.randf_range(0.5, 1.0), s)
-		var rock_basis := Basis.from_euler(Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)).scaled(rock_scale)
+		var euler := Vector3(rng.randf(), rng.randf(), rng.randf()) * TAU
+		var rock_basis := Basis.from_euler(euler).scaled(rock_scale)
 		mm.set_instance_transform(i, Transform3D(rock_basis, dir * r))
 	multimesh = mm

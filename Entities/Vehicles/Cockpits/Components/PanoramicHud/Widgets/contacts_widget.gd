@@ -37,10 +37,11 @@ func draw_widget() -> void:
 		var half := px(maxf(min_box_deg, rad_to_deg(atan(radius / dist))))
 		brackets(Vector2(half, half), maxf(half * 0.35, 8.0), hud.primary_color)
 		var label: String = contact.get_meta("hud_label", String(contact.name))
-		text(Vector2(half + 6.0, -half + 14.0), label.to_upper(), hud.primary_color, HORIZONTAL_ALIGNMENT_LEFT, 15)
-		text(Vector2(half + 6.0, -half + 32.0), _format_range(dist), hud.dim_color, HORIZONTAL_ALIGNMENT_LEFT, 14)
-		text(Vector2(half + 6.0, -half + 48.0), "Vc %+.1f" % _closure.get(id, 0.0), hud.dim_color,
-				HORIZONTAL_ALIGNMENT_LEFT, 14)
+		var left := HORIZONTAL_ALIGNMENT_LEFT
+		var x := half + 6.0
+		text(Vector2(x, -half + 14.0), label.to_upper(), hud.primary_color, left, 15)
+		text(Vector2(x, -half + 32.0), _format_range(dist), hud.dim_color, left, 14)
+		text(Vector2(x, -half + 48.0), "Vc %+.1f" % _closure.get(id, 0.0), hud.dim_color, left, 14)
 		end_local()
 
 
