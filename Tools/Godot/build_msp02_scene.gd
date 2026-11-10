@@ -15,6 +15,10 @@ const ANIM_PATH := DIR + "Animations/msp02_animations.tres"
 const MODEL := DIR + "Arts/mobile_suit_msp02.glb"
 const SKELETON := ^"Model/Armature/Skeleton3D"
 const COM := Vector3(0.0, 14.6, 0.2)
+const SENSOR_SCENE := \
+		"res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn"
+const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat.tscn"
+const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn"
 
 # name, bone, position, exhaust direction, thrust kN, gimbal deg, plume m, nozzle scale
 # Main thrust follows the published late-UC ratio: 4 × 18,300 kgf + 2 × 12,300 kgf.
@@ -35,8 +39,10 @@ const THRUSTERS := [
 	["ShSideL", "shoulder.L", Vector3(-5.33, 17.8, 0.0), Vector3(-1, 0, 0), 30.0, 25.0, 3.5, 0.55],
 	["ChestR", "chest", Vector3(2.1, 16.48, -2.66), Vector3(0, 0, -1), 35.0, 20.0, 4.0, 0.6],
 	["ChestL", "chest", Vector3(-2.1, 16.48, -2.66), Vector3(0, 0, -1), 35.0, 20.0, 4.0, 0.6],
-	["SkFrontR", "skirt_front.R", Vector3(1.25, 11.3, -1.75), Vector3(0, -0.4, -1), 30.0, 30.0, 3.5, 0.55],
-	["SkFrontL", "skirt_front.L", Vector3(-1.25, 11.3, -1.75), Vector3(0, -0.4, -1), 30.0, 30.0, 3.5, 0.55],
+	["SkFrontR", "skirt_front.R", Vector3(1.25, 11.3, -1.75), Vector3(0, -0.4, -1), 30.0, 30.0,
+			3.5, 0.55],
+	["SkFrontL", "skirt_front.L", Vector3(-1.25, 11.3, -1.75), Vector3(0, -0.4, -1), 30.0, 30.0,
+			3.5, 0.55],
 	["SkSideR", "skirt_side.R", Vector3(2.8, 11.7, 0.0), Vector3(1, -0.3, 0), 30.0, 30.0, 3.5, 0.55],
 	["SkSideL", "skirt_side.L", Vector3(-2.8, 11.7, 0.0), Vector3(-1, -0.3, 0), 30.0, 30.0, 3.5, 0.55],
 	["SkRearR", "skirt_rear.R", Vector3(1.0, 11.6, 1.8), Vector3(0, -0.5, 1), 30.0, 30.0, 3.5, 0.55],
@@ -145,9 +151,9 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 		_add(root, root, shape)
 
 	var sensor_mount := _marker(root, "SensorHeadMount", Vector3(0, 19.9, -1.45))
-	_add(root, sensor_mount, load("res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn").instantiate())
+	_add(root, sensor_mount, load(SENSOR_SCENE).instantiate())
 	var cockpit_mount := _marker(root, "CockpitMount", Vector3(0, 16.1, -0.5))
-	_add(root, cockpit_mount, load("res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat.tscn").instantiate())
+	_add(root, cockpit_mount, load(COCKPIT_SCENE).instantiate())
 
 	_build_thrusters(root)
 	_build_flight_computer(root)
@@ -175,7 +181,7 @@ func _build_thrusters(root: Node3D) -> void:
 	var group := Node3D.new()
 	group.name = "Thrusters"
 	_add(root, root, group)
-	var thruster_scene: PackedScene = load("res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn")
+	var thruster_scene: PackedScene = load(THRUSTER_SCENE)
 	var attachments := {}
 	for t in THRUSTERS:
 		var bone: String = t[1]
@@ -340,20 +346,15 @@ func _idle() -> Animation:
 
 func _idle_rotations(bone: String, phase: float) -> Array:
 	var side := 1.0 if bone.ends_with(".R") else -1.0
-	match bone.get_slice(".", 0):
-		"upper_arm":
-			return [[Vector3.RIGHT, 4.0 + 2.0 * sin(phase)], [Vector3.BACK, 6.0 * side]]
-		"forearm":
-			return [[Vector3.RIGHT, 12.0 + 2.0 * sin(phase + 0.6)]]
-		"thigh":
-			return [[Vector3.RIGHT, 8.0 + 1.5 * sin(phase + side)], [Vector3.BACK, 3.0 * side]]
-		"shin":
-			return [[Vector3.RIGHT, -14.0 - 2.0 * sin(phase + side)]]
-		"spine":
-			return [[Vector3.UP, 1.5 * sin(phase)]]
-		"head":
-			return [[Vector3.UP, 10.0 * sin(phase)], [Vector3.RIGHT, -3.0]]
-	return []
+	var table := {
+		"upper_arm": [[Vector3.RIGHT, 4.0 + 2.0 * sin(phase)], [Vector3.BACK, 6.0 * side]],
+		"forearm": [[Vector3.RIGHT, 12.0 + 2.0 * sin(phase + 0.6)]],
+		"thigh": [[Vector3.RIGHT, 8.0 + 1.5 * sin(phase + side)], [Vector3.BACK, 3.0 * side]],
+		"shin": [[Vector3.RIGHT, -14.0 - 2.0 * sin(phase + side)]],
+		"spine": [[Vector3.UP, 1.5 * sin(phase)]],
+		"head": [[Vector3.UP, 10.0 * sin(phase)], [Vector3.RIGHT, -3.0]],
+	}
+	return table.get(bone.get_slice(".", 0), [])
 
 
 func _pose(pose: Dictionary) -> Animation:

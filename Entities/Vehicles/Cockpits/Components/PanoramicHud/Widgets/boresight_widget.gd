@@ -19,7 +19,8 @@ func draw_widget() -> void:
 	var fwd := hud.world_to_display(-body.z)
 	var angles := HudProjector.direction_to_angles(fwd)
 	var pos := hud.projector.angles_to_canvas(angles.x, angles.y)
-	var up_pos := hud.projector.direction_to_canvas((fwd + hud.world_to_display(body.y) * 0.02).normalized())
+	var up_dir := (fwd + hud.world_to_display(body.y) * 0.02).normalized()
+	var up_pos := hud.projector.direction_to_canvas(up_dir)
 	var roll := (up_pos - pos).angle() + PI * 0.5
 	var offset_deg := rad_to_deg(fwd.angle_to(Vector3.FORWARD))
 
