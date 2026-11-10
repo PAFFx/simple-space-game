@@ -11,8 +11,8 @@ PanoramicHud (Node)
     ├── Silhouettes     outlines of nearby HudSilhouette nodes (e.g. the shield)
     ├── Attitude        horizon ring (360°, heading marks) + pitch ladder, in the cockpit frame
     ├── Boresight       body-axis reticle (rolls with the body)
-    ├── SuitAttitude    suit vs cockpit: PITCH gauges left/right (side view), ROLL gauge below
-                        the reticle (rear view); circle = cockpit, line = suit
+    ├── SuitAttitude    suit vs cockpit: big PITCH gauges 90° left/right (side view), small ROLL
+                        gauge below the reticle (rear view); circle = cockpit, line = suit
     ├── FlightPath      prograde / retrograde markers + speed
     ├── FlightData      SPD / G MS / G PLT / ROT / AMBAC, PROP / THR bars, FCS modes, cautions
     ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
