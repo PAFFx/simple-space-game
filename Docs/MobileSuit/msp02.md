@@ -10,8 +10,9 @@ blade antenna, tapered forearms, long flaring shins, wedge feet, backpack saber 
 |---|---|
 | Head height | ~21.2 m |
 | Mass | 30 t dry + 10 t propellant + 2.6 t rifle + 3.8 t shield ≈ 46.4 t |
-| Main thrust | 4 × 179.5 kN backpack + 2 × 120.6 kN leg (= 4 × 18,300 + 2 × 12,300 kgf) |
-| Verniers | 18 × 25–35 kN (shoulders, chest, skirts, feet) |
+| Main thrust | 4 × 450 kN backpack + 2 × 300 kN leg ≈ 2.4 MN (~5.3 G; anime-style, enough to leap in 1 G) |
+| Verniers | 18 × 40–56 kN (shoulders, chest, skirts, feet) |
+| Actuators | mains spool 0.12 s / vector 240°/s, verniers 0.06 s / 360°/s |
 | Mains layout | backpack bells at the bottom of the pods, firing down and 25° back, 60° vectoring |
 
 ## Files

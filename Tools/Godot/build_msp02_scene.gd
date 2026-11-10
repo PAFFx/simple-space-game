@@ -21,18 +21,24 @@ const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockp
 const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn"
 
 # name, bone, position, exhaust direction, thrust kN, gimbal deg, plume m, nozzle scale
-# Main thrust follows the published late-UC ratio: 4 × 18,300 kgf + 2 × 12,300 kgf.
+# Mains are tuned for anime-style performance (~5 G on main thrust alone, enough to leap
+# in an atmosphere); verniers are scaled by VERNIER_SCALE to balance their torque.
 # Backpack mains fire down and 25° back from the bottom of the pods (below the COM). Their
 # 60° vectoring lets them swing the thrust line through the COM, and, with the suit pitched
 # nose-down, push mostly downward for a fast descent.
 const MAIN_EXHAUST := Vector3(0.0, -0.906, 0.423)
+const VERNIER_SCALE := 1.6
+## Thrusters at or above this rating are mains (fast-spooling, fast-vectoring engines).
+const MAIN_RATING_KN := 200.0
+const MAIN_DYNAMICS := {spool_up_time = 0.12, spool_down_time = 0.08, gimbal_rate_deg = 240.0}
+const VERNIER_DYNAMICS := {spool_up_time = 0.06, spool_down_time = 0.04, gimbal_rate_deg = 360.0}
 const THRUSTERS := [
-	["MainRI", "backpack", Vector3(1.15, 12.8, 3.0), MAIN_EXHAUST, 179.5, 60.0, 11.0, 1.1],
-	["MainRO", "backpack", Vector3(1.85, 12.8, 3.0), MAIN_EXHAUST, 179.5, 60.0, 11.0, 1.1],
-	["MainLI", "backpack", Vector3(-1.15, 12.8, 3.0), MAIN_EXHAUST, 179.5, 60.0, 11.0, 1.1],
-	["MainLO", "backpack", Vector3(-1.85, 12.8, 3.0), MAIN_EXHAUST, 179.5, 60.0, 11.0, 1.1],
-	["LegR", "shin.R", Vector3(1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 120.6, 20.0, 8.0, 1.0],
-	["LegL", "shin.L", Vector3(-1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 120.6, 20.0, 8.0, 1.0],
+	["MainRI", "backpack", Vector3(1.15, 12.8, 3.0), MAIN_EXHAUST, 450.0, 60.0, 15.0, 1.25],
+	["MainRO", "backpack", Vector3(1.85, 12.8, 3.0), MAIN_EXHAUST, 450.0, 60.0, 15.0, 1.25],
+	["MainLI", "backpack", Vector3(-1.15, 12.8, 3.0), MAIN_EXHAUST, 450.0, 60.0, 15.0, 1.25],
+	["MainLO", "backpack", Vector3(-1.85, 12.8, 3.0), MAIN_EXHAUST, 450.0, 60.0, 15.0, 1.25],
+	["LegR", "shin.R", Vector3(1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 300.0, 25.0, 11.0, 1.1],
+	["LegL", "shin.L", Vector3(-1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 300.0, 25.0, 11.0, 1.1],
 	["ShTopR", "shoulder.R", Vector3(4.1, 19.2, 0.3), Vector3(0, 1, 0), 35.0, 30.0, 3.5, 0.6],
 	["ShTopL", "shoulder.L", Vector3(-4.1, 19.2, 0.3), Vector3(0, 1, 0), 35.0, 30.0, 3.5, 0.6],
 	["ShFrontR", "shoulder.R", Vector3(4.1, 17.7, -1.62), Vector3(0, 0, -1), 30.0, 25.0, 3.5, 0.55],
@@ -209,7 +215,12 @@ func _build_thrusters(root: Node3D) -> void:
 		node.name = t[0]
 		_add(root, attachments[bone], node)
 		node.transform = _bone_rest_in_body(bone).affine_inverse() * body_xf
-		node.set("max_thrust", float(t[4]) * 1000.0)
+		var rating: float = t[4]
+		var is_main := rating >= MAIN_RATING_KN
+		node.set("max_thrust", rating * (1.0 if is_main else VERNIER_SCALE) * 1000.0)
+		var dynamics: Dictionary = MAIN_DYNAMICS if is_main else VERNIER_DYNAMICS
+		for key: String in dynamics:
+			node.set(key, dynamics[key])
 		node.set("gimbal_limit_deg", t[5])
 		node.set("plume_length", t[6])
 		node.set("nozzle_scale", t[7])
@@ -225,7 +236,7 @@ func _build_flight_computer(root: Node3D) -> void:
 	law.attitude_solver = ThrustVectoringAttitudeSolver.new()
 	fc.set("control_law", law)
 	var alloc := ConeProjectedAllocator.new()
-	alloc.iterations = 30
+	alloc.iterations = 60
 	fc.set("allocator", alloc)
 	fc.set("dry_mass", 30000.0)
 	fc.set("propellant_capacity", 10000.0)
