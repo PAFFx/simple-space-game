@@ -50,6 +50,7 @@ var _ref_velocity := Vector3.ZERO
 var _ref_tracking := false
 var _depleted_emitted := false
 var _hatch: CockpitHatch
+var _capability_map: ForceCapabilityMap
 
 
 func _ready() -> void:
@@ -70,6 +71,13 @@ func _ready() -> void:
 	_collect_thrusters(body)
 	body.mass = get_total_mass()
 	_prev_velocity = body.linear_velocity
+
+
+## Re-measures the clean force authority (call after thrusters are added, removed
+## or disabled). Takes a few hundred ms for ~30 thrusters.
+func rebuild_capability_map() -> void:
+	_capability_map = ForceCapabilityMap.build(state, allocator)
+	state.capability_map = _capability_map
 
 
 func get_total_mass() -> float:
@@ -190,7 +198,10 @@ func _build_state(delta: float) -> void:
 	s.compute_authority()
 	# The cockpit must line up with the hull opening while the hatch is unsealed.
 	s.allow_attitude_offset = _hatch == null or not _hatch.is_unsealed()
+	s.capability_map = _capability_map
 	state = s
+	if _capability_map == null and not thrusters.is_empty():
+		rebuild_capability_map()
 
 
 func _reference_velocity(delta: float) -> Vector3:

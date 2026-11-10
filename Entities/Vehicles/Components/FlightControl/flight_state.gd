@@ -34,6 +34,9 @@ var max_torque := Vector3.ZERO     ## Max torque per axis (symmetric, conservati
 ## False while the body must stay aligned with the cockpit (e.g. hatch open).
 var allow_attitude_offset: bool = true
 
+## Clean directional authority measured through the allocator (null = ellipsoid estimate).
+var capability_map: ForceCapabilityMap
+
 
 func to_local(global_vector: Vector3) -> Vector3:
 	return basis.transposed() * global_vector
@@ -43,9 +46,12 @@ func to_global(local_vector: Vector3) -> Vector3:
 	return basis * local_vector
 
 
-## Rough force authority (N) along a unit body-frame direction: an ellipsoid
-## through the six per-axis limits.
+## Force authority (N) along a unit body-frame direction. Uses the measured
+## capability map when available, else an ellipsoid through the per-axis limits
+## (optimistic: it counts force that only comes with side effects).
 func force_capability(dir: Vector3) -> float:
+	if capability_map != null:
+		return capability_map.lookup(dir)
 	var s := 0.0
 	for k in 3:
 		var limit := max_force_pos[k] if dir[k] >= 0.0 else max_force_neg[k]

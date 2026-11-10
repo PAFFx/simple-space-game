@@ -4,16 +4,20 @@ extends AttitudeOffsetSolver
 ## Minimises, over offsets r (rotation vector in the pilot frame, each axis
 ## limited by axis_limit_deg, total by max_offset_deg):
 ##
-##   J(r) = (|F| / capability(R⁻¹ F))²  +  angle_weight · (|r| / max_offset)²
-##                                       +  smooth_weight · |r − r_prev|²
+##   J(r) = shortfall_weight · max(0, |F| / capability(R⁻¹ F) − target_load)²
+##        + angle_weight · (|r| / max_offset)²  +  smooth_weight · |r − r_prev|²
 ##
-## capability() is the body's directional force authority (FlightState), so the
-## first term is "how saturated the thrusters would be". Small demands cost
-## nothing, so the suit only turns when a demand is hard to meet as it is.
+## capability() is the body's clean directional force authority (FlightState).
+## Demands the current attitude can meet cost nothing but the angle, so the
+## suit only turns when it must, and only as far as needed.
 ## Pattern search, started from the best of {current, zero, each body axis aimed
 ## at F}; a couple of dozen cost evaluations per tick.
 
-## Weight of offset angle relative to thruster saturation.
+## Thruster load (demand / capability) the solver aims to stay under.
+@export var target_load: float = 0.9
+## Weight of exceeding target_load (the reason to rotate at all).
+@export var shortfall_weight: float = 20.0
+## Weight of offset angle (the cost of rotating).
 @export var angle_weight: float = 0.6
 ## Penalises jumping between solutions, per rad².
 @export var smooth_weight: float = 0.4
@@ -64,9 +68,10 @@ func solve(state: FlightState, force_pilot: Vector3, current: Quaternion) -> Qua
 func _cost(state: FlightState, f_pilot: Vector3, r: Vector3, r_prev: Vector3) -> float:
 	var f_body := _to_quat(r).inverse() * f_pilot
 	var cap := maxf(state.force_capability(f_body.normalized()), 1.0)
-	var sat := f_pilot.length() / cap
+	var shortfall := maxf(0.0, f_pilot.length() / cap - target_load)
 	var a := r.length() / deg_to_rad(max_offset_deg)
-	return sat * sat + angle_weight * a * a + smooth_weight * (r - r_prev).length_squared()
+	return shortfall_weight * shortfall * shortfall + angle_weight * a * a \
+			+ smooth_weight * (r - r_prev).length_squared()
 
 
 ## Rotation vector that turns body direction `body_axis` toward `target` (pilot frame).

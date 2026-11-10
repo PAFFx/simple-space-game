@@ -85,27 +85,51 @@ The body is driven to `pilot · offset`, where the offset comes from the attitud
 
 Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
 
-**Boost** (Shift): 100% thrust and torque authority, rates × `boost_rate_multiplier` (1.7), rate
-loop × 1.5, commanded speed × 2.
+**Design goals**
+
+- Press a direction and the suit goes that way at the same acceleration whichever way you
+  press: velocity command in the pilot frame with one acceleration cap (`cruise_accel_g`
+  0.35 G, `boost_accel_g` 2 G), so the path is a straight line to the command.
+- Release the rotation controls and the turn stops at once (full torque, `stop_gain_multiplier`),
+  then the attitude is held.
+- The cockpit only turns when the pilot turns it. Any body rotation for thrust happens
+  underneath.
+- While the pilot steers, auto-rotation is frozen: suit and cockpit turn as one rigid unit.
+
+**Boost** (Shift): 2 G acceleration cap, 100% torque authority, rates × `boost_rate_multiplier`
+(1.7), rate loop × 1.5, commanded speed × 2.
 
 ### Auto-rotation (`ThrustVectoringAttitudeSolver`)
 
 Thrusters are not equal: the backpack mains (firing down and back) dwarf the verniers, so the suit
-is strong upward and weak sideways, backwards or down. **While boosting** (Shift), instead of
-thrusting "like a shuttle", the solver turns the body so the strong thrusters face the force
-demand: roll for side moves, lean forward for forward, pitch for braking. Without boost the body
-stays aligned with the cockpit and the verniers do the work (`auto_rotate_on_boost_only`).
+is strong upward and weak in other directions. Clean authority measured on MSP-02: up 2.3 G,
+forward 1.0, back 0.7, sideways 0.67, down 0.42.
+
+The solver turns the body **only when needed**: while a translation is commanded (or Shift is
+held), and only if the capped acceleration exceeds what the current attitude can deliver cleanly.
+Cruise (0.35 G) fits every direction, so normal flying never rotates the suit. Boost (2 G)
+rolls it for side moves, leans it forward for forward and pitches it for climbs or brakes.
+Releasing the controls brakes without rotating.
 
 It minimises over offsets `r` (pitch and roll up to 70°, yaw at most 3° via `axis_limit_deg`, so
 the suit never swings sideways under the pilot):
 
 ```
-J(r) = (|F| / capability(R⁻¹F))²  +  angle_weight · (|r| / 70°)²  +  smooth_weight · |r − r_prev|²
+J(r) = shortfall_weight · max(0, |F| / capability(R⁻¹F) − 0.9)²
+     + angle_weight · (|r| / 70°)²  +  smooth_weight · |r − r_prev|²
 ```
 
-`capability()` is the body's directional authority (`FlightState.force_capability`, an ellipsoid
-through the six per-axis limits). Small demands cost nothing, so the suit only turns when a demand
-is hard to meet. It's a pattern search warm-started from {current, zero, each body axis aimed at
+Demands the current attitude can meet cost only the angle, so the result is "rotate as little as
+possible to make it achievable".
+
+### Capability map
+
+`capability()` comes from a `ForceCapabilityMap`: at load the `FlightComputer` asks the allocator,
+in 48 directions, for the largest force it can make with less than 6% leaking sideways or into
+torque (bisection, warm-started probes, about 0.5 s once). An estimate from per-axis limits is far
+too optimistic: e.g. gimballed downward mains *can* push sideways, but only by also pushing up,
+which used to show up as vertical drift during strafes. Call `rebuild_capability_map()` after
+changing thrusters. It's a pattern search warm-started from {current, zero, each body axis aimed at
 F}, about a dozen cost evaluations per tick. The offset is hard-limited to `max_offset_deg` (70°)
 and slewed at `slew_rate_deg` (30°/s) after a low-pass (`smoothing_time`, 0.35 s), so swings
 ease in and out.

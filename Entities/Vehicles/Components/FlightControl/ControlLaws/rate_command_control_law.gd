@@ -23,8 +23,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var rotation_mode: RotationMode = RotationMode.ATTITUDE_HOLD
 ## Auto-rotation for thrust vectoring (ATTITUDE_HOLD only). Empty = body stays aligned.
 @export var attitude_solver: AttitudeOffsetSolver
-## Only auto-rotate while boosting; otherwise the body stays aligned with the cockpit.
-@export var auto_rotate_on_boost_only: bool = true
+## Only auto-rotate while boosting. Off: auto-rotate whenever a translation is
+## commanded (or boosting) and the demand needs it; plain stops never rotate.
+@export var auto_rotate_on_boost_only: bool = false
 
 @export_group("Rotation")
 ## Max commanded rate at full stick (pitch, yaw, roll), deg/s.
@@ -40,6 +41,8 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var stick_deadzone: float = 0.04
 ## Fraction of torque authority the FCS may request.
 @export_range(0.0, 1.0) var torque_fraction: float = 0.6
+## On stick release: rate-loop gain multiplier and full torque, so rotation stops at once.
+@export var stop_gain_multiplier: float = 2.0
 
 @export_group("Boost")
 ## While boosting: rate limits are multiplied by this, and torque/thrust limits open fully.
@@ -48,7 +51,10 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var boost_speed_multiplier: float = 2.0
 
 @export_group("Translation")
-@export_range(0.0, 1.0) var cruise_thrust_fraction: float = 0.5
+## Acceleration limit, same in every direction, so the suit moves in a straight
+## line toward the command. Auto-rotation finds the attitude that can deliver it.
+@export var cruise_accel_g: float = 0.35
+@export var boost_accel_g: float = 2.0
 ## Velocity demanded at full stick in VELOCITY_HOLD, m/s.
 @export var max_command_speed: float = 60.0
 ## Velocity loop gain, (m/s²) per (m/s) of error.
@@ -86,11 +92,11 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		rotation_mode = ((rotation_mode + 1) % RotationMode.size()) as RotationMode
 		_pilot = body_q * _offset.inverse()
 
+	_stick_active = command.rotation.length() > stick_deadzone
 	var force_world := _translation_force_world(state, command)
 	_update_offset(state, force_world, command)
 	var torque := _rotation_torque(state, command, body_q)
-	var fraction := 1.0 if command.boost else cruise_thrust_fraction
-	var force_body := clamp_to_capability(state.to_local(force_world), state, fraction)
+	var force_body := clamp_to_capability(state.to_local(force_world), state, 1.0)
 	return Wrench.new(force_body, torque)
 
 
@@ -116,9 +122,13 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 	if attitude_solver != null:
 		slew = deg_to_rad(attitude_solver.slew_rate_deg)
 		smoothing = attitude_solver.smoothing_time
-		var engaged := rotation_mode == RotationMode.ATTITUDE_HOLD and state.allow_attitude_offset \
-				and (command.boost or not auto_rotate_on_boost_only)
-		if engaged:
+		# While the pilot steers (or the turn is still braking) the suit and cockpit
+		# move as one rigid unit: keep the offset exactly as it is.
+		if _stick_active or _capturing:
+			return
+		var translating := command.translation.length() > stick_deadzone
+		var wanted := command.boost if auto_rotate_on_boost_only else (command.boost or translating)
+		if rotation_mode == RotationMode.ATTITUDE_HOLD and state.allow_attitude_offset and wanted:
 			var force_pilot := _pilot.inverse() * force_world
 			target = attitude_solver.solve(state, force_pilot, _offset)
 	# Low-pass the target first so the body eases into (and out of) a new attitude.
@@ -133,7 +143,6 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quaternion) -> Vector3:
 	var omega := state.local_angular_velocity
 	var max_rate := max_rate_deg * (PI / 180.0) * (boost_rate_multiplier if command.boost else 1.0)
-	_stick_active = command.rotation.length() > stick_deadzone
 	var stick_rate := command.rotation * max_rate if _stick_active else Vector3.ZERO
 	var rate_cmd := stick_rate
 
@@ -166,24 +175,23 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		_offset = Quaternion.IDENTITY
 		_pilot = body_q
 
+	var stopping := _capturing and not _stick_active
 	var gain := rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
+	if stopping:
+		gain *= stop_gain_multiplier
 	var alpha := (rate_cmd - omega) * gain
 	var inertia := state.inertia_local
 	var torque := inertia * alpha + omega.cross(inertia * omega)
-	var limit := state.max_torque * (1.0 if command.boost else torque_fraction)
+	var limit := state.max_torque * (1.0 if command.boost or stopping else torque_fraction)
 	return torque.clamp(-limit, limit)
 
 
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
 	var stick_world := _pilot * command.translation
+	var accel_limit := (boost_accel_g if command.boost else cruise_accel_g) * FlightComputer.G0
 	if translation_mode == TranslationMode.NEWTONIAN:
-		var magnitude := minf(stick_world.length(), 1.0)
-		if magnitude < 1e-4:
-			return Vector3.ZERO
-		# Full stick = the most the body could give in that direction right now.
-		var dir := stick_world.normalized()
-		return dir * magnitude * state.force_capability(state.to_local(dir))
+		return stick_world.limit_length(1.0) * accel_limit * state.mass
 
 	var speed := max_command_speed * (boost_speed_multiplier if command.boost else 1.0)
 	var v_error := stick_world * speed - state.linear_velocity
-	return v_error * velocity_gain * state.mass
+	return (v_error * velocity_gain).limit_length(accel_limit) * state.mass
