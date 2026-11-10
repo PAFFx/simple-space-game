@@ -11,6 +11,9 @@ extends Resource
 @export var group: StringName = &""
 ## Limb moment of inertia about the joint axis, kg·m².
 @export var inertia: float = 50000.0
+## Travel either side of the animated pose. Asymmetric for hinges that only bend one
+## way (knees, elbows): e.g. min -35, max +8.
+@export var min_angle_deg: float = -30.0
 @export var max_angle_deg: float = 30.0
 @export var max_rate_deg: float = 90.0
 @export var max_accel_deg: float = 400.0

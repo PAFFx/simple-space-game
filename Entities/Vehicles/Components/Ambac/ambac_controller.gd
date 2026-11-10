@@ -53,13 +53,14 @@ func is_joint_available(i: int) -> bool:
 			(_loadout == null or j.group == &"" or not _loadout.is_group_occupied(j.group))
 
 
-## Average |angle| / limit over all joints, 0..1 (HUD).
+## Average angle / limit (in the direction it's deflected) over all joints, 0..1 (HUD).
 func get_usage() -> float:
 	if joints.is_empty():
 		return 0.0
 	var sum := 0.0
 	for i in joints.size():
-		sum += absf(angles[i]) / deg_to_rad(joints[i].max_angle_deg)
+		var limit := joints[i].max_angle_deg if angles[i] >= 0.0 else -joints[i].min_angle_deg
+		sum += absf(angles[i]) / maxf(deg_to_rad(limit), 1e-4)
 	return sum / joints.size()
 
 
@@ -88,11 +89,14 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 	var total := Vector3.ZERO
 	for i in n:
 		var j := joints[i]
-		var limit := deg_to_rad(j.max_angle_deg)
+		var lo := deg_to_rad(minf(j.min_angle_deg, 0.0))
+		var hi := deg_to_rad(maxf(j.max_angle_deg, 0.0))
 		var alpha := -weights[i] * j.inertia * _axes_body[i].dot(lam)
 		# Back off as the limb approaches its stop in the direction it's being pushed.
-		if signf(alpha) == signf(angles[i]):
-			alpha *= clampf(1.0 - absf(angles[i]) / limit, 0.0, 1.0)
+		if alpha > 0.0:
+			alpha *= clampf((hi - angles[i]) / maxf(hi, 1e-4), 0.0, 1.0)
+		elif alpha < 0.0:
+			alpha *= clampf((angles[i] - lo) / maxf(-lo, 1e-4), 0.0, 1.0)
 		alpha += -w0 * w0 * angles[i] - 2.0 * centering_damping * w0 * rates[i]
 		var max_accel := deg_to_rad(j.max_accel_deg)
 		alpha = clampf(alpha, -max_accel, max_accel)
@@ -100,8 +104,8 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 		var max_rate := deg_to_rad(j.max_rate_deg)
 		var new_rate := clampf(rates[i] + alpha * delta, -max_rate, max_rate)
 		var new_angle := angles[i] + new_rate * delta
-		if absf(new_angle) > limit:
-			new_angle = clampf(new_angle, -limit, limit)
+		if new_angle > hi or new_angle < lo:
+			new_angle = clampf(new_angle, lo, hi)
 			new_rate = 0.0
 		var actual_alpha := (new_rate - rates[i]) / delta
 		rates[i] = new_rate

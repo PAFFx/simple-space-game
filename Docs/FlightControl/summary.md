@@ -151,14 +151,16 @@ Limbs act as reaction wheels: accelerating a limb by `α` about axis `a` pushes 
 `−J·α·a`. Each tick the `AmbacController` is offered `share` (30%) of the FBW torque demand:
 
 1. Weighted least squares: `α_i = −w_i J_i a_i·λ`, `M λ = τ_request`, `M = Σ w_i J_i² a_i a_iᵀ + εI`.
-   `w_i` = joint priority (legs 1.0, waist 0.8, arms 0.6), zero for groups occupied by active
-   equipment (rifle raised → right arm, shield guard → left arm).
+   `w_i` = joint priority (hips 1.0, knees 0.9, waist 0.8, shoulders 0.6, elbows 0.5), zero for
+   groups occupied by active equipment (rifle raised → right arm, shield guard → left arm).
+   Hinges have one-sided travel (`min_angle_deg`/`max_angle_deg`): knees bend back up to 35° but
+   straighten only 8° past the pose, elbows bend up to 40° but straighten only 8°.
 2. Each joint backs off as it nears its stop, and a centering spring pulls it back to neutral.
 3. The **achieved** reaction torque is applied to the body; the thrusters get `τ − τ_ambac`.
 
 Limbs can't make sustained torque, so AMBAC mostly trims and smooths. The thrusters do the heavy
-lifting and also pay back the centering. Typical swing during a pitch command: arms ±6°, legs ±11°,
-about 120 kN·m.
+lifting and also pay back the centering. Typical swing during a pitch command: hips ±16°,
+shoulders ±9°, knees −9…+8°, elbows ±3°.
 
 ### `DirectControlLaw`
 

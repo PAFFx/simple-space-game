@@ -71,17 +71,22 @@ const COLLIDERS := [
 	["FootL", Vector3(-1.5, 0.55, -0.4), Vector3(1.8, 1.1, 3.6)],
 ]
 
-# bone, axis (skeleton space), group, inertia kg·m², max angle, priority
+# bone, axis (skeleton space), group, inertia kg·m², min angle, max angle, priority
+# Knees bend back (−X) and elbows forward (+X), so those hinges get one-sided travel.
 const AMBAC := [
-	["upper_arm.R", Vector3.RIGHT, &"arm_r", 6.0e4, 35.0, 0.6],
-	["upper_arm.R", Vector3.BACK, &"arm_r", 6.0e4, 25.0, 0.6],
-	["upper_arm.L", Vector3.RIGHT, &"arm_l", 6.0e4, 35.0, 0.6],
-	["upper_arm.L", Vector3.BACK, &"arm_l", 6.0e4, 25.0, 0.6],
-	["thigh.R", Vector3.RIGHT, &"leg_r", 8.0e4, 30.0, 1.0],
-	["thigh.R", Vector3.BACK, &"leg_r", 8.0e4, 15.0, 1.0],
-	["thigh.L", Vector3.RIGHT, &"leg_l", 8.0e4, 30.0, 1.0],
-	["thigh.L", Vector3.BACK, &"leg_l", 8.0e4, 15.0, 1.0],
-	["spine", Vector3.UP, &"torso", 1.2e5, 12.0, 0.8],
+	["upper_arm.R", Vector3.RIGHT, &"arm_r", 6.0e4, -35.0, 35.0, 0.6],
+	["upper_arm.R", Vector3.BACK, &"arm_r", 6.0e4, -25.0, 25.0, 0.6],
+	["forearm.R", Vector3.RIGHT, &"arm_r", 2.5e4, -8.0, 40.0, 0.5],
+	["upper_arm.L", Vector3.RIGHT, &"arm_l", 6.0e4, -35.0, 35.0, 0.6],
+	["upper_arm.L", Vector3.BACK, &"arm_l", 6.0e4, -25.0, 25.0, 0.6],
+	["forearm.L", Vector3.RIGHT, &"arm_l", 2.5e4, -8.0, 40.0, 0.5],
+	["thigh.R", Vector3.RIGHT, &"leg_r", 8.0e4, -30.0, 30.0, 1.0],
+	["thigh.R", Vector3.BACK, &"leg_r", 8.0e4, -15.0, 15.0, 1.0],
+	["shin.R", Vector3.RIGHT, &"leg_r", 4.5e4, -35.0, 8.0, 0.9],
+	["thigh.L", Vector3.RIGHT, &"leg_l", 8.0e4, -30.0, 30.0, 1.0],
+	["thigh.L", Vector3.BACK, &"leg_l", 8.0e4, -15.0, 15.0, 1.0],
+	["shin.L", Vector3.RIGHT, &"leg_l", 4.5e4, -35.0, 8.0, 0.9],
+	["spine", Vector3.UP, &"torso", 1.2e5, -12.0, 12.0, 0.8],
 ]
 
 # Poses: bone → list of [axis, degrees] rotations in skeleton space (applied in order).
@@ -273,8 +278,9 @@ func _build_ambac(root: Node3D) -> void:
 		j.axis = a[1]
 		j.group = a[2]
 		j.inertia = a[3]
-		j.max_angle_deg = a[4]
-		j.priority = a[5]
+		j.min_angle_deg = a[4]
+		j.max_angle_deg = a[5]
+		j.priority = a[6]
 		joints.append(j)
 	ambac.joints = joints
 

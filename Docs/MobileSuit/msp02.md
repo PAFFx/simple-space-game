@@ -45,7 +45,7 @@ MobileSuitMSP02 (RigidBody3D + MobileSuitBody)
 ├── Thrusters/Attach_<bone>/<Thruster>
 ├── FlightComputer/PilotInput        RateCommandControlLaw + ThrustVectoringAttitudeSolver
 ├── CockpitHatch
-├── Ambac                     9 joints: arm pitch/roll, leg pitch/roll, waist yaw
+├── Ambac                     13 joints: shoulder pitch/roll, elbow, hip pitch/roll, knee, waist yaw
 ├── Loadout                   BeamRifle (hand.R), Shield (forearm.L)
 ├── PoseAnimations            AnimationPlayer (library above)
 ├── PoseAnimator              builds the AnimationTree: idle + per-arm pose layers
