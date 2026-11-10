@@ -45,7 +45,8 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 		return _u
 
 	var wf2 := 1.0 / (total * total)
-	var wt2 := wf2 * torque_priority * torque_priority / (reference_arm * reference_arm)
+	var tp := wrench.torque_priority if wrench.torque_priority >= 0.0 else torque_priority
+	var wt2 := wf2 * tp * tp / (reference_arm * reference_arm)
 	var lam := fuel_weight * wf2
 	var lipschitz := 2.0 * lam * t_max * t_max
 	for i in n:

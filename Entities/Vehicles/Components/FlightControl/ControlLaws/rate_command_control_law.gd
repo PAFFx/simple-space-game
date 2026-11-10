@@ -39,6 +39,11 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var stick_deadzone: float = 0.04
 ## Fraction of torque authority the FCS may request.
 @export_range(0.0, 1.0) var torque_fraction: float = 0.6
+## Torque authority auto-rotation (and attitude hold) may use.
+@export_range(0.0, 1.0) var auto_rotate_torque_fraction: float = 0.4
+## Allocator torque priority while auto-rotating/holding. Low = never spill force to
+## rotate faster (big turning moments otherwise borrow the off-centre mains).
+@export var auto_rotate_torque_priority: float = 0.5
 ## On stick release: rate-loop gain multiplier and full torque, so rotation stops at once.
 @export var stop_gain_multiplier: float = 2.0
 
@@ -46,22 +51,26 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## While boosting: rate limits are multiplied by this, and torque/thrust limits open fully.
 @export var boost_rate_multiplier: float = 1.7
 @export var boost_rate_gain_multiplier: float = 1.5
-@export var boost_speed_multiplier: float = 2.0
+@export var boost_speed_multiplier: float = 2.5
 
 @export_group("Translation")
 ## Acceleration limit, same in every direction, so the suit moves in a straight
 ## line toward the command. Auto-rotation finds the attitude that can deliver it.
 @export var cruise_accel_g: float = 0.35
-@export var boost_accel_g: float = 2.0
+@export var boost_accel_g: float = 4.0
 ## Velocity demanded at full stick in VELOCITY_HOLD, m/s.
 @export var max_command_speed: float = 60.0
 ## Velocity loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
+## Velocity loop gain while boosting: snappy starts, stops and direction changes (dodging).
+@export var boost_velocity_gain: float = 2.5
 
 var _initialized := false
 var _pilot := Quaternion.IDENTITY    ## Pilot frame orientation (global)
 var _offset := Quaternion.IDENTITY   ## Body relative to pilot frame
 var _offset_target := Quaternion.IDENTITY
+var _prev_target := Quaternion.IDENTITY
+var _has_prev_target := false
 var _stick_active := false
 var _capturing := false
 
@@ -95,7 +104,10 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	_update_offset(state, force_world, command)
 	var torque := _rotation_torque(state, command, body_q)
 	var force_body := clamp_to_capability(state.to_local(force_world), state, 1.0)
-	return Wrench.new(force_body, torque)
+	var wrench := Wrench.new(force_body, torque)
+	if not _stick_active and not _capturing:
+		wrench.torque_priority = auto_rotate_torque_priority
+	return wrench
 
 
 func get_mode_labels() -> PackedStringArray:
@@ -153,16 +165,31 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 			_pilot = body_q * _offset.inverse()
 			rate_cmd = state.to_local(_pilot * stick_rate)
 		else:
-			# Hold: track pilot · offset (the offset may be moving for thrust vectoring).
-			var err_q := (_pilot * _offset) * body_q.inverse()
+			# Hold: track pilot · offset (the offset may be moving for thrust vectoring),
+			# with the target's own rotation rate fed forward so fast swings don't lag.
+			var target := _pilot * _offset
+			var feed_forward := Vector3.ZERO
+			if _has_prev_target and state.delta > 0.0:
+				var step := target * _prev_target.inverse()
+				if step.w < 0.0:
+					step = -step
+				feed_forward = state.to_local(Vector3(step.x, step.y, step.z) * 2.0 / state.delta)
+			var err_q := target * body_q.inverse()
 			if err_q.w < 0.0:
 				err_q = -err_q
-			var err := state.to_local(Vector3(err_q.x, err_q.y, err_q.z) * 2.0)
-			rate_cmd = (err * attitude_gain).clamp(-max_rate * 1.2, max_rate * 1.2)
+			var err := state.to_local(Vector3(err_q.x, err_q.y, err_q.z) * 2.0) \
+					+ feed_forward / attitude_gain
+			# Auto-rotation may swing the body faster than the pilot's own rate limits.
+			var hold_rate := max_rate * 1.2
+			if attitude_solver != null:
+				hold_rate = hold_rate.max(Vector3.ONE * deg_to_rad(attitude_solver.slew_rate_deg) * 1.2)
+			rate_cmd = (err * attitude_gain).clamp(-hold_rate, hold_rate)
 	else:
 		_offset = Quaternion.IDENTITY
 		_pilot = body_q
 
+	_prev_target = _pilot * _offset
+	_has_prev_target = rotation_mode == RotationMode.ATTITUDE_HOLD and not _capturing
 	var stopping := _capturing and not _stick_active
 	var gain := rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
 	if stopping:
@@ -170,7 +197,14 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	var alpha := (rate_cmd - omega) * gain
 	var inertia := state.inertia_local
 	var torque := inertia * alpha + omega.cross(inertia * omega)
-	var limit := state.max_torque * (1.0 if command.boost or stopping else torque_fraction)
+	var fraction := torque_fraction
+	if stopping or (command.boost and _stick_active):
+		fraction = 1.0
+	elif not _stick_active:
+		# Auto-rotation: big torque requests make the allocator borrow the mains (off-centre)
+		# for turning, which spills force in the wrong direction.
+		fraction = auto_rotate_torque_fraction
+	var limit := state.max_torque * fraction
 	return torque.clamp(-limit, limit)
 
 
@@ -182,4 +216,5 @@ func _translation_force_world(state: FlightState, command: PilotCommand) -> Vect
 
 	var speed := max_command_speed * (boost_speed_multiplier if command.boost else 1.0)
 	var v_error := stick_world * speed - state.linear_velocity
-	return (v_error * velocity_gain).limit_length(accel_limit) * state.mass
+	var gain := boost_velocity_gain if command.boost else velocity_gain
+	return (v_error * gain).limit_length(accel_limit) * state.mass

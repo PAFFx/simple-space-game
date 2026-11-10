@@ -97,14 +97,21 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
   The only seat damping is linear (`SeatDampener`).
 - While the pilot steers, auto-rotation is frozen: suit and cockpit turn as one rigid unit.
 
-**Boost** (Shift): 2 G acceleration cap, 100% torque authority, rates × `boost_rate_multiplier`
-(1.7), rate loop × 1.5, commanded speed × 2.
+**Boost** (Shift): 4 G acceleration cap, velocity loop 2.5 /s (`boost_velocity_gain`, snappy
+starts, stops and dodges), 100% torque for pilot steering, rates × 1.7, commanded speed × 2.5
+(150 m/s). Auto-rotation swings at 120°/s with the target's rate fed forward into the hold.
+
+**Clean force while auto-rotating.** Fast swings need big turning moments, and the allocator would
+borrow the off-centre mains for them, spilling force (e.g. a boosted dive first shooting upward).
+Auto-rotation therefore requests at most `auto_rotate_torque_fraction` (0.4) of torque authority and
+hands the allocator a lower torque priority (`auto_rotate_torque_priority` 0.5, carried on the
+`Wrench`). Lower than ~0.3 loses attitude control; pilot steering and stops keep the default.
 
 ### Auto-rotation (`ThrustVectoringAttitudeSolver`)
 
 Thrusters are not equal: the backpack mains (firing down and back) dwarf the verniers, so the suit
-is strong upward and weak in other directions. Clean authority measured on MSP-02: up 2.3 G,
-forward 1.0, back 0.7, sideways 0.67, down 0.45 (level attitude). The mains' 60° vectoring
+is strong upward and weak in other directions. Clean authority measured on MSP-02: up 5.75 G,
+forward 2.6, back 1.3, sideways 1.7, down 0.7 (level attitude). The mains' 60° vectoring
 means a boosted descent pitches the suit nose-down (~1 G down at 70°) instead of nose-up.
 
 The solver turns the body **only when needed**: while a translation is commanded (or Shift is
@@ -126,7 +133,8 @@ possible to make it achievable".
 
 ### Capability map
 
-`capability()` comes from a `ForceCapabilityMap`: at load the `FlightComputer` asks the allocator,
+`capability()` comes from a `ForceCapabilityMap` (blended with a harmonic mean, so strong
+directions never inflate weak neighbours): at load the `FlightComputer` asks the allocator,
 in 48 directions, for the largest force it can make with less than 6% leaking sideways or into
 torque (bisection, warm-started probes, about 0.5 s once). An estimate from per-axis limits is far
 too optimistic: e.g. gimballed downward mains *can* push sideways, but only by also pushing up,
@@ -228,9 +236,8 @@ bindings, then enable `joystick_enabled`.
 
 ## Tuning reference (MSP-02)
 
-- 30 t dry + 10 t propellant + 6.4 t equipment ≈ 46 t. Main thrust follows the published late-UC
-  split: 4 × 179.5 kN backpack mains + 2 × 120.6 kN leg mains (97,800 kgf), plus 18 verniers of
-  25–35 kN. The backpack mains sit at the bottom of the pods, below and behind the centre of
+- 30 t dry + 10 t propellant + 6.4 t equipment ≈ 46 t. Main thrust is anime-style: 4 × 450 kN
+  backpack mains + 2 × 300 kN leg mains (~5.3 G), plus 18 verniers of 40–56 kN. The backpack mains sit at the bottom of the pods, below and behind the centre of
   mass, firing down and 25° back, with 60° vectoring.
 - Authority is deliberately anisotropic: strong up, weak sideways, back and down. No backpack
   verniers fire upward; down thrust comes from the shoulder tops only.

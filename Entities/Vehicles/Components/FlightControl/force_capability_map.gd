@@ -46,18 +46,20 @@ static func build(state: FlightState, allocator: ThrustAllocator, count: int = 4
 	return map
 
 
-## Interpolated clean authority along a unit body direction, N.
+## Interpolated clean authority along a unit body direction, N. A weighted
+## harmonic mean, so a strong neighbour (e.g. "up") never inflates a weak
+## in-between direction: overestimates make the allocator spill force.
 func lookup(dir: Vector3) -> float:
-	var sum := 0.0
+	var inv_sum := 0.0
 	var weight := 0.0
 	for i in dirs.size():
 		var d := dirs[i].dot(dir)
 		if d <= 0.0:
 			continue
 		var w := pow(d, SHARPNESS)
-		sum += values[i] * w
+		inv_sum += w / maxf(values[i], 1.0)
 		weight += w
-	return sum / weight if weight > 0.0 else 0.0
+	return weight / inv_sum if inv_sum > 0.0 else 0.0
 
 
 static func _is_clean(state: FlightState, probe: ThrustAllocator, dir: Vector3,

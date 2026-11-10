@@ -111,6 +111,7 @@ func _physics_process(delta: float) -> void:
 			ambac_torque = ambac.step(last_wrench.torque * ambac.share, delta)
 			body.apply_torque(state.to_global(ambac_torque))
 			thrust_wrench = Wrench.new(last_wrench.force, last_wrench.torque - ambac_torque)
+			thrust_wrench.torque_priority = last_wrench.torque_priority
 		var demand := allocator.allocate(state, thrust_wrench)
 		for i in thrusters.size():
 			thrusters[i].set_command(demand[i].length(), demand[i], body)

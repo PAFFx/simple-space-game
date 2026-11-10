@@ -6,7 +6,7 @@ extends PilotInputSource
 ## snapping, which keeps the FBW demand smooth and animates cockpit grips nicely.
 
 ## Seconds for a digital axis to travel from centre to full deflection.
-@export var key_travel_time: float = 0.18
+@export var key_travel_time: float = 0.1
 
 var _translation := Vector3.ZERO
 var _rotation := Vector3.ZERO
