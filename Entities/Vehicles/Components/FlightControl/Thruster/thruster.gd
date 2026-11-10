@@ -17,6 +17,8 @@ extends Node3D
 @export var spool_down_time: float = 0.12         ## Throttle time constant falling, s
 @export_range(0.0, 0.2) var min_throttle: float = 0.02   ## Below this the thruster cuts off
 @export var enabled: bool = true
+## Short name shown on the HUD thruster page. Empty = node name.
+@export var hud_label: String = ""
 
 @export_group("Visuals")
 @export var plume_length: float = 7.0             ## Plume length at full thrust, m
@@ -46,6 +48,18 @@ func _ready() -> void:
 ## Current thrust in Newtons.
 func get_thrust() -> float:
 	return throttle * max_thrust if enabled else 0.0
+
+
+## Actual nozzle deflection, each axis in [-1, 1] of the gimbal limit.
+func get_gimbal_deflection() -> Vector2:
+	var limit := sin(deg_to_rad(gimbal_limit_deg))
+	if limit <= 0.0:
+		return Vector2.ZERO
+	return Vector2(_dir.x, _dir.y) / limit
+
+
+func get_hud_label() -> String:
+	return hud_label if hud_label != "" else String(name)
 
 
 ## Available thrust for the allocator (0 when disabled).
