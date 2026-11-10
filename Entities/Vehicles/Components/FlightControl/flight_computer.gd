@@ -19,6 +19,8 @@ const G0 := 9.80665
 @export var input_source: PilotInputSource
 @export var control_law: ControlLaw
 @export var allocator: ThrustAllocator
+## Optional limb balancing. Auto-discovered on the vehicle if left empty.
+@export var ambac: AmbacController
 ## Master FCS switch. Off = all thrusters commanded to zero.
 @export var fcs_enabled: bool = true
 
@@ -38,6 +40,8 @@ var payload_mass: float = 0.0
 var thrusters: Array[Thruster] = []
 var state := FlightState.new()
 var last_wrench := Wrench.new()
+## Reaction torque AMBAC delivered last tick (body frame).
+var ambac_torque := Vector3.ZERO
 var acceleration_g: float = 0.0
 
 var _prev_velocity := Vector3.ZERO
@@ -55,6 +59,10 @@ func _ready() -> void:
 		return
 	if input_source == null:
 		input_source = _find_input_source()
+	if ambac == null:
+		var vehicle := VehicleBase.find_vehicle(self)
+		if vehicle != null:
+			ambac = vehicle.find_component(AmbacController) as AmbacController
 	set_control_law(control_law if control_law != null else RateCommandControlLaw.new())
 	set_allocator(allocator if allocator != null else ConeProjectedAllocator.new())
 	_collect_thrusters(body)
@@ -88,7 +96,12 @@ func _physics_process(delta: float) -> void:
 
 	if fcs_enabled:
 		last_wrench = control_law.compute(state, command)
-		var demand := allocator.allocate(state, last_wrench)
+		var thrust_wrench := last_wrench
+		if ambac != null and ambac.enabled:
+			ambac_torque = ambac.step(last_wrench.torque * ambac.share, delta)
+			body.apply_torque(state.to_global(ambac_torque))
+			thrust_wrench = Wrench.new(last_wrench.force, last_wrench.torque - ambac_torque)
+		var demand := allocator.allocate(state, thrust_wrench)
 		for i in thrusters.size():
 			thrusters[i].set_command(demand[i].length(), demand[i], body)
 	else:
