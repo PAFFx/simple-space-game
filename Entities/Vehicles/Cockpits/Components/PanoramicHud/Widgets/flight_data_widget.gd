@@ -8,6 +8,7 @@ extends HudWidget
 @export var block_elevation_deg: float = 3.0
 @export var caution_elevation_deg: float = -11.0
 @export var low_propellant_fraction: float = 0.2
+@export var high_g_caution: float = 6.0
 
 
 func draw_widget() -> void:
@@ -26,15 +27,19 @@ func _draw_left_block(fc: FlightComputer, line_h: float) -> void:
 	var rate := rad_to_deg(fc.state.angular_velocity.length())
 	var rows := [
 		["SPD", "%7.1f" % fc.state.linear_velocity.length(), "m/s"],
-		["ACC", "%7.2f" % fc.acceleration_g, "G"],
-		["ROT", "%7.1f" % rate, "°/s"],
+		["G MS", "%7.2f" % fc.acceleration_g, "G"],
 	]
+	if hud.seat != null:
+		rows.append(["G PLT", "%7.2f" % hud.seat.pilot_g, "G"])
+	rows.append(["ROT", "%7.1f" % rate, "°/s"])
+	if hud.ambac != null:
+		rows.append(["AMBAC", "%7d" % roundi(hud.ambac.get_usage() * 100.0), "%"])
 	for i in rows.size():
 		var y := i * line_h
 		text(Vector2(-px(7.5), y), rows[i][0], hud.dim_color)
 		text(Vector2(0, y), rows[i][1], hud.primary_color, HORIZONTAL_ALIGNMENT_RIGHT)
 		text(Vector2(4, y), rows[i][2], hud.dim_color, HORIZONTAL_ALIGNMENT_LEFT, 14)
-	line(Vector2(-px(8.1), -line_h), Vector2(-px(8.1), line_h * 2.4), hud.dim_color)
+	line(Vector2(-px(8.1), -line_h), Vector2(-px(8.1), line_h * (rows.size() - 0.6)), hud.dim_color)
 	end_local()
 
 
@@ -81,6 +86,8 @@ func _draw_cautions(fc: FlightComputer, line_h: float) -> void:
 		items.append(["PROPELLANT DEPLETED", hud.warning_color])
 	elif fc.get_propellant_fraction() < low_propellant_fraction:
 		items.append(["PROPELLANT LOW", hud.caution_color])
+	if hud.seat != null and hud.seat.pilot_g > high_g_caution:
+		items.append(["HIGH G", hud.warning_color])
 	if hud.hatch != null and hud.hatch.is_unsealed():
 		items.append(["HATCH OPEN", hud.caution_color])
 	if items.is_empty():

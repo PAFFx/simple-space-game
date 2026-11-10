@@ -9,6 +9,8 @@
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/SeatGimbal/cockpit_gimbal.gd" id="7_gimbal"]
 
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/SeatDampener/seat_dampener.gd" id="8_damper"]
+
 [node name="CockpitLinearSeat" type="Node3D"]
 script = ExtResource("1_script")
 
@@ -47,3 +49,7 @@ right_pedal = NodePath("../Model/PedalR")
 
 [node name="CockpitGimbal" type="Node" parent="."]
 script = ExtResource("7_gimbal")
+
+[node name="SeatDampener" type="Node" parent="." node_paths=PackedStringArray("camera_mount")]
+script = ExtResource("8_damper")
+camera_mount = NodePath("../CameraMount")
