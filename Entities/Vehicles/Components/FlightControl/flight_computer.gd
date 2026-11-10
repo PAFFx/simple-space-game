@@ -144,6 +144,18 @@ func get_pilot_offset() -> Quaternion:
 	return control_law.get_pilot_offset() if fcs_enabled else Quaternion.IDENTITY
 
 
+## Pilot frame relative to the body *now* (cockpit local rotation). Unlike the commanded
+## offset this includes the body's tracking lag, so the cockpit holds still in the world
+## while the body swings into a new attitude.
+func get_cockpit_rotation() -> Quaternion:
+	if not fcs_enabled or control_law == null:
+		return Quaternion.IDENTITY
+	var pilot: Variant = control_law.get_pilot_orientation()
+	if pilot == null:
+		return Quaternion.IDENTITY
+	return (body.global_basis.orthonormalized().get_rotation_quaternion().inverse() * pilot).normalized()
+
+
 func get_mode_labels() -> PackedStringArray:
 	if not fcs_enabled:
 		return PackedStringArray(["FCS OFF"])

@@ -1,10 +1,11 @@
 class_name CockpitGimbal
 extends Node
 
-## Turns the whole cockpit (seat, screen, camera) inside the hull so it keeps the
-## pilot frame while the FCS turns the body for thrust vectoring:
-## cockpit rotation relative to its mount = offset⁻¹ (body = pilot · offset).
-## Commanded rotations turn the pilot frame itself, so the cockpit moves with them.
+## Turns the whole cockpit (seat, screen, camera) inside the hull so it holds the
+## pilot frame in the world while the FCS turns the body for thrust vectoring:
+## cockpit rotation relative to the hull = body⁻¹ · pilot (measured, not commanded,
+## so it stays still while the body is still swinging). Commanded rotations turn
+## the pilot frame itself, so the cockpit moves with them, slightly ahead of the body.
 ## Place under the CockpitBase node; it rotates that node.
 
 @export var flight_computer: FlightComputer
@@ -27,9 +28,9 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _cockpit == null or flight_computer == null or flight_computer.control_law == null:
 		return
-	var offset := AttitudeOffsetSolver.clamp_rotation(
-			flight_computer.get_pilot_offset(), deg_to_rad(max_angle_deg))
-	_cockpit.basis = _rest * Basis(offset.inverse())
+	var relative := AttitudeOffsetSolver.clamp_rotation(
+			flight_computer.get_cockpit_rotation(), deg_to_rad(max_angle_deg))
+	_cockpit.basis = _rest * Basis(relative)
 
 
 ## Current cockpit ↔ body angle, degrees.

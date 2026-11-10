@@ -22,6 +22,11 @@ func get_pilot_offset() -> Quaternion:
 	return Quaternion.IDENTITY
 
 
+## Pilot frame (cockpit) orientation, global. null = the law has none (cockpit follows the body).
+func get_pilot_orientation() -> Variant:
+	return null
+
+
 ## Called when the law is (re)engaged so stale integrators / holds are dropped.
 func reset() -> void:
 	pass
