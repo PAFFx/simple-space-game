@@ -38,6 +38,9 @@ func _input(event: InputEvent) -> void:
 	var target := get_parent() as Node3D
 	if target == null:
 		return
+	# Don't steer an inactive camera (e.g. while an external view is current).
+	if target is Camera3D and not (target as Camera3D).current:
+		return
 
 	_yaw   -= event.relative.x * sensitivity
 	_pitch  = clamp(_pitch - event.relative.y * sensitivity, -pitch_limit, pitch_limit)
