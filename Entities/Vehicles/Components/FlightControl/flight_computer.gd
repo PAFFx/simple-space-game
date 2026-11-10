@@ -153,7 +153,8 @@ func get_cockpit_rotation() -> Quaternion:
 	var pilot: Variant = control_law.get_pilot_orientation()
 	if pilot == null:
 		return Quaternion.IDENTITY
-	return (body.global_basis.orthonormalized().get_rotation_quaternion().inverse() * pilot).normalized()
+	var body_q := body.global_basis.orthonormalized().get_rotation_quaternion()
+	return (body_q.inverse() * pilot).normalized()
 
 
 func get_mode_labels() -> PackedStringArray:

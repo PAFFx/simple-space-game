@@ -20,9 +20,6 @@ extends AttitudeOffsetSolver
 @export var initial_step_deg: float = 12.0
 @export var iterations: int = 6
 
-const _AXES: Array[Vector3] = [Vector3.RIGHT, Vector3.UP, Vector3.BACK]
-
-
 func solve(state: FlightState, force_pilot: Vector3, current: Quaternion) -> Quaternion:
 	var max_angle := deg_to_rad(max_offset_deg)
 	var demand := force_pilot.length()
