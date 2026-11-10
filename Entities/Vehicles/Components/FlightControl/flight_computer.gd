@@ -33,6 +33,8 @@ const G0 := 9.80665
 @export var reference_frame: Node3D
 
 var body: RigidBody3D
+## Mass carried in addition to dry mass + propellant (equipment), kg.
+var payload_mass: float = 0.0
 var thrusters: Array[Thruster] = []
 var state := FlightState.new()
 var last_wrench := Wrench.new()
@@ -56,8 +58,18 @@ func _ready() -> void:
 	set_control_law(control_law if control_law != null else RateCommandControlLaw.new())
 	set_allocator(allocator if allocator != null else ConeProjectedAllocator.new())
 	_collect_thrusters(body)
-	body.mass = dry_mass + propellant
+	body.mass = get_total_mass()
 	_prev_velocity = body.linear_velocity
+
+
+func get_total_mass() -> float:
+	return dry_mass + propellant + payload_mass
+
+
+func add_payload_mass(kg: float) -> void:
+	payload_mass += kg
+	if body != null:
+		body.mass = get_total_mass()
 
 
 func set_control_law(law: ControlLaw) -> void:
@@ -162,7 +174,7 @@ func _consume_propellant(thrust_sum: float, delta: float) -> void:
 	if propellant <= 0.0:
 		return
 	propellant = maxf(0.0, propellant - thrust_sum / (specific_impulse * G0) * delta)
-	var mass := dry_mass + propellant
+	var mass := get_total_mass()
 	if absf(body.mass - mass) > 10.0:
 		body.mass = mass
 	if propellant <= 0.0 and not _depleted_emitted:

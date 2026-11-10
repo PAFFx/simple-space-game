@@ -1,0 +1,16 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Entities/Equipment/BeamRifle/beam_rifle.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://Entities/Equipment/BeamRifle/Arts/beam_rifle.glb" id="2_model"]
+
+[node name="BeamRifle" type="Node3D"]
+script = ExtResource("1_script")
+equipment_name = "BEAM RIFLE"
+mass = 2600.0
+input_action = &"ms_toggle_rifle"
+active_pose = &"rifle_ready"
+
+[node name="Model" parent="." instance=ExtResource("2_model")]
+
+[node name="Muzzle" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, -6.05)
