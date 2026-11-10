@@ -22,14 +22,15 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 
 # name, bone, position, exhaust direction, thrust kN, gimbal deg, plume m, nozzle scale
 # Main thrust follows the published late-UC ratio: 4 × 18,300 kgf + 2 × 12,300 kgf.
-# Backpack mains fire down and 25° back from the bottom of the pods (below the COM), so
-# gimballing forward swings their thrust line through the centre of mass.
+# Backpack mains fire down and 25° back from the bottom of the pods (below the COM). Their
+# 60° vectoring lets them swing the thrust line through the COM, and, with the suit pitched
+# nose-down, push mostly downward for a fast descent.
 const MAIN_EXHAUST := Vector3(0.0, -0.906, 0.423)
 const THRUSTERS := [
-	["MainRI", "backpack", Vector3(1.15, 12.8, 3.0), MAIN_EXHAUST, 179.5, 28.0, 11.0, 1.1],
-	["MainRO", "backpack", Vector3(1.85, 12.8, 3.0), MAIN_EXHAUST, 179.5, 28.0, 11.0, 1.1],
-	["MainLI", "backpack", Vector3(-1.15, 12.8, 3.0), MAIN_EXHAUST, 179.5, 28.0, 11.0, 1.1],
-	["MainLO", "backpack", Vector3(-1.85, 12.8, 3.0), MAIN_EXHAUST, 179.5, 28.0, 11.0, 1.1],
+	["MainRI", "backpack", Vector3(1.15, 12.8, 3.0), MAIN_EXHAUST, 179.5, 60.0, 11.0, 1.1],
+	["MainRO", "backpack", Vector3(1.85, 12.8, 3.0), MAIN_EXHAUST, 179.5, 60.0, 11.0, 1.1],
+	["MainLI", "backpack", Vector3(-1.15, 12.8, 3.0), MAIN_EXHAUST, 179.5, 60.0, 11.0, 1.1],
+	["MainLO", "backpack", Vector3(-1.85, 12.8, 3.0), MAIN_EXHAUST, 179.5, 60.0, 11.0, 1.1],
 	["LegR", "shin.R", Vector3(1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 120.6, 20.0, 8.0, 1.0],
 	["LegL", "shin.L", Vector3(-1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 120.6, 20.0, 8.0, 1.0],
 	["ShTopR", "shoulder.R", Vector3(4.1, 19.2, 0.3), Vector3(0, 1, 0), 35.0, 30.0, 3.5, 0.6],

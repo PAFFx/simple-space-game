@@ -104,7 +104,8 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
 
 Thrusters are not equal: the backpack mains (firing down and back) dwarf the verniers, so the suit
 is strong upward and weak in other directions. Clean authority measured on MSP-02: up 2.3 G,
-forward 1.0, back 0.7, sideways 0.67, down 0.42.
+forward 1.0, back 0.7, sideways 0.67, down 0.45 (level attitude). The mains' 60° vectoring
+means a boosted descent pitches the suit nose-down (~1 G down at 70°) instead of nose-up.
 
 The solver turns the body **only when needed**: while a translation is commanded (or Shift is
 held), and only if the capped acceleration exceeds what the current attitude can deliver cleanly.
@@ -228,7 +229,7 @@ bindings, then enable `joystick_enabled`.
 - 30 t dry + 10 t propellant + 6.4 t equipment ≈ 46 t. Main thrust follows the published late-UC
   split: 4 × 179.5 kN backpack mains + 2 × 120.6 kN leg mains (97,800 kgf), plus 18 verniers of
   25–35 kN. The backpack mains sit at the bottom of the pods, below and behind the centre of
-  mass, firing down and 25° back; their 28° gimbals can swing the thrust line through the COM.
+  mass, firing down and 25° back, with 60° vectoring.
 - Authority is deliberately anisotropic: strong up, weak sideways, back and down. No backpack
   verniers fire upward; down thrust comes from the shoulder tops only.
 - Verified headless:

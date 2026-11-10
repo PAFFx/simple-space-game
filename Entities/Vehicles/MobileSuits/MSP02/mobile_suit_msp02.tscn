@@ -183,7 +183,7 @@ script = ExtResource("26_nwe7p")
 pose = &"shield_guard"
 bones = PackedStringArray("upper_arm.L", "forearm.L", "hand.L")
 
-[node name="MobileSuitMSP02" type="RigidBody3D" unique_id=1379068188]
+[node name="MobileSuitMSP02" type="RigidBody3D" unique_id=332152215]
 mass = 46400.0
 gravity_scale = 0.0
 center_of_mass_mode = 1
@@ -193,141 +193,141 @@ linear_damp_mode = 1
 angular_damp_mode = 1
 script = ExtResource("1_n1837")
 
-[node name="Model" type="Node3D" parent="." unique_id=1878192443 instance=ExtResource("2_8l07d")]
+[node name="Model" type="Node3D" parent="." unique_id=221204176 instance=ExtResource("2_8l07d")]
 
-[node name="ColTorso" type="CollisionShape3D" parent="." unique_id=59932072]
+[node name="ColTorso" type="CollisionShape3D" parent="." unique_id=524879415]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16.2, -0.4)
 shape = SubResource("BoxShape3D_3hxul")
 
-[node name="ColBackpack" type="CollisionShape3D" parent="." unique_id=1726001161]
+[node name="ColBackpack" type="CollisionShape3D" parent="." unique_id=697829060]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 15.3, 2.9)
 shape = SubResource("BoxShape3D_41qg7")
 
-[node name="ColHead" type="CollisionShape3D" parent="." unique_id=850490152]
+[node name="ColHead" type="CollisionShape3D" parent="." unique_id=791800268]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 19.9, -0.45)
 shape = SubResource("BoxShape3D_mwlq0")
 
-[node name="ColPelvis" type="CollisionShape3D" parent="." unique_id=1475697284]
+[node name="ColPelvis" type="CollisionShape3D" parent="." unique_id=1413883595]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12.6, -0.1)
 shape = SubResource("BoxShape3D_2mrjl")
 
-[node name="ColShoulderR" type="CollisionShape3D" parent="." unique_id=251196946]
+[node name="ColShoulderR" type="CollisionShape3D" parent="." unique_id=1858101333]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 18, 0)
 shape = SubResource("BoxShape3D_h47hh")
 
-[node name="ColShoulderL" type="CollisionShape3D" parent="." unique_id=1064819007]
+[node name="ColShoulderL" type="CollisionShape3D" parent="." unique_id=1747498122]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.1, 18, 0)
 shape = SubResource("BoxShape3D_xh2vg")
 
-[node name="ColArmR" type="CollisionShape3D" parent="." unique_id=1905190213]
+[node name="ColArmR" type="CollisionShape3D" parent="." unique_id=452717384]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.9, 12.7, -0.05)
 shape = SubResource("BoxShape3D_gey5s")
 
-[node name="ColArmL" type="CollisionShape3D" parent="." unique_id=931670190]
+[node name="ColArmL" type="CollisionShape3D" parent="." unique_id=107944265]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.9, 12.7, -0.05)
 shape = SubResource("BoxShape3D_o0mww")
 
-[node name="ColLegR" type="CollisionShape3D" parent="." unique_id=346568051]
+[node name="ColLegR" type="CollisionShape3D" parent="." unique_id=1957141537]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 6, 0)
 shape = SubResource("BoxShape3D_mhaie")
 
-[node name="ColLegL" type="CollisionShape3D" parent="." unique_id=1623968405]
+[node name="ColLegL" type="CollisionShape3D" parent="." unique_id=2100171263]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 6, 0)
 shape = SubResource("BoxShape3D_bijt0")
 
-[node name="ColFootR" type="CollisionShape3D" parent="." unique_id=998460612]
+[node name="ColFootR" type="CollisionShape3D" parent="." unique_id=1040758087]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.55, -0.4)
 shape = SubResource("BoxShape3D_wedc2")
 
-[node name="ColFootL" type="CollisionShape3D" parent="." unique_id=1886831438]
+[node name="ColFootL" type="CollisionShape3D" parent="." unique_id=1828769899]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.55, -0.4)
 shape = SubResource("BoxShape3D_wtdow")
 
-[node name="SensorHeadMount" type="Marker3D" parent="." unique_id=1016962516]
+[node name="SensorHeadMount" type="Marker3D" parent="." unique_id=89011083]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 19.9, -1.45)
 
-[node name="SensorHead" type="Node3D" parent="SensorHeadMount" unique_id=2137392721 instance=ExtResource("3_4saxt")]
+[node name="SensorHead" type="Node3D" parent="SensorHeadMount" unique_id=1311645750 instance=ExtResource("3_4saxt")]
 script = ExtResource("4_sk76n")
 
-[node name="CockpitMount" type="Marker3D" parent="." unique_id=60766312]
+[node name="CockpitMount" type="Marker3D" parent="." unique_id=149135131]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16.1, -0.5)
 
-[node name="CockpitLinearSeat" type="Node3D" parent="CockpitMount" unique_id=1480166464 instance=ExtResource("5_twpmf")]
+[node name="CockpitLinearSeat" type="Node3D" parent="CockpitMount" unique_id=2028334737 instance=ExtResource("5_twpmf")]
 script = ExtResource("6_g2k8u")
 
-[node name="Thrusters" type="Node3D" parent="." unique_id=115203615]
+[node name="Thrusters" type="Node3D" parent="." unique_id=1352623082]
 
-[node name="Attach_backpack" type="BoneAttachment3D" parent="Thrusters" unique_id=551043741]
+[node name="Attach_backpack" type="BoneAttachment3D" parent="Thrusters" unique_id=235899884]
 bone_name = "backpack"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="MainRI" type="Node3D" parent="Thrusters/Attach_backpack" unique_id=1595699138 instance=ExtResource("7_1ckem")]
+[node name="MainRI" type="Node3D" parent="Thrusters/Attach_backpack" unique_id=1797380613 instance=ExtResource("7_1ckem")]
 transform = Transform3D(1, 0, 0, 0, 0.42304972, -0.9061065, 0, 0.9061065, 0.42304972, 1.15, -2.1999998, 1)
 script = ExtResource("8_3g4qg")
 max_thrust = 179500.0
-gimbal_limit_deg = 28.0
+gimbal_limit_deg = 60.0
 hud_label = "MNRI"
 plume_length = 11.0
 nozzle_scale = 1.1
 
-[node name="MainRO" type="Node3D" parent="Thrusters/Attach_backpack" unique_id=1768649053 instance=ExtResource("7_1ckem")]
+[node name="MainRO" type="Node3D" parent="Thrusters/Attach_backpack" unique_id=727898324 instance=ExtResource("7_1ckem")]
 transform = Transform3D(1, 0, 0, 0, 0.42304972, -0.9061065, 0, 0.9061065, 0.42304972, 1.85, -2.1999998, 1)
 script = ExtResource("8_3g4qg")
 max_thrust = 179500.0
-gimbal_limit_deg = 28.0
+gimbal_limit_deg = 60.0
 hud_label = "MNRO"
 plume_length = 11.0
 nozzle_scale = 1.1
 
-[node name="MainLI" type="Node3D" parent="Thrusters/Attach_backpack" unique_id=1564353296 instance=ExtResource("7_1ckem")]
+[node name="MainLI" type="Node3D" parent="Thrusters/Attach_backpack" unique_id=964756920 instance=ExtResource("7_1ckem")]
 transform = Transform3D(1, 0, 0, 0, 0.42304972, -0.9061065, 0, 0.9061065, 0.42304972, -1.15, -2.1999998, 1)
 script = ExtResource("8_3g4qg")
 max_thrust = 179500.0
-gimbal_limit_deg = 28.0
+gimbal_limit_deg = 60.0
 hud_label = "MNLI"
 plume_length = 11.0
 nozzle_scale = 1.1
 
-[node name="MainLO" type="Node3D" parent="Thrusters/Attach_backpack" unique_id=1455612423 instance=ExtResource("7_1ckem")]
+[node name="MainLO" type="Node3D" parent="Thrusters/Attach_backpack" unique_id=972791724 instance=ExtResource("7_1ckem")]
 transform = Transform3D(1, 0, 0, 0, 0.42304972, -0.9061065, 0, 0.9061065, 0.42304972, -1.85, -2.1999998, 1)
 script = ExtResource("8_3g4qg")
 max_thrust = 179500.0
-gimbal_limit_deg = 28.0
+gimbal_limit_deg = 60.0
 hud_label = "MNLO"
 plume_length = 11.0
 nozzle_scale = 1.1
 
-[node name="Attach_shin_R" type="BoneAttachment3D" parent="Thrusters" unique_id=1423353398]
+[node name="Attach_shin_R" type="BoneAttachment3D" parent="Thrusters" unique_id=1752614580]
 bone_name = "shin.R"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="LegR" type="Node3D" parent="Thrusters/Attach_shin_R" unique_id=408633793 instance=ExtResource("7_1ckem")]
+[node name="LegR" type="Node3D" parent="Thrusters/Attach_shin_R" unique_id=2129822051 instance=ExtResource("7_1ckem")]
 transform = Transform3D(1, 0, 0, 0, -0.3713907, 0.92847675, 0, -0.92847675, -0.3713907, 0, 4.2, -1.6)
 script = ExtResource("8_3g4qg")
 max_thrust = 120600.0
 hud_label = "LEGR"
 plume_length = 8.0
 
-[node name="Attach_shin_L" type="BoneAttachment3D" parent="Thrusters" unique_id=618122285]
+[node name="Attach_shin_L" type="BoneAttachment3D" parent="Thrusters" unique_id=1540621294]
 bone_name = "shin.L"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="LegL" type="Node3D" parent="Thrusters/Attach_shin_L" unique_id=477481411 instance=ExtResource("7_1ckem")]
+[node name="LegL" type="Node3D" parent="Thrusters/Attach_shin_L" unique_id=1839445876 instance=ExtResource("7_1ckem")]
 transform = Transform3D(1, 0, 0, 0, -0.3713907, 0.92847675, 0, -0.92847675, -0.3713907, 0, 4.2, -1.6)
 script = ExtResource("8_3g4qg")
 max_thrust = 120600.0
 hud_label = "LEGL"
 plume_length = 8.0
 
-[node name="Attach_shoulder_R" type="BoneAttachment3D" parent="Thrusters" unique_id=188163936]
+[node name="Attach_shoulder_R" type="BoneAttachment3D" parent="Thrusters" unique_id=430211968]
 bone_name = "shoulder.R"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="ShTopR" type="Node3D" parent="Thrusters/Attach_shoulder_R" unique_id=372419102 instance=ExtResource("7_1ckem")]
+[node name="ShTopR" type="Node3D" parent="Thrusters/Attach_shoulder_R" unique_id=236660063 instance=ExtResource("7_1ckem")]
 transform = Transform3D(0, 1, 0, -1.0000001, 0, 0, 0, 0, 1, 0.3, 2.5, 1.6000004)
 script = ExtResource("8_3g4qg")
 max_thrust = 35000.0
@@ -336,7 +336,7 @@ hud_label = "SHTR"
 plume_length = 3.5
 nozzle_scale = 0.6
 
-[node name="ShFrontR" type="Node3D" parent="Thrusters/Attach_shoulder_R" unique_id=395503311 instance=ExtResource("7_1ckem")]
+[node name="ShFrontR" type="Node3D" parent="Thrusters/Attach_shoulder_R" unique_id=2099789466 instance=ExtResource("7_1ckem")]
 transform = Transform3D(0, 0, -1, -1.0000001, 0, 0, 0, 1, 0, -1.62, 2.5, 0.10000038)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -345,7 +345,7 @@ hud_label = "SHFR"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="ShRearR" type="Node3D" parent="Thrusters/Attach_shoulder_R" unique_id=90966933 instance=ExtResource("7_1ckem")]
+[node name="ShRearR" type="Node3D" parent="Thrusters/Attach_shoulder_R" unique_id=1068628152 instance=ExtResource("7_1ckem")]
 transform = Transform3D(0, 0, 1, 1.0000001, 0, 0, 0, 1, 0, 1.65, 2.5, 0.5)
 script = ExtResource("8_3g4qg")
 max_thrust = 25000.0
@@ -354,7 +354,7 @@ hud_label = "SHBR"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="ShSideR" type="Node3D" parent="Thrusters/Attach_shoulder_R" unique_id=1524176347 instance=ExtResource("7_1ckem")]
+[node name="ShSideR" type="Node3D" parent="Thrusters/Attach_shoulder_R" unique_id=1258845513 instance=ExtResource("7_1ckem")]
 transform = Transform3D(-1, 0, 0, 0, 0, 1.0000001, 0, 1, 0, 0, 3.73, 0.19999886)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -363,12 +363,12 @@ hud_label = "SHSR"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="Attach_shoulder_L" type="BoneAttachment3D" parent="Thrusters" unique_id=1592470325]
+[node name="Attach_shoulder_L" type="BoneAttachment3D" parent="Thrusters" unique_id=1278691669]
 bone_name = "shoulder.L"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="ShTopL" type="Node3D" parent="Thrusters/Attach_shoulder_L" unique_id=1491183679 instance=ExtResource("7_1ckem")]
+[node name="ShTopL" type="Node3D" parent="Thrusters/Attach_shoulder_L" unique_id=410890553 instance=ExtResource("7_1ckem")]
 transform = Transform3D(0, -1, 0, 1.0000001, 0, 0, 0, 0, 1, -0.3, 2.5, 1.6000004)
 script = ExtResource("8_3g4qg")
 max_thrust = 35000.0
@@ -377,7 +377,7 @@ hud_label = "SHTL"
 plume_length = 3.5
 nozzle_scale = 0.6
 
-[node name="ShFrontL" type="Node3D" parent="Thrusters/Attach_shoulder_L" unique_id=1241211386 instance=ExtResource("7_1ckem")]
+[node name="ShFrontL" type="Node3D" parent="Thrusters/Attach_shoulder_L" unique_id=2085302055 instance=ExtResource("7_1ckem")]
 transform = Transform3D(0, 0, 1, 1.0000001, 0, 0, 0, 1, 0, 1.62, 2.5, 0.10000038)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -386,7 +386,7 @@ hud_label = "SHFL"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="ShRearL" type="Node3D" parent="Thrusters/Attach_shoulder_L" unique_id=1210593169 instance=ExtResource("7_1ckem")]
+[node name="ShRearL" type="Node3D" parent="Thrusters/Attach_shoulder_L" unique_id=1831834154 instance=ExtResource("7_1ckem")]
 transform = Transform3D(0, 0, -1, -1.0000001, 0, 0, 0, 1, 0, -1.65, 2.5, 0.5)
 script = ExtResource("8_3g4qg")
 max_thrust = 25000.0
@@ -395,7 +395,7 @@ hud_label = "SHBL"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="ShSideL" type="Node3D" parent="Thrusters/Attach_shoulder_L" unique_id=712405522 instance=ExtResource("7_1ckem")]
+[node name="ShSideL" type="Node3D" parent="Thrusters/Attach_shoulder_L" unique_id=244602084 instance=ExtResource("7_1ckem")]
 transform = Transform3D(-1, 0, 0, 0, 0, 1.0000001, 0, 1, 0, 0, 3.73, 0.19999886)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -404,12 +404,12 @@ hud_label = "SHSL"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="Attach_chest" type="BoneAttachment3D" parent="Thrusters" unique_id=1642418173]
+[node name="Attach_chest" type="BoneAttachment3D" parent="Thrusters" unique_id=115956867]
 bone_name = "chest"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="ChestR" type="Node3D" parent="Thrusters/Attach_chest" unique_id=89667325 instance=ExtResource("7_1ckem")]
+[node name="ChestR" type="Node3D" parent="Thrusters/Attach_chest" unique_id=434569457 instance=ExtResource("7_1ckem")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.1, 2.2799997, -2.66)
 script = ExtResource("8_3g4qg")
 max_thrust = 35000.0
@@ -417,7 +417,7 @@ hud_label = "CHR"
 plume_length = 4.0
 nozzle_scale = 0.6
 
-[node name="ChestL" type="Node3D" parent="Thrusters/Attach_chest" unique_id=1118001789 instance=ExtResource("7_1ckem")]
+[node name="ChestL" type="Node3D" parent="Thrusters/Attach_chest" unique_id=1206084436 instance=ExtResource("7_1ckem")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -2.1, 2.2799997, -2.66)
 script = ExtResource("8_3g4qg")
 max_thrust = 35000.0
@@ -425,12 +425,12 @@ hud_label = "CHL"
 plume_length = 4.0
 nozzle_scale = 0.6
 
-[node name="Attach_skirt_front_R" type="BoneAttachment3D" parent="Thrusters" unique_id=1015436252]
+[node name="Attach_skirt_front_R" type="BoneAttachment3D" parent="Thrusters" unique_id=462762419]
 bone_name = "skirt_front.R"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="SkFrontR" type="Node3D" parent="Thrusters/Attach_skirt_front_R" unique_id=1361718973 instance=ExtResource("7_1ckem")]
+[node name="SkFrontR" type="Node3D" parent="Thrusters/Attach_skirt_front_R" unique_id=1709405680 instance=ExtResource("7_1ckem")]
 transform = Transform3D(-0.99787545, 0.021105006, -0.06163364, -0.04938645, -0.86205906, 0.5043961, -0.04248645, 0.5063672, 0.861268, -0.04386604, 1.8322372, 0.07731891)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -439,12 +439,12 @@ hud_label = "SKFR"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="Attach_skirt_front_L" type="BoneAttachment3D" parent="Thrusters" unique_id=1314886675]
+[node name="Attach_skirt_front_L" type="BoneAttachment3D" parent="Thrusters" unique_id=285973620]
 bone_name = "skirt_front.L"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="SkFrontL" type="Node3D" parent="Thrusters/Attach_skirt_front_L" unique_id=1213746032 instance=ExtResource("7_1ckem")]
+[node name="SkFrontL" type="Node3D" parent="Thrusters/Attach_skirt_front_L" unique_id=1663080790 instance=ExtResource("7_1ckem")]
 transform = Transform3D(-0.99787545, -0.021105006, 0.06163364, 0.04938645, -0.86205906, 0.5043961, 0.04248645, 0.5063672, 0.861268, 0.04386604, 1.8322372, 0.07731891)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -453,12 +453,12 @@ hud_label = "SKFL"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="Attach_skirt_side_R" type="BoneAttachment3D" parent="Thrusters" unique_id=793654948]
+[node name="Attach_skirt_side_R" type="BoneAttachment3D" parent="Thrusters" unique_id=2111381574]
 bone_name = "skirt_side.R"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="SkSideR" type="Node3D" parent="Thrusters/Attach_skirt_side_R" unique_id=28495207 instance=ExtResource("7_1ckem")]
+[node name="SkSideR" type="Node3D" parent="Thrusters/Attach_skirt_side_R" unique_id=889792225 instance=ExtResource("7_1ckem")]
 transform = Transform3D(-0.15596192, 0.42791402, 0.8902571, -2.7939567e-08, -0.9012897, 0.433217, 0.987763, 0.06756558, 0.1405674, 0.09243202, 1.3308811, 0.014594555)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -467,12 +467,12 @@ hud_label = "SKSR"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="Attach_skirt_side_L" type="BoneAttachment3D" parent="Thrusters" unique_id=1422951387]
+[node name="Attach_skirt_side_L" type="BoneAttachment3D" parent="Thrusters" unique_id=1257647930]
 bone_name = "skirt_side.L"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="SkSideL" type="Node3D" parent="Thrusters/Attach_skirt_side_L" unique_id=1675204443 instance=ExtResource("7_1ckem")]
+[node name="SkSideL" type="Node3D" parent="Thrusters/Attach_skirt_side_L" unique_id=1358403131 instance=ExtResource("7_1ckem")]
 transform = Transform3D(-0.15596192, -0.42791402, -0.8902571, 2.7939567e-08, -0.9012897, 0.433217, -0.987763, 0.06756558, 0.1405674, -0.09243202, 1.3308811, 0.014594555)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -481,12 +481,12 @@ hud_label = "SKSL"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="Attach_skirt_rear_R" type="BoneAttachment3D" parent="Thrusters" unique_id=906738314]
+[node name="Attach_skirt_rear_R" type="BoneAttachment3D" parent="Thrusters" unique_id=949707815]
 bone_name = "skirt_rear.R"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="SkRearR" type="Node3D" parent="Thrusters/Attach_skirt_rear_R" unique_id=1545312313 instance=ExtResource("7_1ckem")]
+[node name="SkRearR" type="Node3D" parent="Thrusters/Attach_skirt_rear_R" unique_id=309267952 instance=ExtResource("7_1ckem")]
 transform = Transform3D(0.99641836, 0.082140304, 0.020107102, 0.054717556, -0.80752444, 0.5872909, 0.06447738, -0.5840887, -0.80912876, -0.074827075, 1.5430346, -0.15311074)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -495,12 +495,12 @@ hud_label = "SKBR"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="Attach_skirt_rear_L" type="BoneAttachment3D" parent="Thrusters" unique_id=2007684886]
+[node name="Attach_skirt_rear_L" type="BoneAttachment3D" parent="Thrusters" unique_id=858982001]
 bone_name = "skirt_rear.L"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="SkRearL" type="Node3D" parent="Thrusters/Attach_skirt_rear_L" unique_id=1896511503 instance=ExtResource("7_1ckem")]
+[node name="SkRearL" type="Node3D" parent="Thrusters/Attach_skirt_rear_L" unique_id=1419946241 instance=ExtResource("7_1ckem")]
 transform = Transform3D(0.99641836, -0.082140304, -0.020107102, -0.054717556, -0.80752444, 0.5872909, -0.06447738, -0.5840887, -0.80912876, 0.074827075, 1.5430346, -0.15311074)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -509,12 +509,12 @@ hud_label = "SKBL"
 plume_length = 3.5
 nozzle_scale = 0.55
 
-[node name="Attach_foot_R" type="BoneAttachment3D" parent="Thrusters" unique_id=1881035086]
+[node name="Attach_foot_R" type="BoneAttachment3D" parent="Thrusters" unique_id=1120732446]
 bone_name = "foot.R"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="FootR" type="Node3D" parent="Thrusters/Attach_foot_R" unique_id=508940859 instance=ExtResource("7_1ckem")]
+[node name="FootR" type="Node3D" parent="Thrusters/Attach_foot_R" unique_id=686515357 instance=ExtResource("7_1ckem")]
 transform = Transform3D(1, 0, 0, 0, -0.7071067, 0.7071068, 0, -0.7071068, -0.7071067, 0, 1.4849246, -0.9192388)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -523,12 +523,12 @@ hud_label = "FTR"
 plume_length = 3.5
 nozzle_scale = 0.6
 
-[node name="Attach_foot_L" type="BoneAttachment3D" parent="Thrusters" unique_id=1627648917]
+[node name="Attach_foot_L" type="BoneAttachment3D" parent="Thrusters" unique_id=545825692]
 bone_name = "foot.L"
 use_external_skeleton = true
 external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
 
-[node name="FootL" type="Node3D" parent="Thrusters/Attach_foot_L" unique_id=830685409 instance=ExtResource("7_1ckem")]
+[node name="FootL" type="Node3D" parent="Thrusters/Attach_foot_L" unique_id=1957081918 instance=ExtResource("7_1ckem")]
 transform = Transform3D(1, 0, 0, 0, -0.7071067, 0.7071068, 0, -0.7071068, -0.7071067, 0, 1.4849246, -0.9192388)
 script = ExtResource("8_3g4qg")
 max_thrust = 30000.0
@@ -537,7 +537,7 @@ hud_label = "FTL"
 plume_length = 3.5
 nozzle_scale = 0.6
 
-[node name="FlightComputer" type="Node" parent="." unique_id=1317037404]
+[node name="FlightComputer" type="Node" parent="." unique_id=84260822]
 script = ExtResource("9_xn3y6")
 control_law = SubResource("Resource_oc3ly")
 allocator = SubResource("Resource_is4jn")
@@ -545,25 +545,25 @@ dry_mass = 30000.0
 propellant_capacity = 10000.0
 propellant = 10000.0
 
-[node name="PilotInput" type="Node" parent="FlightComputer" unique_id=1143751845]
+[node name="PilotInput" type="Node" parent="FlightComputer" unique_id=1208563635]
 script = ExtResource("13_uefsq")
 axis_bindings = Array[ExtResource("14_3km8y")]([SubResource("Resource_8fryf"), SubResource("Resource_2oy1w"), SubResource("Resource_acib1")])
 
-[node name="CockpitHatch" type="Node" parent="." unique_id=1130426103 node_paths=PackedStringArray("skeleton")]
+[node name="CockpitHatch" type="Node" parent="." unique_id=935924298 node_paths=PackedStringArray("skeleton")]
 script = ExtResource("15_b0623")
 skeleton = NodePath("../Model/Armature/Skeleton3D")
 panels = Array[ExtResource("16_5y4qh")]([SubResource("Resource_vf1nf"), SubResource("Resource_45m7x")])
 
-[node name="Ambac" type="Node" parent="." unique_id=1334331333 node_paths=PackedStringArray("skeleton")]
+[node name="Ambac" type="Node" parent="." unique_id=678983524 node_paths=PackedStringArray("skeleton")]
 script = ExtResource("17_0ulpa")
 skeleton = NodePath("../Model/Armature/Skeleton3D")
 joints = Array[ExtResource("18_ah32w")]([SubResource("Resource_j75hl"), SubResource("Resource_sjrge"), SubResource("Resource_x62w6"), SubResource("Resource_xxsfa"), SubResource("Resource_pb8n5"), SubResource("Resource_0naes"), SubResource("Resource_alcet"), SubResource("Resource_3p2xq"), SubResource("Resource_piii2")])
 
-[node name="Loadout" type="Node3D" parent="." unique_id=1351857244 node_paths=PackedStringArray("skeleton")]
+[node name="Loadout" type="Node3D" parent="." unique_id=2117483853 node_paths=PackedStringArray("skeleton")]
 script = ExtResource("19_6o1ws")
 skeleton = NodePath("../Model/Armature/Skeleton3D")
 
-[node name="BeamRifle" type="Node3D" parent="Loadout" unique_id=1191195107 instance=ExtResource("20_5mkw8")]
+[node name="BeamRifle" type="Node3D" parent="Loadout" unique_id=1800250629 instance=ExtResource("20_5mkw8")]
 script = ExtResource("21_lawlv")
 equipment_name = "BEAM RIFLE"
 mass = 2600.0
@@ -573,7 +573,7 @@ input_action = &"ms_toggle_rifle"
 active_pose = &"rifle_ready"
 ambac_group = &"arm_r"
 
-[node name="Shield" type="Node3D" parent="Loadout" unique_id=689065995 instance=ExtResource("22_5cpeu")]
+[node name="Shield" type="Node3D" parent="Loadout" unique_id=1600290269 instance=ExtResource("22_5cpeu")]
 script = ExtResource("23_owjy5")
 equipment_name = "SHIELD"
 mass = 3800.0
@@ -583,21 +583,21 @@ input_action = &"ms_toggle_shield"
 active_pose = &"shield_guard"
 ambac_group = &"arm_l"
 
-[node name="PoseAnimations" type="AnimationPlayer" parent="." unique_id=1977847975]
+[node name="PoseAnimations" type="AnimationPlayer" parent="." unique_id=366007307]
 root_node = NodePath("../Model")
 libraries/ = ExtResource("24_x5ywh")
 
-[node name="PoseAnimator" type="Node" parent="." unique_id=542242368 node_paths=PackedStringArray("animation_player")]
+[node name="PoseAnimator" type="Node" parent="." unique_id=253191793 node_paths=PackedStringArray("animation_player")]
 script = ExtResource("25_wg0jq")
 animation_player = NodePath("../PoseAnimations")
 layers = Array[ExtResource("26_nwe7p")]([SubResource("Resource_ajew8"), SubResource("Resource_gv1vk")])
 
-[node name="ExternalCamera" type="Camera3D" parent="." unique_id=205141509]
+[node name="ExternalCamera" type="Camera3D" parent="." unique_id=1932474277]
 far = 8000.0
 script = ExtResource("27_ijsb7")
 focus_offset = Vector3(0, 13, 0)
 distance = 45.0
 
-[node name="ViewSwitcher" type="Node" parent="." unique_id=2142748395 node_paths=PackedStringArray("external_camera")]
+[node name="ViewSwitcher" type="Node" parent="." unique_id=1684454955 node_paths=PackedStringArray("external_camera")]
 script = ExtResource("28_g67fc")
 external_camera = NodePath("../ExternalCamera")

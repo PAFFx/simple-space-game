@@ -12,7 +12,7 @@ blade antenna, tapered forearms, long flaring shins, wedge feet, backpack saber 
 | Mass | 30 t dry + 10 t propellant + 2.6 t rifle + 3.8 t shield ≈ 46.4 t |
 | Main thrust | 4 × 179.5 kN backpack + 2 × 120.6 kN leg (= 4 × 18,300 + 2 × 12,300 kgf) |
 | Verniers | 18 × 25–35 kN (shoulders, chest, skirts, feet) |
-| Mains layout | backpack bells at the bottom of the pods, firing down and 25° back (gimbal 28°) |
+| Mains layout | backpack bells at the bottom of the pods, firing down and 25° back, 60° vectoring |
 
 ## Files
 
