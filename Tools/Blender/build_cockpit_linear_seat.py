@@ -35,7 +35,7 @@ def materials():
         "yellow": mk.make_material("CP_AccentYellow", (0.95, 0.70, 0.08), roughness=0.4),
         "red": mk.make_material("CP_AccentRed", (0.75, 0.08, 0.08), roughness=0.4),
         "strip": mk.make_material("CP_LightStrip", (0.1, 0.3, 0.5), emission=(0.3, 0.75, 1.0), strength=3.0),
-        "screen": mk.make_material("CP_Screen", (0.02, 0.05, 0.08), emission=(0.15, 0.55, 0.9), strength=1.5),
+        "screen": mk.make_material("CP_Screen", (0.01, 0.03, 0.05), emission=(0.04, 0.18, 0.32), strength=1.0),
     }
 
 
