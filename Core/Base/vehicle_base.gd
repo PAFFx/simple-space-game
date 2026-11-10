@@ -52,3 +52,19 @@ func get_sensor_head() -> SensorHead:
 			return child as SensorHead
 	push_error(name + ": no SensorHead found under sensor head mount")
 	return null
+
+
+## Returns the first node under this vehicle whose script is (or extends) `script`,
+## e.g. find_component(FlightComputer). Intended for one-off lookups in _ready().
+func find_component(script: Script) -> Node:
+	return _find_component_in(self, script)
+
+
+static func _find_component_in(node: Node, script: Script) -> Node:
+	for child in node.get_children():
+		if is_instance_of(child, script):
+			return child
+		var found := _find_component_in(child, script)
+		if found != null:
+			return found
+	return null
