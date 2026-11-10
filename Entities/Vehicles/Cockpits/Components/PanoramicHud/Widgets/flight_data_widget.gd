@@ -36,10 +36,10 @@ func _draw_left_block(fc: FlightComputer, line_h: float) -> void:
 		rows.append(["AMBAC", "%7d" % roundi(hud.ambac.get_usage() * 100.0), "%"])
 	for i in rows.size():
 		var y := i * line_h
-		text(Vector2(-px(7.5), y), rows[i][0], hud.dim_color)
+		text(Vector2(-px(8.6), y), rows[i][0], hud.dim_color)
 		text(Vector2(0, y), rows[i][1], hud.primary_color, HORIZONTAL_ALIGNMENT_RIGHT)
 		text(Vector2(4, y), rows[i][2], hud.dim_color, HORIZONTAL_ALIGNMENT_LEFT, 14)
-	line(Vector2(-px(8.1), -line_h), Vector2(-px(8.1), line_h * (rows.size() - 0.6)), hud.dim_color)
+	line(Vector2(-px(9.2), -line_h), Vector2(-px(9.2), line_h * (rows.size() - 0.6)), hud.dim_color)
 	end_local()
 
 
