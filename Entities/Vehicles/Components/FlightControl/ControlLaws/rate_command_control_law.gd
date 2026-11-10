@@ -32,7 +32,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Attitude loop gain, (rad/s) per rad of error.
 @export var attitude_gain: float = 1.6
 ## How far the commanded attitude may run ahead of the body, deg.
-@export var max_command_lead_deg: float = 8.0
+@export var max_command_lead_deg: float = 4.0
+## After the stick is released, attitude is locked once the rate drops below this, deg/s.
+@export var hold_capture_rate_deg: float = 2.0
 @export var stick_deadzone: float = 0.04
 ## Fraction of torque authority the FCS may request.
 @export_range(0.0, 1.0) var torque_fraction: float = 0.6
@@ -54,6 +56,7 @@ var _initialized := false
 var _pilot := Quaternion.IDENTITY    ## Pilot frame orientation (global)
 var _offset := Quaternion.IDENTITY   ## Body relative to pilot frame
 var _stick_active := false
+var _capturing := false
 
 
 func reset() -> void:
@@ -92,7 +95,7 @@ func get_mode_labels() -> PackedStringArray:
 	var trans := "TRANS NEWTON" if translation_mode == TranslationMode.NEWTONIAN else "TRANS V-HOLD"
 	var rot := "ROT RATE"
 	if rotation_mode == RotationMode.ATTITUDE_HOLD:
-		rot = "ROT ATT-HOLD" + ("" if _stick_active else " ●")
+		rot = "ROT ATT-HOLD" + (" ●" if is_holding_attitude() else "")
 	var labels := PackedStringArray([trans, rot])
 	if attitude_solver != null and rotation_mode == RotationMode.ATTITUDE_HOLD:
 		labels.append("VECTOR %02d°" % roundi(rad_to_deg(_offset.get_angle())))
@@ -100,7 +103,7 @@ func get_mode_labels() -> PackedStringArray:
 
 
 func is_holding_attitude() -> bool:
-	return rotation_mode == RotationMode.ATTITUDE_HOLD and not _stick_active
+	return rotation_mode == RotationMode.ATTITUDE_HOLD and not _stick_active and not _capturing
 
 
 func _update_offset(state: FlightState, force_world: Vector3) -> void:
@@ -127,7 +130,14 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		# Integrate the commanded rate into the pilot frame, then track pilot · offset.
 		var w := stick_rate.length()
 		if w > 1e-6:
+			_capturing = true
 			_pilot = (_pilot * Quaternion(stick_rate / w, w * state.delta)).normalized()
+		elif _capturing:
+			# Released: damp the rate out, then lock the attitude where the suit stopped
+			# (locking at release would pull it back by the stopping distance).
+			_pilot = body_q * _offset.inverse()
+			if omega.length() < deg_to_rad(hold_capture_rate_deg):
+				_capturing = false
 		var target := _pilot * _offset
 		var err_q := target * body_q.inverse()
 		var lead := deg_to_rad(max_command_lead_deg)
@@ -139,7 +149,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 			err_q = -err_q
 		var err := state.to_local(Vector3(err_q.x, err_q.y, err_q.z) * 2.0)
 		var feed_forward := state.to_local(_pilot * stick_rate)
-		rate_cmd = (feed_forward + err * attitude_gain).clamp(-max_rate * 1.5, max_rate * 1.5)
+		rate_cmd = (feed_forward + err * attitude_gain).clamp(-max_rate * 1.2, max_rate * 1.2)
 	else:
 		_offset = Quaternion.IDENTITY
 		_pilot = body_q
