@@ -23,6 +23,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var rotation_mode: RotationMode = RotationMode.ATTITUDE_HOLD
 ## Auto-rotation for thrust vectoring (ATTITUDE_HOLD only). Empty = body stays aligned.
 @export var attitude_solver: AttitudeOffsetSolver
+## Auto-rotation waits for the body: the offset swing slows once the body lags the
+## target by the first angle and stops at the second, so it never runs away (deg).
+@export var tracking_lag_deg := Vector2(6.0, 15.0)
 ## Only auto-rotate while boosting. Off: auto-rotate whenever a translation is
 ## commanded (or boosting) and the demand needs it; plain stops never rotate.
 @export var auto_rotate_on_boost_only: bool = false
@@ -101,7 +104,7 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 
 	_stick_active = command.rotation.length() > stick_deadzone
 	var force_world := _translation_force_world(state, command)
-	_update_offset(state, force_world, command)
+	_update_offset(state, force_world, command, body_q)
 	var torque := _rotation_torque(state, command, body_q)
 	var force_body := clamp_to_capability(state.to_local(force_world), state, 1.0)
 	var wrench := Wrench.new(force_body, torque)
@@ -125,7 +128,8 @@ func is_holding_attitude() -> bool:
 	return rotation_mode == RotationMode.ATTITUDE_HOLD and not _stick_active and not _capturing
 
 
-func _update_offset(state: FlightState, force_world: Vector3, command: PilotCommand) -> void:
+func _update_offset(state: FlightState, force_world: Vector3, command: PilotCommand,
+		body_q: Quaternion) -> void:
 	var target := Quaternion.IDENTITY
 	var slew := deg_to_rad(60.0)
 	var smoothing := 0.0
@@ -145,8 +149,13 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 	if smoothing > 0.0:
 		_offset_target = _offset_target.slerp(target, 1.0 - exp(-state.delta / smoothing))
 		target = _offset_target
+	# Throttle the swing by how far the body already lags the current target.
+	var lag_q := AttitudeOffsetSolver.shortest((_pilot * _offset) * body_q.inverse())
+	var lag := rad_to_deg(lag_q.get_angle())
+	var span := maxf(tracking_lag_deg.y - tracking_lag_deg.x, 0.01)
+	slew *= clampf(1.0 - (lag - tracking_lag_deg.x) / span, 0.0, 1.0)
 	var angle := _offset.angle_to(target)
-	if angle > 1e-5:
+	if angle > 1e-5 and slew > 0.0:
 		_offset = _offset.slerp(target, minf(1.0, slew * state.delta / angle)).normalized()
 
 

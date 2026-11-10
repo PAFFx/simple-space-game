@@ -62,8 +62,9 @@ shader, sensor and HUD read `PanoramicScreen.get_display_transform()`. Gameplay 
 
 ## Linear seat: gimbal and G dampening
 
-- `CockpitGimbal` rotates the whole cockpit by the measured `body⁻¹ · pilot` (clamped to 70°),
-  so the cockpit holds still in the world while the body turns, even mid-swing. Commanded rotations move the pilot frame, so the cockpit
+- `CockpitGimbal` rotates the whole cockpit by the measured `body⁻¹ · pilot`, so the cockpit holds
+  still in the world while the body turns, even mid-swing. Range 75°, eased (not clamped) past
+  62° so an overshooting body never snaps the view. Commanded rotations move the pilot frame, so the cockpit
   turns with the suit for those.
 - `SeatDampener` models the seat suspension (spring-damper, 14 rad/s, ζ 0.8, ±0.15 m travel) plus
   an active inertial compensator that cancels 55% of what's left. `G MS` is the suit, `G PLT` is

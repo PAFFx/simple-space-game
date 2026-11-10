@@ -120,12 +120,12 @@ Cruise (0.35 G) fits every direction, so normal flying never rotates the suit. B
 rolls it for side moves, leans it forward for forward and pitches it for climbs or brakes.
 Releasing the controls brakes without rotating.
 
-It minimises over offsets `r` (pitch and roll up to 70°, yaw at most 3° via `axis_limit_deg`, so
+It minimises over offsets `r` (pitch and roll up to 60°, yaw at most 3° via `axis_limit_deg`, so
 the suit never swings sideways under the pilot):
 
 ```
 J(r) = shortfall_weight · max(0, |F| / capability(R⁻¹F) − 0.9)²
-     + angle_weight · (|r| / 70°)²  +  smooth_weight · |r − r_prev|²
+     + angle_weight · (|r| / 60°)²  +  smooth_weight · |r − r_prev|²
 ```
 
 Demands the current attitude can meet cost only the angle, so the result is "rotate as little as
@@ -141,8 +141,14 @@ too optimistic: e.g. gimballed downward mains *can* push sideways, but only by a
 which used to show up as vertical drift during strafes. Call `rebuild_capability_map()` after
 changing thrusters. It's a pattern search warm-started from {current, zero, each body axis aimed at
 F}, about a dozen cost evaluations per tick. The offset is hard-limited to `max_offset_deg` (70°)
-and slewed at `slew_rate_deg` (30°/s) after a low-pass (`smoothing_time`, 0.35 s), so swings
-ease in and out.
+and slewed at `slew_rate_deg` after a short low-pass (`smoothing_time`).
+
+**Keeping the pilot oriented.** The swing waits for the body: once the body lags the target by
+6° the slew slows, and at 15° it pauses (`tracking_lag_deg`). The solver's 60° limit sits below the
+seat gimbal's soft knee (62°, limit 75°), and past the knee the gimbal eases toward its limit
+(tanh) instead of clamping, so an overshoot can't snap the view. All rotation clamps take the
+shortest way round: clamping the "long way" quaternion once flipped the cockpit by ~220° in a
+single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 8°/s.
 
 - Commanded rotations move the pilot frame itself, so they never produce an offset.
 - The cockpit holds the pilot frame (`CockpitGimbal`): its rotation in the hull is the

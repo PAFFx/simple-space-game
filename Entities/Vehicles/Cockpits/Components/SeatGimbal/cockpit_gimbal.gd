@@ -9,7 +9,11 @@ extends Node
 ## Place under the CockpitBase node; it rotates that node.
 
 @export var flight_computer: FlightComputer
-@export var max_angle_deg: float = 70.0
+## Mechanical limit of the seat gimbal.
+@export var max_angle_deg: float = 75.0
+## Beyond this the cockpit starts to yield smoothly instead of hitting a wall at
+## the limit, so an overshooting body never snaps the pilot's view.
+@export var soft_knee_deg: float = 62.0
 
 var _cockpit: Node3D
 var _rest := Basis.IDENTITY
@@ -28,9 +32,20 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if _cockpit == null or flight_computer == null or flight_computer.control_law == null:
 		return
-	var relative := AttitudeOffsetSolver.clamp_rotation(
-			flight_computer.get_cockpit_rotation(), deg_to_rad(max_angle_deg))
-	_cockpit.basis = _rest * Basis(relative)
+	_cockpit.basis = _rest * Basis(cushion(flight_computer.get_cockpit_rotation()))
+
+
+## Maps the wanted cockpit rotation into the gimbal range: unchanged below the
+## knee, then eased (tanh) toward the limit, continuous in angle and rate.
+func cushion(rotation_q: Quaternion) -> Quaternion:
+	var q := AttitudeOffsetSolver.shortest(rotation_q)
+	var angle := q.get_angle()
+	var knee := deg_to_rad(soft_knee_deg)
+	var limit := deg_to_rad(max_angle_deg)
+	if angle <= knee or limit <= knee:
+		return AttitudeOffsetSolver.clamp_rotation(q, limit)
+	var span := limit - knee
+	return Quaternion(q.get_axis(), knee + span * tanh((angle - knee) / span))
 
 
 ## Current cockpit ↔ body angle, degrees.
