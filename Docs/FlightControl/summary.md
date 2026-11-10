@@ -78,7 +78,7 @@ The body is driven to `pilot · offset`, where the offset comes from the attitud
 
 | Axis | Mode | Stick means | Stick released |
 |------|------|-------------|----------------|
-| Rotation | `ATTITUDE_HOLD` (default) | Rate of the pilot frame (`max_rate_deg`) | Rate damps out, then the attitude is locked and held |
+| Rotation | `ATTITUDE_HOLD` (default) | Turn rate about the pilot's axes (`max_rate_deg`); cockpit locked rigidly to the suit | Turn brakes at full torque (cockpit still locked), then the attitude is held |
 | Rotation | `RATE_DAMP` | Angular rate demand | Rate → 0, no hold, no auto-rotation |
 | Translation | `VELOCITY_HOLD` (default) | Velocity in the pilot frame (`max_command_speed`) | Brought to rest relative to the reference frame |
 | Translation | `NEWTONIAN` | Thrust demand (cruise fraction, or 100% with boost) | Coast |
@@ -92,8 +92,9 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
   0.35 G, `boost_accel_g` 2 G), so the path is a straight line to the command.
 - Release the rotation controls and the turn stops at once (full torque, `stop_gain_multiplier`),
   then the attitude is held.
-- The cockpit only turns when the pilot turns it. Any body rotation for thrust happens
-  underneath.
+- The cockpit only turns when the pilot turns it, and then rigidly with the suit (no lead or
+  lag on any axis). Any body rotation for thrust happens underneath, and only while not steering.
+  The only seat damping is linear (`SeatDampener`).
 - While the pilot steers, auto-rotation is frozen: suit and cockpit turn as one rigid unit.
 
 **Boost** (Shift): 2 G acceleration cap, 100% torque authority, rates × `boost_rate_multiplier`

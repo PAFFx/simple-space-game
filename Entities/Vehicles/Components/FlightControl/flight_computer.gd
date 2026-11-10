@@ -161,7 +161,8 @@ func get_cockpit_rotation() -> Quaternion:
 	var pilot: Variant = control_law.get_pilot_orientation()
 	if pilot == null:
 		return Quaternion.IDENTITY
-	var body_q := body.global_basis.orthonormalized().get_rotation_quaternion()
+	# Same body snapshot the law used, so a rigid lock stays exact (no one-tick lag).
+	var body_q := state.basis.get_rotation_quaternion()
 	return (body_q.inverse() * pilot).normalized()
 
 

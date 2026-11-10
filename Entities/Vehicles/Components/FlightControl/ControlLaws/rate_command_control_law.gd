@@ -34,8 +34,6 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var rate_gain: float = 2.5
 ## Attitude loop gain, (rad/s) per rad of error.
 @export var attitude_gain: float = 1.6
-## How far the commanded attitude may run ahead of the body, deg.
-@export var max_command_lead_deg: float = 4.0
 ## After the stick is released, attitude is locked once the rate drops below this, deg/s.
 @export var hold_capture_rate_deg: float = 2.0
 @export var stick_deadzone: float = 0.04
@@ -147,30 +145,20 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	var rate_cmd := stick_rate
 
 	if rotation_mode == RotationMode.ATTITUDE_HOLD:
-		# Integrate the commanded rate into the pilot frame, then track pilot · offset.
-		var w := stick_rate.length()
-		if w > 1e-6:
-			_capturing = true
-			_pilot = (_pilot * Quaternion(stick_rate / w, w * state.delta)).normalized()
-		elif _capturing:
-			# Released: damp the rate out, then lock the attitude where the suit stopped
-			# (locking at release would pull it back by the stopping distance).
+		if _stick_active or _capturing:
+			# Steering, or braking the turn after release: the cockpit is locked rigidly
+			# to the suit (pilot = body · offset⁻¹), so it never leads or lags the hull.
+			# The stick commands the rate about the pilot's axes directly.
+			_capturing = _stick_active or omega.length() >= deg_to_rad(hold_capture_rate_deg)
 			_pilot = body_q * _offset.inverse()
-			if omega.length() < deg_to_rad(hold_capture_rate_deg):
-				_capturing = false
-		var target := _pilot * _offset
-		var err_q := target * body_q.inverse()
-		var lead := deg_to_rad(max_command_lead_deg)
-		# Only stick commands are limited; offset changes must never drag the pilot frame.
-		if w > 1e-6 and err_q.get_angle() > lead:
-			target = body_q.slerp(target, lead / err_q.get_angle())
-			_pilot = target * _offset.inverse()
-			err_q = target * body_q.inverse()
-		if err_q.w < 0.0:
-			err_q = -err_q
-		var err := state.to_local(Vector3(err_q.x, err_q.y, err_q.z) * 2.0)
-		var feed_forward := state.to_local(_pilot * stick_rate)
-		rate_cmd = (feed_forward + err * attitude_gain).clamp(-max_rate * 1.2, max_rate * 1.2)
+			rate_cmd = state.to_local(_pilot * stick_rate)
+		else:
+			# Hold: track pilot · offset (the offset may be moving for thrust vectoring).
+			var err_q := (_pilot * _offset) * body_q.inverse()
+			if err_q.w < 0.0:
+				err_q = -err_q
+			var err := state.to_local(Vector3(err_q.x, err_q.y, err_q.z) * 2.0)
+			rate_cmd = (err * attitude_gain).clamp(-max_rate * 1.2, max_rate * 1.2)
 	else:
 		_offset = Quaternion.IDENTITY
 		_pilot = body_q
