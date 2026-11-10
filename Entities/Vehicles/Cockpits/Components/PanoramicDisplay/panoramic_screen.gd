@@ -202,3 +202,32 @@ func set_aperture_amount(amount: float) -> void:
 	_aperture_amount = clampf(amount, 0.0, 1.0)
 	if _material != null:
 		_material.set_shader_parameter("aperture_amount", _aperture_amount)
+
+
+func get_aperture_amount() -> float:
+	return _aperture_amount
+
+
+func get_aperture_center_rad() -> Vector2:
+	return _deg_to_rad_v2(aperture_center_deg)
+
+
+func get_aperture_half_size_rad() -> Vector2:
+	return _deg_to_rad_v2(aperture_half_size_deg)
+
+
+## True if a screen-local direction currently falls in the cut-out (same test as the shader).
+func is_in_aperture(local_dir: Vector3) -> bool:
+	if _aperture_amount <= 0.0:
+		return false
+	var centre := get_aperture_center_rad()
+	var half := get_aperture_half_size_rad()
+	var d_az := wrapf(atan2(local_dir.x, -local_dir.z) - centre.x, -PI, PI)
+	var d_el := asin(clampf(local_dir.y, -1.0, 1.0)) - centre.y
+	return absf(d_az) < half.x and absf(d_el) < half.y * _aperture_amount
+
+
+## Screen-local unit direction for an azimuth/elevation (azimuth 0 = -Z, positive = +X).
+static func angles_to_direction(azimuth: float, elevation: float) -> Vector3:
+	var cos_el := cos(elevation)
+	return Vector3(sin(azimuth) * cos_el, sin(elevation), -cos(azimuth) * cos_el)

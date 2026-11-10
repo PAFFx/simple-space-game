@@ -2,16 +2,20 @@ class_name SensorHead
 extends Node3D
 
 ## Manages a sensor camera at the mech's head pivot.
-## Tracks the viewer camera's look direction and renders only the angular
-## slice of the world the viewer is currently looking at, feeding the result
+## Renders only the angular slice of the world covering the part of the screen
+## the active camera can currently see (from the seat or through the hatch), feeding the result
 ## to PanoramicScreen via a SubViewport texture.
 ##
 ## Dependencies (viewer_camera, panoramic_screen) are discovered automatically
 ## by walking up to the nearest VehicleBase ancestor. Set the exports manually
 ## only when testing outside a full vehicle hierarchy.
 
-## Optional override — auto-discovered from the vehicle's cockpit if left empty.
+## Default viewer (the pilot's camera). Auto-discovered from the vehicle's cockpit if left empty.
 @export var viewer_camera: Camera3D
+
+## Render for whichever camera is currently active, so the screen also looks
+## right from external cameras. Off = always render for viewer_camera.
+@export var follow_active_camera: bool = true
 
 ## Optional override — auto-discovered from the vehicle's cockpit if left empty.
 @export var panoramic_screen: PanoramicScreen
@@ -43,9 +47,23 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	if viewer_camera == null:
+	var viewer := get_active_viewer()
+	if viewer == null:
 		return
-	_update_camera()
+	if panoramic_screen == null:
+		_update_camera_fallback(viewer)
+	else:
+		_update_camera(viewer)
+
+
+## The camera the screen is rendered for: whatever camera is currently showing
+## the main viewport (cockpit, external, cinematic...), else viewer_camera.
+func get_active_viewer() -> Camera3D:
+	if follow_active_camera:
+		var active := get_viewport().get_camera_3d()
+		if active != null:
+			return active
+	return viewer_camera
 
 
 # --- Auto-discovery ---
@@ -92,47 +110,35 @@ func _create_camera() -> void:
 	_viewport.add_child(_camera)
 
 
-func _update_camera() -> void:
-	if panoramic_screen == null:
-		_update_camera_fallback()
+func _update_camera(viewer: Camera3D) -> void:
+	# The shader maps screen-local directions through the sensor basis, so do the same here.
+	var screen_to_world := get_sensor_basis()
+	var dirs := SensorFovSolver.sample_visible_directions(viewer, panoramic_screen)
+	for i in dirs.size():
+		dirs[i] = screen_to_world * dirs[i]
+
+	# Nothing on the screen is visible (e.g. outside with the hatch shut): skip rendering.
+	_set_rendering(not dirs.is_empty())
+	if dirs.is_empty():
 		return
 
-	var viewer_basis := viewer_camera.global_transform.basis
-	var world_look   := -viewer_basis.z
-	var viewer_up    := viewer_basis.y
-	var up := viewer_up if abs(world_look.dot(viewer_up)) < 0.99 else viewer_basis.x
+	var look := SensorFovSolver.aim_direction(dirs)
+	if look.is_zero_approx():
+		look = -viewer.global_basis.z
+	var viewer_up := viewer.global_basis.y
+	var up := viewer_up if absf(look.dot(viewer_up)) < 0.99 else viewer.global_basis.x
 
-	# Sensor camera is always aimed in the viewer's look direction.
 	# SubViewport has no spatial transform — _camera.transform IS world-space.
-	_camera.transform = Transform3D(Basis.looking_at(world_look, up), global_position)
-
-	# Decompose the sensor camera's local axes for per-axis FOV computation.
+	_camera.transform = Transform3D(Basis.looking_at(look, up), global_position)
 	var cam_basis := _camera.transform.basis
-
-	var fov_result := SensorFovSolver.solve_required_fov(
-		viewer_camera,
-		panoramic_screen.global_position,
-		panoramic_screen.screen_radius,
-		global_position,
-		world_look,
-		cam_basis.x,  # cam_right
-		cam_basis.y,  # cam_up
-		fov_safety_margin_degrees
-	)
-
-	if fov_result.x < 0.0:
-		# No frustum ray hit the sphere — park at narrow FOV.
-		_camera.fov = 10.0
-		return
+	var fov := SensorFovSolver.solve_required_fov(
+		dirs, look, cam_basis.x, cam_basis.y, fov_safety_margin_degrees)
 
 	# Camera3D.fov is vertical FOV (keep_aspect = KEEP_HEIGHT default).
-	_camera.fov = fov_result.y
+	_camera.fov = fov.y
 
 	var new_size := SensorFovSolver.compute_viewport_size(
-		viewer_camera, quality_scale,
-		fov_result.y, fov_result.x,
-		min_viewport_size, max_viewport_size
-	)
+		viewer, quality_scale, fov.y, fov.x, min_viewport_size, max_viewport_size)
 
 	# Resize only when either dimension changes by > 10% to avoid per-frame GPU realloc.
 	var size_changed := (
@@ -142,20 +148,25 @@ func _update_camera() -> void:
 	if size_changed:
 		_viewport.size = new_size
 
-	# _debug_log(fov_result.x, fov_result.y, new_size)
+	# _debug_log(viewer, fov.x, fov.y, new_size)
+
+
+func _set_rendering(enabled: bool) -> void:
+	_viewport.render_target_update_mode = (
+		SubViewport.UPDATE_ALWAYS if enabled else SubViewport.UPDATE_DISABLED)
 
 
 ## Logs sensor FOV, player FOV, and viewport whenever any value changes by > 1°/1px.
-func _debug_log(hfov: float, vfov: float, vp: Vector2i) -> void:
+func _debug_log(viewer: Camera3D, hfov: float, vfov: float, vp: Vector2i) -> void:
 	if absf(hfov - _dbg_last_hfov) < 1.0 and absf(vfov - _dbg_last_vfov) < 1.0 \
 			and vp == _dbg_last_viewport:
 		return
 	_dbg_last_hfov     = hfov
 	_dbg_last_vfov     = vfov
 	_dbg_last_viewport = vp
-	var player_fov := viewer_camera.fov if viewer_camera != null else 0.0
-	var ppd        := (viewer_camera.get_viewport().get_visible_rect().size.y / player_fov) \
-			* quality_scale if viewer_camera != null else 0.0
+	var player_fov := viewer.fov if viewer != null else 0.0
+	var ppd        := (viewer.get_viewport().get_visible_rect().size.y / player_fov) \
+			* quality_scale if viewer != null else 0.0
 	var aspect     := float(vp.x) / float(vp.y) if vp.y > 0 else 0.0
 	print("[SensorHead] sensor H=%.1f° V=%.1f°  player_fov=%.1f°  viewport=%dx%d (%.2f)  ppd=%.1f" \
 		% [hfov, vfov, player_fov, vp.x, vp.y, aspect, ppd])
@@ -163,16 +174,16 @@ func _debug_log(hfov: float, vfov: float, vp: Vector2i) -> void:
 
 ## Fallback when panoramic_screen is not available (e.g. standalone testing).
 ## Uses a wide static FOV margin to ensure the display stays covered.
-func _update_camera_fallback() -> void:
-	var viewer_basis := viewer_camera.global_transform.basis
+func _update_camera_fallback(viewer: Camera3D) -> void:
+	var viewer_basis := viewer.global_transform.basis
 	var world_look   := -viewer_basis.z
 	var viewer_up    := viewer_basis.y
 	var up := viewer_up if abs(world_look.dot(viewer_up)) < 0.99 else viewer_basis.x
 	_camera.transform = Transform3D(Basis.looking_at(world_look, up), global_position)
-	var vfov := clampf(viewer_camera.fov + 90.0, 10.0, 160.0)
+	var vfov := clampf(viewer.fov + 90.0, 10.0, 160.0)
 	_camera.fov = vfov
-	var display_size := viewer_camera.get_viewport().get_visible_rect().size
-	var ppd          := (display_size.y / viewer_camera.fov) * quality_scale
+	var display_size := viewer.get_viewport().get_visible_rect().size
+	var ppd          := (display_size.y / viewer.fov) * quality_scale
 	var vpx := int(clampf(ppd * vfov, float(min_viewport_size), float(max_viewport_size)))
 	var hpx := int(clampf(float(vpx) * (display_size.x / display_size.y),
 			float(min_viewport_size), float(max_viewport_size)))

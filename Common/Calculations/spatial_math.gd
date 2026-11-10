@@ -27,3 +27,18 @@ static func ray_sphere_intersect(
 	if t1 > 0.001:
 		return t1
 	return -1.0
+
+
+## Returns Vector2(t_enter, t_exit) for a unit-direction ray against a sphere, or
+## Vector2(-1, -1) if the line misses. Either t may be negative (behind the origin).
+static func ray_sphere_entry_exit(
+	ray_origin: Vector3, ray_dir: Vector3,
+	sphere_center: Vector3, sphere_radius: float
+) -> Vector2:
+	var d    := ray_origin - sphere_center
+	var b    := d.dot(ray_dir)
+	var disc := b * b - (d.dot(d) - sphere_radius * sphere_radius)
+	if disc < 0.0:
+		return Vector2(-1.0, -1.0)
+	var sq := sqrt(disc)
+	return Vector2(-b - sq, -b + sq)

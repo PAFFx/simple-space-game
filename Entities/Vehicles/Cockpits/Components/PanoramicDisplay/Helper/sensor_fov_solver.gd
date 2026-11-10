@@ -1,76 +1,90 @@
 class_name SensorFovSolver
 
-## Computes the minimum sensor camera FOV and SubViewport size needed to cover
-## the visible portion of a panoramic sphere from the viewer's perspective.
-##
-## Extracted from SensorHead to keep that class focused on lifecycle management.
-## All functions are stateless — no node is required to call them.
+## Works out which part of the panoramic sphere a viewer camera can see, and the
+## sensor camera aim / FOV / SubViewport size needed to cover exactly that part.
+## Works for a viewer inside the sphere (pilot) and outside it (looking in through
+## the open hatch). All functions are stateless.
+
+const _APERTURE_GRID := Vector2i(7, 5)
 
 
-## Casts 9 frustum sample rays against the panoramic sphere and returns the minimum
-## H/V FOV (in degrees) the sensor camera needs to cover every visible point.
-##
-## Sample layout: centre + 4 corners + 4 edge midpoints.
-## Corners catch diagonal worst-case; edge midpoints isolate each axis cleanly.
-##
-## Returns Vector2(required_hfov_deg, required_vfov_deg).
-## Returns Vector2(-1.0, -1.0) if no sample ray hits the sphere.
+## Screen-local unit directions (from the sphere centre) of the screen points the
+## viewer can see. Empty when none are visible (e.g. outside with the hatch shut).
+static func sample_visible_directions(
+	viewer_camera: Camera3D, screen: PanoramicScreen
+) -> PackedVector3Array:
+	var to_local := screen.global_transform.affine_inverse()
+	var origin := to_local * viewer_camera.global_position
+	var radius := screen.screen_radius
+	var dirs := PackedVector3Array()
+	var inside := origin.length() < radius
+
+	if not inside and screen.get_aperture_amount() <= 0.0:
+		return dirs
+
+	# Frustum rays: centre, corners, edge midpoints.
+	var vp := viewer_camera.get_viewport().get_visible_rect().size
+	for f: Vector2 in [Vector2(0.5, 0.5), Vector2(0, 0), Vector2(1, 0), Vector2(0, 1),
+			Vector2(1, 1), Vector2(0.5, 0), Vector2(0.5, 1), Vector2(0, 0.5), Vector2(1, 0.5)]:
+		var ray := (to_local.basis * viewer_camera.project_ray_normal(vp * f)).normalized()
+		var t := SpatialMath.ray_sphere_entry_exit(origin, ray, Vector3.ZERO, radius)
+		if t.y <= 0.0:
+			continue
+		# Outside: the near wall is back-face culled, so the visible pixel is where
+		# the ray leaves the sphere, and only rays entering through the hatch count.
+		if not inside and not screen.is_in_aperture((origin + ray * t.x).normalized()):
+			continue
+		dirs.append((origin + ray * t.y).normalized())
+
+	if inside:
+		return dirs
+
+	# From outside the opening is usually a small patch of the frame that the
+	# frustum rays miss, so also aim rays through a grid over the aperture.
+	var amount := screen.get_aperture_amount()
+	var centre := screen.get_aperture_center_rad()
+	var half := screen.get_aperture_half_size_rad() * Vector2(1.0, amount)
+	for ix in _APERTURE_GRID.x:
+		for iy in _APERTURE_GRID.y:
+			var g := Vector2(ix, iy) / Vector2(_APERTURE_GRID - Vector2i.ONE) * 2.0 - Vector2.ONE
+			var a := centre + g * half
+			var entry := PanoramicScreen.angles_to_direction(a.x, a.y) * radius
+			if (origin - entry).dot(entry) <= 0.0:
+				continue  # opening faces away from the viewer
+			if not viewer_camera.is_position_in_frustum(screen.global_transform * entry):
+				continue
+			var ray := (entry - origin).normalized()
+			var t := SpatialMath.ray_sphere_entry_exit(origin, ray, Vector3.ZERO, radius)
+			dirs.append((origin + ray * t.y).normalized())
+	return dirs
+
+
+## Mean of the directions: the sensor camera aims here. Zero if dirs is empty.
+static func aim_direction(dirs: PackedVector3Array) -> Vector3:
+	var sum := Vector3.ZERO
+	for d in dirs:
+		sum += d
+	return sum.normalized()
+
+
+## Minimum H/V FOV in degrees for a camera looking along `look` (with the given
+## right/up axes) to contain every direction in `dirs`.
 static func solve_required_fov(
-	viewer_camera: Camera3D,
-	sphere_center: Vector3,
-	sphere_radius: float,
-	sensor_position: Vector3,
-	world_look: Vector3,
+	dirs: PackedVector3Array,
+	look: Vector3,
 	cam_right: Vector3,
 	cam_up: Vector3,
 	safety_margin_deg: float
 ) -> Vector2:
-	var viewer_pos := viewer_camera.global_position
-	var vp_size    := viewer_camera.get_viewport().get_visible_rect().size
-
-	var sample_pixels: Array[Vector2] = [
-		vp_size * 0.5,                            # centre
-		Vector2(0.0,          0.0),               # top-left
-		Vector2(vp_size.x,    0.0),               # top-right
-		Vector2(0.0,          vp_size.y),         # bottom-left
-		vp_size,                                   # bottom-right
-		Vector2(vp_size.x * 0.5, 0.0),           # top-centre    (pure V)
-		Vector2(vp_size.x * 0.5, vp_size.y),     # bottom-centre (pure V)
-		Vector2(0.0,          vp_size.y * 0.5),   # left-centre   (pure H)
-		Vector2(vp_size.x,    vp_size.y * 0.5),  # right-centre  (pure H)
-	]
-
-	var max_h_half_angle := 0.0
-	var max_v_half_angle := 0.0
-	var any_hit          := false
-
-	for pixel in sample_pixels:
-		var ray_dir := viewer_camera.project_ray_normal(pixel)
-		var t := SpatialMath.ray_sphere_intersect(
-			viewer_pos, ray_dir, sphere_center, sphere_radius)
-		if t < 0.0:
-			continue
-		any_hit = true
-		var panoramic_dir := (viewer_pos + ray_dir * t - sphere_center).normalized()
-
-		# Project panoramic_dir into sensor camera's local H and V planes.
-		# atan2(lateral, forward) gives the perspective angle in each axis.
-		# d_fwd > 0 means the direction is in front of the sensor camera.
-		var d_fwd   := panoramic_dir.dot(world_look)
-		var h_angle := absf(atan2(panoramic_dir.dot(cam_right), d_fwd))
-		var v_angle := absf(atan2(panoramic_dir.dot(cam_up),    d_fwd))
-
-		if h_angle > max_h_half_angle:
-			max_h_half_angle = h_angle
-		if v_angle > max_v_half_angle:
-			max_v_half_angle = v_angle
-
-	if not any_hit:
-		return Vector2(-1.0, -1.0)
-
+	var max_h := 0.0
+	var max_v := 0.0
+	for d in dirs:
+		var fwd := d.dot(look)
+		max_h = maxf(max_h, absf(atan2(d.dot(cam_right), fwd)))
+		max_v = maxf(max_v, absf(atan2(d.dot(cam_up), fwd)))
 	return Vector2(
-		clampf(rad_to_deg(max_h_half_angle) * 2.0 + safety_margin_deg, 10.0, 160.0),
-		clampf(rad_to_deg(max_v_half_angle) * 2.0 + safety_margin_deg, 10.0, 160.0)
+		clampf(rad_to_deg(max_h) * 2.0 + safety_margin_deg, 10.0, 160.0),
+		clampf(rad_to_deg(max_v) * 2.0 + safety_margin_deg, 10.0, 160.0)
 	)
 
 
