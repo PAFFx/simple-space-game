@@ -25,7 +25,7 @@ func _ready() -> void:
 			flight_computer = vehicle.find_component(FlightComputer) as FlightComputer
 
 
-func _process(_delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	if _cockpit == null or flight_computer == null or flight_computer.control_law == null:
 		return
 	var relative := AttitudeOffsetSolver.clamp_rotation(

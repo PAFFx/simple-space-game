@@ -106,6 +106,8 @@ func _create_camera() -> void:
 	# body parts have been assigned their own sensor sub-layers.
 	_camera.cull_mask = Layers.WORLD | Layers.FX
 	_camera.near = 0.5
+	# Placed every frame from interpolated transforms; never interpolate it again.
+	_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_camera.far = 2000.0
 	_viewport.add_child(_camera)
 
@@ -129,7 +131,8 @@ func _update_camera(viewer: Camera3D) -> void:
 	var up := viewer_up if absf(look.dot(viewer_up)) < 0.99 else viewer.global_basis.x
 
 	# SubViewport has no spatial transform — _camera.transform IS world-space.
-	_camera.transform = Transform3D(Basis.looking_at(look, up), global_position)
+	var origin := get_global_transform_interpolated().origin
+	_camera.transform = Transform3D(Basis.looking_at(look, up), origin)
 	var cam_basis := _camera.transform.basis
 	var fov := SensorFovSolver.solve_required_fov(
 		dirs, look, cam_basis.x, cam_basis.y, fov_safety_margin_degrees)
@@ -179,7 +182,8 @@ func _update_camera_fallback(viewer: Camera3D) -> void:
 	var world_look   := -viewer_basis.z
 	var viewer_up    := viewer_basis.y
 	var up := viewer_up if abs(world_look.dot(viewer_up)) < 0.99 else viewer_basis.x
-	_camera.transform = Transform3D(Basis.looking_at(world_look, up), global_position)
+	_camera.transform = Transform3D(Basis.looking_at(world_look, up),
+			get_global_transform_interpolated().origin)
 	var vfov := clampf(viewer.fov + 90.0, 10.0, 160.0)
 	_camera.fov = vfov
 	var display_size := viewer.get_viewport().get_visible_rect().size

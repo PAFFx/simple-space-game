@@ -72,7 +72,7 @@ func get_display_basis() -> Basis:
 ## Pilot eye point: the centre of the panoramic sphere.
 func get_display_origin() -> Vector3:
 	if panoramic_screen != null:
-		return panoramic_screen.global_position
+		return panoramic_screen.get_display_transform().origin
 	return sensor_head.global_position
 
 

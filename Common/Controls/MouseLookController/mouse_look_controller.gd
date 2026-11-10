@@ -44,4 +44,8 @@ func _input(event: InputEvent) -> void:
 
 	_yaw   -= event.relative.x * sensitivity
 	_pitch  = clamp(_pitch - event.relative.y * sensitivity, -pitch_limit, pitch_limit)
-	target.rotation = Vector3(deg_to_rad(_pitch), deg_to_rad(_yaw), 0.0)
+	var look := Vector3(deg_to_rad(_pitch), deg_to_rad(_yaw), 0.0)
+	if target.has_method(&"set_look_rotation"):
+		target.call(&"set_look_rotation", Basis.from_euler(look))
+	else:
+		target.rotation = look

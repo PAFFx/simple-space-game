@@ -13,7 +13,8 @@ const _APERTURE_GRID := Vector2i(7, 5)
 static func sample_visible_directions(
 	viewer_camera: Camera3D, screen: PanoramicScreen
 ) -> PackedVector3Array:
-	var to_local := screen.global_transform.affine_inverse()
+	var screen_xf := screen.get_display_transform()
+	var to_local := screen_xf.affine_inverse()
 	var origin := to_local * viewer_camera.global_position
 	var radius := screen.screen_radius
 	var dirs := PackedVector3Array()
@@ -51,7 +52,7 @@ static func sample_visible_directions(
 			var entry := PanoramicScreen.angles_to_direction(a.x, a.y) * radius
 			if (origin - entry).dot(entry) <= 0.0:
 				continue  # opening faces away from the viewer
-			if not viewer_camera.is_position_in_frustum(screen.global_transform * entry):
+			if not viewer_camera.is_position_in_frustum(screen_xf * entry):
 				continue
 			var ray := (entry - origin).normalized()
 			var t := SpatialMath.ray_sphere_entry_exit(origin, ray, Vector3.ZERO, radius)

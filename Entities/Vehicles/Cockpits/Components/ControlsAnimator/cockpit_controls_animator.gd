@@ -26,7 +26,7 @@ func _ready() -> void:
 			input_source = vehicle.find_component(PilotInputSource) as PilotInputSource
 
 
-func _process(_delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	if input_source == null:
 		return
 	var cmd := input_source.last_command

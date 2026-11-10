@@ -148,7 +148,12 @@ func _push_shader_uniforms() -> void:
 ## World orientation of the panoramic frame: screen-local direction d shows world direction
 ## get_display_basis() * d. Follows the cockpit, not the sensor.
 func get_display_basis() -> Basis:
-	return global_basis.orthonormalized()
+	return get_display_transform().basis.orthonormalized()
+
+
+## Where the screen is actually drawn this frame (interpolated between physics ticks).
+func get_display_transform() -> Transform3D:
+	return get_global_transform_interpolated()
 
 
 # --- Segment mask API ---

@@ -11,6 +11,8 @@
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/SeatDampener/seat_dampener.gd" id="8_damper"]
 
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PilotCamera/pilot_camera.gd" id="9_cam"]
+
 [node name="CockpitLinearSeat" type="Node3D"]
 script = ExtResource("1_script")
 
@@ -25,6 +27,7 @@ screen_radius = 1.25
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.08)
 
 [node name="PlayerCamera3D" type="Camera3D" parent="CameraMount"]
+script = ExtResource("9_cam")
 cull_mask = 125
 near = 0.03
 fov = 80.0

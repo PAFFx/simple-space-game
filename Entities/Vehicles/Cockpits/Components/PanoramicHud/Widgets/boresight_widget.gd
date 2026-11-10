@@ -14,7 +14,8 @@ extends HudWidget
 
 
 func draw_widget() -> void:
-	var body := hud.vehicle.global_basis.orthonormalized() if hud.vehicle != null \
+	var body := hud.vehicle.get_global_transform_interpolated().basis.orthonormalized() \
+			if hud.vehicle != null \
 			else hud.get_display_basis()
 	var fwd := hud.world_to_display(-body.z)
 	var angles := HudProjector.direction_to_angles(fwd)

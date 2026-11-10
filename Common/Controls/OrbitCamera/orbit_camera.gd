@@ -19,6 +19,8 @@ extends Camera3D
 
 func _ready() -> void:
 	top_level = true
+	# Moved every frame from the target's interpolated transform (see _update).
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	cull_mask = Layers.MASK_THIRD_PERSION
 	if target == null:
 		target = get_parent() as Node3D
@@ -46,7 +48,7 @@ func _process(delta: float) -> void:
 func _update(weight: float) -> void:
 	if target == null:
 		return
-	var frame := target.global_transform
+	var frame := target.get_global_transform_interpolated()
 	var orbit := Basis.from_euler(Vector3(deg_to_rad(pitch_deg), deg_to_rad(yaw_deg), 0.0))
 	var focus := frame * focus_offset
 	var desired_basis := frame.basis.orthonormalized() * orbit

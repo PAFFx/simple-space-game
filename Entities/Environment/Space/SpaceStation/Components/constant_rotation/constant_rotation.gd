@@ -10,7 +10,7 @@ enum Direction { POSITIVE = 1, NEGATIVE = -1 }
 
 @onready var target_component : Node3D = get_parent()
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	var final_speed = deg_to_rad(rotation_speed) * rotation_direction * delta
 
 	match rotation_axis:
