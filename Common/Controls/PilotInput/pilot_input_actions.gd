@@ -22,26 +22,27 @@ const TOGGLE_ROTATION_MODE := &"ms_toggle_rotation_mode"
 const TOGGLE_HATCH := &"ms_toggle_hatch"
 const TOGGLE_VIEW := &"ms_toggle_view"
 
-# action: [keys, joypad axis (axis, sign) or null, joypad button or -1]
+# Keyboard only. Flight sticks and HOTAS report raw axes/buttons whose indices
+# differ per device, so analog input is bound through HotasPilotInput instead.
 const _DEFAULTS := {
-	TRANSLATE_FORWARD: [[KEY_W], [JOY_AXIS_LEFT_Y, -1.0], -1],
-	TRANSLATE_BACK: [[KEY_S], [JOY_AXIS_LEFT_Y, 1.0], -1],
-	TRANSLATE_LEFT: [[KEY_A], [JOY_AXIS_LEFT_X, -1.0], -1],
-	TRANSLATE_RIGHT: [[KEY_D], [JOY_AXIS_LEFT_X, 1.0], -1],
-	TRANSLATE_UP: [[KEY_R, KEY_SPACE], [JOY_AXIS_TRIGGER_RIGHT, 1.0], -1],
-	TRANSLATE_DOWN: [[KEY_F], [JOY_AXIS_TRIGGER_LEFT, 1.0], -1],
+	TRANSLATE_FORWARD: [KEY_W],
+	TRANSLATE_BACK: [KEY_S],
+	TRANSLATE_LEFT: [KEY_A],
+	TRANSLATE_RIGHT: [KEY_D],
+	TRANSLATE_UP: [KEY_R, KEY_SPACE],
+	TRANSLATE_DOWN: [KEY_F],
 	# Flight-sim convention: pushing the stick forward (Up arrow) pitches the nose down.
-	PITCH_UP: [[KEY_DOWN], [JOY_AXIS_RIGHT_Y, 1.0], -1],
-	PITCH_DOWN: [[KEY_UP], [JOY_AXIS_RIGHT_Y, -1.0], -1],
-	YAW_LEFT: [[KEY_LEFT], [JOY_AXIS_RIGHT_X, -1.0], -1],
-	YAW_RIGHT: [[KEY_RIGHT], [JOY_AXIS_RIGHT_X, 1.0], -1],
-	ROLL_LEFT: [[KEY_Q], null, JOY_BUTTON_LEFT_SHOULDER],
-	ROLL_RIGHT: [[KEY_E], null, JOY_BUTTON_RIGHT_SHOULDER],
-	BOOST: [[KEY_SHIFT], null, JOY_BUTTON_LEFT_STICK],
-	TOGGLE_TRANSLATION_MODE: [[KEY_T], null, JOY_BUTTON_X],
-	TOGGLE_ROTATION_MODE: [[KEY_G], null, JOY_BUTTON_Y],
-	TOGGLE_HATCH: [[KEY_H], null, JOY_BUTTON_BACK],
-	TOGGLE_VIEW: [[KEY_V], null, JOY_BUTTON_START],
+	PITCH_UP: [KEY_DOWN],
+	PITCH_DOWN: [KEY_UP],
+	YAW_LEFT: [KEY_LEFT],
+	YAW_RIGHT: [KEY_RIGHT],
+	ROLL_LEFT: [KEY_Q],
+	ROLL_RIGHT: [KEY_E],
+	BOOST: [KEY_SHIFT],
+	TOGGLE_TRANSLATION_MODE: [KEY_T],
+	TOGGLE_ROTATION_MODE: [KEY_G],
+	TOGGLE_HATCH: [KEY_H],
+	TOGGLE_VIEW: [KEY_V],
 }
 
 
@@ -50,17 +51,7 @@ static func ensure_defaults() -> void:
 		if InputMap.has_action(action):
 			continue
 		InputMap.add_action(action, 0.15)
-		var spec: Array = _DEFAULTS[action]
-		for key: Key in spec[0]:
+		for key: Key in _DEFAULTS[action]:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
 			InputMap.action_add_event(action, ev)
-		if spec[1] != null:
-			var joy := InputEventJoypadMotion.new()
-			joy.axis = spec[1][0]
-			joy.axis_value = spec[1][1]
-			InputMap.action_add_event(action, joy)
-		if spec[2] >= 0:
-			var btn := InputEventJoypadButton.new()
-			btn.button_index = spec[2]
-			InputMap.action_add_event(action, btn)
