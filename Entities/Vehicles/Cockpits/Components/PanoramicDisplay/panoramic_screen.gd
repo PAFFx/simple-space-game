@@ -43,7 +43,15 @@ const _SHADER := preload("res://Entities/Vehicles/Cockpits/Components/PanoramicD
 ## Each segment spans arc_angle / segment_count radians.
 @export var segment_count: int = 64
 
+@export_group("Hatch Aperture")
+## Centre of the hatch opening in degrees (x = azimuth, y = elevation). 0,0 = straight ahead.
+@export var aperture_center_deg := Vector2.ZERO
+## Half extent of the hatch opening in degrees (x = azimuth, y = elevation).
+@export var aperture_half_size_deg := Vector2(35.0, 35.0)
+
 var _material: ShaderMaterial
+var _hud_texture: Texture2D
+var _aperture_amount: float = 0.0
 var _mask_image: Image
 var _mask_texture: ImageTexture
 
@@ -119,7 +127,15 @@ func _setup_material() -> void:
 
 	_material.set_shader_parameter("segment_mask", _mask_texture)
 	_material.set_shader_parameter("panoramic_elevation_range", elevation_range)
+	_material.set_shader_parameter("aperture_center", _deg_to_rad_v2(aperture_center_deg))
+	_material.set_shader_parameter("aperture_half_size", _deg_to_rad_v2(aperture_half_size_deg))
+	_material.set_shader_parameter("aperture_amount", _aperture_amount)
+	_material.set_shader_parameter("hud_texture", _hud_texture)
 	_mesh_instance.material_override = _material
+
+
+static func _deg_to_rad_v2(v: Vector2) -> Vector2:
+	return Vector2(deg_to_rad(v.x), deg_to_rad(v.y))
 
 
 func _push_shader_uniforms() -> void:
@@ -167,3 +183,22 @@ func enable_all_segments() -> void:
 func disable_all_segments() -> void:
 	_mask_image.fill(Color.BLACK)
 	_mask_texture.update(_mask_image)
+
+
+# --- HUD overlay API ---
+
+## Texture drawn over the sensor image in equirectangular panoramic space
+## (see panoramic_screen.gdshader). Pass null to remove the HUD.
+func set_hud_texture(texture: Texture2D) -> void:
+	_hud_texture = texture
+	if _material != null:
+		_material.set_shader_parameter("hud_texture", texture)
+
+
+# --- Hatch aperture API ---
+
+## 0 = screen closed, 1 = hatch opening fully cut out of the sphere.
+func set_aperture_amount(amount: float) -> void:
+	_aperture_amount = clampf(amount, 0.0, 1.0)
+	if _material != null:
+		_material.set_shader_parameter("aperture_amount", _aperture_amount)
