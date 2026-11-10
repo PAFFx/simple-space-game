@@ -50,16 +50,27 @@ func is_live() -> bool:
 	return projector != null and sensor_head != null
 
 
-## World direction → canvas position (through the sensor's fixed panoramic frame).
+## World direction → canvas position (through the screen's panoramic frame).
 func world_dir_to_canvas(world_dir: Vector3) -> Vector2:
-	return projector.direction_to_canvas(world_to_sensor(world_dir))
+	return projector.direction_to_canvas(world_to_display(world_dir))
 
 
-func world_to_sensor(world_dir: Vector3) -> Vector3:
-	return sensor_head.global_basis.inverse() * world_dir
+## World direction → display-local direction (the frame the canvas is laid out in).
+func world_to_display(world_dir: Vector3) -> Vector3:
+	return get_display_basis().inverse() * world_dir
 
 
-func get_sensor_position() -> Vector3:
+## Orientation of the display (the cockpit), which may differ from the suit's body.
+func get_display_basis() -> Basis:
+	if panoramic_screen != null:
+		return panoramic_screen.get_display_basis()
+	return sensor_head.global_basis.orthonormalized()
+
+
+## Pilot eye point: the centre of the panoramic sphere.
+func get_display_origin() -> Vector3:
+	if panoramic_screen != null:
+		return panoramic_screen.global_position
 	return sensor_head.global_position
 
 

@@ -14,10 +14,11 @@ extends HudWidget
 func draw_widget() -> void:
 	var ref := _reference_basis()
 	var up := ref.y
-	var forward := -hud.sensor_head.global_basis.z
+	var display := hud.get_display_basis()
+	var forward := -display.z
 	var flat := forward - up * forward.dot(up)
 	if flat.length_squared() < 1e-6:
-		flat = -hud.sensor_head.global_basis.y  # looking straight up/down: use body down as heading
+		flat = -display.y  # looking straight up/down: use cockpit down as heading
 	flat = flat.normalized()
 	var right := flat.cross(up).normalized()
 

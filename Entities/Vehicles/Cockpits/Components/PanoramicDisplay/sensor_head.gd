@@ -111,8 +111,8 @@ func _create_camera() -> void:
 
 
 func _update_camera(viewer: Camera3D) -> void:
-	# The shader maps screen-local directions through the sensor basis, so do the same here.
-	var screen_to_world := get_sensor_basis()
+	# Same mapping as the shader: screen-local direction → world through the display basis.
+	var screen_to_world := panoramic_screen.get_display_basis()
 	var dirs := SensorFovSolver.sample_visible_directions(viewer, panoramic_screen)
 	for i in dirs.size():
 		dirs[i] = screen_to_world * dirs[i]

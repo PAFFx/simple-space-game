@@ -15,7 +15,7 @@ var _closure := {}
 
 
 func draw_widget() -> void:
-	var origin := hud.get_sensor_position()
+	var origin := hud.get_display_origin()
 	var dt := maxf(get_process_delta_time(), 1e-3)
 	for node in get_tree().get_nodes_in_group(GROUP):
 		var contact := node as Node3D
@@ -31,7 +31,7 @@ func draw_widget() -> void:
 			_closure[id] = lerpf(_closure.get(id, rate), rate, 0.1)
 		_last_range[id] = dist
 
-		var angles := HudProjector.direction_to_angles(hud.world_to_sensor(rel))
+		var angles := HudProjector.direction_to_angles(hud.world_to_display(rel))
 		begin_local_at(hud.projector.angles_to_canvas(angles.x, angles.y), angles.y)
 		var radius: float = contact.get_meta("hud_radius", default_radius)
 		var half := px(maxf(min_box_deg, rad_to_deg(atan(radius / dist))))

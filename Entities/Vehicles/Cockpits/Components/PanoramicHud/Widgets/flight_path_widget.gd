@@ -36,5 +36,5 @@ func draw_widget() -> void:
 
 
 func _begin_at_dir(world_dir: Vector3) -> void:
-	var angles := HudProjector.direction_to_angles(hud.world_to_sensor(world_dir))
+	var angles := HudProjector.direction_to_angles(hud.world_to_display(world_dir))
 	begin_local_at(hud.projector.angles_to_canvas(angles.x, angles.y), angles.y)

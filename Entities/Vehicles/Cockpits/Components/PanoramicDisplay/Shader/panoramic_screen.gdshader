@@ -11,9 +11,10 @@ uniform mat4 sensor_view_proj;
 // Used as the ray origin when projecting panoramic directions.
 uniform vec3 sensor_world_pos;
 
-// World-space orientation of the sensor camera (columns: right, up, -forward).
-// Transforms local panoramic directions into world space.
-uniform mat3 sensor_basis;
+// World-space orientation of the screen itself. A screen-local direction d
+// shows the world in direction display_basis * d, so the picture stays true
+// even when the cockpit (and screen) rotate relative to the sensor.
+uniform mat3 display_basis;
 
 // Total vertical angle span of the screen in radians (default PI/2 = ±45°).
 uniform float panoramic_elevation_range = 1.5707963;
@@ -76,7 +77,7 @@ void fragment() {
 			 sin(elevation),           // up
 			-cos(azimuth) * cos_el    // forward (-Z in Godot right-hand convention)
 		);
-		vec3 world_dir = sensor_basis * local_dir;
+		vec3 world_dir = display_basis * local_dir;
 
 		// --- Step 5: Project the direction through the sensor camera ---
 		// Project a point far along the ray to avoid near-plane clipping artefacts.

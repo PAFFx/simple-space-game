@@ -142,7 +142,13 @@ func _push_shader_uniforms() -> void:
 	_material.set_shader_parameter("sensor_viewport",  sensor_head.get_viewport_texture())
 	_material.set_shader_parameter("sensor_view_proj", sensor_head.get_view_proj())
 	_material.set_shader_parameter("sensor_world_pos", sensor_head.get_world_pos())
-	_material.set_shader_parameter("sensor_basis",     sensor_head.get_sensor_basis())
+	_material.set_shader_parameter("display_basis",    get_display_basis())
+
+
+## World orientation of the panoramic frame: screen-local direction d shows world direction
+## get_display_basis() * d. Follows the cockpit, not the sensor.
+func get_display_basis() -> Basis:
+	return global_basis.orthonormalized()
 
 
 # --- Segment mask API ---
