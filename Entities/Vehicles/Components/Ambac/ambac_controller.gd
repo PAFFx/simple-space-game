@@ -14,21 +14,9 @@ extends Node
 @export var skeleton: Skeleton3D
 @export var joints: Array[AmbacJoint] = []
 ## Fraction of the FBW torque demand offered to AMBAC first.
-@export_range(0.0, 1.0) var share: float = 0.55
-## Share while a released rotation is being braked: limbs throw hard to kill the spin.
-@export_range(0.0, 1.0) var stop_share: float = 0.85
-## Centering spring natural frequency (rad/s) and damping ratio. Low = limbs hold
-## their counter-pose a moment before drifting back to neutral.
-@export var centering_frequency: float = 1.1
-## Centering is scaled by this while a rotation is being stopped, so the limbs
-## hold their counter-swing until the spin is dead, then ease back.
-@export_range(0.0, 1.0) var stop_centering_scale: float = 0.25
-## Seconds for centering to regain full strength after a stop, so the limbs drift
-## home gently instead of kicking the body.
-@export var recenter_time: float = 1.5
-## Fraction of a joint's max acceleration used to brake into its limits. Low =
-## a long, gentle braking zone, so stopping a fast limb can't kick the body.
-@export_range(0.05, 1.0) var soft_stop_accel_fraction: float = 0.12
+@export_range(0.0, 1.0) var share: float = 0.3
+## Centering spring natural frequency (rad/s) and damping ratio.
+@export var centering_frequency: float = 1.6
 @export var centering_damping: float = 1.0
 ## Regularisation of the allocation (keeps it sane when no joint can help).
 @export var regularization: float = 1e-3
@@ -36,7 +24,6 @@ extends Node
 var angles := PackedFloat32Array()   ## rad
 var rates := PackedFloat32Array()    ## rad/s
 var last_torque := Vector3.ZERO      ## Achieved body torque, body frame
-var _center_scale := 1.0
 var _loadout: MsLoadout
 var _axes_body: Array[Vector3] = []
 
@@ -78,9 +65,7 @@ func get_usage() -> float:
 
 
 ## Advances the limbs and returns the achieved reaction torque (body frame).
-## Limbs only *borrow* angular momentum (it returns when they stop), so AMBAC
-## front-loads braking and smooths trimming; thrusters still remove the spin.
-func step(torque_request: Vector3, delta: float, stopping: bool = false) -> Vector3:
+func step(torque_request: Vector3, delta: float) -> Vector3:
 	var n := joints.size()
 	if n == 0 or _axes_body.size() != n or delta <= 0.0:
 		last_torque = Vector3.ZERO
@@ -100,11 +85,7 @@ func step(torque_request: Vector3, delta: float, stopping: bool = false) -> Vect
 	# Solve Σ −J α a = request:  α_i = −w_i J_i a_i·λ,  M λ = request.
 	var lam := Basis(cols[0], cols[1], cols[2]).inverse() * torque_request
 
-	if stopping:
-		_center_scale = stop_centering_scale
-	else:
-		_center_scale = move_toward(_center_scale, 1.0, delta / maxf(recenter_time, 0.01))
-	var w0 := centering_frequency * _center_scale
+	var w0 := centering_frequency
 	var total := Vector3.ZERO
 	for i in n:
 		var j := joints[i]
@@ -122,11 +103,6 @@ func step(torque_request: Vector3, delta: float, stopping: bool = false) -> Vect
 
 		var max_rate := deg_to_rad(j.max_rate_deg)
 		var new_rate := clampf(rates[i] + alpha * delta, -max_rate, max_rate)
-		# Soft stops: never move faster than the limb can brake before its limit, so it
-		# eases into the stop instead of slamming (which kicks the body).
-		var brake := max_accel * soft_stop_accel_fraction
-		new_rate = clampf(new_rate, -sqrt(2.0 * brake * maxf(angles[i] - lo, 0.0)),
-				sqrt(2.0 * brake * maxf(hi - angles[i], 0.0)))
 		var new_angle := angles[i] + new_rate * delta
 		if new_angle > hi or new_angle < lo:
 			new_angle = clampf(new_angle, lo, hi)

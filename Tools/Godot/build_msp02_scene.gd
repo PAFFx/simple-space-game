@@ -80,19 +80,19 @@ const COLLIDERS := [
 # bone, axis (skeleton space), group, inertia kg·m², min angle, max angle, priority
 # Knees bend back (−X) and elbows forward (+X), so those hinges get one-sided travel.
 const AMBAC := [
-	["upper_arm.R", Vector3.RIGHT, &"arm_r", 6.0e4, -45.0, 45.0, 0.7],
-	["upper_arm.R", Vector3.BACK, &"arm_r", 6.0e4, -30.0, 30.0, 0.7],
-	["forearm.R", Vector3.RIGHT, &"arm_r", 2.5e4, -8.0, 60.0, 0.6],
-	["upper_arm.L", Vector3.RIGHT, &"arm_l", 6.0e4, -45.0, 45.0, 0.7],
-	["upper_arm.L", Vector3.BACK, &"arm_l", 6.0e4, -30.0, 30.0, 0.7],
-	["forearm.L", Vector3.RIGHT, &"arm_l", 2.5e4, -8.0, 60.0, 0.6],
-	["thigh.R", Vector3.RIGHT, &"leg_r", 8.0e4, -40.0, 40.0, 1.0],
-	["thigh.R", Vector3.BACK, &"leg_r", 8.0e4, -20.0, 20.0, 1.0],
-	["shin.R", Vector3.RIGHT, &"leg_r", 7.0e4, -60.0, 10.0, 1.0],
-	["thigh.L", Vector3.RIGHT, &"leg_l", 8.0e4, -40.0, 40.0, 1.0],
-	["thigh.L", Vector3.BACK, &"leg_l", 8.0e4, -20.0, 20.0, 1.0],
-	["shin.L", Vector3.RIGHT, &"leg_l", 7.0e4, -60.0, 10.0, 1.0],
-	["spine", Vector3.UP, &"torso", 1.2e5, -15.0, 15.0, 0.8],
+	["upper_arm.R", Vector3.RIGHT, &"arm_r", 6.0e4, -35.0, 35.0, 0.6],
+	["upper_arm.R", Vector3.BACK, &"arm_r", 6.0e4, -25.0, 25.0, 0.6],
+	["forearm.R", Vector3.RIGHT, &"arm_r", 2.5e4, -8.0, 40.0, 0.5],
+	["upper_arm.L", Vector3.RIGHT, &"arm_l", 6.0e4, -35.0, 35.0, 0.6],
+	["upper_arm.L", Vector3.BACK, &"arm_l", 6.0e4, -25.0, 25.0, 0.6],
+	["forearm.L", Vector3.RIGHT, &"arm_l", 2.5e4, -8.0, 40.0, 0.5],
+	["thigh.R", Vector3.RIGHT, &"leg_r", 8.0e4, -30.0, 30.0, 1.0],
+	["thigh.R", Vector3.BACK, &"leg_r", 8.0e4, -15.0, 15.0, 1.0],
+	["shin.R", Vector3.RIGHT, &"leg_r", 4.5e4, -35.0, 8.0, 0.9],
+	["thigh.L", Vector3.RIGHT, &"leg_l", 8.0e4, -30.0, 30.0, 1.0],
+	["thigh.L", Vector3.BACK, &"leg_l", 8.0e4, -15.0, 15.0, 1.0],
+	["shin.L", Vector3.RIGHT, &"leg_l", 4.5e4, -35.0, 8.0, 0.9],
+	["spine", Vector3.UP, &"torso", 1.2e5, -12.0, 12.0, 0.8],
 ]
 
 # Poses: bone → list of [axis, degrees] rotations in skeleton space (applied in order).

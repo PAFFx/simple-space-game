@@ -162,28 +162,19 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
 ## AMBAC
 
 Limbs act as reaction wheels: accelerating a limb by `α` about axis `a` pushes the body with
-`−J·α·a`. Each tick the `AmbacController` is offered `share` (55%) of the law's *unclamped*
-torque demand, `stop_share` (85%) while a released turn is braking. Thrusters then cover the rest
-up to their own authority, so limbs add torque on top of saturated thrusters:
+`−J·α·a`. Each tick the `AmbacController` is offered `share` (30%) of the FBW torque demand:
 
 1. Weighted least squares: `α_i = −w_i J_i a_i·λ`, `M λ = τ_request`, `M = Σ w_i J_i² a_i a_iᵀ + εI`.
    `w_i` = joint priority (hips 1.0, knees 0.9, waist 0.8, shoulders 0.6, elbows 0.5), zero for
    groups occupied by active equipment (rifle raised → right arm, shield guard → left arm).
-   Hinges have one-sided travel (`min_angle_deg`/`max_angle_deg`): knees bend back up to 60° but
-   straighten only 10° past the pose, elbows bend up to 60° but straighten only 8°; hips ±40°,
-   shoulders ±45°, waist ±15°.
-2. Each joint backs off as it nears its stop and brakes into it gently (soft stops at
-   `soft_stop_accel_fraction` of its max acceleration), and a centering spring pulls it back to
-   neutral. While a turn is being stopped the spring is weak (`stop_centering_scale`), so the limbs
-   hold their counter-pose; it regains strength over `recenter_time` (1.5 s).
+   Hinges have one-sided travel (`min_angle_deg`/`max_angle_deg`): knees bend back up to 35° but
+   straighten only 8° past the pose, elbows bend up to 40° but straighten only 8°.
+2. Each joint backs off as it nears its stop, and a centering spring pulls it back to neutral.
 3. The **achieved** reaction torque is applied to the body; the thrusters get `τ − τ_ambac`.
 
-Limbs only *borrow* angular momentum: it comes back when they stop. So AMBAC front-loads braking
-(the body stops quickly while the limbs keep swinging) and the thrusters remove the momentum as
-the limbs ease to rest. The soft stops keep that payback below what the hold can absorb (a hard
-stop kicked the body back to 15°/s). Measured stop times after release: pitch 0.38 s, boosted pitch
-0.50 s, boosted yaw 0.42 s, boosted roll 0.73 s (were 0.65 / 0.82 / 0.57 / 0.98 s), with ≤ 2°/s
-rebound. Boosted pitch throws the hips to ±40° and knees to −46°.
+Limbs can't make sustained torque, so AMBAC mostly trims and smooths. The thrusters do the heavy
+lifting and also pay back the centering. Typical swing during a pitch command: hips ±16°,
+shoulders ±9°, knees −9…+8°, elbows ±3°.
 
 ### `DirectControlLaw`
 

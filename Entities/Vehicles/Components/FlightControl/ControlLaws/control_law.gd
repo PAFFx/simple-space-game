@@ -27,11 +27,6 @@ func get_pilot_orientation() -> Variant:
 	return null
 
 
-## True while the law is braking a rotation the pilot just released (AMBAC helps harder).
-func is_stopping_rotation() -> bool:
-	return false
-
-
 ## Called when the law is (re)engaged so stale integrators / holds are dropped.
 func reset() -> void:
 	pass

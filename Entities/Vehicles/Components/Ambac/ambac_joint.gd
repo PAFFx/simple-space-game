@@ -15,7 +15,7 @@ extends Resource
 ## way (knees, elbows): e.g. min -35, max +8.
 @export var min_angle_deg: float = -30.0
 @export var max_angle_deg: float = 30.0
-@export var max_rate_deg: float = 140.0
-@export var max_accel_deg: float = 600.0
+@export var max_rate_deg: float = 90.0
+@export var max_accel_deg: float = 400.0
 ## Relative willingness to move this joint (0 = never used for balancing).
 @export_range(0.0, 1.0) var priority: float = 1.0

@@ -108,17 +108,9 @@ func _physics_process(delta: float) -> void:
 		last_wrench = control_law.compute(state, command)
 		var thrust_wrench := last_wrench
 		if ambac != null and ambac.enabled:
-			var stopping := control_law.is_stopping_rotation()
-			var share := ambac.stop_share if stopping else ambac.share
-			# Offer AMBAC a share of what the law really wanted; thrusters then cover the
-			# rest up to their own authority, so limbs add torque when thrusters saturate.
-			var wanted := last_wrench.raw_torque
-			if wanted == Vector3.ZERO:
-				wanted = last_wrench.torque
-			ambac_torque = ambac.step(wanted * share, delta, stopping)
+			ambac_torque = ambac.step(last_wrench.torque * ambac.share, delta)
 			body.apply_torque(state.to_global(ambac_torque))
-			var lim := last_wrench.torque_limit
-			thrust_wrench = Wrench.new(last_wrench.force, (wanted - ambac_torque).clamp(-lim, lim))
+			thrust_wrench = Wrench.new(last_wrench.force, last_wrench.torque - ambac_torque)
 			thrust_wrench.torque_priority = last_wrench.torque_priority
 		var demand := allocator.allocate(state, thrust_wrench)
 		for i in thrusters.size():
