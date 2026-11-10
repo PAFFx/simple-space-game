@@ -1,0 +1,308 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Entities/Vehicles/MobileSuits/Prototype/mobile_suit_prototype.gd" id="script"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/MobileSuits/Prototype/Arts/mobile_suit_prototype.glb" id="model"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn" id="sensor"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat.tscn" id="cockpit"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn" id="thruster"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/flight_computer.gd" id="fc"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/ControlLaws/rate_command_control_law.gd" id="law"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/Allocators/cone_projected_allocator.gd" id="alloc"]
+[ext_resource type="Script" path="res://Common/Controls/PilotInput/hotas_pilot_input.gd" id="hotas"]
+[ext_resource type="Script" path="res://Common/Controls/PilotInput/joy_axis_binding.gd" id="joybind"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/Hatch/cockpit_hatch.gd" id="hatch"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/Hatch/hatch_panel.gd" id="panel"]
+[ext_resource type="Script" path="res://Common/Controls/OrbitCamera/orbit_camera.gd" id="orbit"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/ViewSwitcher/view_switcher.gd" id="views"]
+
+[sub_resource type="BoxShape3D" id="Box_Torso"]
+size = Vector3(5.6, 4.0, 3.9)
+
+[sub_resource type="BoxShape3D" id="Box_Backpack"]
+size = Vector3(3.0, 3.0, 1.4)
+
+[sub_resource type="BoxShape3D" id="Box_Head"]
+size = Vector3(1.3, 1.6, 1.6)
+
+[sub_resource type="BoxShape3D" id="Box_Pelvis"]
+size = Vector3(3.2, 2.8, 2.6)
+
+[sub_resource type="BoxShape3D" id="Box_ShoulderR"]
+size = Vector3(2.0, 2.2, 2.8)
+
+[sub_resource type="BoxShape3D" id="Box_ShoulderL"]
+size = Vector3(2.0, 2.2, 2.8)
+
+[sub_resource type="BoxShape3D" id="Box_ArmR"]
+size = Vector3(1.4, 7.0, 1.5)
+
+[sub_resource type="BoxShape3D" id="Box_ArmL"]
+size = Vector3(1.4, 7.0, 1.5)
+
+[sub_resource type="BoxShape3D" id="Box_LegR"]
+size = Vector3(1.8, 10.4, 2.2)
+
+[sub_resource type="BoxShape3D" id="Box_LegL"]
+size = Vector3(1.8, 10.4, 2.2)
+
+[sub_resource type="BoxShape3D" id="Box_FootR"]
+size = Vector3(1.7, 1.0, 3.4)
+
+[sub_resource type="BoxShape3D" id="Box_FootL"]
+size = Vector3(1.7, 1.0, 3.4)
+
+[sub_resource type="Resource" id="JoyRoll"]
+script = ExtResource("joybind")
+channel = 0
+axis = 0
+
+[sub_resource type="Resource" id="JoyPitch"]
+script = ExtResource("joybind")
+channel = 1
+axis = 1
+
+[sub_resource type="Resource" id="JoyYaw"]
+script = ExtResource("joybind")
+channel = 2
+axis = 5
+deadzone = 0.08
+
+[sub_resource type="Resource" id="ControlLaw"]
+script = ExtResource("law")
+
+[sub_resource type="Resource" id="Allocator"]
+script = ExtResource("alloc")
+
+[sub_resource type="Resource" id="PanelUpper"]
+script = ExtResource("panel")
+bone_name = &"hatch_upper"
+hinge_axis = Vector3(1, 0, 0)
+open_angle_deg = 110.0
+window = Vector2(0.3, 0.85)
+
+[sub_resource type="Resource" id="PanelLower"]
+script = ExtResource("panel")
+bone_name = &"hatch_lower"
+hinge_axis = Vector3(1, 0, 0)
+open_angle_deg = -95.0
+window = Vector2(0.4, 1.0)
+
+[node name="MobileSuitPrototype" type="RigidBody3D"]
+script = ExtResource("script")
+mass = 45000.0
+gravity_scale = 0.0
+center_of_mass_mode = 1
+center_of_mass = Vector3(0, 12.8, 0.4)
+can_sleep = false
+linear_damp_mode = 1
+angular_damp_mode = 1
+
+[node name="Model" parent="." instance=ExtResource("model")]
+
+[node name="ColTorso" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14.5, -0.3)
+shape = SubResource("Box_Torso")
+
+[node name="ColBackpack" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14.6, 2.3)
+shape = SubResource("Box_Backpack")
+
+[node name="ColHead" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 17.6, -0.4)
+shape = SubResource("Box_Head")
+
+[node name="ColPelvis" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 11.0, -0.1)
+shape = SubResource("Box_Pelvis")
+
+[node name="ColShoulderR" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.0, 15.8, 0)
+shape = SubResource("Box_ShoulderR")
+
+[node name="ColShoulderL" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.0, 15.8, 0)
+shape = SubResource("Box_ShoulderL")
+
+[node name="ColArmR" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.0, 11.0, 0)
+shape = SubResource("Box_ArmR")
+
+[node name="ColArmL" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.0, 11.0, 0)
+shape = SubResource("Box_ArmL")
+
+[node name="ColLegR" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.35, 5.2, 0)
+shape = SubResource("Box_LegR")
+
+[node name="ColLegL" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.35, 5.2, 0)
+shape = SubResource("Box_LegL")
+
+[node name="ColFootR" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.35, 0.5, -0.4)
+shape = SubResource("Box_FootR")
+
+[node name="ColFootL" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.35, 0.5, -0.4)
+shape = SubResource("Box_FootL")
+
+[node name="SensorHeadMount" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 17.6, -1.35)
+
+[node name="SensorHead" parent="SensorHeadMount" instance=ExtResource("sensor")]
+
+[node name="CockpitMount" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14.4, -0.4)
+
+[node name="CockpitLinearSeat" parent="CockpitMount" instance=ExtResource("cockpit")]
+
+[node name="Thrusters" type="Node3D" parent="."]
+
+[node name="Attach_backpack" type="BoneAttachment3D" parent="Thrusters"]
+bone_name = "backpack"
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="MainR" parent="Thrusters/Attach_backpack" instance=ExtResource("thruster")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, -0.10000038, 1.4499999)
+max_thrust = 450000.0
+gimbal_limit_deg = 15.0
+hud_label = "MN-R"
+plume_length = 10.0
+nozzle_scale = 1.40
+
+[node name="MainL" parent="Thrusters/Attach_backpack" instance=ExtResource("thruster")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, -0.10000038, 1.4499999)
+max_thrust = 450000.0
+gimbal_limit_deg = 15.0
+hud_label = "MN-L"
+plume_length = 10.0
+nozzle_scale = 1.40
+
+[node name="Attach_shoulder_R" type="BoneAttachment3D" parent="Thrusters"]
+bone_name = "shoulder.R"
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="ShoulderR" parent="Thrusters/Attach_shoulder_R" instance=ExtResource("thruster")]
+transform = Transform3D(0, -0.8, 0.6, 1.0000001, 0, 0, 0, 0.6, 0.8, 1.25, 1.1000001, 1.3500004)
+max_thrust = 120000.0
+gimbal_limit_deg = 35.0
+hud_label = "SH-R"
+plume_length = 5.0
+nozzle_scale = 0.75
+
+[node name="Attach_shoulder_L" type="BoneAttachment3D" parent="Thrusters"]
+bone_name = "shoulder.L"
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="ShoulderL" parent="Thrusters/Attach_shoulder_L" instance=ExtResource("thruster")]
+transform = Transform3D(0, 0.8, -0.6, -1.0000001, 0, 0, 0, 0.6, 0.8, -1.25, 1.1000001, 1.3500004)
+max_thrust = 120000.0
+gimbal_limit_deg = 35.0
+hud_label = "SH-L"
+plume_length = 5.0
+nozzle_scale = 0.75
+
+[node name="Attach_skirt_front_R" type="BoneAttachment3D" parent="Thrusters"]
+bone_name = "skirt_front.R"
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="SkirtFrontR" parent="Thrusters/Attach_skirt_front_R" instance=ExtResource("thruster")]
+transform = Transform3D(-1, 0, 0, 0, -0.8600992, 0.5101268, 0, 0.51011914, 0.8600862, 0, 1.6474609, 0.3096261)
+max_thrust = 150000.0
+gimbal_limit_deg = 30.0
+hud_label = "SF-R"
+plume_length = 5.0
+nozzle_scale = 0.70
+
+[node name="Attach_skirt_front_L" type="BoneAttachment3D" parent="Thrusters"]
+bone_name = "skirt_front.L"
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="SkirtFrontL" parent="Thrusters/Attach_skirt_front_L" instance=ExtResource("thruster")]
+transform = Transform3D(-1, 0, 0, 0, -0.8600992, 0.5101268, 0, 0.51011914, 0.8600862, 0, 1.6474609, 0.3096261)
+max_thrust = 150000.0
+gimbal_limit_deg = 30.0
+hud_label = "SF-L"
+plume_length = 5.0
+nozzle_scale = 0.70
+
+[node name="Attach_skirt_side_R" type="BoneAttachment3D" parent="Thrusters"]
+bone_name = "skirt_side.R"
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="SkirtSideR" parent="Thrusters/Attach_skirt_side_R" instance=ExtResource("thruster")]
+transform = Transform3D(-0.12403553, 0.31378746, 0.9413638, 2.607721e-08, -0.9486837, 0.3162274, 0.992278, 0.039223194, 0.11766969, 0.14059663, 1.4239178, -0.28476027)
+max_thrust = 120000.0
+gimbal_limit_deg = 30.0
+hud_label = "SS-R"
+plume_length = 4.5
+nozzle_scale = 0.65
+
+[node name="Attach_skirt_side_L" type="BoneAttachment3D" parent="Thrusters"]
+bone_name = "skirt_side.L"
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="SkirtSideL" parent="Thrusters/Attach_skirt_side_L" instance=ExtResource("thruster")]
+transform = Transform3D(-0.12403553, -0.31378746, -0.9413638, -2.607721e-08, -0.9486837, 0.3162274, -0.992278, 0.039223194, 0.11766969, -0.14059663, 1.4239178, -0.28476027)
+max_thrust = 120000.0
+gimbal_limit_deg = 30.0
+hud_label = "SS-L"
+plume_length = 4.5
+nozzle_scale = 0.65
+
+[node name="Attach_shin_R" type="BoneAttachment3D" parent="Thrusters"]
+bone_name = "shin.R"
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="LegR" parent="Thrusters/Attach_shin_R" instance=ExtResource("thruster")]
+transform = Transform3D(1, 0, 0, 0, -0.5070201, 0.86193424, 0, -0.86193424, -0.5070201, 0, 4.2000003, -1.35)
+max_thrust = 200000.0
+gimbal_limit_deg = 25.0
+hud_label = "LG-R"
+plume_length = 7.0
+nozzle_scale = 1.00
+
+[node name="Attach_shin_L" type="BoneAttachment3D" parent="Thrusters"]
+bone_name = "shin.L"
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="LegL" parent="Thrusters/Attach_shin_L" instance=ExtResource("thruster")]
+transform = Transform3D(1, 0, 0, 0, -0.5070201, 0.86193424, 0, -0.86193424, -0.5070201, 0, 4.2000003, -1.35)
+max_thrust = 200000.0
+gimbal_limit_deg = 25.0
+hud_label = "LG-L"
+plume_length = 7.0
+nozzle_scale = 1.00
+
+
+[node name="FlightComputer" type="Node" parent="."]
+script = ExtResource("fc")
+control_law = SubResource("ControlLaw")
+allocator = SubResource("Allocator")
+
+[node name="PilotInput" type="Node" parent="FlightComputer"]
+script = ExtResource("hotas")
+axis_bindings = Array[ExtResource("joybind")]([SubResource("JoyRoll"), SubResource("JoyPitch"), SubResource("JoyYaw")])
+
+[node name="CockpitHatch" type="Node" parent="." node_paths=PackedStringArray("skeleton")]
+script = ExtResource("hatch")
+skeleton = NodePath("../Model/Armature/Skeleton3D")
+panels = Array[ExtResource("panel")]([SubResource("PanelUpper"), SubResource("PanelLower")])
+
+[node name="ExternalCamera" type="Camera3D" parent="."]
+script = ExtResource("orbit")
+far = 8000.0
+
+[node name="ViewSwitcher" type="Node" parent="." node_paths=PackedStringArray("external_camera")]
+script = ExtResource("views")
+external_camera = NodePath("../ExternalCamera")
