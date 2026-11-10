@@ -4,7 +4,7 @@ extends HudWidget
 ## Numeric flight data blocks either side of the boresight, an attitude readout
 ## above it and the caution list below — kept small and out of the central view.
 
-@export var side_azimuth_deg: float = 15.0
+@export var side_azimuth_deg: float = 13.0
 @export var block_elevation_deg: float = 3.0
 @export var caution_elevation_deg: float = -11.0
 @export var low_propellant_fraction: float = 0.2
@@ -31,10 +31,10 @@ func _draw_left_block(fc: FlightComputer, line_h: float) -> void:
 	]
 	for i in rows.size():
 		var y := i * line_h
-		text(Vector2(-px(5.0), y), rows[i][0], hud.dim_color)
+		text(Vector2(-px(7.5), y), rows[i][0], hud.dim_color)
 		text(Vector2(0, y), rows[i][1], hud.primary_color, HORIZONTAL_ALIGNMENT_RIGHT)
 		text(Vector2(4, y), rows[i][2], hud.dim_color, HORIZONTAL_ALIGNMENT_LEFT, 14)
-	line(Vector2(-px(5.6), -line_h), Vector2(-px(5.6), line_h * 2.4), hud.dim_color)
+	line(Vector2(-px(8.1), -line_h), Vector2(-px(8.1), line_h * 2.4), hud.dim_color)
 	end_local()
 
 
@@ -47,13 +47,13 @@ func _draw_right_block(fc: FlightComputer, line_h: float) -> void:
 	var modes := fc.get_mode_labels()
 	for i in modes.size():
 		text(Vector2(0, line_h * (2.2 + i)), modes[i], hud.primary_color, HORIZONTAL_ALIGNMENT_LEFT, 16)
-	line(Vector2(px(5.6), -line_h), Vector2(px(5.6), line_h * (1.8 + modes.size())), hud.dim_color)
+	line(Vector2(-px(0.6), -line_h), Vector2(-px(0.6), line_h * (1.8 + modes.size())), hud.dim_color)
 	end_local()
 
 
 func _bar_row(y: float, label: String, fraction: float, color: Color) -> void:
 	text(Vector2(0, y), label, hud.dim_color)
-	var x0 := px(1.6)
+	var x0 := px(2.6)
 	var w := px(2.6)
 	var h := 8.0
 	draw_rect(Rect2(x0, y - h - 2.0, w, h), hud.dim_color, false, 1.0)
@@ -64,7 +64,7 @@ func _bar_row(y: float, label: String, fraction: float, color: Color) -> void:
 func _draw_attitude_readout() -> void:
 	var euler := hud.sensor_head.global_basis.get_euler()
 	var hdg := wrapf(-rad_to_deg(euler.y), 0.0, 360.0)
-	begin_local(0.0, 9.0)
+	begin_local(0.0, 12.5)
 	text(Vector2.ZERO, "HDG %03d   PIT %+03d   RLL %+04d" % [
 		roundi(hdg), roundi(rad_to_deg(euler.x)), roundi(rad_to_deg(euler.z))
 	], hud.dim_color, HORIZONTAL_ALIGNMENT_CENTER, 16)
