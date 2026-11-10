@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeat/Arts/cockpit_linear_seat.glb" id="2_model"]
@@ -6,6 +6,8 @@
 [ext_resource type="PackedScene" path="res://Common/Controls/MouseLookController/mouse_look_controller.tscn" id="4_mlc"]
 [ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/panoramic_hud.tscn" id="5_hud"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/ControlsAnimator/cockpit_controls_animator.gd" id="6_anim"]
+
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/SeatGimbal/cockpit_gimbal.gd" id="7_gimbal"]
 
 [node name="CockpitLinearSeat" type="Node3D"]
 script = ExtResource("1_script")
@@ -42,3 +44,6 @@ left_pedal = NodePath("../Model/PedalL")
 right_pedal = NodePath("../Model/PedalR")
 
 [node name="PanoramicHud" parent="." instance=ExtResource("5_hud")]
+
+[node name="CockpitGimbal" type="Node" parent="."]
+script = ExtResource("7_gimbal")
