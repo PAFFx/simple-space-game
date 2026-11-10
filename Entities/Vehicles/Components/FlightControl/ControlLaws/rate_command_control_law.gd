@@ -141,7 +141,8 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		var target := _pilot * _offset
 		var err_q := target * body_q.inverse()
 		var lead := deg_to_rad(max_command_lead_deg)
-		if err_q.get_angle() > lead:
+		# Only stick commands are limited; offset changes must never drag the pilot frame.
+		if w > 1e-6 and err_q.get_angle() > lead:
 			target = body_q.slerp(target, lead / err_q.get_angle())
 			_pilot = target * _offset.inverse()
 			err_q = target * body_q.inverse()
