@@ -52,8 +52,8 @@ outline, like an integrated shield camera.
 
 ## Linear seat: gimbal and G dampening
 
-- `CockpitGimbal` rotates the whole cockpit by `offset⁻¹`, so the pilot keeps facing the pilot
-  frame while the body turns, up to 70°. Commanded rotations move the pilot frame, so the cockpit
+- `CockpitGimbal` rotates the whole cockpit by the measured `body⁻¹ · pilot` (clamped to 70°),
+  so the cockpit holds still in the world while the body turns, even mid-swing. Commanded rotations move the pilot frame, so the cockpit
   turns with the suit for those.
 - `SeatDampener` models the seat suspension (spring-damper, 14 rad/s, ζ 0.8, ±0.15 m travel) plus
   an active inertial compensator that cancels 55% of what's left. `G MS` is the suit, `G PLT` is

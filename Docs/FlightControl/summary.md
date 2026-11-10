@@ -90,9 +90,14 @@ loop × 1.5, commanded speed × 2.
 
 ### Auto-rotation (`ThrustVectoringAttitudeSolver`)
 
-Thrusters are not equal: the backpack mains dwarf the verniers, so the suit is strong forward and
-weak sideways or backwards. Instead of thrusting "like a shuttle", the solver turns the body so the
-strong thrusters face the force demand. It minimises over pitch/yaw offsets `r`:
+Thrusters are not equal: the backpack mains (firing down and back) dwarf the verniers, so the suit
+is strong upward and weak sideways, backwards or down. **While boosting** (Shift), instead of
+thrusting "like a shuttle", the solver turns the body so the strong thrusters face the force
+demand: roll for side moves, lean forward for forward, pitch for braking. Without boost the body
+stays aligned with the cockpit and the verniers do the work (`auto_rotate_on_boost_only`).
+
+It minimises over offsets `r` (pitch and roll up to 70°, yaw at most 3° via `axis_limit_deg`, so
+the suit never swings sideways under the pilot):
 
 ```
 J(r) = (|F| / capability(R⁻¹F))²  +  angle_weight · (|r| / 70°)²  +  smooth_weight · |r − r_prev|²
@@ -102,11 +107,13 @@ J(r) = (|F| / capability(R⁻¹F))²  +  angle_weight · (|r| / 70°)²  +  smoo
 through the six per-axis limits). Small demands cost nothing, so the suit only turns when a demand
 is hard to meet. It's a pattern search warm-started from {current, zero, each body axis aimed at
 F}, about a dozen cost evaluations per tick. The offset is hard-limited to `max_offset_deg` (70°)
-and slewed at `slew_rate_deg`.
+and slewed at `slew_rate_deg` (30°/s) after a low-pass (`smoothing_time`, 0.35 s), so swings
+ease in and out.
 
 - Commanded rotations move the pilot frame itself, so they never produce an offset.
-- The cockpit counter-rotates by the offset (`CockpitGimbal`), and the HUD body reticle slides
-  off the cockpit centre to show it.
+- The cockpit holds the pilot frame (`CockpitGimbal`): its rotation in the hull is the
+  *measured* `body⁻¹ · pilot`, so it stays still in the world even while the body is still
+  swinging. The HUD body reticle slides off the cockpit centre to show the difference.
 - While the hatch is unsealed the offset is forced to zero (`FlightState.allow_attitude_offset`), so
   the cockpit lines up with the hull opening.
 
@@ -194,15 +201,18 @@ bindings, then enable `joystick_enabled`.
 ## Tuning reference (MSP-02)
 
 - 30 t dry + 10 t propellant + 6.4 t equipment ≈ 46 t. Main thrust follows the published late-UC
-  split: 4 × 179.5 kN backpack mains + 2 × 120.6 kN leg mains (97,800 kgf), plus 20 verniers of
-  20–35 kN. Mains' thrust lines pass near the centre of mass.
-- Authority is deliberately anisotropic: ≈ 1.7 g forward vs ≈ 0.4 g back and ≈ 0.2 g sideways,
-  which is what makes auto-rotation worthwhile.
+  split: 4 × 179.5 kN backpack mains + 2 × 120.6 kN leg mains (97,800 kgf), plus 18 verniers of
+  25–35 kN. The backpack mains sit at the bottom of the pods, below and behind the centre of
+  mass, firing down and 25° back; their 28° gimbals can swing the thrust line through the COM.
+- Authority is deliberately anisotropic: strong up, weak sideways, back and down. No backpack
+  verniers fire upward; down thrust comes from the shoulder tops only.
 - Verified headless:
-  - boosted strafe: the suit yaws to the 70° limit and reaches 45 m/s in 3.5 s at ~1.9 G (pilot ~0.85 G)
-  - release: it swings the other way to brake and comes to rest with the offset back at 0°
-  - reverse and up both pitch the suit 70° to bring the mains to bear
-  - yaw and pitch reach their commanded rates and stop without pulling back
+  - up, no boost: 1.37 G with no rotation
+  - strafe, no boost: no rotation, ~0.55 G; with boost: rolls up to 70°, yaw stays 0°, 45 m/s
+  - forward with boost: leans forward up to 70° in pitch
+  - holding Shift after a strafe rolls the other way and brakes 35 → 3 m/s in ~6 s
+  - the cockpit stays within ~1° in the world through all of it
+  - a commanded yaw turns cockpit and suit together and stops cleanly
 
 ## Tuning reference (MSP-01 prototype)
 
