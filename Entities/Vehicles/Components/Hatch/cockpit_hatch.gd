@@ -69,7 +69,9 @@ func _set_target(value: float) -> void:
 func _process(delta: float) -> void:
 	if listen_for_input and Input.is_action_just_pressed(PilotInputActions.TOGGLE_HATCH):
 		toggle()
-	if is_equal_approx(amount, _target):
+	# Exact compare: is_equal_approx() would stop a hair short of 0 and the
+	# hatch would report unsealed forever.
+	if amount == _target:
 		return
 	amount = move_toward(amount, _target, delta / maxf(duration, 0.01))
 	_apply()
