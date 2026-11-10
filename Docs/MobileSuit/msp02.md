@@ -2,6 +2,9 @@
 
 An original late-UC suit in the ν's colour family (white armour, dark navy chest and inner panels,
 yellow vents, red accents, grey frame), sized and powered after published late-UC specs.
+Styled after UC conventions rather than any one suit: octagonal inner frame with layered armour,
+V-tapered torso with chest intakes, rounded-top shoulder blocks, visor head with faceplate and
+blade antenna, tapered forearms, long flaring shins, wedge feet, backpack saber hilts.
 
 | | |
 |---|---|

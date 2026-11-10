@@ -10,7 +10,9 @@ PanoramicHud (Node)
 └── HudViewport (SubViewport, 4096×2048, transparent)   ← equirectangular canvas
     ├── Silhouettes     outlines of nearby HudSilhouette nodes (e.g. the shield)
     ├── Attitude        horizon ring (360°, heading marks) + pitch ladder, in the cockpit frame
-    ├── Boresight       body-axis reticle (rolls with the body) + cockpit-centre mark + VEC angle
+    ├── Boresight       body-axis reticle (rolls with the body)
+    ├── SuitAttitude    suit vs cockpit: PITCH gauges left/right (side view), ROLL gauge below
+                        the reticle (rear view); circle = cockpit, line = suit
     ├── FlightPath      prograde / retrograde markers + speed
     ├── FlightData      SPD / G MS / G PLT / ROT / AMBAC, PROP / THR bars, FCS modes, cautions
     ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
@@ -49,6 +51,14 @@ Contacts: add any `Node3D` to group `hud_contacts`; optional metadata `hud_label
 Silhouettes: add a `HudSilhouette` (outline points in its local space) to anything the pilot should
 see "through". The sensor never renders the suit or its equipment, so the shield appears only as its
 outline, like an integrated shield camera.
+
+## Physics interpolation
+
+The project runs physics at 60 Hz with interpolation on, so the suit moves smoothly on high-refresh
+displays. Anything placed per frame must use interpolated transforms:
+`PilotCamera` and `OrbitCamera` follow `get_global_transform_interpolated()`, and the screen
+shader, sensor and HUD read `PanoramicScreen.get_display_transform()`. Gameplay transforms
+(gimbal, station rotation, grips) change in `_physics_process`.
 
 ## Linear seat: gimbal and G dampening
 

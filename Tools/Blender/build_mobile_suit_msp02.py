@@ -30,7 +30,7 @@ def materials():
         "dark": mk.make_material("MS_Dark", (0.05, 0.05, 0.06), metallic=0.4, roughness=0.6),
         "yellow": mk.make_material("MS_AccentYellow", (0.95, 0.72, 0.06), roughness=0.4),
         "red": mk.make_material("MS_AccentRed", (0.72, 0.06, 0.06), roughness=0.4),
-        "visor": mk.make_material("MS_Visor", (0.05, 0.3, 0.2), emission=(0.25, 1.0, 0.65), strength=4.0),
+        "visor": mk.make_material("MS_Visor", (0.05, 0.45, 0.25), emission=(0.2, 0.9, 0.45), strength=1.6),
         "cavity": mk.make_material("MS_Cavity", (0.13, 0.13, 0.15), metallic=0.3, roughness=0.7),
     }
 
@@ -64,160 +64,199 @@ def bones():
 
 
 def build_chest(m, arm):
-    # Hollow frame around the cockpit cavity (x ±1.4, y -0.9..1.9, z 14.7..17.5).
+    # Hollow around the cockpit cavity (x ±1.4, y -0.9..1.9, z 14.7..17.5).
+    # V-tapered torso: side blocks flare out and forward toward the shoulders.
     c = mk.PartBuilder("Chest", m)
     for s in (1.0, -1.0):
-        c.tbox((2.15 * s, 0.45, 16.1), (1.5, 4.3), (1.5, 4.0), 3.6, "navy", shift=(0, -0.1))
-        # Vent block either side of the hatch: housing + three slats.
-        c.box((2.1 * s, 2.56, 16.45), (1.3, 0.1, 1.25), "dark")
-        for z in (16.9, 16.48, 16.06):
-            c.box((2.1 * s, 2.63, z), (1.1, 0.1, 0.17), "yellow")
-        c.box((2.15 * s, 2.35, 17.6), (1.5, 0.45, 0.55), "white")
-        c.box((2.95 * s, 0.3, 16.4), (0.1, 2.2, 1.6), "dark")
-        c.box((2.4 * s, 1.0, 14.5), (1.0, 2.6, 0.5), "white")
-    c.tbox((0, 0.35, 18.1), (5.8, 4.2), (4.6, 3.2), 0.7, "white")
-    c.box((0, 1.95, 18.05), (2.0, 0.3, 0.5), "navy")
+        c.tbox((2.1 * s, 0.35, 16.0), (1.3, 3.5), (1.6, 4.2), 3.4, "navy", shift=(0.12 * s, 0.15))
+        # Frame strip around the hatch opening.
+        c.box((1.48 * s, 2.5, 16.1), (0.14, 0.22, 2.9), "white")
+        # Angled intake vents either side of the hatch.
+        c.box((2.15 * s, 2.5, 16.5), (1.15, 0.14, 1.2), "dark", rot=(0, 0, -6 * s))
+        for i, z in enumerate((16.9, 16.5, 16.1)):
+            c.box((2.15 * s, 2.6, z), (1.0 - 0.08 * i, 0.08, 0.16), "yellow", rot=(0, 0, -6 * s))
+        # Pectoral plate above the vents, sloping back into the collar.
+        c.tbox((2.1 * s, 2.15, 17.55), (1.5, 0.7), (1.3, 0.4), 0.6, "white", rot=(-18, 0, 0))
+        # Lower rib flare and side armour.
+        c.tbox((2.2 * s, 0.9, 14.55), (1.3, 3.2), (1.6, 3.6), 0.5, "white")
+        c.box((2.97 * s, 0.25, 16.2), (0.12, 2.4, 1.9), "white")
+        c.box((3.04 * s, 0.25, 16.2), (0.05, 1.6, 0.25), "dark")
+    # Shoulder yoke / collar: wide at the shoulders, sloping in toward the neck.
+    c.tbox((0, 0.15, 18.05), (5.7, 4.1), (3.9, 2.7), 0.8, "white")
+    c.tbox((0, 1.75, 18.0), (2.4, 0.5), (1.6, 0.4), 0.55, "navy")
+    c.box((0, 1.98, 18.0), (0.5, 0.1, 0.18), "yellow")
     c.box((0, -1.3, 16.1), (2.8, 0.8, 2.8), "cavity")
-    c.box((0, 0.45, 14.45), (4.8, 4.0, 0.5), "frame")
-    c.box((0, 2.48, 14.4), (1.0, 0.3, 0.35), "red")
-    c.box((0, -0.2, 18.55), (2.0, 1.6, 0.3), "frame")
-    c.to_object(armature=arm, bone="chest", bevel=0.05)
+    c.tbox((0, 0.4, 14.45), (3.2, 3.2), (4.6, 3.8), 0.5, "frame")
+    c.tbox((0, 2.35, 14.4), (1.4, 0.4), (1.8, 0.4), 0.4, "red")
+    c.cylinder((0, -0.1, 18.5), 0.7, 0.25, "frame", segments=8)
+    c.to_object(armature=arm, bone="chest", bevel=0.07)
 
 
 def build_hatch(m, arm):
     up = mk.PartBuilder("HatchUpper", m)
     up.box((0, 2.25, 16.8), (2.75, 0.7, 1.38), "navy")
-    up.box((0, 2.61, 17.2), (2.2, 0.05, 0.12), "white")
+    up.box((0, 2.61, 17.25), (2.3, 0.05, 0.1), "white")
+    up.box((0, 2.61, 16.35), (0.9, 0.05, 0.1), "frame")
     up.box((0, 1.91, 16.8), (2.5, 0.05, 1.2), "cavity")
-    up.to_object(armature=arm, bone="hatch_upper", bevel=0.03)
+    up.to_object(armature=arm, bone="hatch_upper", bevel=0.04)
 
     lo = mk.PartBuilder("HatchLower", m)
-    lo.tbox((0, 2.25, 15.4), (2.45, 0.7), (2.75, 0.7), 1.38, "navy")
-    lo.box((0, 2.61, 15.55), (0.9, 0.05, 0.5), "frame")
+    lo.tbox((0, 2.25, 15.4), (2.4, 0.7), (2.75, 0.7), 1.38, "navy")
+    lo.box((0, 2.61, 15.6), (1.2, 0.05, 0.45), "frame")
+    lo.box((0, 2.61, 15.05), (1.8, 0.05, 0.08), "white")
     lo.box((0, 1.91, 15.4), (2.3, 0.05, 1.2), "cavity")
-    lo.to_object(armature=arm, bone="hatch_lower", bevel=0.03)
+    lo.to_object(armature=arm, bone="hatch_lower", bevel=0.04)
 
 
 def build_core(m, arm):
     w = mk.PartBuilder("Waist", m)
-    w.box((0, 0, 13.7), (2.4, 2.2, 1.0), "frame")
-    w.box((0, 1.05, 13.7), (1.8, 0.3, 0.8), "white")
+    w.cylinder((0, 0, 13.7), 1.0, 1.0, "frame", segments=8, radius_top=1.15)
+    w.tbox((0, 0.9, 13.95), (1.0, 0.3), (1.2, 0.3), 0.38, "white")
+    w.tbox((0, 0.88, 13.5), (0.9, 0.3), (1.05, 0.3), 0.36, "white")
     for s in (1.0, -1.0):
-        w.box((1.25 * s, 0.6, 13.7), (0.3, 1.2, 0.7), "white")
-    w.to_object(armature=arm, bone="spine", bevel=0.04)
+        w.box((0.95 * s, 0.55, 13.7), (0.25, 0.9, 0.75), "white", rot=(0, 0, 20 * s))
+    w.to_object(armature=arm, bone="spine", bevel=0.05)
 
     p = mk.PartBuilder("Pelvis", m)
-    p.tbox((0, 0.1, 12.4), (1.2, 1.6), (3.0, 2.4), 1.6, "frame")
-    p.tbox((0, 1.15, 12.3), (0.8, 0.4), (1.4, 0.4), 1.4, "navy")
-    p.box((0, 1.37, 12.6), (0.35, 0.1, 0.35), "yellow")
+    p.tbox((0, 0.0, 12.55), (1.4, 1.8), (2.8, 2.3), 1.3, "frame")
+    # Crotch block: tapered navy plate with a yellow marker.
+    p.tbox((0, 1.05, 12.3), (0.55, 0.45), (1.25, 0.5), 1.4, "navy", shift=(0, 0.1))
+    p.box((0, 1.33, 12.7), (0.32, 0.08, 0.32), "yellow")
     for s in (1.0, -1.0):
-        p.cylinder((1.5 * s, 0, 12.2), 0.55, 0.6, "frame", rot=(0, 90, 0))
-    p.to_object(armature=arm, bone="pelvis", bevel=0.04)
+        p.cylinder((1.5 * s, 0, 12.2), 0.55, 0.7, "frame", rot=(0, 90, 0), segments=8)
+    p.to_object(armature=arm, bone="pelvis", bevel=0.05)
 
 
 def build_head(m, arm):
     n = mk.PartBuilder("Neck", m)
-    n.cylinder((0, 0.3, 18.75), 0.45, 0.7, "frame")
+    n.cylinder((0, 0.3, 18.75), 0.38, 0.7, "frame", segments=8)
+    n.cylinder((0, 0.3, 18.55), 0.55, 0.2, "dark", segments=8)
     n.to_object(armature=arm, bone="neck", bevel=0.02)
 
     h = mk.PartBuilder("Head", m)
-    h.tbox((0, 0.45, 19.9), (1.3, 1.6), (1.05, 1.35), 1.6, "white")
-    h.box((0, 1.22, 19.85), (0.95, 0.3, 0.42), "dark")
-    h.box((0, 1.32, 19.9), (0.98, 0.12, 0.2), "visor")
-    h.box((0, 1.28, 19.35), (0.45, 0.12, 0.2), "red")
-    h.box((0, 0.9, 20.8), (0.1, 1.0, 0.25), "yellow", rot=(-25, 0, 0))
-    h.box((0, -0.45, 20.2), (0.7, 0.3, 0.5), "navy")
+    # Helmet: narrows to the top and slightly to the back.
+    h.tbox((0, 0.35, 19.95), (1.15, 1.35), (0.95, 1.05), 1.3, "white", shift=(0, -0.08))
+    h.box((0, -0.3, 19.95), (0.9, 0.45, 0.95), "navy")
+    # Face: slim visor band in a dark frame, grey faceplate and chin with vents.
+    h.box((0, 1.0, 20.0), (0.9, 0.16, 0.3), "dark")
+    h.tbox((0, 1.07, 20.0), (0.8, 0.06), (0.7, 0.06), 0.16, "visor")
+    h.tbox((0, 0.98, 19.58), (0.42, 0.3), (0.66, 0.34), 0.5, "frame")
+    for z in (19.5, 19.62, 19.74):
+        h.box((0, 1.16, z), (0.3, 0.03, 0.05), "dark")
+    # Forehead crest and a single swept blade antenna.
+    h.tbox((0, 0.95, 20.45), (0.4, 0.5), (0.16, 0.3), 0.36, "white")
+    h.box((0, 0.65, 20.9), (0.06, 0.75, 0.16), "yellow", rot=(-38, 0, 0))
     for s in (1.0, -1.0):
-        h.cylinder((0.66 * s, 0.45, 19.9), 0.28, 0.22, "navy", rot=(0, 90, 0))
-        h.box((0.45 * s, 0.6, 20.75), (0.08, 0.55, 0.18), "white", rot=(-35, 0, 15 * s))
-    h.to_object(armature=arm, bone="head", bevel=0.03)
+        h.tbox((0.58 * s, 0.62, 19.62), (0.12, 0.85), (0.12, 0.6), 0.65, "white", rot=(0, 0, -8 * s))
+        h.cylinder((0.6 * s, 0.25, 20.05), 0.24, 0.2, "navy", rot=(0, 90, 0), segments=8)
+        h.cylinder((0.33 * s, 1.02, 20.28), 0.06, 0.12, "dark", rot=(90, 0, 0), segments=6)
+        h.box((0.25 * s, -0.5, 20.6), (0.04, 0.04, 0.6), "frame", rot=(-25, 0, 0))
+    h.to_object(armature=arm, bone="head", bevel=0.035)
 
 
 def build_backpack(m, arm):
     bp = mk.PartBuilder("Backpack", m)
     bp.box((0, -1.8, 16.0), (1.6, 0.3, 2.2), "frame")
-    bp.tbox((0, -2.4, 16.0), (2.2, 1.4), (2.6, 1.2), 3.2, "navy")
-    bp.box((0, -3.12, 16.3), (1.4, 0.12, 1.8), "frame")
+    bp.tbox((0, -2.4, 16.1), (2.0, 1.3), (2.5, 1.2), 3.2, "navy")
+    bp.tbox((0, -3.06, 16.4), (1.3, 0.12), (1.5, 0.12), 2.0, "frame")
     for s in (1.0, -1.0):
         # Twin pods reaching down to the waist; each ends in two downward main bells.
-        bp.cylinder((1.5 * s, -2.9, 15.35), 0.8, 4.5, "frame")
-        bp.box((1.5 * s, -3.1, 16.0), (1.35, 1.15, 3.0), "white")
-        bp.box((1.5 * s, -3.7, 16.0), (0.9, 0.06, 2.0), "navy")
+        bp.cylinder((1.5 * s, -2.9, 15.35), 0.8, 4.5, "frame", segments=8)
+        bp.tbox((1.5 * s, -3.1, 16.1), (1.25, 1.1), (1.4, 1.2), 3.0, "white")
+        bp.box((1.5 * s, -3.72, 16.1), (0.8, 0.06, 2.1), "navy")
+        bp.box((1.5 * s, -3.74, 17.0), (0.5, 0.06, 0.16), "yellow")
         bp.tbox((1.5 * s, -2.9, 13.35), (1.3, 1.2), (1.6, 1.5), 0.5, "navy")
         for dx in (-0.35, 0.35):
-            bp.cylinder((1.5 * s + dx, -2.95, 12.95), 0.32, 0.4, "dark", rot=(-25, 0, 0))
+            bp.cylinder((1.5 * s + dx, -2.95, 12.95), 0.32, 0.4, "dark", rot=(-25, 0, 0), segments=10)
         bp.box((2.32 * s, -2.9, 16.0), (0.12, 0.8, 0.8), "dark")
-    bp.to_object(armature=arm, bone="backpack", bevel=0.04)
+        # Beam saber hilt in its rack, angled out over the shoulder.
+        bp.cylinder((0.65 * s, -2.55, 18.0), 0.13, 1.1, "white", rot=(0, 18 * s, 0), segments=8)
+        bp.cylinder((0.82 * s, -2.55, 18.55), 0.15, 0.18, "dark", rot=(0, 18 * s, 0), segments=8)
+    bp.to_object(armature=arm, bone="backpack", bevel=0.05)
 
 
 def build_arm(m, arm, side, s):
     sh = mk.PartBuilder(f"Shoulder.{side}", m)
-    sh.cylinder((3.3 * s, 0, 17.4), 0.6, 0.8, "frame", rot=(0, 90, 0))
-    sh.tbox((4.1 * s, 0, 17.9), (2.0, 2.8), (2.3, 3.0), 2.0, "white")
-    sh.tbox((4.1 * s, 0, 19.05), (2.3, 3.0), (1.9, 2.4), 0.3, "navy")
-    sh.box((4.1 * s, 1.55, 17.7), (1.6, 0.12, 1.2), "navy")
-    sh.box((4.1 * s, 1.62, 17.25), (1.2, 0.06, 0.2), "yellow")
-    sh.box((5.27 * s, 0, 17.8), (0.12, 2.2, 1.4), "navy")
-    sh.box((4.1 * s, -1.55, 18.1), (1.0, 0.2, 0.8), "dark")
+    sh.cylinder((3.3 * s, 0, 17.4), 0.6, 0.8, "frame", rot=(0, 90, 0), segments=8)
+    # Shoulder block: rounded top seen from the side (drum along X), flat armour
+    # plates front and back, a navy outer face and a yellow stripe.
+    sh.cylinder((4.15 * s, 0, 17.95), 1.25, 2.1, "white", rot=(0, 90, 0), segments=8)
+    sh.tbox((4.15 * s, 0, 17.05), (1.9, 2.9), (2.1, 3.1), 0.7, "white")
+    for y in (1.42, -1.42):
+        sh.tbox((4.15 * s, y, 17.6), (2.0, 0.28), (1.7, 0.22), 1.7, "navy")
+    sh.box((4.15 * s, 1.58, 17.0), (1.4, 0.06, 0.16), "yellow")
+    sh.cylinder((5.22 * s, 0, 17.8), 0.85, 0.08, "navy", rot=(0, 90, 0), segments=8)
+    sh.tbox((4.15 * s, 0, 19.2), (1.2, 1.4), (0.8, 1.0), 0.15, "frame")
     sh.to_object(armature=arm, bone=f"shoulder.{side}", bevel=0.05)
 
     ua = mk.PartBuilder(f"UpperArm.{side}", m)
-    ua.box((3.9 * s, 0, 15.6), (1.0, 1.05, 3.0), "frame")
-    ua.box((3.9 * s, 0.45, 15.9), (0.8, 0.2, 1.6), "white")
-    ua.box((3.9 * s, -0.35, 14.05), (1.05, 0.9, 0.8), "white")
+    ua.cylinder((3.9 * s, 0, 15.55), 0.46, 2.9, "frame", segments=8)
+    ua.tbox((4.2 * s, 0, 15.5), (0.3, 0.95), (0.3, 1.0), 2.2, "white")
+    ua.cylinder((3.9 * s, 0, 13.85), 0.46, 1.0, "frame", rot=(0, 90, 0), segments=8)
+    ua.tbox((3.9 * s, -0.4, 13.9), (0.9, 0.5), (0.8, 0.4), 0.9, "white")
     ua.to_object(armature=arm, bone=f"upper_arm.{side}", bevel=0.04)
 
     fa = mk.PartBuilder(f"Forearm.{side}", m)
-    fa.tbox((3.9 * s, 0.05, 12.0), (1.55, 1.6), (1.25, 1.35), 3.4, "white")
-    fa.box((4.69 * s, 0.05, 12.3), (0.1, 1.0, 2.0), "navy")
-    fa.box((4.72 * s, 0.05, 11.6), (0.08, 0.6, 0.6), "dark")
-    fa.box((3.9 * s, 0.83, 12.6), (0.9, 0.08, 0.3), "red")
+    # Tapered forearm armour, wider at the elbow.
+    fa.cylinder((3.9 * s, 0.05, 11.95), 0.6, 3.3, "white", segments=8, radius_top=0.78)
+    fa.box((4.62 * s, 0.05, 12.2), (0.08, 0.75, 2.0), "navy")
+    fa.box((4.66 * s, 0.05, 11.6), (0.06, 0.5, 0.5), "dark")
+    fa.box((3.9 * s, 0.72, 12.9), (0.8, 0.08, 0.25), "red")
+    fa.cylinder((3.9 * s, 0.05, 10.25), 0.55, 0.25, "frame", segments=8)
     fa.to_object(armature=arm, bone=f"forearm.{side}", bevel=0.04)
 
     hd = mk.PartBuilder(f"Hand.{side}", m)
-    hd.box((3.9 * s, 0.1, 9.75), (0.75, 0.95, 0.9), "frame")
-    hd.box((3.9 * s, 0.3, 9.05), (0.65, 0.85, 0.6), "dark", rot=(15, 0, 0))
-    hd.box((3.52 * s, 0.5, 9.5), (0.2, 0.25, 0.5), "dark")
+    hd.box((3.9 * s, 0.1, 9.75), (0.62, 0.85, 0.75), "frame")
+    for i, y in enumerate((0.4, 0.15, -0.1, -0.35)):
+        hd.box((3.9 * s, y + 0.1, 9.1 + 0.03 * i), (0.5, 0.2, 0.62), "dark", rot=(12, 0, 0))
+    hd.box((3.55 * s, 0.45, 9.5), (0.18, 0.22, 0.5), "dark", rot=(0, 0, 15 * s))
+    hd.box((4.22 * s, 0.1, 9.8), (0.06, 0.6, 0.5), "white")
     hd.to_object(armature=arm, bone=f"hand.{side}", bevel=0.02)
 
 
 def build_leg(m, arm, side, s):
     sf = mk.PartBuilder(f"SkirtFront.{side}", m)
-    sf.tbox((1.25 * s, 1.45, 12.2), (1.5, 0.3), (1.6, 0.3), 2.2, "white", rot=(10, 0, 0))
-    sf.box((1.25 * s, 1.66, 11.5), (1.2, 0.06, 0.18), "navy", rot=(10, 0, 0))
+    sf.tbox((1.25 * s, 1.45, 12.2), (1.25, 0.25), (1.55, 0.3), 2.2, "white", rot=(12, 0, -4 * s))
+    sf.tbox((1.25 * s, 1.64, 12.3), (0.9, 0.05), (1.15, 0.05), 1.4, "navy", rot=(12, 0, -4 * s))
     sf.to_object(armature=arm, bone=f"skirt_front.{side}", bevel=0.03)
 
     ss = mk.PartBuilder(f"SkirtSide.{side}", m)
-    ss.box((2.6 * s, 0, 12.2), (0.3, 1.9, 2.3), "white", rot=(0, -10 * s, 0))
-    ss.box((2.78 * s, 0, 11.7), (0.06, 1.0, 0.6), "dark", rot=(0, -10 * s, 0))
+    ss.tbox((2.6 * s, 0, 12.15), (0.25, 1.5), (0.3, 2.0), 2.3, "white", rot=(0, -12 * s, 0))
+    ss.box((2.77 * s, 0, 11.7), (0.06, 0.9, 0.55), "dark", rot=(0, -12 * s, 0))
+    ss.box((2.76 * s, 0, 12.6), (0.04, 1.2, 0.12), "navy", rot=(0, -12 * s, 0))
     ss.to_object(armature=arm, bone=f"skirt_side.{side}", bevel=0.03)
 
     sr = mk.PartBuilder(f"SkirtRear.{side}", m)
-    sr.box((1.0 * s, -1.5, 12.3), (1.6, 0.3, 2.0), "navy", rot=(-12, 0, 0))
-    sr.box((1.0 * s, -1.72, 11.6), (0.8, 0.06, 0.5), "dark", rot=(-12, 0, 0))
+    sr.tbox((1.0 * s, -1.5, 12.3), (1.3, 0.28), (1.6, 0.3), 2.0, "navy", rot=(-14, 0, 0))
+    sr.box((1.0 * s, -1.72, 11.6), (0.7, 0.06, 0.45), "dark", rot=(-14, 0, 0))
     sr.to_object(armature=arm, bone=f"skirt_rear.{side}", bevel=0.03)
 
     th = mk.PartBuilder(f"Thigh.{side}", m)
-    th.tbox((1.5 * s, 0, 9.8), (1.3, 1.4), (1.5, 1.6), 4.0, "frame")
-    th.box((1.5 * s, 0.75, 10.0), (1.2, 0.25, 2.8), "white")
-    th.box((2.25 * s, 0, 9.6), (0.1, 1.0, 2.2), "white")
+    th.cylinder((1.5 * s, 0, 9.8), 0.62, 4.0, "frame", segments=8, radius_top=0.72)
+    th.tbox((1.5 * s, 0.62, 9.9), (0.95, 0.3), (1.15, 0.35), 3.0, "white")
+    th.tbox((2.1 * s, 0, 9.7), (0.25, 1.1), (0.28, 1.3), 2.6, "white")
     th.to_object(armature=arm, bone=f"thigh.{side}", bevel=0.04)
 
     sh = mk.PartBuilder(f"Shin.{side}", m)
-    sh.cylinder((1.5 * s, 0, 7.4), 0.6, 1.2, "frame", rot=(0, 90, 0))
-    sh.tbox((1.5 * s, 0.85, 7.3), (1.3, 0.6), (1.0, 0.5), 1.2, "navy")
-    sh.tbox((1.5 * s, 0.05, 4.6), (1.9, 2.1), (1.5, 1.7), 5.2, "white")
-    sh.box((1.5 * s, 1.08, 5.4), (1.1, 0.08, 1.6), "navy")
-    sh.tbox((1.5 * s, -1.2, 3.6), (1.3, 0.8), (1.1, 0.6), 2.4, "frame")
-    sh.box((2.45 * s, 0, 3.0), (0.08, 0.9, 0.5), "yellow")
-    sh.cylinder((1.5 * s, 0, 1.7), 0.5, 1.0, "frame", rot=(0, 90, 0))
-    sh.to_object(armature=arm, bone=f"shin.{side}", bevel=0.05)
+    sh.cylinder((1.5 * s, 0, 7.4), 0.6, 1.25, "frame", rot=(0, 90, 0), segments=8)
+    # Knee armour: navy wedge pointing forward, white cap.
+    sh.tbox((1.5 * s, 0.75, 7.35), (1.1, 0.5), (0.9, 0.75), 1.3, "navy", shift=(0, 0.15))
+    sh.tbox((1.5 * s, 1.05, 7.85), (0.8, 0.3), (0.55, 0.2), 0.5, "white")
+    # Shin: long and flaring toward the ankle, calf bulge behind.
+    sh.tbox((1.5 * s, 0.15, 4.4), (1.95, 2.1), (1.35, 1.5), 5.0, "white")
+    sh.tbox((1.5 * s, 1.15, 4.9), (0.9, 0.12), (0.6, 0.12), 3.0, "navy")
+    sh.tbox((1.5 * s, -1.05, 3.6), (1.35, 0.9), (1.0, 0.6), 2.8, "white", shift=(0, -0.1))
+    sh.box((1.5 * s, -1.55, 3.3), (0.8, 0.08, 1.4), "dark")
+    sh.box((2.46 * s, 0.2, 2.8), (0.06, 0.8, 0.45), "yellow")
+    sh.cylinder((1.5 * s, 0, 1.7), 0.5, 1.05, "frame", rot=(0, 90, 0), segments=8)
+    sh.to_object(armature=arm, bone=f"shin.{side}", bevel=0.06)
 
     ft = mk.PartBuilder(f"Foot.{side}", m)
-    ft.tbox((1.5 * s, 0.4, 0.55), (1.8, 3.4), (1.5, 2.4), 1.1, "navy", shift=(0, 0.2))
-    ft.tbox((1.5 * s, 2.0, 0.4), (1.7, 0.8), (1.4, 0.5), 0.8, "white")
-    ft.box((1.5 * s, -1.2, 0.45), (1.3, 0.6, 0.9), "white")
-    ft.to_object(armature=arm, bone=f"foot.{side}", bevel=0.04)
+    ft.tbox((1.5 * s, 0.5, 0.5), (1.55, 3.6), (1.2, 2.5), 0.9, "navy", shift=(0, 0.3))
+    ft.tbox((1.5 * s, 2.3, 0.4), (1.35, 1.0), (1.05, 0.55), 0.7, "white", shift=(0, -0.15))
+    ft.tbox((1.5 * s, -1.25, 0.45), (1.25, 0.6), (1.05, 0.5), 0.85, "white")
+    ft.tbox((1.5 * s, 0.2, 1.15), (1.3, 1.6), (1.0, 1.1), 0.5, "white")
+    ft.to_object(armature=arm, bone=f"foot.{side}", bevel=0.05)
 
 
 def main():
