@@ -15,50 +15,69 @@ simple-space-game/
 │   ├── Calculations/              Pure-math, stateless utility classes
 │   │   └── spatial_math.gd        General 3D math (ray-sphere intersection, etc.)
 │   └── Controls/                  Player input components
-│       └── MouseLookController/
-│           ├── mouse_look_controller.gd   Rotates parent Node3D from mouse input
-│           └── mouse_look_controller.tscn
+│       ├── MouseLookController/
+│       │   ├── mouse_look_controller.gd   Rotates parent Node3D from mouse input (current camera only)
+│       │   └── mouse_look_controller.tscn
+│       ├── OrbitCamera/           External camera orbiting a target in its own frame
+│       └── PilotInput/            PilotCommand + swappable input sources (keyboard, HOTAS)
 │
 ├── Entities/                      All game entities (characters, vehicles, environment)
 │   ├── Characters/
 │   │   └── AmateYuzuriha/         Pilot character model
 │   │
 │   ├── Environment/
-│   │   └── Space/SpaceStation/    Space station with constant rotation components
+│   │   └── Space/
+│   │       ├── SpaceStation/      Space station with constant rotation components
+│   │       ├── DebrisField/       MultiMesh rock shell for motion cues
+│   │       └── NavBuoy/           Blinking buoy that registers as a HUD contact
 │   │
 │   └── Vehicles/
+│       ├── Components/            Vehicle-level components shared across vehicle types
+│       │   ├── FlightControl/     FlightComputer, Thruster, ControlLaws/, Allocators/
+│       │   ├── Hatch/             CockpitHatch + HatchPanel (bone-driven, sequences screen aperture)
+│       │   └── ViewSwitcher/      Cockpit ↔ external camera toggle
 │       ├── Cockpits/              All cockpit interiors
 │       │   ├── Components/        Cockpit components shared across cockpit types
-│       │   │   └── PanoramicDisplay/
-│       │   │       ├── sensor_head.gd          Sensor camera manager
-│       │   │       ├── sensor_head.tscn
-│       │   │       ├── panoramic_screen.gd     Spherical display mesh + shader control
-│       │   │       ├── panoramic_screen.tscn
-│       │   │       ├── Helper/
-│       │   │       │   └── sensor_fov_solver.gd   FOV + viewport sizing math
-│       │   │       ├── Mesh/
-│       │   │       │   └── panoramic_mesh_builder.gd  Sphere mesh generation
-│       │   │       └── Shader/
-│       │   │           └── panoramic_screen.gdshader  Reprojection shader
+│       │   │   ├── PanoramicDisplay/
+│       │   │   │   ├── sensor_head.gd          Sensor camera manager
+│       │   │   │   ├── sensor_head.tscn
+│       │   │   │   ├── panoramic_screen.gd     Spherical display mesh + shader control
+│       │   │   │   ├── panoramic_screen.tscn
+│       │   │   │   ├── Helper/
+│       │   │   │   │   └── sensor_fov_solver.gd   FOV + viewport sizing math
+│       │   │   │   ├── Mesh/
+│       │   │   │   │   └── panoramic_mesh_builder.gd  Sphere mesh generation
+│       │   │   │   └── Shader/
+│       │   │   │       └── panoramic_screen.gdshader  Reprojection + HUD composite + aperture
+│       │   │   ├── PanoramicHud/  Equirectangular HUD canvas + HudWidget instruments
+│       │   │   └── ControlsAnimator/  Grips/pedals follow the PilotCommand
 │       │   │
+│       │   ├── CockpitLinearSeat/ Late-UC linear seat cockpit (extends CockpitBase)
 │       │   └── CockpitRX0/        RX-0 specific cockpit interior
 │       │       ├── cockpit_rx_0.gd    extends CockpitBase
 │       │       ├── cockpit_rx_0.tscn
 │       │       └── Arts/              Cockpit GLB import
 │       │
 │       └── MobileSuits/           All mobile suit vehicles
+│           ├── Prototype/         MSP-01 prototype: RigidBody root, thrusters on bones, FCS, hatch
 │           └── RX0/               RX-0 Full Armor Unicorn Gundam
 │               ├── mobile_suit_rx_0.gd    extends VehicleBase
 │               ├── mobile_suit_rx_0.tscn
 │               └── Arts/                  Mech GLB import
 │
 ├── Stages/                        Playable levels / scenes
+│   ├── MobileSuitTestRange/       Main stage: prototype suit, station, buoys, debris field
 │   └── LowEarthOrbit/
-│       └── low_earth_orbit.tscn   Main stage (instanciates MobileSuitRX0, space station, etc.)
+│       └── low_earth_orbit.tscn   Original RX-0 panoramic display stage
 │
 ├── Docs/                          Architecture documentation
 │   ├── structure.md               This file
-│   └── PanoramicCockpit/          Deep-dive docs for the panoramic display system
+│   ├── FlightControl/             Thrusters, FBW control laws, allocation, controls
+│   ├── MobileSuit/                Prototype suit + linear seat cockpit
+│   └── PanoramicCockpit/          Deep-dive docs for the panoramic display system + HUD
+│
+├── Tools/                         Non-Godot tooling (ignored by Godot via .gdignore)
+│   └── Blender/                   Procedural model build scripts
 │
 └── addons/                        Editor plugins (gdshader, plugin_refresher, gdLinter)
 ```
@@ -90,7 +109,10 @@ virtual methods call `push_error()` at runtime.
 
 ### `VehicleBase`
 
-Root script for any pilotable vehicle (mobile suit, ship, fighter, etc.).
+Root script for any pilotable vehicle (mobile suit, ship, fighter, etc.). It only requires
+`Node3D`, so it can sit on a `RigidBody3D` root (see `MobileSuitPrototype`).
+`find_component(Script)` returns the first descendant of a given script class, for one-off lookups
+such as `vehicle.find_component(FlightComputer)`.
 
 **To create a new vehicle:**
 1. Create a scene whose root node has a script extending `VehicleBase`.
@@ -226,3 +248,6 @@ types. Any cockpit that extends `CockpitBase` and has a `PanoramicDisplayMount` 
 | `Docs/PanoramicCockpit/sensor_head.md` | FOV algorithm, SubViewport trick, dynamic viewport sizing |
 | `Docs/PanoramicCockpit/panoramic_screen.md` | UV2 encoding, mesh generation, segment mask API |
 | `Docs/PanoramicCockpit/panoramic_screen_shader.md` | Shader walkthrough, coordinate systems, artefact guide |
+| `Docs/PanoramicCockpit/hud.md` | HUD canvas mapping, writing widgets, hatch aperture timeline |
+| `Docs/FlightControl/summary.md` | Input → FBW → allocator → thruster pipeline, swapping stages, controls, HOTAS |
+| `Docs/MobileSuit/prototype.md` | Prototype suit scene tree, rig, render layers, regenerating models |
