@@ -14,10 +14,14 @@ the world from the mech's head pivot, producing the texture that `PanoramicScree
 the cockpit display.
 
 Every frame it:
-1. Aims the sensor camera in the viewer's look direction
-2. Delegates to `SensorFovSolver.solve_required_fov()` which casts 9 frustum rays through the
-   screen sphere and decomposes hits into separate horizontal and vertical angular spans
-3. Delegates to `SensorFovSolver.compute_viewport_size()` to size a rectangular viewport to
+1. Picks the viewer: the **active camera** of the main viewport (`follow_active_camera`, on by
+   default), so the cockpit camera, the external orbit camera or any cinematic camera all work.
+   With it off, `viewer_camera` (the pilot) is always used.
+2. `SensorFovSolver.sample_visible_directions()` finds which screen directions that viewer can see
+   (see *Viewers outside the sphere* below). If none are visible, the SubViewport stops rendering.
+3. Aims the sensor camera at the mean of those directions and sizes its H/V FOV to contain them
+   (`aim_direction()`, `solve_required_fov()`)
+4. Delegates to `SensorFovSolver.compute_viewport_size()` to size a rectangular viewport to
    exactly match the required H/V coverage at the target display quality — no wasted pixels
 
 ---
@@ -154,14 +158,27 @@ FOV, the sphere radius, and the sensor-to-sphere-centre distance.
 ### The geometric solution
 
 For each of 9 frustum sample points, cast a ray from the viewer through the sphere via
-`SpatialMath.ray_sphere_intersect()`. For each hit point `P`, the panoramic direction is:
+`SpatialMath.ray_sphere_entry_exit()`. The visible pixel is where the ray **leaves** the sphere
+(`P`), and its panoramic direction is the screen-local direction of `P`, mapped to world through
+the sensor basis (the same mapping the shader uses):
 
 ```
-panoramic_dir = normalize(P - sphere_centre)
+panoramic_dir = sensor_basis * normalize(P_screen_local)
 ```
 
 Decompose it into the sensor camera's local horizontal and vertical planes to get separate
-H/V half-angles. The maximum across all 9 points gives the required H/V FOV.
+H/V half-angles. The maximum across all samples gives the required H/V FOV.
+
+### Viewers outside the sphere
+
+The screen faces inward and the near wall is back-face culled, so an outside camera sees the
+**far** inside wall through the hatch opening. The solver therefore:
+
+- returns nothing while the aperture is closed (sensor rendering is skipped);
+- keeps a frustum ray only if it **enters** the sphere inside the aperture
+  (`PanoramicScreen.is_in_aperture()`, same test as the shader's discard);
+- also aims a 7×5 grid of rays through the aperture itself, because from a distance the opening
+  is a small patch of the frame that the 9 frustum rays would miss.
 
 ### Why separate H/V FOV?
 

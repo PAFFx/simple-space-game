@@ -36,8 +36,9 @@ the sensor camera's view-projection matrix to find where in the sensor's viewpor
 appears, and samples the colour there.
 
 From the pilot's perspective the screen fills the cockpit interior with a live world view.
-From outside, the same mesh face is visible (inward normals, `cull_back`) and shows the same
-reprojected image.
+From outside, the far inside wall is visible through the hatch (inward normals, `cull_back`).
+`SensorHead` follows the active camera, so the sensor covers the part of the screen that camera
+actually sees, from the seat or through the hatch.
 
 ---
 
@@ -62,7 +63,7 @@ viewer can currently see on the screen.
 | `SensorHead` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.gd` | Owns SubViewport + Camera3D. Tracks viewer direction, computes dynamic FOV, exposes texture + matrices. Auto-discovers dependencies via `VehicleBase`. |
 | `PanoramicScreen` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/panoramic_screen.gd` | Builds the spherical mesh with UV2 panoramic encoding. Pushes shader uniforms every frame. Exposes segment mask API. Auto-discovers `SensorHead` via `VehicleBase`. |
 | `panoramic_screen.gdshader` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/Shader/panoramic_screen.gdshader` | Per-fragment: UV2 → world direction → project → sample. |
-| `SensorFovSolver` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/Helper/sensor_fov_solver.gd` | Pure-math helper: `solve_required_fov()` and `compute_viewport_size()`, extracted from `SensorHead`. |
+| `SensorFovSolver` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/Helper/sensor_fov_solver.gd` | Pure-math helper: `sample_visible_directions()`, `aim_direction()`, `solve_required_fov()`, `compute_viewport_size()`, extracted from `SensorHead`. |
 | `PanoramicMeshBuilder` | `Entities/Vehicles/Cockpits/Components/PanoramicDisplay/Mesh/panoramic_mesh_builder.gd` | Pure-math helper: `build()` sphere mesh, extracted from `PanoramicScreen`. |
 | `SpatialMath` | `Common/Calculations/spatial_math.gd` | General 3D math: `ray_sphere_intersect()`. |
 | `VehicleBase` | `Core/Base/vehicle_base.gd` | Abstract vehicle root. Provides `find_vehicle()` static walk-up and `get_cockpit()` / `get_sensor_head()` accessors. |
@@ -134,12 +135,13 @@ from a child's `_ready()`, which fires before the parent's own `_ready()`.
 ```
 _process() on SensorHead
   │
-  ├── viewer_camera.project_ray_normal(9 sample pixels)
-  │     → SensorFovSolver.solve_required_fov(...)
-  │         → SpatialMath.ray_sphere_intersect() per sample
-  │         → max_h_half_angle, max_v_half_angle
+  ├── viewer = active camera (or viewer_camera)
+  ├── SensorFovSolver.sample_visible_directions(viewer, screen)
+  │     → 9 frustum rays (+ aperture grid when outside), exit point per ray
+  │     → empty → stop SubViewport rendering
+  ├── SensorFovSolver.aim_direction() / solve_required_fov()
   │
-  ├── _camera.transform  = Transform3D(looking_at(world_look), sensor_pos)
+  ├── _camera.transform  = Transform3D(looking_at(aim), sensor_pos)
   ├── _camera.fov        = 2 × max_v_half_angle + safety_margin  (vertical FOV)
   │
   └── SensorFovSolver.compute_viewport_size(...)
