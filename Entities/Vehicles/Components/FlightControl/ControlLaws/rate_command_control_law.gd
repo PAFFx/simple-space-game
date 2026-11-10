@@ -13,7 +13,7 @@ extends ControlLaw
 enum TranslationMode { NEWTONIAN, VELOCITY_HOLD }
 enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 
-@export var translation_mode: TranslationMode = TranslationMode.NEWTONIAN
+@export var translation_mode: TranslationMode = TranslationMode.VELOCITY_HOLD
 @export var rotation_mode: RotationMode = RotationMode.ATTITUDE_HOLD
 
 @export_group("Rotation")
@@ -28,6 +28,12 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var stick_deadzone: float = 0.04
 ## Fraction of torque authority the FCS may request.
 @export_range(0.0, 1.0) var torque_fraction: float = 0.6
+
+@export_group("Boost")
+## While boosting: rate limits are multiplied by this, and torque/thrust limits open fully.
+@export var boost_rate_multiplier: float = 1.7
+@export var boost_rate_gain_multiplier: float = 1.5
+@export var boost_speed_multiplier: float = 2.0
 
 @export_group("Translation")
 @export_range(0.0, 1.0) var cruise_thrust_fraction: float = 0.5
@@ -67,7 +73,7 @@ func is_holding_attitude() -> bool:
 
 func _rotation_torque(state: FlightState, command: PilotCommand) -> Vector3:
 	var omega := state.local_angular_velocity
-	var max_rate := max_rate_deg * (PI / 180.0)
+	var max_rate := max_rate_deg * (PI / 180.0) * (boost_rate_multiplier if command.boost else 1.0)
 	var rate_cmd := Vector3.ZERO
 
 	if command.rotation.length() > stick_deadzone:
@@ -86,10 +92,11 @@ func _rotation_torque(state: FlightState, command: PilotCommand) -> Vector3:
 			var err := state.to_local(Vector3(q_err.x, q_err.y, q_err.z) * 2.0)
 			rate_cmd = (err * attitude_gain).clamp(-max_rate, max_rate)
 
-	var alpha := (rate_cmd - omega) * rate_gain
+	var gain := rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
+	var alpha := (rate_cmd - omega) * gain
 	var inertia := state.inertia_local
 	var torque := inertia * alpha + omega.cross(inertia * omega)
-	var limit := state.max_torque * torque_fraction
+	var limit := state.max_torque * (1.0 if command.boost else torque_fraction)
 	return torque.clamp(-limit, limit)
 
 
@@ -98,7 +105,7 @@ func _translation_force(state: FlightState, command: PilotCommand) -> Vector3:
 	if translation_mode == TranslationMode.NEWTONIAN:
 		return scale_by_authority(command.translation, state) * fraction
 
-	var speed := max_command_speed * (2.0 if command.boost else 1.0)
+	var speed := max_command_speed * (boost_speed_multiplier if command.boost else 1.0)
 	var v_error := command.translation * speed - state.local_linear_velocity
 	var force := v_error * velocity_gain * state.mass
 	return clamp_to_authority(force, state, fraction)

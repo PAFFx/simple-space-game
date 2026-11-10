@@ -21,6 +21,8 @@ const TOGGLE_TRANSLATION_MODE := &"ms_toggle_translation_mode"
 const TOGGLE_ROTATION_MODE := &"ms_toggle_rotation_mode"
 const TOGGLE_HATCH := &"ms_toggle_hatch"
 const TOGGLE_VIEW := &"ms_toggle_view"
+const TOGGLE_RIFLE := &"ms_toggle_rifle"
+const TOGGLE_SHIELD := &"ms_toggle_shield"
 
 # Keyboard only. Flight sticks and HOTAS report raw axes/buttons whose indices
 # differ per device, so analog input is bound through HotasPilotInput instead.
@@ -29,8 +31,8 @@ const _DEFAULTS := {
 	TRANSLATE_BACK: [KEY_S],
 	TRANSLATE_LEFT: [KEY_A],
 	TRANSLATE_RIGHT: [KEY_D],
-	TRANSLATE_UP: [KEY_R, KEY_SPACE],
-	TRANSLATE_DOWN: [KEY_F],
+	TRANSLATE_UP: [KEY_SPACE, KEY_R],
+	TRANSLATE_DOWN: [KEY_CTRL, KEY_F],
 	# Flight-sim convention: pushing the stick forward (Up arrow) pitches the nose down.
 	PITCH_UP: [KEY_DOWN],
 	PITCH_DOWN: [KEY_UP],
@@ -43,6 +45,8 @@ const _DEFAULTS := {
 	TOGGLE_ROTATION_MODE: [KEY_G],
 	TOGGLE_HATCH: [KEY_H],
 	TOGGLE_VIEW: [KEY_V],
+	TOGGLE_RIFLE: [KEY_1],
+	TOGGLE_SHIELD: [KEY_2],
 }
 
 
