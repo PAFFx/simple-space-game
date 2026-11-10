@@ -60,6 +60,12 @@ displays. Anything placed per frame must use interpolated transforms:
 shader, sensor and HUD read `PanoramicScreen.get_display_transform()`. Gameplay transforms
 (gimbal, station rotation, grips) change in `_physics_process`.
 
+## External camera
+
+`OrbitCamera` orbits the suit in the **pilot frame** (`follow_pilot_frame`, the vehicle cockpit's
+orientation) rather than the body's, so the outside view stays as steady as the cockpit view and
+the suit visibly leans and rolls inside it during auto-rotation. `orientation_source` overrides it.
+
 ## Linear seat: gimbal and G dampening
 
 - `CockpitGimbal` rotates the whole cockpit by the measured `body⁻¹ · pilot`, so the cockpit holds

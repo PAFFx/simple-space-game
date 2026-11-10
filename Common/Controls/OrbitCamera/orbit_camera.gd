@@ -1,10 +1,18 @@
 class_name OrbitCamera
 extends Camera3D
 
-## External camera that orbits a target in the target's own frame (so it rolls
-## with a spacecraft). Mouse orbits, wheel zooms — only while this camera is current.
+## External camera that orbits a target (so it rolls with a spacecraft). Mouse
+## orbits, wheel zooms — only while this camera is current.
+##
+## Orientation comes from the pilot frame (the vehicle's cockpit) by default, so
+## the view stays steady while the FCS turns the body for thrust vectoring and
+## the suit visibly leans and rolls inside it. Position always follows the target.
 
 @export var target: Node3D
+## Orbit in the pilot's axes (the vehicle cockpit's orientation) instead of the body's.
+@export var follow_pilot_frame: bool = true
+## Optional explicit node to take the orbit orientation from (overrides follow_pilot_frame).
+@export var orientation_source: Node3D
 ## Point in the target's local space to orbit around.
 @export var focus_offset := Vector3(0.0, 11.0, 0.0)
 @export var distance: float = 40.0
@@ -24,6 +32,11 @@ func _ready() -> void:
 	cull_mask = Layers.MASK_THIRD_PERSION
 	if target == null:
 		target = get_parent() as Node3D
+	if orientation_source == null and follow_pilot_frame and target != null:
+		var vehicle := target as VehicleBase if target is VehicleBase \
+				else VehicleBase.find_vehicle(target)
+		if vehicle != null:
+			orientation_source = vehicle.get_cockpit()
 	_update(1.0)
 
 
@@ -49,8 +62,11 @@ func _update(weight: float) -> void:
 	if target == null:
 		return
 	var frame := target.get_global_transform_interpolated()
+	var axes := frame.basis
+	if orientation_source != null:
+		axes = orientation_source.get_global_transform_interpolated().basis
 	var orbit := Basis.from_euler(Vector3(deg_to_rad(pitch_deg), deg_to_rad(yaw_deg), 0.0))
 	var focus := frame * focus_offset
-	var desired_basis := frame.basis.orthonormalized() * orbit
+	var desired_basis := axes.orthonormalized() * orbit
 	var desired := Transform3D(desired_basis, focus + desired_basis.z * distance)
 	global_transform = global_transform.interpolate_with(desired, weight)
