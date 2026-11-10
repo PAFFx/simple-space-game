@@ -1,20 +1,28 @@
 class_name RateCommandControlLaw
 extends ControlLaw
 
-## Fly-by-wire law, in the spirit of modern fighter FCS:
+## Fly-by-wire law, in the spirit of modern fighter FCS.
 ##
-## Rotation — the stick commands an angular RATE, not a torque. Releasing the
-##   stick brings rotation to a stop; in ATTITUDE_HOLD the attitude is then
-##   captured and held against disturbances (e.g. asymmetric thrust).
-## Translation — NEWTONIAN: stick = thrust demand, the suit coasts when released.
-##   VELOCITY_HOLD: stick = desired velocity in the body frame relative to the
-##   reference frame; releasing the stick brings the suit to relative rest.
+## Everything the pilot commands is in the PILOT FRAME (the cockpit's
+## orientation), not the body's:
+##
+## Rotation — the stick commands an angular rate of the pilot frame. In
+##   ATTITUDE_HOLD the frame stops when the stick is released and the body
+##   holds it (rate command / attitude hold). RATE_DAMP just damps rates.
+## Translation — VELOCITY_HOLD: stick = velocity in the pilot frame relative
+##   to the reference frame; released = brought to relative rest.
+##   NEWTONIAN: stick = thrust demand, coast when released.
+## Auto-rotation — an AttitudeOffsetSolver may turn the body away from the
+##   pilot frame (body = pilot · offset) so its strongest thrusters face the
+##   force demand. The cockpit counter-rotates, so the pilot's view stays put.
 
 enum TranslationMode { NEWTONIAN, VELOCITY_HOLD }
 enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 
 @export var translation_mode: TranslationMode = TranslationMode.VELOCITY_HOLD
 @export var rotation_mode: RotationMode = RotationMode.ATTITUDE_HOLD
+## Auto-rotation for thrust vectoring (ATTITUDE_HOLD only). Empty = body stays aligned.
+@export var attitude_solver: AttitudeOffsetSolver
 
 @export_group("Rotation")
 ## Max commanded rate at full stick (pitch, yaw, roll), deg/s.
@@ -22,9 +30,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Rate loop bandwidth, 1/s. Higher = snappier, more thruster chatter.
 @export var rate_gain: float = 2.5
 ## Attitude loop gain, (rad/s) per rad of error.
-@export var attitude_gain: float = 1.2
-## Attitude is captured once the body rate drops below this, deg/s.
-@export var hold_capture_rate_deg: float = 2.0
+@export var attitude_gain: float = 1.6
+## How far the commanded attitude may run ahead of the body, deg.
+@export var max_command_lead_deg: float = 8.0
 @export var stick_deadzone: float = 0.04
 ## Fraction of torque authority the FCS may request.
 @export_range(0.0, 1.0) var torque_fraction: float = 0.6
@@ -42,55 +50,99 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Velocity loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
 
-var _hold_active := false
-var _hold_orientation := Quaternion.IDENTITY
+var _initialized := false
+var _pilot := Quaternion.IDENTITY    ## Pilot frame orientation (global)
+var _offset := Quaternion.IDENTITY   ## Body relative to pilot frame
+var _stick_active := false
 
 
 func reset() -> void:
-	_hold_active = false
+	_initialized = false
+
+
+func get_pilot_offset() -> Quaternion:
+	return _offset
+
+
+func get_pilot_orientation() -> Quaternion:
+	return _pilot
 
 
 func compute(state: FlightState, command: PilotCommand) -> Wrench:
+	var body_q := state.basis.get_rotation_quaternion()
+	if not _initialized:
+		_initialized = true
+		_offset = Quaternion.IDENTITY
+		_pilot = body_q
 	if command.toggle_translation_mode:
 		translation_mode = ((translation_mode + 1) % TranslationMode.size()) as TranslationMode
 	if command.toggle_rotation_mode:
 		rotation_mode = ((rotation_mode + 1) % RotationMode.size()) as RotationMode
-		_hold_active = false
-	return Wrench.new(_translation_force(state, command), _rotation_torque(state, command))
+		_pilot = body_q * _offset.inverse()
+
+	var force_world := _translation_force_world(state, command)
+	_update_offset(state, force_world)
+	var torque := _rotation_torque(state, command, body_q)
+	var fraction := 1.0 if command.boost else cruise_thrust_fraction
+	var force_body := clamp_to_capability(state.to_local(force_world), state, fraction)
+	return Wrench.new(force_body, torque)
 
 
 func get_mode_labels() -> PackedStringArray:
 	var trans := "TRANS NEWTON" if translation_mode == TranslationMode.NEWTONIAN else "TRANS V-HOLD"
 	var rot := "ROT RATE"
 	if rotation_mode == RotationMode.ATTITUDE_HOLD:
-		rot = "ROT ATT-HOLD" + (" ●" if _hold_active else "")
-	return PackedStringArray([trans, rot])
+		rot = "ROT ATT-HOLD" + ("" if _stick_active else " ●")
+	var labels := PackedStringArray([trans, rot])
+	if attitude_solver != null and rotation_mode == RotationMode.ATTITUDE_HOLD:
+		labels.append("VECTOR %02d°" % roundi(rad_to_deg(_offset.get_angle())))
+	return labels
 
 
 func is_holding_attitude() -> bool:
-	return _hold_active
+	return rotation_mode == RotationMode.ATTITUDE_HOLD and not _stick_active
 
 
-func _rotation_torque(state: FlightState, command: PilotCommand) -> Vector3:
+func _update_offset(state: FlightState, force_world: Vector3) -> void:
+	var target := Quaternion.IDENTITY
+	var slew := deg_to_rad(60.0)
+	if attitude_solver != null:
+		slew = deg_to_rad(attitude_solver.slew_rate_deg)
+		if rotation_mode == RotationMode.ATTITUDE_HOLD and state.allow_attitude_offset:
+			var force_pilot := _pilot.inverse() * force_world
+			target = attitude_solver.solve(state, force_pilot, _offset)
+	var angle := _offset.angle_to(target)
+	if angle > 1e-5:
+		_offset = _offset.slerp(target, minf(1.0, slew * state.delta / angle)).normalized()
+
+
+func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quaternion) -> Vector3:
 	var omega := state.local_angular_velocity
 	var max_rate := max_rate_deg * (PI / 180.0) * (boost_rate_multiplier if command.boost else 1.0)
-	var rate_cmd := Vector3.ZERO
+	_stick_active = command.rotation.length() > stick_deadzone
+	var stick_rate := command.rotation * max_rate if _stick_active else Vector3.ZERO
+	var rate_cmd := stick_rate
 
-	if command.rotation.length() > stick_deadzone:
-		_hold_active = false
-		rate_cmd = command.rotation * max_rate
-	elif rotation_mode == RotationMode.ATTITUDE_HOLD:
-		var current := state.basis.get_rotation_quaternion()
-		if not _hold_active and omega.length() < deg_to_rad(hold_capture_rate_deg):
-			_hold_active = true
-			_hold_orientation = current
-		if _hold_active:
-			var q_err := _hold_orientation * current.inverse()
-			if q_err.w < 0.0:
-				q_err = -q_err
-			# Small-angle rotation vector of the error, global → body frame.
-			var err := state.to_local(Vector3(q_err.x, q_err.y, q_err.z) * 2.0)
-			rate_cmd = (err * attitude_gain).clamp(-max_rate, max_rate)
+	if rotation_mode == RotationMode.ATTITUDE_HOLD:
+		# Integrate the commanded rate into the pilot frame, then track pilot · offset.
+		var w := stick_rate.length()
+		if w > 1e-6:
+			_pilot = (_pilot * Quaternion(stick_rate / w, w * state.delta)).normalized()
+		var target := _pilot * _offset
+		var err_q := target * body_q.inverse()
+		var lead := deg_to_rad(max_command_lead_deg)
+		if err_q.get_angle() > lead:
+			target = body_q.slerp(target, lead / err_q.get_angle())
+			_pilot = target * _offset.inverse()
+			err_q = target * body_q.inverse()
+		if err_q.w < 0.0:
+			err_q = -err_q
+		var err := state.to_local(Vector3(err_q.x, err_q.y, err_q.z) * 2.0)
+		var feed_forward := state.to_local(_pilot * stick_rate)
+		rate_cmd = (feed_forward + err * attitude_gain).clamp(-max_rate * 1.5, max_rate * 1.5)
+	else:
+		_offset = Quaternion.IDENTITY
+		_pilot = body_q
 
 	var gain := rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
 	var alpha := (rate_cmd - omega) * gain
@@ -100,12 +152,16 @@ func _rotation_torque(state: FlightState, command: PilotCommand) -> Vector3:
 	return torque.clamp(-limit, limit)
 
 
-func _translation_force(state: FlightState, command: PilotCommand) -> Vector3:
-	var fraction := 1.0 if command.boost else cruise_thrust_fraction
+func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
+	var stick_world := _pilot * command.translation
 	if translation_mode == TranslationMode.NEWTONIAN:
-		return scale_by_authority(command.translation, state) * fraction
+		var magnitude := minf(stick_world.length(), 1.0)
+		if magnitude < 1e-4:
+			return Vector3.ZERO
+		# Full stick = the most the body could give in that direction right now.
+		var dir := stick_world.normalized()
+		return dir * magnitude * state.force_capability(state.to_local(dir))
 
 	var speed := max_command_speed * (boost_speed_multiplier if command.boost else 1.0)
-	var v_error := command.translation * speed - state.local_linear_velocity
-	var force := v_error * velocity_gain * state.mass
-	return clamp_to_authority(force, state, fraction)
+	var v_error := stick_world * speed - state.linear_velocity
+	return v_error * velocity_gain * state.mass

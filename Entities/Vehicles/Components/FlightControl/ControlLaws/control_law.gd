@@ -16,6 +16,12 @@ func get_mode_labels() -> PackedStringArray:
 	return PackedStringArray()
 
 
+## Body orientation relative to the pilot frame (body = pilot · offset). The
+## cockpit counter-rotates by this. Identity for laws without auto-rotation.
+func get_pilot_offset() -> Quaternion:
+	return Quaternion.IDENTITY
+
+
 ## Called when the law is (re)engaged so stale integrators / holds are dropped.
 func reset() -> void:
 	pass
@@ -27,6 +33,15 @@ static func scale_by_authority(demand: Vector3, state: FlightState) -> Vector3:
 	for k in 3:
 		out[k] = demand[k] * (state.max_force_pos[k] if demand[k] >= 0.0 else state.max_force_neg[k])
 	return out
+
+
+## Scales `force` down (keeping its direction) to fit `fraction` of the directional authority.
+static func clamp_to_capability(force: Vector3, state: FlightState, fraction: float) -> Vector3:
+	var magnitude := force.length()
+	if magnitude < 1e-6:
+		return Vector3.ZERO
+	var limit := state.force_capability(force / magnitude) * fraction
+	return force * (limit / magnitude) if magnitude > limit else force
 
 
 static func clamp_to_authority(force: Vector3, state: FlightState, fraction: float) -> Vector3:

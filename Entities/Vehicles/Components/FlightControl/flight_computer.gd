@@ -49,6 +49,7 @@ var _ref_prev_position := Vector3.ZERO
 var _ref_velocity := Vector3.ZERO
 var _ref_tracking := false
 var _depleted_emitted := false
+var _hatch: CockpitHatch
 
 
 func _ready() -> void:
@@ -59,10 +60,11 @@ func _ready() -> void:
 		return
 	if input_source == null:
 		input_source = _find_input_source()
-	if ambac == null:
-		var vehicle := VehicleBase.find_vehicle(self)
-		if vehicle != null:
+	var vehicle := VehicleBase.find_vehicle(self)
+	if vehicle != null:
+		if ambac == null:
 			ambac = vehicle.find_component(AmbacController) as AmbacController
+		_hatch = vehicle.find_component(CockpitHatch) as CockpitHatch
 	set_control_law(control_law if control_law != null else RateCommandControlLaw.new())
 	set_allocator(allocator if allocator != null else ConeProjectedAllocator.new())
 	_collect_thrusters(body)
@@ -137,6 +139,11 @@ func get_thrust_fraction() -> float:
 	return now / total if total > 0.0 else 0.0
 
 
+## Body relative to the pilot frame (body = pilot · offset); the cockpit counter-rotates by it.
+func get_pilot_offset() -> Quaternion:
+	return control_law.get_pilot_offset() if fcs_enabled else Quaternion.IDENTITY
+
+
 func get_mode_labels() -> PackedStringArray:
 	if not fcs_enabled:
 		return PackedStringArray(["FCS OFF"])
@@ -168,6 +175,8 @@ func _build_state(delta: float) -> void:
 		s.thruster_cone.append(t.get_cone_rad())
 		s.thruster_max.append(t.get_available_thrust() if has_propellant else 0.0)
 	s.compute_authority()
+	# The cockpit must line up with the hull opening while the hatch is unsealed.
+	s.allow_attitude_offset = _hatch == null or not _hatch.is_unsealed()
 	state = s
 
 

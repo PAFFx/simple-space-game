@@ -31,6 +31,9 @@ var max_force_pos := Vector3.ZERO  ## Max force along +x/+y/+z (positive numbers
 var max_force_neg := Vector3.ZERO  ## Max force along -x/-y/-z (positive numbers)
 var max_torque := Vector3.ZERO     ## Max torque per axis (symmetric, conservative)
 
+## False while the body must stay aligned with the cockpit (e.g. hatch open).
+var allow_attitude_offset: bool = true
+
 
 func to_local(global_vector: Vector3) -> Vector3:
 	return basis.transposed() * global_vector
@@ -38,6 +41,16 @@ func to_local(global_vector: Vector3) -> Vector3:
 
 func to_global(local_vector: Vector3) -> Vector3:
 	return basis * local_vector
+
+
+## Rough force authority (N) along a unit body-frame direction: an ellipsoid
+## through the six per-axis limits.
+func force_capability(dir: Vector3) -> float:
+	var s := 0.0
+	for k in 3:
+		var limit := max_force_pos[k] if dir[k] >= 0.0 else max_force_neg[k]
+		s += (dir[k] / maxf(limit, 1.0)) ** 2
+	return 1.0 / sqrt(s) if s > 0.0 else 0.0
 
 
 ## Fills max_force_* and max_torque from the thruster geometry.
