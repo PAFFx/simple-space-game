@@ -164,6 +164,12 @@ func get_cockpit_rotation() -> Quaternion:
 		return Quaternion.IDENTITY
 	# Same body snapshot the law used, so a rigid lock stays exact (no one-tick lag).
 	var body_q := state.basis.get_rotation_quaternion()
+	if not control_law.is_cockpit_locked():
+		# Holding the pilot frame still: compare against where the body will be after
+		# this tick's physics step, or the cockpit trails it by one tick of rotation.
+		var w := state.angular_velocity
+		if w.length_squared() > 1e-10:
+			body_q = Quaternion(w.normalized(), w.length() * state.delta) * body_q
 	return (body_q.inverse() * pilot).normalized()
 
 

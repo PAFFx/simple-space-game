@@ -27,6 +27,11 @@ func get_pilot_orientation() -> Variant:
 	return null
 
 
+## True while the cockpit should move rigidly with the body.
+func is_cockpit_locked() -> bool:
+	return false
+
+
 ## Called when the law is (re)engaged so stale integrators / holds are dropped.
 func reset() -> void:
 	pass

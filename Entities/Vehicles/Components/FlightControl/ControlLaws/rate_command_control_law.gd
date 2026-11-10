@@ -49,6 +49,15 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var auto_rotate_torque_priority: float = 0.5
 ## On stick release: rate-loop gain multiplier and full torque, so rotation stops at once.
 @export var stop_gain_multiplier: float = 2.0
+## Fraction of the estimated angular deceleration the braking curve plans with
+## (slack for actuator lag and allocation losses). Higher = faster, riskier.
+@export_range(0.1, 1.0) var braking_margin: float = 0.5
+## Rate-loop gain multiplier while holding / realigning, so the body can follow the
+## braking curve tightly (a soft loop brakes late and overshoots).
+@export var hold_rate_gain_multiplier: float = 5.0
+## Allocator torque priority while realigning to rest (< 0 = allocator default).
+## Lower keeps the suit's braking push clean at the cost of a slower return.
+@export var realign_torque_priority: float = 0.5
 
 @export_group("Boost")
 ## While boosting: rate limits are multiplied by this, and torque/thrust limits open fully.
@@ -74,6 +83,8 @@ var _offset := Quaternion.IDENTITY   ## Body relative to pilot frame
 var _offset_target := Quaternion.IDENTITY
 var _prev_target := Quaternion.IDENTITY
 var _has_prev_target := false
+var _auto_rotating := false   ## Solver engaged this tick (force must stay clean)
+var _rigid := false           ## Last tick the cockpit was locked to the body
 var _stick_active := false
 var _capturing := false
 
@@ -108,8 +119,10 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	var torque := _rotation_torque(state, command, body_q)
 	var force_body := clamp_to_capability(state.to_local(force_world), state, 1.0)
 	var wrench := Wrench.new(force_body, torque)
-	if not _stick_active and not _capturing:
+	if _auto_rotating:
 		wrench.torque_priority = auto_rotate_torque_priority
+	elif not _rigid:
+		wrench.torque_priority = realign_torque_priority
 	return wrench
 
 
@@ -122,6 +135,11 @@ func get_mode_labels() -> PackedStringArray:
 	if attitude_solver != null and rotation_mode == RotationMode.ATTITUDE_HOLD:
 		labels.append("VECTOR %02d°" % roundi(rad_to_deg(_offset.get_angle())))
 	return labels
+
+
+## True while the cockpit is locked rigidly to the body (pilot steering or braking).
+func is_cockpit_locked() -> bool:
+	return _rigid
 
 
 func is_holding_attitude() -> bool:
@@ -137,14 +155,28 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 		slew = deg_to_rad(attitude_solver.slew_rate_deg)
 		smoothing = attitude_solver.smoothing_time
 		# While the pilot steers (or the turn is still braking) the suit and cockpit
-		# move as one rigid unit: keep the offset exactly as it is.
+		# move as one rigid unit. Lock to where the body actually is relative to the
+		# pilot (not where it was heading), so the view can't jump by the tracking lag.
+		_auto_rotating = false
 		if _stick_active or _capturing:
+			if not _rigid:
+				_offset = AttitudeOffsetSolver.shortest(_pilot.inverse() * body_q)
+				_offset_target = _offset
+				_has_prev_target = false
 			return
 		var translating := command.translation.length() > stick_deadzone
 		var wanted := command.boost if auto_rotate_on_boost_only else (command.boost or translating)
 		if rotation_mode == RotationMode.ATTITUDE_HOLD and state.allow_attitude_offset and wanted:
 			var force_pilot := _pilot.inverse() * force_world
 			target = attitude_solver.solve(state, force_pilot, _offset)
+			_auto_rotating = true
+		else:
+			# Nothing needs the offset: aim straight back at the cockpit and let the
+			# time-optimal hold bring the body home in one motion.
+			_offset = Quaternion.IDENTITY
+			_offset_target = Quaternion.IDENTITY
+			_has_prev_target = false
+			return
 	# Low-pass the target first so the body eases into (and out of) a new attitude.
 	if smoothing > 0.0:
 		_offset_target = _offset_target.slerp(target, 1.0 - exp(-state.delta / smoothing))
@@ -183,38 +215,68 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 				if step.w < 0.0:
 					step = -step
 				feed_forward = state.to_local(Vector3(step.x, step.y, step.z) * 2.0 / state.delta)
-			var err_q := target * body_q.inverse()
-			if err_q.w < 0.0:
-				err_q = -err_q
-			var err := state.to_local(Vector3(err_q.x, err_q.y, err_q.z) * 2.0) \
-					+ feed_forward / attitude_gain
+			var err_q := AttitudeOffsetSolver.shortest(target * body_q.inverse())
+			var err := state.to_local(err_q.get_axis() * err_q.get_angle()) \
+					if err_q.get_angle() > 1e-6 else Vector3.ZERO
 			# Auto-rotation may swing the body faster than the pilot's own rate limits.
 			var hold_rate := max_rate * 1.2
 			if attitude_solver != null:
 				hold_rate = hold_rate.max(Vector3.ONE * deg_to_rad(attitude_solver.slew_rate_deg) * 1.2)
-			rate_cmd = (err * attitude_gain).clamp(-hold_rate, hold_rate)
+			# Auto-rotation tracks a moving target gently (keeps force clean); realigning
+			# to rest uses the time-optimal braking curve.
+			var approach := err * attitude_gain if _auto_rotating else _braking_rate(state, err)
+			rate_cmd = (approach + feed_forward).clamp(-hold_rate, hold_rate)
 	else:
 		_offset = Quaternion.IDENTITY
 		_pilot = body_q
 
+	_rigid = _stick_active or _capturing
 	_prev_target = _pilot * _offset
-	_has_prev_target = rotation_mode == RotationMode.ATTITUDE_HOLD and not _capturing
+	_has_prev_target = _has_prev_target or (rotation_mode == RotationMode.ATTITUDE_HOLD \
+			and not _capturing and _auto_rotating)
 	var stopping := _capturing and not _stick_active
 	var gain := rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
 	if stopping:
 		gain *= stop_gain_multiplier
+	elif not _stick_active and not _auto_rotating:
+		gain *= hold_rate_gain_multiplier
 	var alpha := (rate_cmd - omega) * gain
 	var inertia := state.inertia_local
 	var torque := inertia * alpha + omega.cross(inertia * omega)
 	var fraction := torque_fraction
 	if stopping or (command.boost and _stick_active):
 		fraction = 1.0
-	elif not _stick_active:
+	elif _auto_rotating:
 		# Auto-rotation: big torque requests make the allocator borrow the mains (off-centre)
 		# for turning, which spills force in the wrong direction.
 		fraction = auto_rotate_torque_fraction
 	var limit := state.max_torque * fraction
 	return torque.clamp(-limit, limit)
+
+
+## Time-optimal approach: the fastest rate from which the body can still brake to
+## rest exactly on target, ω = √(2·α·θ), with α the deceleration the torque limit
+## allows about the error axis. Linear near zero so it settles without chatter.
+func _braking_rate(state: FlightState, err: Vector3) -> Vector3:
+	var angle := err.length()
+	if angle < 1e-6:
+		return Vector3.ZERO
+	var axis := err / angle
+	var fraction := auto_rotate_torque_fraction if _auto_rotating else torque_fraction
+	var limit := state.max_torque * fraction
+	var per_alpha := (state.inertia_local * axis).abs()
+	var alpha := INF
+	for k in 3:
+		if per_alpha[k] > 1e-3:
+			alpha = minf(alpha, limit[k] / per_alpha[k])
+	if alpha == INF:
+		return err * attitude_gain
+	alpha *= braking_margin
+	var linear_zone := deg_to_rad(1.5)
+	var rate := sqrt(2.0 * alpha * maxf(angle, linear_zone))
+	if angle < linear_zone:
+		rate *= angle / linear_zone
+	return axis * rate
 
 
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:

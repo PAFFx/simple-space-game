@@ -143,6 +143,20 @@ changing thrusters. It's a pattern search warm-started from {current, zero, each
 F}, about a dozen cost evaluations per tick. The offset is hard-limited to `max_offset_deg` (70°)
 and slewed at `slew_rate_deg` after a short low-pass (`smoothing_time`).
 
+**Returning to rest.** When nothing needs the offset (no translation and no boost), the target
+jumps straight back to "aligned with the cockpit". The cockpit doesn't move, because it always holds
+the pilot frame, and the hold brings the body home **time-optimally**: it commands the fastest
+rate from which it can still brake exactly on target, `ω = √(2·α·θ)` (`_braking_rate`, α from the
+torque limit and inertia, `braking_margin` 0.5), tracked by a stiffer rate loop
+(`hold_rate_gain_multiplier` 5). Allocation uses `realign_torque_priority` 0.5 so the return doesn't
+borrow the mains while the suit is braking its velocity. Measured after boosted moves: back within
+2° in 1.1–1.9 s, overshoot ≤ 3.7° (previously 3–5 s with several corrections and up to 36°).
+
+**Steering mid-swing.** When the pilot starts steering during auto-rotation, the offset is re-based
+on the body's *actual* attitude (`pilot⁻¹ · body`), not its target, so the cockpit can't jump by the
+tracking lag. While holding (not steering), the gimbal compares the pilot frame with the body's
+predicted end-of-tick attitude, so the cockpit doesn't trail a turning body by one tick.
+
 **Keeping the pilot oriented.** The swing waits for the body: once the body lags the target by
 6° the slew slows, and at 15° it pauses (`tracking_lag_deg`). The solver's 60° limit sits below the
 seat gimbal's soft knee (62°, limit 75°), and past the knee the gimbal eases toward its limit
