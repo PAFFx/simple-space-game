@@ -139,14 +139,14 @@ def build_backpack(m, arm):
     bp.tbox((0, -2.4, 16.0), (2.2, 1.4), (2.6, 1.2), 3.2, "navy")
     bp.box((0, -3.12, 16.3), (1.4, 0.12, 1.8), "frame")
     for s in (1.0, -1.0):
-        # Twin pods, each carrying an upper (rearward) and lower (downward) main nozzle.
-        bp.cylinder((1.5 * s, -2.9, 16.0), 0.75, 3.4, "frame")
-        bp.box((1.5 * s, -3.1, 16.4), (1.3, 1.1, 2.4), "white")
-        bp.box((1.5 * s, -3.67, 16.4), (0.9, 0.06, 1.6), "navy")
-        bp.cylinder((1.5 * s, -3.65, 17.15), 0.55, 0.35, "dark", rot=(90, 0, 0))
-        bp.cylinder((1.5 * s, -2.9, 14.25), 0.6, 0.3, "dark")
-        bp.box((1.5 * s, -2.9, 17.75), (0.7, 0.7, 0.2), "dark")
-        bp.box((2.25 * s, -2.9, 16.0), (0.12, 0.8, 0.8), "dark")
+        # Twin pods reaching down to the waist; each ends in two downward main bells.
+        bp.cylinder((1.5 * s, -2.9, 15.35), 0.8, 4.5, "frame")
+        bp.box((1.5 * s, -3.1, 16.0), (1.35, 1.15, 3.0), "white")
+        bp.box((1.5 * s, -3.7, 16.0), (0.9, 0.06, 2.0), "navy")
+        bp.tbox((1.5 * s, -2.9, 13.35), (1.3, 1.2), (1.6, 1.5), 0.5, "navy")
+        for dx in (-0.35, 0.35):
+            bp.cylinder((1.5 * s + dx, -2.95, 12.95), 0.32, 0.4, "dark", rot=(-25, 0, 0))
+        bp.box((2.32 * s, -2.9, 16.0), (0.12, 0.8, 0.8), "dark")
     bp.to_object(armature=arm, bone="backpack", bevel=0.04)
 
 

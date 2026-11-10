@@ -14,7 +14,7 @@ const SCENE_PATH := DIR + "mobile_suit_msp02.tscn"
 const ANIM_PATH := DIR + "Animations/msp02_animations.tres"
 const MODEL := DIR + "Arts/mobile_suit_msp02.glb"
 const SKELETON := ^"Model/Armature/Skeleton3D"
-const COM := Vector3(0.0, 14.6, 0.2)
+const COM := Vector3(0.0, 14.8, 0.7)
 const SENSOR_SCENE := \
 		"res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn"
 const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat.tscn"
@@ -22,15 +22,18 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 
 # name, bone, position, exhaust direction, thrust kN, gimbal deg, plume m, nozzle scale
 # Main thrust follows the published late-UC ratio: 4 × 18,300 kgf + 2 × 12,300 kgf.
+# Backpack mains fire down and 25° back from the bottom of the pods (below the COM), so
+# gimballing forward swings their thrust line through the centre of mass.
+const MAIN_EXHAUST := Vector3(0.0, -0.906, 0.423)
 const THRUSTERS := [
-	["MainUR", "backpack", Vector3(1.5, 17.15, 3.75), Vector3.INF, 179.5, 12.0, 11.0, 1.3],
-	["MainUL", "backpack", Vector3(-1.5, 17.15, 3.75), Vector3.INF, 179.5, 12.0, 11.0, 1.3],
-	["MainLR", "backpack", Vector3(1.5, 14.1, 2.9), Vector3.INF, 179.5, 15.0, 11.0, 1.3],
-	["MainLL", "backpack", Vector3(-1.5, 14.1, 2.9), Vector3.INF, 179.5, 15.0, 11.0, 1.3],
+	["MainRI", "backpack", Vector3(1.15, 12.8, 3.0), MAIN_EXHAUST, 179.5, 28.0, 11.0, 1.1],
+	["MainRO", "backpack", Vector3(1.85, 12.8, 3.0), MAIN_EXHAUST, 179.5, 28.0, 11.0, 1.1],
+	["MainLI", "backpack", Vector3(-1.15, 12.8, 3.0), MAIN_EXHAUST, 179.5, 28.0, 11.0, 1.1],
+	["MainLO", "backpack", Vector3(-1.85, 12.8, 3.0), MAIN_EXHAUST, 179.5, 28.0, 11.0, 1.1],
 	["LegR", "shin.R", Vector3(1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 120.6, 20.0, 8.0, 1.0],
 	["LegL", "shin.L", Vector3(-1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 120.6, 20.0, 8.0, 1.0],
-	["ShTopR", "shoulder.R", Vector3(4.1, 19.2, 0.3), Vector3(0, 1, 0), 25.0, 30.0, 3.5, 0.55],
-	["ShTopL", "shoulder.L", Vector3(-4.1, 19.2, 0.3), Vector3(0, 1, 0), 25.0, 30.0, 3.5, 0.55],
+	["ShTopR", "shoulder.R", Vector3(4.1, 19.2, 0.3), Vector3(0, 1, 0), 35.0, 30.0, 3.5, 0.6],
+	["ShTopL", "shoulder.L", Vector3(-4.1, 19.2, 0.3), Vector3(0, 1, 0), 35.0, 30.0, 3.5, 0.6],
 	["ShFrontR", "shoulder.R", Vector3(4.1, 17.7, -1.62), Vector3(0, 0, -1), 30.0, 25.0, 3.5, 0.55],
 	["ShFrontL", "shoulder.L", Vector3(-4.1, 17.7, -1.62), Vector3(0, 0, -1), 30.0, 25.0, 3.5, 0.55],
 	["ShRearR", "shoulder.R", Vector3(4.1, 18.1, 1.65), Vector3(0, 0, 1), 25.0, 25.0, 3.5, 0.55],
@@ -49,14 +52,12 @@ const THRUSTERS := [
 	["SkRearL", "skirt_rear.L", Vector3(-1.0, 11.6, 1.8), Vector3(0, -0.5, 1), 30.0, 30.0, 3.5, 0.55],
 	["FootR", "foot.R", Vector3(1.5, 0.0, -0.4), Vector3(0, -1, 0), 30.0, 25.0, 3.5, 0.6],
 	["FootL", "foot.L", Vector3(-1.5, 0.0, -0.4), Vector3(0, -1, 0), 30.0, 25.0, 3.5, 0.6],
-	["BpTopR", "backpack", Vector3(1.5, 17.85, 2.9), Vector3(0, 1, 0), 20.0, 30.0, 3.0, 0.5],
-	["BpTopL", "backpack", Vector3(-1.5, 17.85, 2.9), Vector3(0, 1, 0), 20.0, 30.0, 3.0, 0.5],
 ]
 
 # name, center, size
 const COLLIDERS := [
 	["Torso", Vector3(0, 16.2, -0.4), Vector3(5.8, 4.3, 4.4)],
-	["Backpack", Vector3(0, 16.0, 2.9), Vector3(4.0, 3.4, 1.8)],
+	["Backpack", Vector3(0, 15.3, 2.9), Vector3(4.2, 5.0, 1.8)],
 	["Head", Vector3(0, 19.9, -0.45), Vector3(1.4, 1.8, 1.7)],
 	["Pelvis", Vector3(0, 12.6, -0.1), Vector3(3.2, 3.0, 2.8)],
 	["ShoulderR", Vector3(4.1, 18.0, 0), Vector3(2.4, 2.4, 3.0)],
@@ -194,11 +195,7 @@ func _build_thrusters(root: Node3D) -> void:
 			_add(root, group, attach)
 			attachments[bone] = attach
 		var pos: Vector3 = t[2]
-		var exhaust: Vector3 = t[3]
-		if exhaust == Vector3.INF:
-			# Mains: thrust line through the centre of mass, so they push without pitching.
-			exhaust = pos - COM
-		exhaust = exhaust.normalized()
+		var exhaust: Vector3 = (t[3] as Vector3).normalized()
 		var up := Vector3.UP if absf(exhaust.dot(Vector3.UP)) < 0.95 else Vector3.BACK
 		# Thruster −Z = thrust direction = opposite of the exhaust.
 		var body_xf := Transform3D(Basis.looking_at(-exhaust, up), pos)
