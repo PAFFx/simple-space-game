@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Simple Space Game"
-run/main_scene="uid://bl3dngc2rlk2o"
+run/main_scene="res://Stages/MobileSuitTestRange/mobile_suit_test_range.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 
