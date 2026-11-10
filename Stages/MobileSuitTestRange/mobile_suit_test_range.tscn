@@ -1,0 +1,64 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Texture2D" uid="uid://dbcbf6arlfvjk" path="res://Stages/LowEarthOrbit/Arts/RenderCrate-HDRI_Orbital_38_4K.hdr" id="1_hdri"]
+[ext_resource type="PackedScene" uid="uid://box0jmso40n32" path="res://Entities/Environment/Space/SpaceStation/scifi_space_station.tscn" id="2_station"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/MobileSuits/Prototype/mobile_suit_prototype.tscn" id="3_ms"]
+[ext_resource type="Script" path="res://Entities/Environment/Space/DebrisField/debris_field.gd" id="4_debris"]
+[ext_resource type="PackedScene" path="res://Entities/Environment/Space/NavBuoy/nav_buoy.tscn" id="5_buoy"]
+
+[sub_resource type="PanoramaSkyMaterial" id="Sky_material"]
+panorama = ExtResource("1_hdri")
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("Sky_material")
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 2
+sky = SubResource("Sky_main")
+tonemap_mode = 4
+tonemap_white = 1.15
+ssao_enabled = true
+glow_enabled = true
+adjustment_enabled = true
+adjustment_brightness = 1.1
+adjustment_contrast = 1.1
+adjustment_saturation = 1.2
+
+[node name="MobileSuitTestRange" type="Node3D"]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.9538638, 1.3123892e-08, -0.30023968, 0.28622365, 0.3019705, 0.9093347, 0.09066355, -0.95331717, 0.28803876, 0, 0, 0)
+shadow_enabled = true
+sky_mode = 1
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+
+[node name="ScifiSpaceStation" parent="." groups=["hud_contacts"] instance=ExtResource("2_station")]
+transform = Transform3D(0.8140951, -0.2739733, 0.5120429, 0.31895933, 0.9477684, 0, -0.48529807, 0.16332085, 0.8589599, -210, -100, 420.5)
+metadata/hud_label = "Station"
+metadata/hud_radius = 60.0
+
+[node name="MobileSuitPrototype" parent="." instance=ExtResource("3_ms")]
+transform = Transform3D(-0.9975871, 0, 0.06942561, 0, 1, 0, -0.06942561, 0, -0.9975871, -187.36398, -81.836815, 162.16248)
+
+[node name="FlightComputer" parent="MobileSuitPrototype" node_paths=PackedStringArray("reference_frame")]
+reference_frame = NodePath("../../ScifiSpaceStation")
+
+[node name="DebrisField" type="MultiMeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -187.36398, -70, 162.16248)
+script = ExtResource("4_debris")
+
+[node name="BuoyAlpha" parent="." instance=ExtResource("5_buoy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -167.8, -66.8, 311.8)
+label = "Buoy A"
+
+[node name="BuoyBravo" parent="." instance=ExtResource("5_buoy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -486.6, -121.8, 141.3)
+label = "Buoy B"
+beacon_color = Color(0.3, 1, 0.4, 1)
+
+[node name="BuoyCharlie" parent="." instance=ExtResource("5_buoy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 67.6, -1.8, -622)
+label = "Buoy C"
+beacon_color = Color(0.3, 0.6, 1, 1)
