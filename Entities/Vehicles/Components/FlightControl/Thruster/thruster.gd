@@ -15,7 +15,9 @@ extends Node3D
 @export var gimbal_rate_deg: float = 120.0        ## Max gimbal slew, deg/s
 @export var spool_up_time: float = 0.25           ## Throttle time constant rising, s
 @export var spool_down_time: float = 0.12         ## Throttle time constant falling, s
-@export_range(0.0, 0.2) var min_throttle: float = 0.02   ## Below this the thruster cuts off
+## Below this the thruster cuts off. Keep small: coarse cut-offs break the
+## allocator's balancing of opposing thrusters and cause drift.
+@export_range(0.0, 0.2) var min_throttle: float = 0.002
 @export var enabled: bool = true
 ## Short name shown on the HUD thruster page. Empty = node name.
 @export var hud_label: String = ""

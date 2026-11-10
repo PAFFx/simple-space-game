@@ -20,14 +20,14 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Max commanded rate at full stick (pitch, yaw, roll), deg/s.
 @export var max_rate_deg := Vector3(40.0, 35.0, 60.0)
 ## Rate loop bandwidth, 1/s. Higher = snappier, more thruster chatter.
-@export var rate_gain: float = 3.0
+@export var rate_gain: float = 2.5
 ## Attitude loop gain, (rad/s) per rad of error.
 @export var attitude_gain: float = 1.2
 ## Attitude is captured once the body rate drops below this, deg/s.
 @export var hold_capture_rate_deg: float = 2.0
 @export var stick_deadzone: float = 0.04
 ## Fraction of torque authority the FCS may request.
-@export_range(0.0, 1.0) var torque_fraction: float = 0.8
+@export_range(0.0, 1.0) var torque_fraction: float = 0.6
 
 @export_group("Translation")
 @export_range(0.0, 1.0) var cruise_thrust_fraction: float = 0.5

@@ -19,6 +19,11 @@ extends ThrustAllocator
 ## Small propellant-use penalty λ.
 @export var fuel_weight: float = 0.01
 
+## Fraction of last tick's solution kept as the starting guess. <1 bleeds off
+## thruster pairs that cancel each other out, which pure residual minimisation
+## never removes.
+@export_range(0.0, 1.0) var warm_start_decay: float = 0.85
+
 var _u := PackedVector3Array()
 
 
@@ -48,7 +53,9 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 	var step := 1.0 / lipschitz
 
 	var u := _u
-	var y := _u.duplicate()
+	for i in n:
+		u[i] *= warm_start_decay
+	var y := u.duplicate()
 	var momentum := 1.0
 	for _k in iterations:
 		var force := Vector3.ZERO
