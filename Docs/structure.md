@@ -25,6 +25,11 @@ simple-space-game/
 │   ├── Characters/
 │   │   └── AmateYuzuriha/         Pilot character model
 │   │
+│   ├── Equipment/                 Suit equipment, modelled and stored separately from suits
+│   │   ├── Components/            MsEquipment base (mount, mass, pose, AMBAC group, input)
+│   │   ├── BeamRifle/             Beam rifle scene + GLB
+│   │   └── Shield/                Shield scene + GLB + HudSilhouette outline
+│   │
 │   ├── Environment/
 │   │   └── Space/
 │   │       ├── SpaceStation/      Space station with constant rotation components
@@ -33,7 +38,10 @@ simple-space-game/
 │   │
 │   └── Vehicles/
 │       ├── Components/            Vehicle-level components shared across vehicle types
-│       │   ├── FlightControl/     FlightComputer, Thruster, ControlLaws/, Allocators/
+│       │   ├── FlightControl/     FlightComputer, Thruster, ControlLaws/, Allocators/, AttitudeSolvers/
+│       │   ├── Ambac/             AMBAC limb balancing (controller, joints, skeleton modifier)
+│       │   ├── Loadout/           MsLoadout: mounts equipment on bones, toggles it
+│       │   ├── PoseAnimator/      AnimationTree with per-limb equipment pose layers
 │       │   ├── Hatch/             CockpitHatch + HatchPanel (bone-driven, sequences screen aperture)
 │       │   └── ViewSwitcher/      Cockpit ↔ external camera toggle
 │       ├── Cockpits/              All cockpit interiors
@@ -49,7 +57,9 @@ simple-space-game/
 │       │   │   │   │   └── panoramic_mesh_builder.gd  Sphere mesh generation
 │       │   │   │   └── Shader/
 │       │   │   │       └── panoramic_screen.gdshader  Reprojection + HUD composite + aperture
-│       │   │   ├── PanoramicHud/  Equirectangular HUD canvas + HudWidget instruments
+│       │   │   ├── PanoramicHud/  Equirectangular HUD canvas + HudWidget instruments + HudSilhouette
+│       │   │   ├── SeatGimbal/    CockpitGimbal: keeps the cockpit on the pilot frame
+│       │   │   ├── SeatDampener/  Linear seat suspension + G compensation
 │       │   │   └── ControlsAnimator/  Grips/pedals follow the PilotCommand
 │       │   │
 │       │   ├── CockpitLinearSeat/ Late-UC linear seat cockpit (extends CockpitBase)
@@ -59,6 +69,8 @@ simple-space-game/
 │       │       └── Arts/              Cockpit GLB import
 │       │
 │       └── MobileSuits/           All mobile suit vehicles
+│           ├── Common/            MobileSuitBody: generic RigidBody suit root
+│           ├── MSP02/             MSP-02 late-UC suit (generated scene, animations, GLB)
 │           ├── Prototype/         MSP-01 prototype: RigidBody root, thrusters on bones, FCS, hatch
 │           └── RX0/               RX-0 Full Armor Unicorn Gundam
 │               ├── mobile_suit_rx_0.gd    extends VehicleBase
@@ -66,7 +78,7 @@ simple-space-game/
 │               └── Arts/                  Mech GLB import
 │
 ├── Stages/                        Playable levels / scenes
-│   ├── MobileSuitTestRange/       Main stage: prototype suit, station, buoys, debris field
+│   ├── MobileSuitTestRange/       Main stage: MSP-02, station, buoys, debris field
 │   └── LowEarthOrbit/
 │       └── low_earth_orbit.tscn   Original RX-0 panoramic display stage
 │
@@ -77,7 +89,8 @@ simple-space-game/
 │   └── PanoramicCockpit/          Deep-dive docs for the panoramic display system + HUD
 │
 ├── Tools/                         Non-Godot tooling (ignored by Godot via .gdignore)
-│   └── Blender/                   Procedural model build scripts
+│   ├── Blender/                   Procedural model build scripts
+│   └── Godot/                     Scene generators (MSP-02 scene + animation library)
 │
 └── addons/                        Editor plugins (gdshader, plugin_refresher, gdLinter)
 ```

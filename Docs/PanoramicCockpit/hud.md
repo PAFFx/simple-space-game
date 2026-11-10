@@ -8,11 +8,12 @@ display, visible from any seat position and from outside through the open hatch.
 ```
 PanoramicHud (Node)
 └── HudViewport (SubViewport, 4096×2048, transparent)   ← equirectangular canvas
-    ├── Attitude        horizon ring (360°, heading marks) + pitch ladder
-    ├── Boresight       fixed reticle on the body axis
+    ├── Silhouettes     outlines of nearby HudSilhouette nodes (e.g. the shield)
+    ├── Attitude        horizon ring (360°, heading marks) + pitch ladder, in the cockpit frame
+    ├── Boresight       body-axis reticle (rolls with the body) + cockpit-centre mark + VEC angle
     ├── FlightPath      prograde / retrograde markers + speed
-    ├── FlightData      SPD / ACC / ROT, PROP / THR bars, FCS modes, cautions
-    ├── ThrusterStatus  per-thruster throttle bar + gimbal dot
+    ├── FlightData      SPD / G MS / G PLT / ROT / AMBAC, PROP / THR bars, FCS modes, cautions
+    ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
     └── Contacts        brackets for nodes in group `hud_contacts`
 ```
 
@@ -25,6 +26,11 @@ hud_uv = (fract(UV2.x + 0.5), 1 − UV2.y)     forward = canvas centre, wraps at
 
 So anything drawn at a direction lines up with the sensor image of that direction, with no
 extra projection.
+
+The canvas is laid out in the **display frame**, the screen's own orientation
+(`hud.get_display_basis()`, `hud.world_to_display()`). It differs from the suit's body when the
+cockpit gimbal turns the seat for thrust vectoring. That's why the boresight (body axis) can move
+away from the canvas centre (cockpit forward).
 
 ### Writing a widget
 
@@ -39,6 +45,20 @@ Data sources: `hud.flight_computer` (state, thrusters, modes, propellant), `hud.
 `hud.sensor_head`.
 
 Contacts: add any `Node3D` to group `hud_contacts`; optional metadata `hud_label` and `hud_radius`.
+
+Silhouettes: add a `HudSilhouette` (outline points in its local space) to anything the pilot should
+see "through". The sensor never renders the suit or its equipment, so the shield appears only as its
+outline, like an integrated shield camera.
+
+## Linear seat: gimbal and G dampening
+
+- `CockpitGimbal` rotates the whole cockpit by `offset⁻¹`, so the pilot keeps facing the pilot
+  frame while the body turns, up to 70°. Commanded rotations move the pilot frame, so the cockpit
+  turns with the suit for those.
+- `SeatDampener` models the seat suspension (spring-damper, 14 rad/s, ζ 0.8, ±0.15 m travel) plus
+  an active inertial compensator that cancels 55% of what's left. `G MS` is the suit, `G PLT` is
+  what the pilot feels; a boosted 3 G burn reads about 1.4 G at the seat. The camera sways with the
+  seat travel. `HIGH G` caution above 6 G at the seat.
 
 Canvas resolution is ~11.4 px/degree. Raise `canvas_size` for sharper text, at the cost of memory.
 

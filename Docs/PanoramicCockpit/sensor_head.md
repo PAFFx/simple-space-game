@@ -163,7 +163,7 @@ For each of 9 frustum sample points, cast a ray from the viewer through the sphe
 the sensor basis (the same mapping the shader uses):
 
 ```
-panoramic_dir = sensor_basis * normalize(P_screen_local)
+panoramic_dir = display_basis * normalize(P_screen_local)
 ```
 
 Decompose it into the sensor camera's local horizontal and vertical planes to get separate
@@ -258,7 +258,11 @@ The function returns `t1` — the hit on the sphere wall in front of the viewer.
 
 ---
 
-## `get_sensor_basis()` — The Fixed Orientation Rule
+## `get_sensor_basis()` — The Fixed Orientation Rule (historical)
+
+> The shader now maps through `PanoramicScreen.get_display_basis()` (the screen's own
+> orientation) instead, so the cockpit can rotate relative to the sensor. The reasoning below
+> still applies: the mapping must never use the sensor camera's tracking rotation.
 
 ```gdscript
 func get_sensor_basis() -> Basis:

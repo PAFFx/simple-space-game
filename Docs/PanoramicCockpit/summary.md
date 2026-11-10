@@ -156,15 +156,17 @@ _process() on PanoramicScreen
         sensor_viewport   ← SubViewport texture
         sensor_view_proj  ← Camera3D projection × view matrix
         sensor_world_pos  ← Camera3D.transform.origin
-        sensor_basis      ← SensorHead.global_transform.basis  ← FIXED orientation
+        display_basis     ← PanoramicScreen.global_basis  ← the screen's own orientation
 ```
 
 ---
 
-## The `sensor_basis` Critical Detail
+## The `display_basis` Critical Detail
 
-`sensor_basis` is **SensorHead's own fixed orientation** (`global_transform.basis`), **not** the
-sensor camera's tracking rotation.
+`display_basis` is **the screen's own orientation** (`PanoramicScreen.get_display_basis()`),
+**not** the sensor camera's tracking rotation, and not the sensor head's either. A screen-local
+direction `d` shows the world in direction `display_basis * d`, so the picture stays true when the
+linear seat cockpit (and its screen) rotates inside the hull (see `CockpitGimbal`).
 
 If the camera's rotating basis were used instead:
 - Shader computes `world_dir = camera_rotation * local_dir`
@@ -172,8 +174,9 @@ If the camera's rotating basis were used instead:
 - The rotations cancel → `clip` is always the same regardless of look direction
 - Screen content never moves
 
-The panoramic coordinate system is fixed to the mech body. Azimuth = 0 always maps to the mech's
-forward direction (`-SensorHead.global_basis.z`). The camera rotates to track the viewer while the
+The panoramic coordinate system is fixed to the cockpit. Azimuth = 0 always maps to the cockpit's
+forward direction (`-PanoramicScreen.global_basis.z`), which equals the suit's forward unless the
+FCS has turned the body for thrust vectoring. The camera rotates to track the viewer while the
 panoramic directions stay anchored to the world.
 
 ---

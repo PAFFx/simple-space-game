@@ -5,8 +5,10 @@
 Every physics tick the `FlightComputer` runs one pass:
 
 ```
-PilotInputSource ──PilotCommand──▶ ControlLaw ──Wrench──▶ ThrustAllocator ──u[i]──▶ Thruster × N ──apply_force──▶ RigidBody3D
- (keyboard/HOTAS/AI)  intent        (FBW logic)  F, τ      (pure math)       per-thruster  (gimbal + spool lag)
+PilotInputSource ──PilotCommand──▶ ControlLaw ──Wrench──▶ AmbacController ──τ_ambac──▶ apply_torque
+ (keyboard/HOTAS/AI)  intent        (FBW logic,   F, τ     (limb balancing)
+                                    pilot frame,      │
+                                    AttitudeOffsetSolver)  └── F, τ − τ_ambac ──▶ ThrustAllocator ──u[i]──▶ Thruster × N ──▶ RigidBody3D
 ```
 
 | Stage | Base class | Implementations | How to swap |
@@ -14,6 +16,8 @@ PilotInputSource ──PilotCommand──▶ ControlLaw ──Wrench──▶ Th
 | Input | `PilotInputSource` (Node) | `KeyboardPilotInput`, `HotasPilotInput` | Replace the `PilotInput` child of `FlightComputer` |
 | Control law | `ControlLaw` (Resource) | `RateCommandControlLaw` (FBW), `DirectControlLaw` | Inspector dropdown on `FlightComputer.control_law`, or `set_control_law()` |
 | Allocator | `ThrustAllocator` (Resource) | `ConeProjectedAllocator`, `GreedyAllocator` | Inspector dropdown on `FlightComputer.allocator`, or `set_allocator()` |
+| Auto-rotation | `AttitudeOffsetSolver` (Resource) | `ThrustVectoringAttitudeSolver` | `RateCommandControlLaw.attitude_solver` (empty = body stays aligned) |
+| Limb balancing | `AmbacController` (Node) | — | Add/remove the node; `FlightComputer.ambac` (auto-discovered) |
 | Actuator | `Thruster` (Node3D scene) | — | Add/remove/move `thruster.tscn` instances anywhere under the body |
 
 Control laws and allocators are duplicated by the `FlightComputer`, so vehicles sharing a `.tres`
@@ -39,6 +43,12 @@ Entities/Vehicles/Components/FlightControl/
   Thruster/                 Gimballed thruster component + scene
   ControlLaws/              ControlLaw base + implementations
   Allocators/               ThrustAllocator base + implementations
+  AttitudeSolvers/          AttitudeOffsetSolver base + ThrustVectoringAttitudeSolver
+
+Entities/Vehicles/Components/Ambac/
+  ambac_joint.gd            One limb DOF: bone, axis, inertia, limits, priority, group
+  ambac_controller.gd       Weighted allocation + centering spring, returns achieved torque
+  ambac_modifier.gd         SkeletonModifier3D: applies the limb offsets after animation
 ```
 
 ---
@@ -63,14 +73,59 @@ Entities/Vehicles/Components/FlightControl/
 
 ### `RateCommandControlLaw` (default FBW)
 
+Everything is commanded in the **pilot frame**: the orientation the linear seat cockpit holds.
+The body is driven to `pilot · offset`, where the offset comes from the attitude solver.
+
 | Axis | Mode | Stick means | Stick released |
 |------|------|-------------|----------------|
-| Rotation | `ATTITUDE_HOLD` (default) | Angular rate demand (`max_rate_deg`) | Rate → 0, then attitude captured and held |
-| Rotation | `RATE_DAMP` | Angular rate demand | Rate → 0, no attitude hold |
-| Translation | `NEWTONIAN` (default) | Thrust demand (cruise fraction, or 100% with boost) | Coast — Newtonian |
-| Translation | `VELOCITY_HOLD` | Velocity demand in body frame (`max_command_speed`) | Brought to rest relative to the reference frame |
+| Rotation | `ATTITUDE_HOLD` (default) | Rate of the pilot frame (`max_rate_deg`) | Rate damps out, then the attitude is locked and held |
+| Rotation | `RATE_DAMP` | Angular rate demand | Rate → 0, no hold, no auto-rotation |
+| Translation | `VELOCITY_HOLD` (default) | Velocity in the pilot frame (`max_command_speed`) | Brought to rest relative to the reference frame |
+| Translation | `NEWTONIAN` | Thrust demand (cruise fraction, or 100% with boost) | Coast |
 
 Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
+
+**Boost** (Shift): 100% thrust and torque authority, rates × `boost_rate_multiplier` (1.7), rate
+loop × 1.5, commanded speed × 2.
+
+### Auto-rotation (`ThrustVectoringAttitudeSolver`)
+
+Thrusters are not equal: the backpack mains dwarf the verniers, so the suit is strong forward and
+weak sideways or backwards. Instead of thrusting "like a shuttle", the solver turns the body so the
+strong thrusters face the force demand. It minimises over pitch/yaw offsets `r`:
+
+```
+J(r) = (|F| / capability(R⁻¹F))²  +  angle_weight · (|r| / 70°)²  +  smooth_weight · |r − r_prev|²
+```
+
+`capability()` is the body's directional authority (`FlightState.force_capability`, an ellipsoid
+through the six per-axis limits). Small demands cost nothing, so the suit only turns when a demand
+is hard to meet. It's a pattern search warm-started from {current, zero, each body axis aimed at
+F}, about a dozen cost evaluations per tick. The offset is hard-limited to `max_offset_deg` (70°)
+and slewed at `slew_rate_deg`.
+
+- Commanded rotations move the pilot frame itself, so they never produce an offset.
+- The cockpit counter-rotates by the offset (`CockpitGimbal`), and the HUD body reticle slides
+  off the cockpit centre to show it.
+- While the hatch is unsealed the offset is forced to zero (`FlightState.allow_attitude_offset`), so
+  the cockpit lines up with the hull opening.
+
+---
+
+## AMBAC
+
+Limbs act as reaction wheels: accelerating a limb by `α` about axis `a` pushes the body with
+`−J·α·a`. Each tick the `AmbacController` is offered `share` (30%) of the FBW torque demand:
+
+1. Weighted least squares: `α_i = −w_i J_i a_i·λ`, `M λ = τ_request`, `M = Σ w_i J_i² a_i a_iᵀ + εI`.
+   `w_i` = joint priority (legs 1.0, waist 0.8, arms 0.6), zero for groups occupied by active
+   equipment (rifle raised → right arm, shield guard → left arm).
+2. Each joint backs off as it nears its stop, and a centering spring pulls it back to neutral.
+3. The **achieved** reaction torque is applied to the body; the thrusters get `τ − τ_ambac`.
+
+Limbs can't make sustained torque, so AMBAC mostly trims and smooths. The thrusters do the heavy
+lifting and also pay back the centering. Typical swing during a pitch command: arms ±6°, legs ±11°,
+about 120 kN·m.
 
 ### `DirectControlLaw`
 
@@ -108,15 +163,17 @@ Intentionally crude (it undershoots and cross-couples), kept for comparison and 
 | Action | Key |
 |--------|-----|
 | Translate fwd / back / left / right | W / S / A / D |
-| Translate up / down | R or Space / F |
+| Translate up / down | Space or R / Ctrl or F |
 | Pitch down / up | ↑ / ↓ (stick-forward convention) |
 | Yaw left / right | ← / → |
 | Roll left / right | Q / E |
 | Boost (full thrust) | Shift |
-| Translation mode (NEWTON ↔ V-HOLD) | T |
+| Translation mode (V-HOLD ↔ NEWTON) | T |
 | Rotation mode (ATT-HOLD ↔ RATE) | G |
 | Hatch open / close | H |
 | Cockpit / external view | V |
+| Rifle ready / lower | 1 |
+| Shield guard / lower | 2 |
 | Look around | Mouse |
 
 Defaults are registered only for actions missing from the InputMap, so bindings set in
@@ -134,7 +191,20 @@ bindings, then enable `joystick_enabled`.
 
 ---
 
-## Tuning reference (prototype suit)
+## Tuning reference (MSP-02)
+
+- 30 t dry + 10 t propellant + 6.4 t equipment ≈ 46 t. Main thrust follows the published late-UC
+  split: 4 × 179.5 kN backpack mains + 2 × 120.6 kN leg mains (97,800 kgf), plus 20 verniers of
+  20–35 kN. Mains' thrust lines pass near the centre of mass.
+- Authority is deliberately anisotropic: ≈ 1.7 g forward vs ≈ 0.4 g back and ≈ 0.2 g sideways,
+  which is what makes auto-rotation worthwhile.
+- Verified headless:
+  - boosted strafe: the suit yaws to the 70° limit and reaches 45 m/s in 3.5 s at ~1.9 G (pilot ~0.85 G)
+  - release: it swings the other way to brake and comes to rest with the offset back at 0°
+  - reverse and up both pitch the suit 70° to bring the mains to bear
+  - yaw and pitch reach their commanded rates and stop without pulling back
+
+## Tuning reference (MSP-01 prototype)
 
 - Mass 36 t dry + 9 t propellant, Isp 3000 s, ~2.6 MN total thrust across 10 thrusters.
 - Forward authority ≈ 1.58 MN (≈ 3.5 g full, ≈ 1.8 g cruise). Braking is much weaker (≈ 0.42 MN):
