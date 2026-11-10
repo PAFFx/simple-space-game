@@ -9,8 +9,13 @@ extends Resource
 
 ## Hard limit on the body ↔ pilot frame angle.
 @export var max_offset_deg: float = 70.0
+## Per-axis limits of the offset (pitch, yaw, roll), deg. Yaw is kept tiny so the
+## suit never swings sideways under the pilot; sideways moves are done by rolling.
+@export var axis_limit_deg := Vector3(70.0, 3.0, 70.0)
 ## How fast the offset may change, deg/s.
-@export var slew_rate_deg: float = 50.0
+@export var slew_rate_deg: float = 30.0
+## Low-pass on the solver's target, s. Smooths starting and stopping a swing.
+@export var smoothing_time: float = 0.35
 
 
 ## Override: target offset (body = pilot · offset) for a force demand given in the

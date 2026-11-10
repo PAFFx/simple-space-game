@@ -23,6 +23,8 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var rotation_mode: RotationMode = RotationMode.ATTITUDE_HOLD
 ## Auto-rotation for thrust vectoring (ATTITUDE_HOLD only). Empty = body stays aligned.
 @export var attitude_solver: AttitudeOffsetSolver
+## Only auto-rotate while boosting; otherwise the body stays aligned with the cockpit.
+@export var auto_rotate_on_boost_only: bool = true
 
 @export_group("Rotation")
 ## Max commanded rate at full stick (pitch, yaw, roll), deg/s.
@@ -55,6 +57,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 var _initialized := false
 var _pilot := Quaternion.IDENTITY    ## Pilot frame orientation (global)
 var _offset := Quaternion.IDENTITY   ## Body relative to pilot frame
+var _offset_target := Quaternion.IDENTITY
 var _stick_active := false
 var _capturing := false
 
@@ -67,7 +70,7 @@ func get_pilot_offset() -> Quaternion:
 	return _offset
 
 
-func get_pilot_orientation() -> Quaternion:
+func get_pilot_orientation() -> Variant:
 	return _pilot
 
 
@@ -84,7 +87,7 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_pilot = body_q * _offset.inverse()
 
 	var force_world := _translation_force_world(state, command)
-	_update_offset(state, force_world)
+	_update_offset(state, force_world, command)
 	var torque := _rotation_torque(state, command, body_q)
 	var fraction := 1.0 if command.boost else cruise_thrust_fraction
 	var force_body := clamp_to_capability(state.to_local(force_world), state, fraction)
@@ -106,14 +109,22 @@ func is_holding_attitude() -> bool:
 	return rotation_mode == RotationMode.ATTITUDE_HOLD and not _stick_active and not _capturing
 
 
-func _update_offset(state: FlightState, force_world: Vector3) -> void:
+func _update_offset(state: FlightState, force_world: Vector3, command: PilotCommand) -> void:
 	var target := Quaternion.IDENTITY
 	var slew := deg_to_rad(60.0)
+	var smoothing := 0.0
 	if attitude_solver != null:
 		slew = deg_to_rad(attitude_solver.slew_rate_deg)
-		if rotation_mode == RotationMode.ATTITUDE_HOLD and state.allow_attitude_offset:
+		smoothing = attitude_solver.smoothing_time
+		var engaged := rotation_mode == RotationMode.ATTITUDE_HOLD and state.allow_attitude_offset \
+				and (command.boost or not auto_rotate_on_boost_only)
+		if engaged:
 			var force_pilot := _pilot.inverse() * force_world
 			target = attitude_solver.solve(state, force_pilot, _offset)
+	# Low-pass the target first so the body eases into (and out of) a new attitude.
+	if smoothing > 0.0:
+		_offset_target = _offset_target.slerp(target, 1.0 - exp(-state.delta / smoothing))
+		target = _offset_target
 	var angle := _offset.angle_to(target)
 	if angle > 1e-5:
 		_offset = _offset.slerp(target, minf(1.0, slew * state.delta / angle)).normalized()
