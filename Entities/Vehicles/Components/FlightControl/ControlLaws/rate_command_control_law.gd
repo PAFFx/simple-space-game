@@ -48,7 +48,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## rotate faster (big turning moments otherwise borrow the off-centre mains).
 @export var auto_rotate_torque_priority: float = 0.5
 ## On stick release: rate-loop gain multiplier and full torque, so rotation stops at once.
-@export var stop_gain_multiplier: float = 2.0
+@export var stop_gain_multiplier: float = 4.0
 
 @export_group("Boost")
 ## While boosting: rate limits are multiplied by this, and torque/thrust limits open fully.
@@ -76,6 +76,8 @@ var _prev_target := Quaternion.IDENTITY
 var _has_prev_target := false
 var _stick_active := false
 var _capturing := false
+var _raw_torque := Vector3.ZERO
+var _torque_limit := Vector3.INF
 
 
 func reset() -> void:
@@ -108,6 +110,8 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	var torque := _rotation_torque(state, command, body_q)
 	var force_body := clamp_to_capability(state.to_local(force_world), state, 1.0)
 	var wrench := Wrench.new(force_body, torque)
+	wrench.raw_torque = _raw_torque
+	wrench.torque_limit = _torque_limit
 	if not _stick_active and not _capturing:
 		wrench.torque_priority = auto_rotate_torque_priority
 	return wrench
@@ -122,6 +126,10 @@ func get_mode_labels() -> PackedStringArray:
 	if attitude_solver != null and rotation_mode == RotationMode.ATTITUDE_HOLD:
 		labels.append("VECTOR %02d°" % roundi(rad_to_deg(_offset.get_angle())))
 	return labels
+
+
+func is_stopping_rotation() -> bool:
+	return _capturing and not _stick_active
 
 
 func is_holding_attitude() -> bool:
@@ -213,8 +221,9 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		# Auto-rotation: big torque requests make the allocator borrow the mains (off-centre)
 		# for turning, which spills force in the wrong direction.
 		fraction = auto_rotate_torque_fraction
-	var limit := state.max_torque * fraction
-	return torque.clamp(-limit, limit)
+	_torque_limit = state.max_torque * fraction
+	_raw_torque = torque
+	return torque.clamp(-_torque_limit, _torque_limit)
 
 
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
