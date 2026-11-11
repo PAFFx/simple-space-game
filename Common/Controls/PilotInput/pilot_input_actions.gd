@@ -19,6 +19,9 @@ const ROLL_RIGHT := &"ms_roll_right"
 const BOOST := &"ms_boost"
 const TOGGLE_TRANSLATION_MODE := &"ms_toggle_translation_mode"
 const TOGGLE_ROTATION_MODE := &"ms_toggle_rotation_mode"
+const TOGGLE_PRECISION := &"ms_toggle_precision"
+## Hold to steer pitch/yaw with the mouse (otherwise the mouse looks around).
+const MOUSE_STEER := &"ms_mouse_steer"
 const TOGGLE_HATCH := &"ms_toggle_hatch"
 const TOGGLE_VIEW := &"ms_toggle_view"
 const TOGGLE_RIFLE := &"ms_toggle_rifle"
@@ -43,10 +46,15 @@ const _DEFAULTS := {
 	BOOST: [KEY_SHIFT],
 	TOGGLE_TRANSLATION_MODE: [KEY_T],
 	TOGGLE_ROTATION_MODE: [KEY_G],
+	TOGGLE_PRECISION: [KEY_C],
 	TOGGLE_HATCH: [KEY_H],
 	TOGGLE_VIEW: [KEY_V],
 	TOGGLE_RIFLE: [KEY_1],
 	TOGGLE_SHIELD: [KEY_2],
+}
+
+const _MOUSE_DEFAULTS := {
+	MOUSE_STEER: [MOUSE_BUTTON_RIGHT],
 }
 
 
@@ -59,3 +67,17 @@ static func ensure_defaults() -> void:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
 			InputMap.action_add_event(action, ev)
+	for action: StringName in _MOUSE_DEFAULTS:
+		if InputMap.has_action(action):
+			continue
+		InputMap.add_action(action)
+		for button: MouseButton in _MOUSE_DEFAULTS[action]:
+			var ev := InputEventMouseButton.new()
+			ev.button_index = button
+			InputMap.action_add_event(action, ev)
+
+
+## True while the mouse steers the suit instead of looking around.
+static func is_mouse_steering() -> bool:
+	return InputMap.has_action(MOUSE_STEER) and Input.is_action_pressed(MOUSE_STEER) \
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED

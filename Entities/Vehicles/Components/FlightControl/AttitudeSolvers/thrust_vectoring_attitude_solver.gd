@@ -25,12 +25,14 @@ extends AttitudeOffsetSolver
 @export var initial_step_deg: float = 12.0
 @export var iterations: int = 6
 
+var _cap := 0.0  ## Offset limit of the current solve, rad
+
 func solve(state: FlightState, force_pilot: Vector3, current: Quaternion,
-		locked: Vector3) -> Quaternion:
+		locked: Vector3, max_angle_deg: float) -> Quaternion:
 	var r_pin := to_rotation_vector(current)
-	var max_angle := deg_to_rad(max_offset_deg)
+	_cap = deg_to_rad(clampf(max_angle_deg, 0.0, max_offset_deg))
 	var demand := force_pilot.length()
-	if demand < 1.0 or max_angle <= 0.0:
+	if demand < 1.0 or _cap <= 0.0:
 		return from_rotation_vector(_limit(Vector3.ZERO, r_pin, locked))
 	var r_prev := _limit(r_pin, r_pin, locked)
 
@@ -90,12 +92,11 @@ static func _aim(body_axis: Vector3, target: Vector3) -> Vector3:
 	return axis.normalized() * angle
 
 
-## Clamps each free axis to axis_limit_deg and the total to max_offset_deg
+## Clamps each free axis to axis_limit_deg and the total to the solve's cap
 ## (shrinking only the free part); locked axes take their value from r_pin as is.
 func _limit(r: Vector3, r_pin: Vector3, locked: Vector3) -> Vector3:
 	var limits := axis_limit_deg * (PI / 180.0)
 	r = r.clamp(-limits, limits)
 	var pinned := r_pin * locked
 	var free := r * (Vector3.ONE - locked)
-	var max_angle := deg_to_rad(max_offset_deg)
-	return pinned + free.limit_length(sqrt(maxf(max_angle * max_angle - pinned.length_squared(), 0.0)))
+	return pinned + free.limit_length(sqrt(maxf(_cap * _cap - pinned.length_squared(), 0.0)))

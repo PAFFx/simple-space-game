@@ -23,8 +23,9 @@ extends Resource
 ## pilot frame. `current` is the offset in use, for warm starts and smoothness.
 ## `locked` is a per pilot axis mask (pitch, yaw, roll; 1 = locked): those
 ## rotation-vector components must stay as they are in `current`.
+## `max_angle_deg` caps the offset below max_offset_deg (movement modes use it).
 @abstract func solve(state: FlightState, force_pilot: Vector3, current: Quaternion,
-		locked: Vector3) -> Quaternion
+		locked: Vector3, max_angle_deg: float) -> Quaternion
 
 
 ## The same rotation the short way round (q and −q are the same rotation; −q's

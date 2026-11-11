@@ -89,7 +89,7 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
 
 - Press a direction and the suit goes that way at the same acceleration whichever way you
   press: velocity command in the pilot frame with one acceleration cap (`cruise_accel_g`
-  0.35 G, `boost_accel_g` 2 G), so the path is a straight line to the command.
+  0.8 G, `boost_accel_g` 4 G), so the path is a straight line to the command.
 - Release the rotation controls and the turn stops at once (full torque, `stop_gain_multiplier`),
   then the attitude is held.
 - The cockpit only turns when the pilot turns it, and then rigidly with the suit (no lead or
@@ -110,6 +110,20 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
     it, auto-rotation stays at `auto_rotate_torque_fraction`. Any locked axis keeps the
     allocator's default torque priority.
 
+**Movement modes.** How far auto-rotation may commit to a move:
+
+| Mode | Input | Accel cap | Speed | Auto-rotation |
+|------|-------|-----------|-------|---------------|
+| Normal | — | `cruise_accel_g` 0.8 G | `max_command_speed` 80 m/s | ≤ `cruise_max_offset_deg` 20° |
+| Precision | C (toggle) | `precision_accel_g` 0.15 G | `precision_speed` 20 m/s | off; turn rates × 0.5 |
+| Boost | Shift | 4 G | × 2.5 | ≤ `boost_max_offset_deg` 30° |
+| Full boost | Shift double-tap + hold | 4 G | × 2.5 | solver's `max_offset_deg` 60° |
+
+Capped modes keep the suit quick to change direction but give less acceleration in weak
+directions (descending: 0.7 G normal, 0.8 G boost, 1.3 G full). Shift overrides precision.
+While boosting, the swing itself is torque-limited (the body lags the target by ~14°, so swings
+run at ~20°/s), because auto-rotation yields to force (`auto_rotate_torque_priority`).
+
 **Boost** (Shift): 4 G acceleration cap, velocity loop 2.5 /s (`boost_velocity_gain`, snappy
 starts, stops and dodges), 100% torque for pilot steering, rates × 1.7, commanded speed × 2.5
 (150 m/s). Auto-rotation swings at 120°/s with the target's rate fed forward into the hold.
@@ -129,8 +143,9 @@ means a boosted descent pitches the suit nose-down (~1 G down at 70°) instead o
 
 The solver turns the body **only when needed**: while a translation is commanded (or Shift is
 held), and only if the capped acceleration exceeds what the current attitude can deliver cleanly.
-Cruise (0.35 G) fits every direction, so normal flying never rotates the suit. Boost (2 G)
-rolls it for side moves, leans it forward for forward and pitches it for climbs or brakes.
+Cruise (0.8 G) only exceeds the weak down direction, so normal flying leans the suit (≤ 20°)
+mostly when descending. Boost (4 G) rolls it for side moves, leans it forward for forward and
+pitches it for climbs or brakes, within the movement mode's cap.
 Releasing the controls brakes without rotating.
 
 It minimises over offsets `r` (pitch and roll up to 60°, yaw at most 3° via `axis_limit_deg`, so
@@ -243,7 +258,9 @@ Intentionally crude (it undershoots and cross-couples), kept for comparison and 
 | Pitch down / up | ↑ / ↓ (stick-forward convention) |
 | Yaw left / right | ← / → |
 | Roll left / right | Q / E |
-| Boost (full thrust) | Shift |
+| Boost (full thrust, auto-rotation ≤ 30°) | Shift |
+| Boost with full auto-rotation (60°) | Shift double-tap, hold |
+| Precision mode on / off | C |
 | Translation mode (V-HOLD ↔ NEWTON) | T |
 | Rotation mode (ATT-HOLD ↔ RATE) | G |
 | Hatch open / close | H |
@@ -251,6 +268,7 @@ Intentionally crude (it undershoots and cross-couples), kept for comparison and 
 | Rifle ready / lower | 1 |
 | Shield guard / lower | 2 |
 | Look around | Mouse |
+| Steer pitch / yaw with the mouse (look recentres) | Hold right mouse button |
 
 Defaults are registered only for actions missing from the InputMap, so bindings set in
 **Project Settings → Input Map** take precedence.

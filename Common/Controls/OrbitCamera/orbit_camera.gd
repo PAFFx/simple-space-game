@@ -2,7 +2,7 @@ class_name OrbitCamera
 extends Camera3D
 
 ## External camera that orbits a target (so it rolls with a spacecraft). Mouse
-## orbits, wheel zooms — only while this camera is current.
+## orbits (unless it is steering the suit), wheel zooms — only while this camera is current.
 ##
 ## Orientation comes from the pilot frame (the vehicle's cockpit) by default, so
 ## the view stays steady while the FCS turns the body for thrust vectoring and
@@ -43,7 +43,8 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not current:
 		return
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and not PilotInputActions.is_mouse_steering():
 		yaw_deg -= event.relative.x * sensitivity
 		pitch_deg = clampf(pitch_deg - event.relative.y * sensitivity, -89.0, 89.0)
 	elif event is InputEventMouseButton and event.pressed:

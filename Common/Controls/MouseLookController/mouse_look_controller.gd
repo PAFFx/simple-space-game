@@ -15,9 +15,14 @@ extends Node
 ## Capture the mouse automatically when this node enters the scene tree.
 ## Disable if you want to manage mouse capture yourself.
 @export var capture_on_ready: bool = true
+## While the mouse steers the suit (PilotInputActions.MOUSE_STEER held), the look
+## eases back to its rest direction with this time constant, s. 0 = stay put.
+@export var recenter_time: float = 0.15
 
 var _yaw: float = 0.0
 var _pitch: float = 0.0
+var _rest_yaw: float = 0.0
+var _rest_pitch: float = 0.0
 
 
 func _ready() -> void:
@@ -26,6 +31,8 @@ func _ready() -> void:
 		# Initialise from the node's current rotation so it doesn't snap on start.
 		_yaw   = rad_to_deg(target.rotation.y)
 		_pitch = rad_to_deg(target.rotation.x)
+	_rest_yaw = _yaw
+	_rest_pitch = _pitch
 	if capture_on_ready:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -33,17 +40,42 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if not event is InputEventMouseMotion:
 		return
-	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED or PilotInputActions.is_mouse_steering():
 		return
-	var target := get_parent() as Node3D
+	var target := _active_target()
 	if target == null:
 		return
-	# Don't steer an inactive camera (e.g. while an external view is current).
-	if target is Camera3D and not (target as Camera3D).current:
-		return
-
 	_yaw   -= event.relative.x * sensitivity
 	_pitch  = clamp(_pitch - event.relative.y * sensitivity, -pitch_limit, pitch_limit)
+	_apply(target)
+
+
+func _process(delta: float) -> void:
+	if recenter_time <= 0.0 or not PilotInputActions.is_mouse_steering():
+		return
+	var target := _active_target()
+	if target == null or (is_equal_approx(_yaw, _rest_yaw) and is_equal_approx(_pitch, _rest_pitch)):
+		return
+	var w := 1.0 - exp(-delta / recenter_time)
+	# Shortest way round in yaw, so a look over the shoulder doesn't unwind 360°.
+	_yaw = _rest_yaw + wrapf(_yaw - _rest_yaw, -180.0, 180.0)
+	_yaw = lerpf(_yaw, _rest_yaw, w)
+	_pitch = lerpf(_pitch, _rest_pitch, w)
+	if absf(_yaw - _rest_yaw) < 0.01 and absf(_pitch - _rest_pitch) < 0.01:
+		_yaw = _rest_yaw
+		_pitch = _rest_pitch
+	_apply(target)
+
+
+## The camera to steer, or null (e.g. while an external view is current).
+func _active_target() -> Node3D:
+	var target := get_parent() as Node3D
+	if target is Camera3D and not (target as Camera3D).current:
+		return null
+	return target
+
+
+func _apply(target: Node3D) -> void:
 	var look := Vector3(deg_to_rad(_pitch), deg_to_rad(_yaw), 0.0)
 	if target.has_method(&"set_look_rotation"):
 		target.call(&"set_look_rotation", Basis.from_euler(look))

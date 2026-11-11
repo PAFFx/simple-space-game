@@ -13,7 +13,10 @@ var rotation := Vector3.ZERO
 
 ## Allow full thrust instead of the cruise limit.
 var boost := false
+## Boost with full auto-rotation (Shift double-tapped and held). Implies boost.
+var boost_full := false
 
 ## One-shot requests, true only on the frame the button was pressed.
 var toggle_translation_mode := false
 var toggle_rotation_mode := false
+var toggle_precision := false

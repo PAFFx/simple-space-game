@@ -17,6 +17,10 @@ extends ControlLaw
 ## Auto-rotation — an AttitudeOffsetSolver may turn the body away from the
 ##   pilot frame (body = pilot · offset) so its strongest thrusters face the
 ##   force demand. The cockpit counter-rotates, so the pilot's view stays put.
+## Movement modes — how far auto-rotation may commit: normal flight and Shift
+##   are capped (cruise/boost_max_offset_deg) so the suit stays quick to change
+##   direction; a double-tapped Shift unlocks the solver's full range. Precision
+##   (toggle) turns auto-rotation off and gentles thrust and turn rates.
 
 enum TranslationMode { NEWTONIAN, VELOCITY_HOLD }
 enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
@@ -70,13 +74,25 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var boost_rate_gain_multiplier: float = 1.5
 @export var boost_speed_multiplier: float = 2.5
 
+@export_group("Movement modes")
+## Auto-rotation limit in normal flight and with Shift held, deg. A double-tapped
+## Shift uses the solver's own max_offset_deg.
+@export var cruise_max_offset_deg: float = 20.0
+@export var boost_max_offset_deg: float = 30.0
+## Precision mode: no auto-rotation, these acceleration / speed limits, and the
+## turn rates scaled down. Shift still boosts normally.
+@export var precision_accel_g: float = 0.15
+@export var precision_speed: float = 20.0
+@export var precision_rate_multiplier: float = 0.5
+@export var precision: bool = false
+
 @export_group("Translation")
 ## Acceleration limit, same in every direction, so the suit moves in a straight
 ## line toward the command. Auto-rotation finds the attitude that can deliver it.
-@export var cruise_accel_g: float = 0.35
+@export var cruise_accel_g: float = 0.8
 @export var boost_accel_g: float = 4.0
 ## Velocity demanded at full stick in VELOCITY_HOLD, m/s.
-@export var max_command_speed: float = 60.0
+@export var max_command_speed: float = 80.0
 ## Velocity loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
 ## Velocity loop gain while boosting: snappy starts, stops and direction changes (dodging).
@@ -95,6 +111,8 @@ var _locked := Vector3.ZERO          ## Cockpit locked to the body
 var _newly_locked := Vector3.ZERO
 var _release_timer := Vector3.ZERO
 var _turn_sign := Vector3.ZERO       ## Direction each steered axis was turning
+var _last_boost := false             ## For the HUD label
+var _last_boost_full := false
 
 
 func reset() -> void:
@@ -133,10 +151,15 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_turn_sign = Vector3.ZERO
 	if command.toggle_translation_mode:
 		translation_mode = ((translation_mode + 1) % TranslationMode.size()) as TranslationMode
+	if command.toggle_precision:
+		precision = not precision
 	if command.toggle_rotation_mode:
 		rotation_mode = ((rotation_mode + 1) % RotationMode.size()) as RotationMode
 		_pilot = body_q * _offset.inverse()
 
+	command.boost = command.boost or command.boost_full
+	_last_boost = command.boost
+	_last_boost_full = command.boost_full
 	_update_locks(state, command)
 	_update_pilot(body_q)
 	var force_world := _translation_force_world(state, command)
@@ -159,7 +182,25 @@ func get_mode_labels() -> PackedStringArray:
 	var labels := PackedStringArray([trans, rot])
 	if attitude_solver != null and rotation_mode == RotationMode.ATTITUDE_HOLD:
 		labels.append("VECTOR %02d°" % roundi(rad_to_deg(_offset.get_angle())))
+	labels.append(_movement_label())
 	return labels
+
+
+func _movement_label() -> String:
+	if _last_boost_full:
+		return "MOVE BOOST FULL"
+	if _last_boost:
+		return "MOVE BOOST"
+	return "MOVE PRECISION" if precision else "MOVE NORMAL"
+
+
+## Auto-rotation limit for this tick, deg (0 = off).
+func _offset_limit_deg(command: PilotCommand) -> float:
+	if command.boost_full:
+		return attitude_solver.max_offset_deg
+	if command.boost:
+		return boost_max_offset_deg
+	return 0.0 if precision else cruise_max_offset_deg
 
 
 func is_holding_attitude() -> bool:
@@ -253,10 +294,11 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 		smoothing = attitude_solver.smoothing_time
 		var translating := command.translation.length() > stick_deadzone
 		var wanted := command.boost if auto_rotate_on_boost_only else (command.boost or translating)
-		if state.allow_attitude_offset and wanted:
+		var limit := _offset_limit_deg(command)
+		if state.allow_attitude_offset and wanted and limit > 0.0:
 			var force_pilot := _pilot.inverse() * force_world
 			r_target = AttitudeOffsetSolver.to_rotation_vector(
-					attitude_solver.solve(state, force_pilot, _offset, _locked))
+					attitude_solver.solve(state, force_pilot, _offset, _locked, limit))
 			_auto_rotating = true
 		else:
 			# Nothing needs the offset: aim the free axes straight back at the cockpit
@@ -288,7 +330,11 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 
 func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quaternion) -> Vector3:
 	var omega := state.local_angular_velocity
-	var max_rate := max_rate_deg * (PI / 180.0) * (boost_rate_multiplier if command.boost else 1.0)
+	var max_rate := max_rate_deg * (PI / 180.0)
+	if command.boost:
+		max_rate *= boost_rate_multiplier
+	elif precision:
+		max_rate *= precision_rate_multiplier
 	var gain := rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
 	var inertia := state.inertia_local
 	var gyro := omega.cross(inertia * omega)
@@ -380,11 +426,18 @@ func _braking_rate(state: FlightState, err: Vector3) -> Vector3:
 
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
 	var stick_world := _pilot * command.translation
-	var accel_limit := (boost_accel_g if command.boost else cruise_accel_g) * FlightComputer.G0
+	var accel_g := cruise_accel_g
+	var speed := max_command_speed
+	if command.boost:
+		accel_g = boost_accel_g
+		speed *= boost_speed_multiplier
+	elif precision:
+		accel_g = precision_accel_g
+		speed = precision_speed
+	var accel_limit := accel_g * FlightComputer.G0
 	if translation_mode == TranslationMode.NEWTONIAN:
 		return stick_world.limit_length(1.0) * accel_limit * state.mass
 
-	var speed := max_command_speed * (boost_speed_multiplier if command.boost else 1.0)
 	var v_error := stick_world * speed - state.linear_velocity
 	var gain := boost_velocity_gain if command.boost else velocity_gain
 	return (v_error * gain).limit_length(accel_limit) * state.mass
