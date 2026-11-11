@@ -21,13 +21,32 @@ extends Resource
 
 ## Override: target offset (body = pilot · offset) for a force demand given in the
 ## pilot frame. `current` is the offset in use, for warm starts and smoothness.
+## `locked` is a per pilot axis mask (pitch, yaw, roll; 1 = locked): those
+## rotation-vector components must stay as they are in `current`.
+@abstract func solve(state: FlightState, force_pilot: Vector3, current: Quaternion,
+		locked: Vector3) -> Quaternion
+
+
 ## The same rotation the short way round (q and −q are the same rotation; −q's
 ## angle is 360° minus q's, which makes clamps and slerps flip).
 static func shortest(q: Quaternion) -> Quaternion:
 	return -q if q.w < 0.0 else q
 
 
-@abstract func solve(state: FlightState, force_pilot: Vector3, current: Quaternion) -> Quaternion
+## Rotation vector (axis · angle, short way round) of a rotation. Accurate for tiny
+## per-tick rotations too (Quaternion.get_axis() isn't normalised below ~0.5°).
+static func to_rotation_vector(q: Quaternion) -> Vector3:
+	q = shortest(q)
+	var v := Vector3(q.x, q.y, q.z)
+	var s := v.length()
+	if s < 1e-9:
+		return v * 2.0
+	return v * (2.0 * atan2(s, q.w) / s)
+
+
+static func from_rotation_vector(r: Vector3) -> Quaternion:
+	var angle := r.length()
+	return Quaternion(r / angle, angle) if angle > 1e-6 else Quaternion.IDENTITY
 
 
 static func clamp_rotation(q: Quaternion, max_angle: float) -> Quaternion:

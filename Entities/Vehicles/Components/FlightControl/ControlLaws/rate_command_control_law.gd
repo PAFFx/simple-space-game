@@ -9,6 +9,8 @@ extends ControlLaw
 ## Rotation — the stick commands an angular rate of the pilot frame. In
 ##   ATTITUDE_HOLD the frame stops when the stick is released and the body
 ##   holds it (rate command / attitude hold). RATE_DAMP just damps rates.
+##   Locking is per axis: a steered (or still braking) axis turns the cockpit
+##   rigidly with the suit, while the other axes keep holding and auto-rotating.
 ## Translation — VELOCITY_HOLD: stick = velocity in the pilot frame relative
 ##   to the reference frame; released = brought to relative rest.
 ##   NEWTONIAN: stick = thrust demand, coast when released.
@@ -40,6 +42,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## After the stick is released, attitude is locked once the rate drops below this, deg/s.
 @export var hold_capture_rate_deg: float = 2.0
 @export var stick_deadzone: float = 0.04
+## Each rotation axis locks to the stick on its own; it stays locked this long after
+## its input drops into the deadzone, so a noisy stick doesn't flicker the lock, s.
+@export var axis_release_time: float = 0.12
 ## Fraction of torque authority the FCS may request.
 @export_range(0.0, 1.0) var torque_fraction: float = 0.6
 ## Torque authority auto-rotation (and attitude hold) may use.
@@ -80,13 +85,16 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 var _initialized := false
 var _pilot := Quaternion.IDENTITY    ## Pilot frame orientation (global)
 var _offset := Quaternion.IDENTITY   ## Body relative to pilot frame
-var _offset_target := Quaternion.IDENTITY
-var _prev_target := Quaternion.IDENTITY
-var _has_prev_target := false
+var _offset_target_r := Vector3.ZERO ## Smoothed solver target, rotation vector (pilot frame)
+var _offset_rate := Vector3.ZERO     ## Offset swing rate, pilot frame (rad/s), fed forward
 var _auto_rotating := false   ## Solver engaged this tick (force must stay clean)
-var _rigid := false           ## Last tick the cockpit was locked to the body
-var _stick_active := false
-var _capturing := false
+# Per pilot axis masks (pitch, yaw, roll), 1 = set:
+var _active := Vector3.ZERO          ## Steered by the stick
+var _capture := Vector3.ZERO         ## Steered, or released and still braking
+var _locked := Vector3.ZERO          ## Cockpit locked to the body
+var _newly_locked := Vector3.ZERO
+var _release_timer := Vector3.ZERO
+var _turn_sign := Vector3.ZERO       ## Direction each steered axis was turning
 
 
 func reset() -> void:
@@ -101,28 +109,45 @@ func get_pilot_orientation() -> Variant:
 	return _pilot
 
 
+func get_cockpit_orientation(body_q: Quaternion) -> Variant:
+	if not _initialized:
+		return null
+	if rotation_mode != RotationMode.ATTITUDE_HOLD:
+		return body_q
+	return _follow_body(body_q)
+
+
 func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	var body_q := state.basis.get_rotation_quaternion()
 	if not _initialized:
 		_initialized = true
-		_offset = Quaternion.IDENTITY
 		_pilot = body_q
+		_offset = Quaternion.IDENTITY
+		_offset_target_r = Vector3.ZERO
+		_offset_rate = Vector3.ZERO
+		_auto_rotating = false
+		_active = Vector3.ZERO
+		_capture = Vector3.ZERO
+		_locked = Vector3.ZERO
+		_release_timer = Vector3.ZERO
+		_turn_sign = Vector3.ZERO
 	if command.toggle_translation_mode:
 		translation_mode = ((translation_mode + 1) % TranslationMode.size()) as TranslationMode
 	if command.toggle_rotation_mode:
 		rotation_mode = ((rotation_mode + 1) % RotationMode.size()) as RotationMode
 		_pilot = body_q * _offset.inverse()
 
-	_stick_active = command.rotation.length() > stick_deadzone
+	_update_locks(state, command)
+	_update_pilot(body_q)
 	var force_world := _translation_force_world(state, command)
-	_update_offset(state, force_world, command, body_q)
+	_update_offset(state, force_world, command)
 	var torque := _rotation_torque(state, command, body_q)
 	var force_body := clamp_to_capability(state.to_local(force_world), state, 1.0)
 	var wrench := Wrench.new(force_body, torque)
-	if _auto_rotating:
-		wrench.torque_priority = auto_rotate_torque_priority
-	elif not _rigid:
-		wrench.torque_priority = realign_torque_priority
+	# Steering and stopping keep the allocator default.
+	if _locked == Vector3.ZERO:
+		wrench.torque_priority = auto_rotate_torque_priority if _auto_rotating \
+				else realign_torque_priority
 	return wrench
 
 
@@ -137,121 +162,195 @@ func get_mode_labels() -> PackedStringArray:
 	return labels
 
 
-## True while the cockpit is locked rigidly to the body (pilot steering or braking).
-func is_cockpit_locked() -> bool:
-	return _rigid
-
-
 func is_holding_attitude() -> bool:
-	return rotation_mode == RotationMode.ATTITUDE_HOLD and not _stick_active and not _capturing
+	return rotation_mode == RotationMode.ATTITUDE_HOLD and _locked == Vector3.ZERO
 
 
-func _update_offset(state: FlightState, force_world: Vector3, command: PilotCommand,
-		body_q: Quaternion) -> void:
-	var target := Quaternion.IDENTITY
+## Per-axis lock state. An axis locks while its stick is deflected (plus
+## axis_release_time, so a noisy stick doesn't flicker) and stays locked after
+## release until the released axes have all stopped turning the way they were
+## steered (rate below hold_capture_rate_deg or reversed), then hands them to the
+## attitude hold, which also takes out any overshoot without moving the view.
+func _update_locks(state: FlightState, command: PilotCommand) -> void:
+	var was_locked := _locked
+	if rotation_mode != RotationMode.ATTITUDE_HOLD:
+		var on := command.rotation.length() > stick_deadzone
+		_active = Vector3.ONE if on else Vector3.ZERO
+		_capture = Vector3.ZERO
+		_locked = Vector3.ONE
+		_newly_locked = Vector3.ZERO
+		return
+	# Body turn rate about the pilot's axes, minus what the offset swing itself causes.
+	var rate_p := _pilot.inverse() * state.angular_velocity - _offset_rate
+	for k in 3:
+		if absf(command.rotation[k]) > stick_deadzone:
+			_active[k] = 1.0
+			_release_timer[k] = axis_release_time
+		elif _active[k] > 0.0:
+			_release_timer[k] -= state.delta
+			if _release_timer[k] <= 0.0:
+				_active[k] = 0.0
+	var capture_rate := deg_to_rad(hold_capture_rate_deg)
+	var stopped := true
+	for k in 3:
+		if _active[k] > 0.0:
+			if absf(rate_p[k]) > capture_rate:
+				_turn_sign[k] = signf(rate_p[k])
+		elif _capture[k] > 0.0 and rate_p[k] * _turn_sign[k] >= capture_rate:
+			stopped = false
+	_capture = _active if stopped else _capture.max(_active)
+	_locked = _capture
+	_newly_locked = (_locked - was_locked).max(Vector3.ZERO)
+
+
+## Moves the pilot frame with the body on locked axes and holds it on free ones.
+## A newly locked axis first takes the body's lag on it into the offset, so locking
+## mid-swing never jumps the view.
+func _update_pilot(body_q: Quaternion) -> void:
+	if rotation_mode != RotationMode.ATTITUDE_HOLD:
+		_offset = Quaternion.IDENTITY
+		_pilot = body_q
+		return
+	if _newly_locked != Vector3.ZERO:
+		var lag := AttitudeOffsetSolver.from_rotation_vector(_deviation(body_q) * _newly_locked)
+		_offset = (lag * _offset).normalized()
+		_offset_target_r = AttitudeOffsetSolver.to_rotation_vector(_offset)
+	_pilot = _follow_body(body_q)
+
+
+## Body deviation from pilot · offset, as a rotation vector in the pilot frame
+## (body = pilot · D · offset).
+func _deviation(body_q: Quaternion) -> Vector3:
+	return AttitudeOffsetSolver.to_rotation_vector(_pilot.inverse() * body_q * _offset.inverse())
+
+
+## Pilot frame that follows a body at body_q on the locked axes only.
+func _follow_body(body_q: Quaternion) -> Quaternion:
+	if _locked == Vector3.ONE:
+		return (body_q * _offset.inverse()).normalized()
+	if _locked == Vector3.ZERO:
+		return _pilot
+	var step := AttitudeOffsetSolver.from_rotation_vector(_deviation(body_q) * _locked)
+	return (_pilot * step).normalized()
+
+
+## Auto-rotation on the free axes; locked axes keep their offset component.
+func _update_offset(state: FlightState, force_world: Vector3, command: PilotCommand) -> void:
+	_offset_rate = Vector3.ZERO
+	_auto_rotating = false
+	if rotation_mode != RotationMode.ATTITUDE_HOLD:
+		return
+	var r_cur := AttitudeOffsetSolver.to_rotation_vector(_offset)
+	if _locked == Vector3.ONE:
+		_offset_target_r = r_cur
+		return
+	var free := Vector3.ONE - _locked
+	var r_target := r_cur * _locked
 	var slew := deg_to_rad(60.0)
 	var smoothing := 0.0
 	if attitude_solver != null:
 		slew = deg_to_rad(attitude_solver.slew_rate_deg)
 		smoothing = attitude_solver.smoothing_time
-		# While the pilot steers (or the turn is still braking) the suit and cockpit
-		# move as one rigid unit. Lock to where the body actually is relative to the
-		# pilot (not where it was heading), so the view can't jump by the tracking lag.
-		_auto_rotating = false
-		if _stick_active or _capturing:
-			if not _rigid:
-				_offset = AttitudeOffsetSolver.shortest(_pilot.inverse() * body_q)
-				_offset_target = _offset
-				_has_prev_target = false
-			return
 		var translating := command.translation.length() > stick_deadzone
 		var wanted := command.boost if auto_rotate_on_boost_only else (command.boost or translating)
-		if rotation_mode == RotationMode.ATTITUDE_HOLD and state.allow_attitude_offset and wanted:
+		if state.allow_attitude_offset and wanted:
 			var force_pilot := _pilot.inverse() * force_world
-			target = attitude_solver.solve(state, force_pilot, _offset)
+			r_target = AttitudeOffsetSolver.to_rotation_vector(
+					attitude_solver.solve(state, force_pilot, _offset, _locked))
 			_auto_rotating = true
 		else:
-			# Nothing needs the offset: aim straight back at the cockpit and let the
-			# time-optimal hold bring the body home in one motion.
-			_offset = Quaternion.IDENTITY
-			_offset_target = Quaternion.IDENTITY
-			_has_prev_target = false
+			# Nothing needs the offset: aim the free axes straight back at the cockpit
+			# and let the time-optimal hold bring the body home in one motion.
+			_offset = AttitudeOffsetSolver.from_rotation_vector(r_target)
+			_offset_target_r = r_target
 			return
+	r_target = r_target * free + r_cur * _locked
 	# Low-pass the target first so the body eases into (and out of) a new attitude.
+	_offset_target_r = _offset_target_r * free + r_cur * _locked
 	if smoothing > 0.0:
-		_offset_target = _offset_target.slerp(target, 1.0 - exp(-state.delta / smoothing))
-		target = _offset_target
+		_offset_target_r = _offset_target_r.lerp(r_target, 1.0 - exp(-state.delta / smoothing))
+	else:
+		_offset_target_r = r_target
 	# Throttle the swing by how far the body already lags the current target.
+	var body_q := state.basis.get_rotation_quaternion()
 	var lag_q := AttitudeOffsetSolver.shortest((_pilot * _offset) * body_q.inverse())
 	var lag := rad_to_deg(lag_q.get_angle())
 	var span := maxf(tracking_lag_deg.y - tracking_lag_deg.x, 0.01)
 	slew *= clampf(1.0 - (lag - tracking_lag_deg.x) / span, 0.0, 1.0)
-	var angle := _offset.angle_to(target)
-	if angle > 1e-5 and slew > 0.0:
-		_offset = _offset.slerp(target, minf(1.0, slew * state.delta / angle)).normalized()
+	var step := ((_offset_target_r - r_cur) * free).limit_length(slew * state.delta)
+	if step.length_squared() < 1e-12:
+		return
+	var old := _offset
+	_offset = AttitudeOffsetSolver.from_rotation_vector(r_cur + step)
+	if _auto_rotating and state.delta > 0.0:
+		_offset_rate = AttitudeOffsetSolver.to_rotation_vector(_offset * old.inverse()) / state.delta
 
 
 func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quaternion) -> Vector3:
 	var omega := state.local_angular_velocity
 	var max_rate := max_rate_deg * (PI / 180.0) * (boost_rate_multiplier if command.boost else 1.0)
-	var stick_rate := command.rotation * max_rate if _stick_active else Vector3.ZERO
-	var rate_cmd := stick_rate
-
-	if rotation_mode == RotationMode.ATTITUDE_HOLD:
-		if _stick_active or _capturing:
-			# Steering, or braking the turn after release: the cockpit is locked rigidly
-			# to the suit (pilot = body · offset⁻¹), so it never leads or lags the hull.
-			# The stick commands the rate about the pilot's axes directly.
-			_capturing = _stick_active or omega.length() >= deg_to_rad(hold_capture_rate_deg)
-			_pilot = body_q * _offset.inverse()
-			rate_cmd = state.to_local(_pilot * stick_rate)
-		else:
-			# Hold: track pilot · offset (the offset may be moving for thrust vectoring),
-			# with the target's own rotation rate fed forward so fast swings don't lag.
-			var target := _pilot * _offset
-			var feed_forward := Vector3.ZERO
-			if _has_prev_target and state.delta > 0.0:
-				var step := target * _prev_target.inverse()
-				if step.w < 0.0:
-					step = -step
-				feed_forward = state.to_local(Vector3(step.x, step.y, step.z) * 2.0 / state.delta)
-			var err_q := AttitudeOffsetSolver.shortest(target * body_q.inverse())
-			var err := state.to_local(err_q.get_axis() * err_q.get_angle()) \
-					if err_q.get_angle() > 1e-6 else Vector3.ZERO
-			# Auto-rotation may swing the body faster than the pilot's own rate limits.
-			var hold_rate := max_rate * 1.2
-			if attitude_solver != null:
-				hold_rate = hold_rate.max(Vector3.ONE * deg_to_rad(attitude_solver.slew_rate_deg) * 1.2)
-			# Auto-rotation tracks a moving target gently (keeps force clean); realigning
-			# to rest uses the time-optimal braking curve.
-			var approach := err * attitude_gain if _auto_rotating else _braking_rate(state, err)
-			rate_cmd = (approach + feed_forward).clamp(-hold_rate, hold_rate)
-	else:
-		_offset = Quaternion.IDENTITY
-		_pilot = body_q
-
-	_rigid = _stick_active or _capturing
-	_prev_target = _pilot * _offset
-	_has_prev_target = _has_prev_target or (rotation_mode == RotationMode.ATTITUDE_HOLD \
-			and not _capturing and _auto_rotating)
-	var stopping := _capturing and not _stick_active
 	var gain := rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
-	if stopping:
-		gain *= stop_gain_multiplier
-	elif not _stick_active and not _auto_rotating:
-		gain *= hold_rate_gain_multiplier
-	var alpha := (rate_cmd - omega) * gain
 	var inertia := state.inertia_local
-	var torque := inertia * alpha + omega.cross(inertia * omega)
-	var fraction := torque_fraction
-	if stopping or (command.boost and _stick_active):
-		fraction = 1.0
-	elif _auto_rotating:
-		# Auto-rotation: big torque requests make the allocator borrow the mains (off-centre)
-		# for turning, which spills force in the wrong direction.
-		fraction = auto_rotate_torque_fraction
-	var limit := state.max_torque * fraction
-	return torque.clamp(-limit, limit)
+	var gyro := omega.cross(inertia * omega)
+	var steering := _active != Vector3.ZERO
+
+	if rotation_mode != RotationMode.ATTITUDE_HOLD:
+		var rate_cmd := command.rotation * max_rate if steering else Vector3.ZERO
+		if not steering:
+			gain *= hold_rate_gain_multiplier
+		var fraction := 1.0 if command.boost and steering else torque_fraction
+		var limit := state.max_torque * fraction
+		return (inertia * ((rate_cmd - omega) * gain) + gyro).clamp(-limit, limit)
+
+	# Everything below is about the pilot's axes. Locked axes: the stick commands the
+	# rate (0 while braking a released turn). Free axes: track pilot · offset. Both
+	# get the offset swing fed forward so fast swings don't lag.
+	var body_to_pilot := _pilot.inverse() * body_q
+	var pilot_to_body := body_to_pilot.inverse()
+	var free := Vector3.ONE - _locked
+	var rate_p := command.rotation * max_rate * _active + _offset_rate
+	if free != Vector3.ZERO:
+		var err_q := AttitudeOffsetSolver.shortest((_pilot * _offset) * body_q.inverse())
+		var err_p := Vector3.ZERO
+		if err_q.get_angle() > 1e-6:
+			err_p = (_pilot.inverse() * (err_q.get_axis() * err_q.get_angle())) * free
+		var err := pilot_to_body * err_p
+		# Auto-rotation may swing the body faster than the pilot's own rate limits.
+		var hold_rate := max_rate * 1.2
+		if attitude_solver != null:
+			hold_rate = hold_rate.max(Vector3.ONE * deg_to_rad(attitude_solver.slew_rate_deg) * 1.2)
+		# Auto-rotation tracks a moving target gently (keeps force clean); realigning
+		# to rest uses the time-optimal braking curve.
+		var approach := err * attitude_gain if _auto_rotating else _braking_rate(state, err)
+		var hold_p := (body_to_pilot * approach + _offset_rate) * free
+		rate_p = rate_p * _locked + hold_p.clamp(-hold_rate, hold_rate)
+
+	var omega_p := body_to_pilot * omega
+	var gain_p := Vector3.ZERO
+	for k in 3:
+		if _active[k] > 0.0:
+			gain_p[k] = gain
+		elif _capture[k] > 0.0:
+			gain_p[k] = gain * stop_gain_multiplier
+		elif _auto_rotating:
+			gain_p[k] = gain
+		else:
+			gain_p[k] = gain * hold_rate_gain_multiplier
+	var alpha_p := (rate_p - omega_p) * gain_p
+
+	# Locked and free axes get separate torque budgets: a boosted turn or a stop may
+	# use it all, while auto-rotation stays gentle so it never spills force.
+	var stopping := (_capture - _active).max(Vector3.ZERO) != Vector3.ZERO
+	var lock_fraction := 1.0 if stopping or (command.boost and steering) else torque_fraction
+	var free_fraction := auto_rotate_torque_fraction if _auto_rotating else torque_fraction
+	var lock_limit := state.max_torque * lock_fraction
+	var free_limit := state.max_torque * free_fraction
+	var torque_lock := (inertia * (pilot_to_body * (alpha_p * _locked))).clamp(-lock_limit, lock_limit)
+	var torque_free := (inertia * (pilot_to_body * (alpha_p * free))).clamp(-free_limit, free_limit)
+	var limit := lock_limit if _locked != Vector3.ZERO else free_limit
+	if free != Vector3.ZERO:
+		limit = limit.max(free_limit)
+	return (torque_lock + torque_free + gyro).clamp(-limit, limit)
 
 
 ## Time-optimal approach: the fastest rate from which the body can still brake to

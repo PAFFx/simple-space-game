@@ -78,7 +78,7 @@ The body is driven to `pilot · offset`, where the offset comes from the attitud
 
 | Axis | Mode | Stick means | Stick released |
 |------|------|-------------|----------------|
-| Rotation | `ATTITUDE_HOLD` (default) | Turn rate about the pilot's axes (`max_rate_deg`); cockpit locked rigidly to the suit | Turn brakes at full torque (cockpit still locked), then the attitude is held |
+| Rotation | `ATTITUDE_HOLD` (default) | Turn rate about the pilot's axes (`max_rate_deg`); cockpit locked rigidly to the suit on the steered axes only | Turn brakes at full torque (axis still locked), then the attitude is held |
 | Rotation | `RATE_DAMP` | Angular rate demand | Rate → 0, no hold, no auto-rotation |
 | Translation | `VELOCITY_HOLD` (default) | Velocity in the pilot frame (`max_command_speed`) | Brought to rest relative to the reference frame |
 | Translation | `NEWTONIAN` | Thrust demand (cruise fraction, or 100% with boost) | Coast |
@@ -93,9 +93,22 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
 - Release the rotation controls and the turn stops at once (full torque, `stop_gain_multiplier`),
   then the attitude is held.
 - The cockpit only turns when the pilot turns it, and then rigidly with the suit (no lead or
-  lag on any axis). Any body rotation for thrust happens underneath, and only while not steering.
+  lag on the steered axis). Any body rotation for thrust happens underneath on the other axes.
   The only seat damping is linear (`SeatDampener`).
-- While the pilot steers, auto-rotation is frozen: suit and cockpit turn as one rigid unit.
+- Locking is **per pilot axis** (pitch, yaw, roll). A steered axis, and a released one that is
+  still braking, turns suit and cockpit as one unit; its offset component is frozen. The other
+  axes keep their attitude hold and auto-rotation, so e.g. yawing during a boosted dive keeps the
+  mains vectored while the view stays level. Steering all three axes = fully rigid.
+  - An axis stays locked `axis_release_time` (0.12 s) after its input drops into the deadzone,
+    so a noisy stick doesn't flicker the lock.
+  - Released axes unlock together once none is still turning the way it was steered (rate below
+    `hold_capture_rate_deg` or reversed). Any overshoot is then removed by the hold, not the view.
+  - An axis that locks mid-swing takes the body's lag on it into the offset, so the view never
+    jumps. Locked axes still get the offset swing fed forward (rotating about two axes at once
+    turns the body slightly about the third).
+  - Locked and free axes get separate torque budgets: a boosted turn or a stop may use all of
+    it, auto-rotation stays at `auto_rotate_torque_fraction`. Any locked axis keeps the
+    allocator's default torque priority.
 
 **Boost** (Shift): 4 G acceleration cap, velocity loop 2.5 /s (`boost_velocity_gain`, snappy
 starts, stops and dodges), 100% torque for pilot steering, rates × 1.7, commanded speed × 2.5

@@ -159,17 +159,15 @@ func get_pilot_offset() -> Quaternion:
 func get_cockpit_rotation() -> Quaternion:
 	if not fcs_enabled or control_law == null:
 		return Quaternion.IDENTITY
-	var pilot: Variant = control_law.get_pilot_orientation()
+	# Compare against where the body will be after this tick's physics step, or held
+	# axes trail it by one tick. Locked axes follow that same predicted body exactly.
+	var body_q := state.basis.get_rotation_quaternion()
+	var w := state.angular_velocity
+	if w.length_squared() > 1e-10:
+		body_q = Quaternion(w.normalized(), w.length() * state.delta) * body_q
+	var pilot: Variant = control_law.get_cockpit_orientation(body_q)
 	if pilot == null:
 		return Quaternion.IDENTITY
-	# Same body snapshot the law used, so a rigid lock stays exact (no one-tick lag).
-	var body_q := state.basis.get_rotation_quaternion()
-	if not control_law.is_cockpit_locked():
-		# Holding the pilot frame still: compare against where the body will be after
-		# this tick's physics step, or the cockpit trails it by one tick of rotation.
-		var w := state.angular_velocity
-		if w.length_squared() > 1e-10:
-			body_q = Quaternion(w.normalized(), w.length() * state.delta) * body_q
 	return (body_q.inverse() * pilot).normalized()
 
 

@@ -27,9 +27,10 @@ func get_pilot_orientation() -> Variant:
 	return null
 
 
-## True while the cockpit should move rigidly with the body.
-func is_cockpit_locked() -> bool:
-	return false
+## Pilot frame the cockpit should show if the body were at `body_q` (axes locked
+## to the body follow it). null = the cockpit follows the body.
+func get_cockpit_orientation(_body_q: Quaternion) -> Variant:
+	return get_pilot_orientation()
 
 
 ## Called when the law is (re)engaged so stale integrators / holds are dropped.

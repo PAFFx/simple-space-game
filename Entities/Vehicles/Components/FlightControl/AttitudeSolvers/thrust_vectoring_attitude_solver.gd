@@ -11,7 +11,8 @@ extends AttitudeOffsetSolver
 ## Demands the current attitude can meet cost nothing but the angle, so the
 ## suit only turns when it must, and only as far as needed.
 ## Pattern search, started from the best of {current, zero, each body axis aimed
-## at F}; a couple of dozen cost evaluations per tick.
+## at F}; a couple of dozen cost evaluations per tick. Locked axes keep their
+## current component and are left out of the search.
 
 ## Thruster load (demand / capability) the solver aims to stay under.
 @export var target_load: float = 0.9
@@ -24,12 +25,14 @@ extends AttitudeOffsetSolver
 @export var initial_step_deg: float = 12.0
 @export var iterations: int = 6
 
-func solve(state: FlightState, force_pilot: Vector3, current: Quaternion) -> Quaternion:
+func solve(state: FlightState, force_pilot: Vector3, current: Quaternion,
+		locked: Vector3) -> Quaternion:
+	var r_pin := to_rotation_vector(current)
 	var max_angle := deg_to_rad(max_offset_deg)
 	var demand := force_pilot.length()
 	if demand < 1.0 or max_angle <= 0.0:
-		return Quaternion.IDENTITY
-	var r_prev := _limit(_to_vector(current))
+		return from_rotation_vector(_limit(Vector3.ZERO, r_pin, locked))
+	var r_prev := _limit(r_pin, r_pin, locked)
 
 	var best := r_prev
 	var best_cost := _cost(state, force_pilot, best, r_prev)
@@ -37,7 +40,9 @@ func solve(state: FlightState, force_pilot: Vector3, current: Quaternion) -> Qua
 	var candidates: Array[Vector3] = [Vector3.ZERO]
 	for axis: Vector3 in [Vector3.FORWARD, Vector3.BACK, Vector3.UP, Vector3.DOWN,
 			Vector3.LEFT, Vector3.RIGHT]:
-		candidates.append(_limit(_aim(axis, f_dir)))
+		candidates.append(_aim(axis, f_dir))
+	for i in candidates.size():
+		candidates[i] = _limit(candidates[i], r_pin, locked)
 	for c in candidates:
 		var cost := _cost(state, force_pilot, c, r_prev)
 		if cost < best_cost:
@@ -49,12 +54,12 @@ func solve(state: FlightState, force_pilot: Vector3, current: Quaternion) -> Qua
 	for _i in iterations:
 		var improved := false
 		for k in 3:
-			if limits[k] <= 1e-4:
+			if limits[k] <= 1e-4 or locked[k] > 0.0:
 				continue
 			for sign in [1.0, -1.0]:
 				var c := best
 				c[k] += step * sign
-				c = _limit(c)
+				c = _limit(c, r_pin, locked)
 				var cost := _cost(state, force_pilot, c, r_prev)
 				if cost < best_cost:
 					best_cost = cost
@@ -62,11 +67,11 @@ func solve(state: FlightState, force_pilot: Vector3, current: Quaternion) -> Qua
 					improved = true
 		if not improved:
 			step *= 0.5
-	return _to_quat(best)
+	return from_rotation_vector(best)
 
 
 func _cost(state: FlightState, f_pilot: Vector3, r: Vector3, r_prev: Vector3) -> float:
-	var f_body := _to_quat(r).inverse() * f_pilot
+	var f_body := from_rotation_vector(r).inverse() * f_pilot
 	var cap := maxf(state.force_capability(f_body.normalized()), 1.0)
 	var shortfall := maxf(0.0, f_pilot.length() / cap - target_load)
 	var a := r.length() / deg_to_rad(max_offset_deg)
@@ -85,17 +90,12 @@ static func _aim(body_axis: Vector3, target: Vector3) -> Vector3:
 	return axis.normalized() * angle
 
 
-## Clamps each axis to axis_limit_deg, then the total to max_offset_deg.
-func _limit(r: Vector3) -> Vector3:
+## Clamps each free axis to axis_limit_deg and the total to max_offset_deg
+## (shrinking only the free part); locked axes take their value from r_pin as is.
+func _limit(r: Vector3, r_pin: Vector3, locked: Vector3) -> Vector3:
 	var limits := axis_limit_deg * (PI / 180.0)
-	return r.clamp(-limits, limits).limit_length(deg_to_rad(max_offset_deg))
-
-
-static func _to_quat(r: Vector3) -> Quaternion:
-	var angle := r.length()
-	return Quaternion(r / angle, angle) if angle > 1e-6 else Quaternion.IDENTITY
-
-
-static func _to_vector(q: Quaternion) -> Vector3:
-	var angle := q.get_angle()
-	return q.get_axis() * angle if angle > 1e-6 else Vector3.ZERO
+	r = r.clamp(-limits, limits)
+	var pinned := r_pin * locked
+	var free := r * (Vector3.ONE - locked)
+	var max_angle := deg_to_rad(max_offset_deg)
+	return pinned + free.limit_length(sqrt(maxf(max_angle * max_angle - pinned.length_squared(), 0.0)))
