@@ -351,30 +351,26 @@ func _build_animations() -> AnimationLibrary:
 	return lib
 
 
-## Relaxed zero-g float: slightly bent knees and elbows, slow breathing sway, head scanning.
+## Relaxed zero-g float: slightly bent knees and elbows, held still (no sway, so the
+## suit never looks like it's drifting).
 func _idle() -> Animation:
 	var anim := Animation.new()
 	anim.length = IDLE_LENGTH
 	anim.loop_mode = Animation.LOOP_LINEAR
-	var keys := 9
 	for bone: String in IDLE_BONES:
 		var track := _track(anim, bone)
-		for k in keys:
-			var t := IDLE_LENGTH * k / (keys - 1)
-			var phase := TAU * t / IDLE_LENGTH
-			anim.rotation_track_insert_key(track, t, _local(bone, _idle_rotations(bone, phase)))
+		anim.rotation_track_insert_key(track, 0.0, _local(bone, _idle_rotations(bone)))
 	return anim
 
 
-func _idle_rotations(bone: String, phase: float) -> Array:
+func _idle_rotations(bone: String) -> Array:
 	var side := 1.0 if bone.ends_with(".R") else -1.0
 	var table := {
-		"upper_arm": [[Vector3.RIGHT, 4.0 + 2.0 * sin(phase)], [Vector3.BACK, 6.0 * side]],
-		"forearm": [[Vector3.RIGHT, 12.0 + 2.0 * sin(phase + 0.6)]],
-		"thigh": [[Vector3.RIGHT, 8.0 + 1.5 * sin(phase + side)], [Vector3.BACK, 3.0 * side]],
-		"shin": [[Vector3.RIGHT, -14.0 - 2.0 * sin(phase + side)]],
-		"spine": [[Vector3.UP, 1.5 * sin(phase)]],
-		"head": [[Vector3.UP, 10.0 * sin(phase)], [Vector3.RIGHT, -3.0]],
+		"upper_arm": [[Vector3.RIGHT, 4.0], [Vector3.BACK, 6.0 * side]],
+		"forearm": [[Vector3.RIGHT, 12.0]],
+		"thigh": [[Vector3.RIGHT, 8.0], [Vector3.BACK, 3.0 * side]],
+		"shin": [[Vector3.RIGHT, -14.0]],
+		"head": [[Vector3.RIGHT, -3.0]],
 	}
 	return table.get(bone.get_slice(".", 0), [])
 
