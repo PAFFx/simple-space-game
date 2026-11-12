@@ -17,6 +17,10 @@
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/HatchCockpitParts/hatch_cockpit_parts.gd" id="11_hatchparts"]
 
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/CockpitControls/cockpit_switch_panel.gd" id="12_panel"]
+
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/CockpitControls/cockpit_click_mode.gd" id="13_click"]
+
 [node name="CockpitLinearSeat" type="Node3D"]
 script = ExtResource("1_script")
 
@@ -70,3 +74,10 @@ model_root = NodePath("../Model")
 [node name="HatchCockpitParts" type="Node" parent="." node_paths=PackedStringArray("model_root")]
 script = ExtResource("11_hatchparts")
 model_root = NodePath("../Model")
+
+[node name="SwitchPanel" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, -0.4, -0.11)
+script = ExtResource("12_panel")
+
+[node name="CockpitClickMode" type="Node" parent="."]
+script = ExtResource("13_click")

@@ -18,12 +18,11 @@ const ROLL_LEFT := &"ms_roll_left"
 const ROLL_RIGHT := &"ms_roll_right"
 const BOOST := &"ms_boost"
 const BRAKE := &"ms_brake"
-const TOGGLE_ROTATION_MODE := &"ms_toggle_rotation_mode"
-const TOGGLE_PRECISION := &"ms_toggle_precision"
-const TOGGLE_HORIZON_LOCK := &"ms_toggle_horizon_lock"
 ## Hold to steer pitch/yaw with the mouse (otherwise the mouse looks around).
 const MOUSE_STEER := &"ms_mouse_steer"
-const TOGGLE_HATCH := &"ms_toggle_hatch"
+## Toggle cockpit click mode: a free cursor for the cockpit's switches (left / right click
+## throws a switch either way); otherwise the mouse looks around.
+const CLICK_MODE := &"ms_click_mode"
 const TOGGLE_VIEW := &"ms_toggle_view"
 const TOGGLE_RIFLE := &"ms_toggle_rifle"
 const TOGGLE_SHIELD := &"ms_toggle_shield"
@@ -46,10 +45,6 @@ const _DEFAULTS := {
 	ROLL_RIGHT: [KEY_E],
 	BOOST: [KEY_SHIFT],
 	BRAKE: [KEY_CTRL],
-	TOGGLE_ROTATION_MODE: [KEY_G],
-	TOGGLE_PRECISION: [KEY_C],
-	TOGGLE_HORIZON_LOCK: [KEY_L],
-	TOGGLE_HATCH: [KEY_H],
 	TOGGLE_VIEW: [KEY_V],
 	TOGGLE_RIFLE: [KEY_1],
 	TOGGLE_SHIELD: [KEY_2],
@@ -60,6 +55,7 @@ const _LEFT_ONLY := [KEY_ALT]
 
 const _MOUSE_DEFAULTS := {
 	MOUSE_STEER: [MOUSE_BUTTON_RIGHT],
+	CLICK_MODE: [MOUSE_BUTTON_MIDDLE],
 }
 
 

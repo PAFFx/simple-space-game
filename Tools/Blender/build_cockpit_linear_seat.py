@@ -60,20 +60,21 @@ def build_shell(m):
             doomed.append(f)
     bmesh.ops.delete(shell.bm, geom=doomed, context="FACES")
 
-    # Portal frame around the aperture (visible from outside and from the seat).
+    # Portal frame around the aperture, between the screen (r 1.25) and the shell, so it
+    # shows only through the open hatch (inside the screen it floated in the pilot's view).
     t = 0.07
-    d = 1.12
+    d = 1.285
     hw, hh = d * math.tan(ha), d * math.tan(he)
     rot = (APERTURE[0], 0.0, 0.0)
 
     def at(x, y, z):  # rotate an aperture-frame point up/down to the aperture's elevation
         return (x, y * math.cos(el0) - z * math.sin(el0), y * math.sin(el0) + z * math.cos(el0))
 
-    shell.box(at(0, d, hh), (2 * hw + 0.1, 0.28, t), "frame", rot=rot)
-    shell.box(at(0, d, -hh), (2 * hw + 0.1, 0.28, t), "frame", rot=rot)
+    shell.box(at(0, d, hh), (2 * hw + 0.1, 0.045, t), "frame", rot=rot)
+    shell.box(at(0, d, -hh), (2 * hw + 0.1, 0.045, t), "frame", rot=rot)
     for s in (1.0, -1.0):
-        shell.box(at(hw * s, d, 0), (t, 0.28, 2 * hh + 0.07), "frame", rot=rot)
-    shell.box(at(0, d - 0.08, hh - 0.035), (1.4 * hw, 0.02, 0.012), "strip", rot=rot)
+        shell.box(at(hw * s, d, 0), (t, 0.045, 2 * hh + 0.07), "frame", rot=rot)
+    shell.box(at(0, d - 0.01, hh - 0.035), (1.4 * hw, 0.012, 0.012), "strip", rot=rot)
     shell.to_object(bevel=0.01)
 
 
@@ -172,6 +173,7 @@ def build_footrest_and_mfd(m):
 
 def _parent_keep(obj, parent):
     """Parents `obj` to `parent`, keeping where it is."""
+    bpy.context.view_layer.update()  # parent.matrix_world must reflect its location
     obj.parent = parent
     obj.matrix_parent_inverse = parent.matrix_world.inverted()
 

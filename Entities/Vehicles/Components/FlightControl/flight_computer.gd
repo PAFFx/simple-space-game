@@ -44,6 +44,7 @@ var payload_mass: float = 0.0
 var thrusters: Array[Thruster] = []
 var state := FlightState.new()
 var last_wrench := Wrench.new()
+var _pending_toggles := {}
 ## Reaction torque AMBAC delivered last tick (body frame).
 var ambac_torque := Vector3.ZERO
 var acceleration_g: float = 0.0
@@ -123,6 +124,9 @@ func _physics_process(delta: float) -> void:
 		state.capability_map = _capability_map
 		_map_build = null
 	var command := input_source.get_command() if input_source != null else PilotCommand.new()
+	for toggle: StringName in _pending_toggles:
+		command.set(toggle, true)
+	_pending_toggles.clear()
 
 	if fcs_enabled:
 		last_wrench = control_law.compute(state, command)
@@ -200,6 +204,12 @@ func get_attitude_basis() -> Basis:
 		north = up.cross(Vector3.RIGHT if absf(up.x) < 0.9 else Vector3.BACK)
 	var back := -north.normalized()
 	return Basis(up.cross(back).normalized(), up, back)
+
+
+## Queues a one-shot PilotCommand toggle (e.g. &"toggle_precision") for the next tick,
+## for cockpit switches: they reuse the control law's own toggle handling.
+func request_toggle(toggle: StringName) -> void:
+	_pending_toggles[toggle] = true
 
 
 ## Whether the pilot is boosting (Shift, or full boost).

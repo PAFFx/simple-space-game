@@ -61,9 +61,7 @@ func poll_command() -> PilotCommand:
 	cmd.boost_full = _held_after_double_tap(a.BOOST)
 	cmd.brake = Input.is_action_pressed(a.BRAKE)
 	cmd.brake_full = _held_after_double_tap(a.BRAKE)
-	cmd.toggle_rotation_mode = Input.is_action_just_pressed(a.TOGGLE_ROTATION_MODE)
-	cmd.toggle_precision = Input.is_action_just_pressed(a.TOGGLE_PRECISION)
-	cmd.toggle_horizon_lock = Input.is_action_just_pressed(a.TOGGLE_HORIZON_LOCK)
+	# Rotation mode, precision and horizon lock are cockpit switches (CockpitSwitchPanel).
 	return cmd
 
 

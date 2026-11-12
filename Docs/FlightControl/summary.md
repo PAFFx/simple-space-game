@@ -384,6 +384,13 @@ Intentionally crude (it undershoots and cross-couples), kept for comparison and 
 
 ## Controls (defaults)
 
+Settings that rarely change mid-fight are cockpit switches, not keys (DCS style; middle mouse for
+click mode, left click throws a switch forward, right click back). Left console panel, FCS
+group: FCS on/off, ROT att-hold/rate, HRZN lock/free, MOVE normal/precision; LIMBS group:
+AMBAC on/off, STANCE auto/off, BRK POSE on/off. Right console: the hatch, a red button under a
+yellow guard (lift the guard, then press). Mode switches go through
+`FlightComputer.request_toggle()`, so the control law's own toggle handling runs.
+
 | Action | Key |
 |--------|-----|
 | Translate fwd / back / left / right | W / S / A / D |
@@ -395,10 +402,8 @@ Intentionally crude (it undershoots and cross-couples), kept for comparison and 
 | Boost with full auto-rotation (60°) | Shift double-tap, hold |
 | Brake (axes not being pushed on; released keys coast) | Ctrl, hold |
 | Hard brake (auto-rotation ≤ 30°) | Ctrl double-tap, hold |
-| Precision mode on / off | C |
-| Horizon lock on / off | L |
-| Rotation mode (ATT-HOLD ↔ RATE) | G |
-| Hatch open / close | H |
+| Cockpit click mode (free cursor for the switches) | Middle mouse |
+| Throw a switch forward / back | Left / right click (in click mode) |
 | Cockpit / external view | V |
 | Rifle ready / lower | 1 |
 | Shield guard / lower | 2 |

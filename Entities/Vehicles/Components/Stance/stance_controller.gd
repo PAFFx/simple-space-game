@@ -21,6 +21,8 @@ extends Node
 @export var ambac: AmbacController
 @export var flight_computer: FlightComputer
 @export var stances: Array[MsStance] = []
+## Off: the limbs ease back to neutral and stay there (AMBAC still balances with them).
+@export var enabled: bool = true
 ## Share of each stance's joint angles used without boost: normal moves barely tilt the
 ## suit, so the limbs only lean into them. Boost (Shift) uses the full pose.
 @export_range(0.0, 1.0) var normal_scale: float = 0.4
@@ -85,7 +87,9 @@ func _physics_process(delta: float) -> void:
 
 func _select(delta: float) -> void:
 	var intent := flight_computer.get_translation_intent()
-	var dir := intent.normalized() if intent.length() >= engage else _brake_push()
+	var dir := Vector3.ZERO
+	if enabled:
+		dir = intent.normalized() if intent.length() >= engage else _brake_push()
 	var pick: MsStance = null
 	if dir != Vector3.ZERO:
 		var best := -2.0

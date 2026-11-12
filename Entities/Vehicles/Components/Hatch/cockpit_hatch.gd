@@ -17,8 +17,6 @@ signal state_changed(is_open: bool)
 ## Portion of the timeline during which the screen aperture opens.
 @export var aperture_window := Vector2(0.0, 0.3)
 @export var start_open: bool = false
-## Toggle with PilotInputActions.TOGGLE_HATCH.
-@export var listen_for_input: bool = true
 
 var amount: float = 0.0
 
@@ -28,7 +26,6 @@ var _bones: Array[Dictionary] = []
 
 
 func _ready() -> void:
-	PilotInputActions.ensure_defaults()
 	_resolve_bones()
 	var vehicle := VehicleBase.find_vehicle(self)
 	if vehicle != null and vehicle.get_cockpit() != null:
@@ -67,8 +64,6 @@ func _set_target(value: float) -> void:
 
 
 func _process(delta: float) -> void:
-	if listen_for_input and Input.is_action_just_pressed(PilotInputActions.TOGGLE_HATCH):
-		toggle()
 	# Exact compare: is_equal_approx() would stop a hair short of 0 and the
 	# hatch would report unsealed forever.
 	if amount == _target:
