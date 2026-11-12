@@ -88,8 +88,8 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var boost_rate_gain_multiplier: float = 1.5
 
 @export_group("Movement modes")
-## Auto-rotation limit in normal flight and with Shift held (or a
-## double-tapped brake), deg. A double-tapped Shift uses the solver's own max_offset_deg.
+## Auto-rotation limit in normal flight and with Shift held, deg. A double-tapped Shift
+## or brake uses the solver's own max_offset_deg.
 @export var cruise_max_offset_deg: float = 20.0
 @export var boost_max_offset_deg: float = 30.0
 ## Precision mode: no auto-rotation, this acceleration (pushing and braking), no pushing
@@ -246,9 +246,9 @@ func get_mode_labels() -> PackedStringArray:
 
 ## Auto-rotation limit for this tick, deg (0 = off).
 func _offset_limit_deg(command: PilotCommand) -> float:
-	if command.boost_full:
+	if command.boost_full or (command.brake_full and not precision):
 		return attitude_solver.max_offset_deg
-	if command.boost or (command.brake_full and not precision):
+	if command.boost:
 		return boost_max_offset_deg
 	return 0.0 if precision else cruise_max_offset_deg
 
@@ -618,5 +618,7 @@ func _translation_force_world(state: FlightState, command: PilotCommand) -> Vect
 		held[k] = 1.0 if absf(command.translation[k]) > stick_deadzone else 0.0
 	var v_free := _pilot * ((_pilot.inverse() * v) * (Vector3.ONE - held))
 	var brake_limit := (precision_accel_g if gentle else stop_accel_g) * FlightComputer.G0
+	if command.brake_full and not gentle:
+		brake_limit = maxf(brake_limit, _total_thrust(state) / state.mass)  # hard brake: no cap
 	var brake := (-v_free * brake_gain).limit_length(brake_limit)
 	return (push + brake).limit_length(maxf(accel_limit, brake_limit)) * state.mass

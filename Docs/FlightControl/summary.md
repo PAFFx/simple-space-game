@@ -231,8 +231,9 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
   swamp it. Descents no longer flip between nose-up and nose-down.
 - **Brake on demand.** Released keys coast. Ctrl brakes the axes the stick doesn't hold at
   `stop_accel_g` (6 G, `brake_gain` 2.5 /s), limited by what the attitude can deliver, with the
-  without turning, like the old stop; a double-tapped Ctrl turns the suit up to the boost range
-  (30°, boost swing gain) so the big thrusters face the motion: fast moves stop 15–22% sooner
+  without turning, like the old stop; a double-tapped Ctrl (hard brake) turns the suit up to the full
+  range (60°, boost swing gain) with no braking cap (all the thrust, like a full boost) so the
+  big thrusters face the motion: fast moves stop 15–22% sooner
   (Shift strafe 5.6 → 4.4 s, full-boost dash 14.8 → 12.3 s), the suit levelling ~1 s after it
   stops; slow moves gain nothing. Precision mode brakes gently (`precision_accel_g`) without
   turning. Holding W + Ctrl brakes only drift, not the forward speed.
