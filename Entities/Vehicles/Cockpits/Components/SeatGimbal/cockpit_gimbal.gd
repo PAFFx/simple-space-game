@@ -9,11 +9,12 @@ extends Node
 ## Place under the CockpitBase node; it rotates that node.
 
 @export var flight_computer: FlightComputer
-## Mechanical limit of the seat gimbal.
-@export var max_angle_deg: float = 75.0
+## Mechanical limit of the seat gimbal. Room for the seat's own pitch (15°) plus the
+## largest auto-rotation offset (60°).
+@export var max_angle_deg: float = 90.0
 ## Beyond this the cockpit starts to yield smoothly instead of hitting a wall at
 ## the limit, so an overshooting body never snaps the pilot's view.
-@export var soft_knee_deg: float = 62.0
+@export var soft_knee_deg: float = 77.0
 
 var _cockpit: Node3D
 var _rest := Basis.IDENTITY

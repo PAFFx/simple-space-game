@@ -124,6 +124,17 @@ directions (descending: 0.7 G normal, 0.8 G boost, 1.3 G full). Shift overrides 
 While boosting, the swing itself is torque-limited (the body lags the target by ~14°, so swings
 run at ~20°/s), because auto-rotation yields to force (`auto_rotate_torque_priority`).
 
+**Pilot seat** (`seat_pitch_deg` 15°). The seat is pitched up from the suit, so at rest the pilot
+looks 15° above the suit's forward axis, like a suit leaning into its flight. The law tracks the
+suit's neutral frame (body = neutral · offset) and the pilot frame is neutral · seat. The view,
+the stick axes and movement directions follow the seat. Steering, per-axis locking and the attitude
+hold work on the pilot's axes, so a yaw in the view is one axis and stops cleanly; auto-rotation
+works on the suit's axes. Pilot yaw and roll mix suit yaw and roll, so while either is locked the
+offset keeps both. The seat levels out while the hatch is open (`seat_rate_deg` 30°/s), so the
+cockpit lines up with the opening. Verified: forward stick moves within 1–2° of the view's forward;
+a view yaw turns the hull about the tilted axis with no view bank; yawing during a boosted dive
+keeps the other view axes within 0.03°.
+
 **Horizon lock** (L, toggle; `horizon_lock`, on by default). Body-axis pitch + yaw bank the view relative to
 the world: a diagonal turn tilts the horizon, and a closed loop of stick motion leaves a roll
 (pitch up 90°, yaw 90°, pitch down 90° = rolled 90°). With the lock, yaw turns about a stored
@@ -198,7 +209,7 @@ predicted end-of-tick attitude, so the cockpit doesn't trail a turning body by o
 
 **Keeping the pilot oriented.** The swing waits for the body: once the body lags the target by
 6° the slew slows, and at 15° it pauses (`tracking_lag_deg`). The solver's 60° limit sits below the
-seat gimbal's soft knee (62°, limit 75°), and past the knee the gimbal eases toward its limit
+seat gimbal's soft knee less the seat pitch (77° − 15°; limit 90°), and past the knee the gimbal eases toward its limit
 (tanh) instead of clamping, so an overshoot can't snap the view. All rotation clamps take the
 shortest way round: clamping the "long way" quaternion once flipped the cockpit by ~220° in a
 single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 8°/s.
