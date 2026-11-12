@@ -112,6 +112,16 @@ func _limit_planes() -> Array[Vector3]:
 	return out
 
 
+## Actual (gimballed) thrust direction, global.
+func get_thrust_direction_global() -> Vector3:
+	return -_gimbal.global_basis.z.normalized()
+
+
+## Nominal (un-gimballed) thrust direction, global.
+func get_nominal_direction_global() -> Vector3:
+	return -global_basis.z.normalized()
+
+
 ## Nominal thrust direction expressed in `frame`'s local axes.
 func get_axis_in(frame: Node3D) -> Vector3:
 	return (frame.global_basis.inverse() * -global_basis.z).normalized()

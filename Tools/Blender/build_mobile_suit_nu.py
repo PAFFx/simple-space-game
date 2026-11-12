@@ -71,11 +71,19 @@ GROUPS = {
     "hand.L": ids((123, 127)),
     "thigh.R": ids(42, 44, 45),
     "thigh.L": ids(53, 55, 56),
-    "shin.R": ids(47, 48, 51, 52),
-    "shin.L": ids(58, 59, 62, 63),
+    "shin.R": ids(48, 52),
+    "shin.L": ids(59, 63),
+    # Movable thruster parts (Godot's ThrusterGuards turns them with their thrusters): the
+    # calf nozzles and the plates over them; the main nozzles are cut out of the backpack
+    # pods below (NOZZLE_CUPS).
+    "calf_nozzle.R": ids(47),
+    "calf_nozzle.L": ids(58),
+    "calf_guard.R": ids(51),
+    "calf_guard.L": ids(62),
     "foot.R": ids(2, 43, 46, 49, 50),
     "foot.L": ids(3, 54, 57, 60, 61),
-    "backpack": [i for i in range(70, 109) if i not in (86, 87, 88, 94, 95, 99, 100, 106, 107, 108)],
+    "backpack": [i for i in range(70, 109) if i not in (74, 75, 76, 83,
+            86, 87, 88, 94, 95, 99, 100, 106, 107, 108)],
     # Weapons
     "W:BeamRifle": ids((109, 122)),
     "W:Shield": ids((128, 138)),
@@ -127,6 +135,55 @@ def bones():
     return [(n, tuple(to_suit(h)), tuple(to_suit(t)), p) for n, h, t, p in b]
 
 
+# Main nozzles: (group, nozzle part, pod housing part). The nozzle is the hexagonal cup
+# with the yellow rim; CUP_RADIUS > 0 would also take housing faces around it that face
+# the same way (0: the frame stays with the backpack).
+NOZZLE_CUPS = [("main_nozzle.RU", 76, 70), ("main_nozzle.RL", 75, 70),
+               ("main_nozzle.LU", 83, 71), ("main_nozzle.LL", 74, 71)]
+CUP_RADIUS = 0.0
+CUP_MIN_DOT = 0.2
+
+# Movable bones: (group, parent bone, pivot): "top_front" = top edge toward +Y (a plate
+# hinged against the leg), "centre" = the part's centre (a nozzle on a ball joint).
+GUARDS = [("calf_guard.R", "shin.R", "top_front"), ("calf_guard.L", "shin.L", "top_front"),
+          ("calf_nozzle.R", "shin.R", "centre"), ("calf_nozzle.L", "shin.L", "centre")] + \
+         [(g, "backpack", "centre") for g, _r, _h in NOZZLE_CUPS]
+
+
+def face_groups(bm, part):
+    """Group name per face: by part (GROUPS), with the main nozzle cups cut out."""
+    by_part = {i: g for g, ps in GROUPS.items() for i in ps}
+    bm.faces.ensure_lookup_table()
+    out = [by_part.get(part[f.index], "backpack") for f in bm.faces]
+    for group, ring, housing in NOZZLE_CUPS:
+        faces = [f for f in bm.faces if part[f.index] == ring]
+        centre = sum((v.co for f in faces for v in f.verts), mathutils.Vector()) / sum(len(f.verts) for f in faces)
+        normal = sum((f.normal * f.calc_area() for f in faces), mathutils.Vector()).normalized()
+        for f in faces:
+            out[f.index] = group
+        for f in bm.faces:
+            if part[f.index] == housing and (f.calc_center_median() - centre).length < CUP_RADIUS \
+                    and f.normal.dot(normal) > CUP_MIN_DOT:
+                out[f.index] = group
+    return out
+
+
+def guard_bones(bm, groups):
+    """Bones for the movable thruster parts, placed from their geometry (suit space)."""
+    out = []
+    for group, parent, pivot in GUARDS:
+        pts = [v.co for f in bm.faces if groups[f.index] == group for v in f.verts]
+        lo = mathutils.Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+        hi = mathutils.Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        if pivot == "top_front":
+            head = mathutils.Vector(((lo.x + hi.x) * 0.5, hi.y, hi.z))
+        else:
+            head = sum(pts, mathutils.Vector()) / len(pts)
+        length = max(hi.z - lo.z, 0.3)
+        out.append((group, tuple(head), tuple(head - mathutils.Vector((0, 0, length))), parent))
+    return out
+
+
 def load_parts(path):
     """Imports the source, welds it and returns (bmesh, materials, face → part index)."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -169,11 +226,10 @@ def load_parts(path):
     return bm, materials, part
 
 
-def make_object(name, bm, materials, part, keep):
-    keep = set(keep)
+def make_object(name, bm, materials, groups, group):
     b = bm.copy()
     b.faces.ensure_lookup_table()
-    bmesh.ops.delete(b, geom=[f for f in b.faces if part[f.index] not in keep], context="FACES")
+    bmesh.ops.delete(b, geom=[f for f in b.faces if groups[f.index] != group], context="FACES")
     bmesh.ops.delete(b, geom=[v for v in b.verts if not v.link_faces], context="VERTS")
     mesh = bpy.data.meshes.new(name)
     b.to_mesh(mesh)
@@ -245,16 +301,17 @@ def main():
     preview_prefix = argv[argv.index("--preview") + 1] if "--preview" in argv else ""
     bm, materials, part = load_parts(src)
     count = max(part) + 1
-    assigned = [i for g in GROUPS.values() for i in g]
+    assigned = [i for g in GROUPS.values() for i in g] + [r for _g, r, _h in NOZZLE_CUPS]
     missing = sorted(set(range(count)) - set(assigned))
     doubled = sorted({i for i in assigned if assigned.count(i) > 1})
     if missing or doubled:
         raise SystemExit(f"[nu] unassigned parts {missing}, assigned twice {doubled}")
 
-    arm = mk.build_armature("Armature", bones())
+    groups = face_groups(bm, part)
+    arm = mk.build_armature("Armature", bones() + guard_bones(bm, groups))
     suit, weapons = [], {}
-    for group, keep in GROUPS.items():
-        obj = make_object(object_name(group), bm, materials, part, keep)
+    for group in list(GROUPS) + [g for g, _r, _h in NOZZLE_CUPS]:
+        obj = make_object(object_name(group), bm, materials, groups, group)
         if group.startswith("W:"):
             kind = group[2:].rstrip("0123456789")
             weapons.setdefault(kind, []).append(obj)

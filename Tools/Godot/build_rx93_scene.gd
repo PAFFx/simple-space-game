@@ -31,6 +31,11 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 # Anime-strong (a boosted jump easily beats Earth gravity): mains 4 × 1 MN, the rest
 # sized by nozzle.
 const CONE_3D := [30.0, 90.0, 90.0]
+# Mains are the model's own nozzles, turned by ThrusterGuards; they swing from ~10° forward
+# of straight down to 60° back (35° cone around 25° back), and 35° sideways.
+const MAIN_EXHAUST := Vector3(0.0, -0.906, 0.423)
+const MAIN_MODEL_EXHAUST := Vector3(0.0, -0.67, 0.74)
+const MAIN_CONE := [35.0, 90.0, 90.0]
 const SOLE_3D := [20.0, 90.0, 90.0]
 const FORE_AFT := [25.0, 25.0, 0.0]      # 2D: swings fore/aft (about the port's sideways axis)
 const UP_DOWN := [20.0, 20.0, 0.0]       # 2D, for forward-facing ports
@@ -41,16 +46,16 @@ const MAIN_DYNAMICS := {spool_up_time = 0.12, spool_down_time = 0.08, gimbal_rat
 const VERNIER_DYNAMICS := {spool_up_time = 0.06, spool_down_time = 0.04, gimbal_rate_deg = 360.0}
 const THRUSTERS := [
 	# Backpack mains, 2 per side stacked, firing back and down.
-	["MainRU", "backpack", Vector3(1.25, 16.5, 3.35), Vector3(0, -0.67, 0.74), 1000.0, CONE_3D, 14.0, 1.1, true],
-	["MainRL", "backpack", Vector3(1.25, 15.46, 3.12), Vector3(0, -0.67, 0.74), 1000.0, CONE_3D, 14.0, 1.1, true],
-	["MainLU", "backpack", Vector3(-1.23, 16.5, 3.35), Vector3(0, -0.67, 0.74), 1000.0, CONE_3D, 14.0, 1.1, true],
-	["MainLL", "backpack", Vector3(-1.23, 15.46, 3.12), Vector3(0, -0.67, 0.74), 1000.0, CONE_3D, 14.0, 1.1, true],
+	["MainRU", "backpack", Vector3(1.25, 16.75, 3.13), MAIN_EXHAUST, 1000.0, MAIN_CONE, 14.0, 1.1, false],
+	["MainRL", "backpack", Vector3(1.25, 15.71, 2.91), MAIN_EXHAUST, 1000.0, MAIN_CONE, 14.0, 1.1, false],
+	["MainLU", "backpack", Vector3(-1.23, 16.75, 3.13), MAIN_EXHAUST, 1000.0, MAIN_CONE, 14.0, 1.1, false],
+	["MainLL", "backpack", Vector3(-1.23, 15.71, 2.91), MAIN_EXHAUST, 1000.0, MAIN_CONE, 14.0, 1.1, false],
 	# Soles (the "toe" thrusters).
 	["SoleR", "foot.R", Vector3(4.25, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 5.0, 0.8, false],
 	["SoleL", "foot.L", Vector3(-4.24, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 5.0, 0.8, false],
-	# Behind each calf, mostly down and a little back.
-	["CalfR", "shin.R", Vector3(3.34, 5.16, 1.8), Vector3(0.17, -0.9, 0.41), 400.0, FORE_AFT, 8.0, 0.8, true],
-	["CalfL", "shin.L", Vector3(-3.32, 5.16, 1.8), Vector3(-0.17, -0.9, 0.41), 400.0, FORE_AFT, 8.0, 0.8, true],
+	# Behind each calf, mostly down and a little back; its guard plate moves with it.
+	["CalfR", "shin.R", Vector3(3.22, 5.8, 1.53), Vector3(0.17, -0.9, 0.41), 400.0, CONE_3D, 8.0, 0.8, false],
+	["CalfL", "shin.L", Vector3(-3.2, 5.8, 1.53), Vector3(-0.17, -0.9, 0.41), 400.0, CONE_3D, 8.0, 0.8, false],
 	# Shoulder armor, two each: up-and-out (pushes the suit down) and out-and-down.
 	["ShUpR", "shoulder.R", Vector3(4.79, 19.7, 0.45), Vector3(0.74, 0.67, 0.01), 250.0, FORE_AFT, 3.5, 0.5, false],
 	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.5, 0.5, false],
@@ -199,6 +204,7 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 	_build_thrusters(root)
 	_build_flight_computer(root)
 	_build_ambac(root)
+	_build_thruster_guards(root)
 	_build_loadout(root)
 	_build_animation(root, library)
 
@@ -286,6 +292,29 @@ func _build_flight_computer(root: Node3D) -> void:
 		binding.deadzone = b[2]
 		bindings.append(binding)
 	input.set("axis_bindings", bindings)
+
+
+## The model's main and calf nozzles turn with their thrusters; the calf plates swing
+## with the calf nozzles.
+func _build_thruster_guards(root: Node3D) -> void:
+	var node := ThrusterGuards.new()
+	node.name = "ThrusterGuards"
+	_add(root, root, node)
+	node.skeleton = root.get_node(SKELETON)
+	var guards: Array[ThrusterGuard] = []
+	# bone, thrusters, full rotation (nozzle) or hinge (guard plate)
+	for g in [["main_nozzle.RU", ["MainRU"], true], ["main_nozzle.RL", ["MainRL"], true],
+			["main_nozzle.LU", ["MainLU"], true], ["main_nozzle.LL", ["MainLL"], true],
+			["calf_nozzle.R", ["CalfR"], true], ["calf_nozzle.L", ["CalfL"], true],
+			["calf_guard.R", ["CalfR"], false], ["calf_guard.L", ["CalfL"], false]]:
+		var guard := ThrusterGuard.new()
+		guard.bone_name = g[0]
+		guard.thrusters = PackedStringArray(g[1])
+		guard.full_rotation = g[2]
+		if g[0].begins_with("main_nozzle"):
+			guard.rest_thrust = -MAIN_MODEL_EXHAUST  # the modelled cups point further back
+		guards.append(guard)
+	node.guards = guards
 
 
 func _build_ambac(root: Node3D) -> void:

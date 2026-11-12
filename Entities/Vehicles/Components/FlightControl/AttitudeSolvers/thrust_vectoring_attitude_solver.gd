@@ -37,6 +37,10 @@ extends AttitudeOffsetSolver
 @export var commit_angle_deg: float = 5.0
 ## The side is released when the demanded force turns this far from where it was chosen, deg.
 @export var commit_release_deg: float = 45.0
+## Only turn away from the pilot frame if that raises the force capability along the demand
+## by at least this factor; otherwise stay upright (e.g. a full-boost climb keeps the head
+## up instead of leaning back for a bit more thrust).
+@export var min_tilt_gain: float = 1.6
 @export var initial_step_deg: float = 12.0
 @export var iterations: int = 6
 
@@ -89,12 +93,20 @@ func solve(state: FlightState, force_pilot: Vector3, current: Quaternion,
 					improved = true
 		if not improved:
 			step *= 0.5
+	if best != Vector3.ZERO and _capability(state, force_pilot, Vector3.ZERO) * min_tilt_gain \
+			>= _capability(state, force_pilot, best):
+		best = _limit(Vector3.ZERO, r_pin, locked)
 	# Commit to the side of this solution (not of the current attitude, which after a
 	# release still points the old way).
 	if _commit == Vector3.ZERO and best.length() > deg_to_rad(commit_angle_deg):
 		_commit = best.normalized()
 		_commit_force = f_dir
 	return from_rotation_vector(best)
+
+
+func _capability(state: FlightState, f_pilot: Vector3, r: Vector3) -> float:
+	var f_body := from_rotation_vector(r).inverse() * f_pilot
+	return state.force_capability(f_body.normalized())
 
 
 func _cost(state: FlightState, f_pilot: Vector3, r: Vector3, r_prev: Vector3) -> float:

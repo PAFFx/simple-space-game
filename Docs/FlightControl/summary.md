@@ -232,6 +232,9 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
   swamp it. Descents no longer flip between nose-up and nose-down.
 - **Hard stops.** In V-HOLD, releasing the stick brakes at `stop_accel_g` (6 G) with the boost gain,
   limited by what the attitude can deliver (not in precision mode).
+- **Upright when it's enough.** The solver only turns away from the pilot frame if that raises the
+  capability along the demand by `min_tilt_gain` (×1.6); a full-boost climb stays head-up (~9 G on
+  the ν) instead of leaning back for a bit more thrust.
 - **Boost.** Shift is capped at `boost_accel_g` 7 G; a double-tapped full boost has no cap (all the
   thrust the suit has). ν: full boost up peaks at ~11 G.
 
@@ -402,17 +405,21 @@ texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
-| 4 × 1 MN mains (nozzle model) | backpack, 2 per side, stacked | back + down | 3D, 30° cone |
+| 4 × 1 MN mains (the model's own nozzles, turned to follow) | backpack, 2 per side, stacked | down, back | 3D, 35° cone around 25° back (~10° forward of straight down to 60° back) |
 | 2 × 500 kN | soles | down | 3D, 20° cone |
-| 2 × 400 kN (nozzle model) | behind each calf | down, a little back | 2D fore/aft ±25° |
+| 2 × 400 kN (the model's own nozzles; the plate over each swings with it) | behind each calf | down, a little back | 3D, 30° cone |
 | 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | 2D fore/aft ±25° |
 | 2 × 250 kN | chest vents | forward (brakes) | 2D up/down ±20° |
 | 6 × 80 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
 | 2 × 120 kN | rear skirts | back | fixed |
 | 6 × 70 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
 
-Small ports have no nozzle model (`Thruster.show_nozzle` off): only the plume shows, from the
-armor. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
+No added nozzle meshes on the ν (`Thruster.show_nozzle` off): small ports show only a plume from
+the armor, and the main and calf nozzles are the model's own, turned by `ThrusterGuards` to follow
+their thrusters' actual gimbal (`ThrusterGuard.full_rotation`; `rest_thrust` when the modelled cup
+points elsewhere at rest). The calf plates hinge to follow their nozzles. These bones
+(`main_nozzle.*`, `calf_nozzle.*`, `calf_guard.*`) are visual only: the thrusters stay on the
+backpack/shin bones. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
 (sideways) tighten the cone per axis; 0 on one = 2D vectoring, `gimbal_limit_deg` 0 = fixed.
 
 Clean force capability (level, limbs at rest): up 7.1 G, forward 4.3 G, sideways 2.4 G, back
