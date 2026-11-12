@@ -32,16 +32,18 @@ var _accel := Vector3.ZERO  ## filtered cabin acceleration, world
 var _prev_point_v := Vector3.ZERO
 var _primed := false
 var _mount_rest := Vector3.ZERO
+var _hatch: CockpitHatch
 
 
 func _ready() -> void:
 	_cockpit = get_parent() as Node3D
 	if camera_mount != null:
 		_mount_rest = camera_mount.position
-	if flight_computer == null:
-		var vehicle := VehicleBase.find_vehicle(self)
-		if vehicle != null:
+	var vehicle := VehicleBase.find_vehicle(self)
+	if vehicle != null:
+		if flight_computer == null:
 			flight_computer = vehicle.find_component(FlightComputer) as FlightComputer
+		_hatch = vehicle.find_component(CockpitHatch) as CockpitHatch
 
 
 func _physics_process(delta: float) -> void:
@@ -60,6 +62,8 @@ func _physics_process(delta: float) -> void:
 
 	# Seat relative to the cabin: x'' = -a_cabin - wn² x - 2 ζ wn x'
 	var a_local := _cockpit.global_basis.inverse() * _accel
+	if _hatch != null and _hatch.is_unsealed():
+		a_local = Vector3.ZERO  # linear seat off with the hatch open: the seat settles to centre
 	var wn := natural_frequency
 	var rel_accel := -a_local - _x * wn * wn - _v * 2.0 * damping_ratio * wn
 	_v += rel_accel * delta
