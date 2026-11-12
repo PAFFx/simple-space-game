@@ -14,7 +14,9 @@ extends ControlLaw
 ## Translation — the stick pushes along its direction (pilot frame) with no top speed;
 ##   speed on the axes it holds is wanted, never cancelled. Released axes coast. Brake
 ##   (Ctrl) stops the motion, relative to the reference frame, on the axes the stick
-##   isn't holding; a double-tapped brake may turn the suit further, like a boost.
+##   isn't holding, and on held axes still moving against the stick; a double-tapped
+##   brake may turn the suit further, like a boost. Drift hold pushes out motion
+##   nobody commanded (force spilled while turning) on the axes the stick isn't holding.
 ## Auto-rotation — an AttitudeOffsetSolver may turn the body away from the
 ##   pilot frame (body = pilot · offset) so its strongest thrusters face the
 ##   force demand. The cockpit counter-rotates, so the pilot's view stays put.
@@ -40,9 +42,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 
 @export_group("Rotation")
 ## Max commanded rate at full stick (pitch, yaw, roll), deg/s.
-@export var max_rate_deg := Vector3(40.0, 35.0, 60.0)
+@export var max_rate_deg := Vector3(90.0, 90.0, 120.0)
 ## Rate loop bandwidth for steering and stops, 1/s. Higher = snappier, more chatter.
-@export var rate_gain: float = 5.0
+@export var rate_gain: float = 7.5
 ## Rate loop bandwidth while auto-rotating, 1/s. Gentler, so the swing never asks for
 ## turning moments that spill force.
 @export var auto_rotate_rate_gain: float = 2.5
@@ -55,7 +57,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## its input drops into the deadzone, so a noisy stick doesn't flicker the lock, s.
 @export var axis_release_time: float = 0.12
 ## Fraction of torque authority the FCS may request.
-@export_range(0.0, 1.0) var torque_fraction: float = 0.6
+@export_range(0.0, 1.0) var torque_fraction: float = 0.85
 ## Torque authority auto-rotation (and attitude hold) may use.
 @export_range(0.0, 1.0) var auto_rotate_torque_fraction: float = 0.4
 ## Allocator torque priority while auto-rotating/holding. Low = never spill force to
@@ -78,12 +80,17 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Rate-loop gain multiplier while holding / realigning, so the body can follow the
 ## braking curve tightly (a soft loop brakes late and overshoots).
 @export var hold_rate_gain_multiplier: float = 5.0
+## Allocator torque priority while steering or stopping a turn (< 0 = allocator default).
+## Low keeps the force clean: hard turns otherwise buy torque with off-centre thrust,
+## which shoves the suit sideways. AMBAC still adds its torque on top.
+@export var steer_torque_priority: float = 0.35
 ## Allocator torque priority while realigning to rest (< 0 = allocator default).
 ## Lower keeps the suit's braking push clean at the cost of a slower return.
 @export var realign_torque_priority: float = 0.5
 
 @export_group("Boost")
-## While boosting: rate limits are multiplied by this, and torque/thrust limits open fully.
+## While boosting (or hard braking, outside precision): rate limits are multiplied by
+## this, and torque/thrust limits open fully.
 @export var boost_rate_multiplier: float = 1.7
 @export var boost_rate_gain_multiplier: float = 1.5
 
@@ -123,6 +130,15 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var brake_gain: float = 2.5
 @export var stop_accel_g: float = 6.0
 
+@export_group("Drift hold")
+## Cancels motion the pilot didn't ask for (force spilled by hard turns, thruster lag)
+## on the axes the stick isn't holding, against the velocity the commands alone give.
+@export var drift_hold: bool = true
+## (m/s²) per (m/s) of drift, up to cruise_accel_g (precision_accel_g in precision).
+@export var drift_gain: float = 3.0
+## Drift above this is taken as real (a collision, a new reference frame), m/s.
+@export var drift_max_error: float = 3.0
+
 var _initialized := false
 var _pilot := Quaternion.IDENTITY    ## Pilot frame orientation (global)
 var _offset := Quaternion.IDENTITY   ## Body relative to pilot frame
@@ -147,6 +163,9 @@ var _thruster_limit := Vector3.INF   ## Thrusters' share of this tick's torque l
 var _stick := Vector3.ZERO           ## Rotation demand after horizon-lock shaping
 var _horizon_up := Vector3.UP        ## Global "up" the horizon lock levels to
 var _manual_roll := false            ## Pilot is rolling (sets a new horizon)
+var _v_expect := Vector3.ZERO        ## Velocity the commands alone would give (global)
+var _intent_accel := Vector3.ZERO    ## Last tick's commanded acceleration (global)
+var _drift_frame := -10              ## Physics frame of the last drift update
 
 
 func reset() -> void:
@@ -210,14 +229,16 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	_update_pilot(body_q)
 	_level_horizon(state.delta)
 	var force_world := _translation_force_world(state, command)
+	var drift_force := _drift_correction(state, command, force_world)
 	_update_offset(state, force_world, command)
 	var torque := _rotation_torque(state, command, body_q)
-	var force_body := clamp_to_capability(state.to_local(force_world), state, 1.0)
+	var force_body := clamp_to_capability(state.to_local(force_world + drift_force), state, 1.0)
 	var wrench := Wrench.new(force_body, torque)
 	wrench.thruster_torque_limit = _thruster_limit
-	# Steering and stopping keep the allocator default.
 	# Braking into a target always wins: a stop matters more than a clean push.
-	if _locked == Vector3.ZERO:
+	if _locked != Vector3.ZERO:
+		wrench.torque_priority = steer_torque_priority
+	else:
 		var base := lerpf(auto_rotate_torque_priority, recover_torque_priority, _recover) \
 				if _auto_rotating else realign_torque_priority
 		wrench.torque_priority = lerpf(base, recover_torque_priority, _brake)
@@ -467,11 +488,13 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	var omega := state.local_angular_velocity
 	_brake = 0.0
 	var max_rate := max_rate_deg * (PI / 180.0)
-	if command.boost:
+	# A hard brake snap-turns like a boost, to swing the big thrusters into the stop.
+	var fast_turn := command.boost or (command.brake_full and not precision)
+	if fast_turn:
 		max_rate *= boost_rate_multiplier
 	elif precision:
 		max_rate *= precision_rate_multiplier
-	var gain := rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
+	var gain := rate_gain * (boost_rate_gain_multiplier if fast_turn else 1.0)
 	var inertia := state.inertia_local
 	var gyro := omega.cross(inertia * omega)
 	var steering := _active != Vector3.ZERO
@@ -480,7 +503,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		var rate_cmd := _stick * max_rate if steering else Vector3.ZERO
 		if not steering:
 			gain *= hold_rate_gain_multiplier
-		var fraction := 1.0 if command.boost and steering else torque_fraction
+		var fraction := 1.0 if fast_turn and steering else torque_fraction
 		_thruster_limit = state.max_torque * fraction
 		var limit := _thruster_limit + state.ambac_torque
 		return (inertia * ((rate_cmd - omega) * gain) + gyro).clamp(-limit, limit)
@@ -524,8 +547,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		elif _capture[k] > 0.0:
 			gain_p[k] = gain * stop_gain_multiplier
 		elif _auto_rotating:
-			var fast := command.boost or (command.brake_full and not precision)
-			gain_p[k] = auto_rotate_rate_gain * (boost_rate_gain_multiplier if fast else 1.0)
+			gain_p[k] = auto_rotate_rate_gain * (boost_rate_gain_multiplier if fast_turn else 1.0)
 		else:
 			gain_p[k] = gain * hold_rate_gain_multiplier
 	var alpha_p := (rate_p - omega_p) * gain_p
@@ -534,7 +556,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	# use it all, while auto-rotation stays gentle so it never spills force. The limbs'
 	# torque comes on top of both (it moves no thrusters, so it's always clean).
 	var stopping := (_capture - _active).max(Vector3.ZERO) != Vector3.ZERO
-	var lock_fraction := 1.0 if stopping or (command.boost and steering) else torque_fraction
+	var lock_fraction := 1.0 if stopping or (fast_turn and steering) else torque_fraction
 	var free_fraction := lerpf(_auto_fraction() if _auto_rotating else torque_fraction, 1.0, _brake)
 	var lock_thrust := state.max_torque * lock_fraction
 	var free_thrust := state.max_torque * free_fraction
@@ -601,6 +623,37 @@ func _total_thrust(state: FlightState) -> float:
 	return total
 
 
+## Force (global) that pushes out drift on the pilot axes the stick isn't holding.
+## The expected velocity integrates only the pilot's intent (clamped to capability),
+## so whatever else moved the suit shows up as the error.
+func _drift_correction(state: FlightState, command: PilotCommand, intent_world: Vector3) -> Vector3:
+	var v := state.linear_velocity
+	var frame := Engine.get_physics_frames()
+	var continuous := frame == _drift_frame + 1
+	_drift_frame = frame
+	var active := drift_hold and not command.brake
+	if active and continuous:
+		_v_expect += _intent_accel * state.delta
+	else:
+		_v_expect = v
+	_intent_accel = state.to_global(clamp_to_capability(
+			state.to_local(intent_world), state, 1.0)) / state.mass
+	if not active:
+		return Vector3.ZERO
+	var err_p := _pilot.inverse() * (v - _v_expect)
+	for k in 3:
+		if absf(command.translation[k]) > stick_deadzone:
+			err_p[k] = 0.0
+	if err_p.length() > drift_max_error:
+		_v_expect = v
+		return Vector3.ZERO
+	var err := _pilot * err_p
+	_v_expect = v - err  # held axes: their speed is wanted, so it's expected
+	var gentle := precision and not command.boost
+	var limit := (precision_accel_g if gentle else cruise_accel_g) * FlightComputer.G0
+	return (-err * drift_gain).limit_length(limit) * state.mass
+
+
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
 	var stick_world := _pilot * command.translation
 	var gentle := precision and not command.boost
@@ -620,11 +673,14 @@ func _translation_force_world(state: FlightState, command: PilotCommand) -> Vect
 		push = dir * push_accel
 	if not command.brake:
 		return push * state.mass
-	# Brake only the pilot axes the stick isn't holding.
-	var held := Vector3.ZERO
+	# Brake the pilot axes the stick isn't holding, and held axes still moving against
+	# the stick (so reversing brakes hard first, then pushes).
+	var v_p := _pilot.inverse() * v
 	for k in 3:
-		held[k] = 1.0 if absf(command.translation[k]) > stick_deadzone else 0.0
-	var v_free := _pilot * ((_pilot.inverse() * v) * (Vector3.ONE - held))
+		var s := command.translation[k]
+		if absf(s) > stick_deadzone and v_p[k] * s > 0.0:
+			v_p[k] = 0.0
+	var v_free := _pilot * v_p
 	var brake_limit := (precision_accel_g if gentle else stop_accel_g) * FlightComputer.G0
 	if command.brake_full and not gentle:
 		brake_limit = maxf(brake_limit, _total_thrust(state) / state.mass)  # hard brake: no cap

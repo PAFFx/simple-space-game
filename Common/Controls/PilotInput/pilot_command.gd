@@ -16,7 +16,8 @@ var boost := false
 ## Boost with full auto-rotation (Shift double-tapped and held). Implies boost.
 var boost_full := false
 
-## Brake the motion on the axes the translation doesn't hold (Ctrl held). Released keys
+## Brake the motion on the axes the translation doesn't hold, or holds against the
+## current motion (Ctrl held). Released keys
 ## otherwise coast. brake_full (Ctrl double-tapped and held) stops harder, turning the
 ## suit further to use its big thrusters, like a boost.
 var brake := false
