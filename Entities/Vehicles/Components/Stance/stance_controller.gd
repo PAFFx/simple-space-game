@@ -5,8 +5,11 @@ extends Node
 ## on them point usefully (and their swing helps turn the body), without flailing.
 ##
 ## The stance is picked from the pilot's movement request (stick translation, pilot
-## frame): the stance whose direction it falls within, else neutral. Releasing the
-## stick returns the limbs to neutral, and their swing back helps level the suit. It only changes after the new choice has
+## frame): the stance whose direction it falls within, else neutral. With the stick
+## released, while the FBW is braking a fast move, it's picked from the braking push
+## instead (against the velocity), so the limbs counter the motion (legs forward to stop
+## a dash) and their swing helps turn the suit into the brake; once nearly stopped they
+## return to neutral, and their swing back helps level the suit. It only changes after the new choice has
 ## held for confirm_time and the current one for min_dwell, and the current stance
 ## keeps its pick until the push leaves its cone by hysteresis_deg. Each change is one
 ## smooth motion (min-jerk, transition_time) fed to AMBAC as joint targets, so the
@@ -18,8 +21,17 @@ extends Node
 @export var ambac: AmbacController
 @export var flight_computer: FlightComputer
 @export var stances: Array[MsStance] = []
+## Share of each stance's joint angles used without boost: normal moves barely tilt the
+## suit, so the limbs only lean into them. Boost (Shift) uses the full pose.
+@export_range(0.0, 1.0) var normal_scale: float = 0.4
 ## Stick deflection below which the suit goes back to neutral.
 @export var engage: float = 0.2
+## Pose against the motion while braking (stick released) above brake_speed, until
+## below brake_release_speed (m/s, relative to the reference frame). Off: in tests it
+## didn't stop the suit any sooner (braking is thrust-limited) and settled it a bit slower.
+@export var brake_stances: bool = false
+@export var brake_speed: float = 8.0
+@export var brake_release_speed: float = 3.0
 @export var hysteresis_deg: float = 25.0
 @export var confirm_time: float = 0.15
 @export var min_dwell: float = 0.6
@@ -40,6 +52,8 @@ var _to := PackedFloat32Array()
 var _t := 1.0                          ## Transition progress 0..1
 var _T := 0.45                         ## Duration of the current transition, s
 var _settled := true
+var _braking := false
+var _scale := 1.0                      ## Share of the current stance's angles in use
 
 
 func _ready() -> void:
@@ -70,9 +84,9 @@ func _physics_process(delta: float) -> void:
 
 func _select(delta: float) -> void:
 	var intent := flight_computer.get_translation_intent()
+	var dir := intent.normalized() if intent.length() >= engage else _brake_push()
 	var pick: MsStance = null
-	if intent.length() >= engage:
-		var dir := intent.normalized()
+	if dir != Vector3.ZERO:
 		var best := -2.0
 		for s in stances:
 			var cone := s.cone_deg + (hysteresis_deg if s == current else 0.0)
@@ -84,17 +98,43 @@ func _select(delta: float) -> void:
 	if pick == current:
 		_pending = null
 		_pending_time = 0.0
+		# Boost pressed or let go mid-move (kept while braking): ease to the new size.
+		var scale := _wanted_scale()
+		if current != null and intent.length() >= engage and absf(scale - _scale) > 1e-3:
+			_begin(current, scale)
 		return
 	if pick != _pending:
 		_pending = pick
 		_pending_time = 0.0
 	_pending_time += delta
 	if _pending_time >= confirm_time and _dwell >= min_dwell:
-		_begin(pick)
+		_begin(pick, _wanted_scale())
 
 
-func _begin(stance: MsStance) -> void:
+func _wanted_scale() -> float:
+	return 1.0 if flight_computer.is_boosting() else normal_scale
+
+
+## Direction of the braking push in the pilot frame, zero when not braking a fast move
+## (also when coasting: the FBW must be pushing against the motion).
+func _brake_push() -> Vector3:
+	var state := flight_computer.state
+	if not brake_stances or not flight_computer.fcs_enabled or state == null:
+		_braking = false
+		return Vector3.ZERO
+	var v_body := state.local_linear_velocity
+	var speed := v_body.length()
+	var force := flight_computer.last_wrench.force
+	_braking = speed > (brake_release_speed if _braking else brake_speed) \
+			and force.dot(-v_body) > 0.0
+	if not _braking:
+		return Vector3.ZERO
+	return -(flight_computer.get_pilot_offset() * v_body) / speed
+
+
+func _begin(stance: MsStance, scale: float) -> void:
 	current = stance
+	_scale = scale
 	_pending = null
 	_pending_time = 0.0
 	_dwell = 0.0
@@ -107,7 +147,7 @@ func _begin(stance: MsStance) -> void:
 		for k in stance.bones.size():
 			var i := ambac.find_joint(StringName(stance.bones[k]), stance.axes[k])
 			if i >= 0:
-				_to[i] = deg_to_rad(stance.angles_deg[k])
+				_to[i] = deg_to_rad(stance.angles_deg[k]) * scale
 	_T = transition_time
 	for i in ambac.joints.size():
 		var rate := deg_to_rad(ambac.joints[i].max_rate_deg) * 0.9

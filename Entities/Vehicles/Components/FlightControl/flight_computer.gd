@@ -181,6 +181,12 @@ func get_translation_intent() -> Vector3:
 	return input_source.last_command.translation
 
 
+## Whether the pilot is boosting (Shift, or full boost).
+func is_boosting() -> bool:
+	return input_source != null and input_source.last_command != null \
+			and input_source.last_command.boost
+
+
 ## Body relative to the pilot frame (body = pilot · offset); the cockpit counter-rotates by it.
 func get_pilot_offset() -> Quaternion:
 	return control_law.get_pilot_offset() if fcs_enabled else Quaternion.IDENTITY

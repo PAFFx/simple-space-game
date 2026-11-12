@@ -258,6 +258,11 @@ Only free limbs move: groups occupied by active equipment or hard-locked
 **climb** (legs forward, knees bent), **strafe left/right** (raise the leg on that side high,
 hip ~70°, knee tucked ~95°, toe pointed), **forward** (legs trail), **back** (legs forward). There's no descend stance: bending the
 legs made descents worse. Capability-map rebuilds per stance are available but off (too costly).
+Without boost a stance uses 40% of its angles (`normal_scale`; normal moves barely tilt the
+suit), with boost (Shift) the full pose; pressing or releasing Shift mid-move eases between them.
+A braking counter-pose (pick the stance from the braking push while the stick is released,
+`brake_stances`) is available but off: it didn't stop the suit sooner (braking is
+thrust-limited) and settled it slightly slower.
 Each joint's transition is stretched to what its `max_rate_deg` allows, so a big leg swing stays
 smooth (min-jerk) instead of hitting the rate limit.
 
