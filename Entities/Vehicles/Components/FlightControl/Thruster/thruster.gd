@@ -16,6 +16,9 @@ extends Node3D
 ## above gimbal_limit_deg it adds nothing. Lets a nozzle swing wide sideways but only
 ## a little fore and aft.
 @export_range(0.0, 90.0) var gimbal_pitch_limit_deg: float = 90.0
+## Same for the sideways swing (about local Y). 0 = the nozzle only swings fore/aft
+## (one-plane, "2D" vectoring); gimbal_limit_deg 0 = fixed nozzle.
+@export_range(0.0, 90.0) var gimbal_yaw_limit_deg: float = 90.0
 @export var gimbal_rate_deg: float = 120.0        ## Max gimbal slew, deg/s
 @export var spool_up_time: float = 0.25           ## Throttle time constant rising, s
 @export var spool_down_time: float = 0.12         ## Throttle time constant falling, s
@@ -33,6 +36,9 @@ extends Node3D
 		nozzle_scale = v
 		if is_node_ready():
 			_visual.scale = Vector3.ONE * v
+
+## Plane normals per thruster in FlightState.thruster_planes (pitch ×2, yaw ×2).
+const PLANES := 4
 
 var throttle: float = 0.0                         ## Actual spooled throttle [0, 1]
 
@@ -77,22 +83,30 @@ func get_cone_rad() -> float:
 	return deg_to_rad(gimbal_limit_deg)
 
 
-## Fore/aft swing limit as two plane normals m (the direction d is allowed when
-## m·d ≤ 0 for both), in `frame`'s axes. Zero vectors when there's no extra limit.
-func get_pitch_planes_in(frame: Node3D) -> PackedVector3Array:
-	if gimbal_pitch_limit_deg >= gimbal_limit_deg:
-		return PackedVector3Array([Vector3.ZERO, Vector3.ZERO])
+## Fore/aft and sideways swing limits as PLANES_PER_THRUSTER plane normals m (the
+## direction d is allowed when m·d ≤ 0 for all), in `frame`'s axes. Zero vectors
+## where there's no extra limit.
+func get_limit_planes_in(frame: Node3D) -> PackedVector3Array:
 	var to_frame := frame.global_basis.inverse() * global_basis
 	var out := PackedVector3Array()
-	for m in _pitch_planes():
-		out.append((to_frame * m).normalized())
+	for m in _limit_planes():
+		out.append((to_frame * m).normalized() if m != Vector3.ZERO else Vector3.ZERO)
 	return out
 
 
-## Local plane normals: pitch φ = atan2(d.y, −d.z) stays within ±limit.
-func _pitch_planes() -> Array[Vector3]:
-	var h := deg_to_rad(gimbal_pitch_limit_deg)
-	return [Vector3(0.0, cos(h), sin(h)), Vector3(0.0, -cos(h), sin(h))]
+## Local plane normals: pitch atan2(d.y, −d.z) and yaw atan2(d.x, −d.z) stay within
+## their limits (two planes each, zero when that limit adds nothing).
+func _limit_planes() -> Array[Vector3]:
+	var out: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO]
+	if gimbal_pitch_limit_deg < gimbal_limit_deg:
+		var h := deg_to_rad(gimbal_pitch_limit_deg)
+		out[0] = Vector3(0.0, cos(h), sin(h))
+		out[1] = Vector3(0.0, -cos(h), sin(h))
+	if gimbal_yaw_limit_deg < gimbal_limit_deg:
+		var h := deg_to_rad(gimbal_yaw_limit_deg)
+		out[2] = Vector3(cos(h), 0.0, sin(h))
+		out[3] = Vector3(-cos(h), 0.0, sin(h))
+	return out
 
 
 ## Nominal thrust direction expressed in `frame`'s local axes.
@@ -142,10 +156,9 @@ func _clamp_to_cone(local_dir: Vector3) -> Vector3:
 		return Vector3.FORWARD
 	if angle > limit:
 		d = Vector3.FORWARD.slerp(local_dir, limit / angle).normalized()
-	if gimbal_pitch_limit_deg < gimbal_limit_deg:
-		for m in _pitch_planes():
-			if m.dot(d) > 0.0:
-				d = (d - m * m.dot(d)).normalized()
+	for m in _limit_planes():
+		if m.dot(d) > 0.0:
+			d = (d - m * m.dot(d)).normalized()
 	return d
 
 

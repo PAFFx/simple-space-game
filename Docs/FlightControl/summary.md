@@ -368,6 +368,27 @@ bindings, then enable `joystick_enabled`.
   - the cockpit stays within ~1° in the world through all of it
   - a commanded yaw turns cockpit and suit together and stops cleanly
 
+## RX-93 ν Gundam (`Stages/RX93TestRange`)
+
+Built from a downloaded model (`Tools/Blender/build_mobile_suit_nu.py`, `Tools/Godot/build_rx93_scene.gd`),
+with MSP-02's bone names and components. Weapons are separate equipment (rifle on `hand.R`, shield
+on `forearm.L`, hyper bazooka, beam saber and six fin funnels on `backpack`). Thrusters sit only on
+the nozzles the model has:
+
+| Thrusters | Where | Fires | Vectoring |
+|---|---|---|---|
+| 4 × 450 kN mains | backpack, 2 per side, stacked | back + down (45°) | fore/aft only, ±25° (one plane) |
+| 2 × 300 kN | foot soles | down | fixed (moves only with the foot) |
+| 4 × 40 kN | top of the backpack's centre column | up | fixed |
+
+Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg` (sideways)
+tighten the cone per axis; 0 sideways = one-plane vectoring, `gimbal_limit_deg` 0 = fixed.
+
+**Not flyable yet:** no nozzle fires sideways, forward or back, so nothing cancels the side force and
+torque of a burn. Clean force capability is ~0.03 G in every direction, pitch torque 0.9 MN·m
+(MSP-02: 8), and rotating drifts the suit. It needs hidden verniers (or a control scheme built
+around point-and-burn).
+
 ## Tuning reference (MSP-01 prototype)
 
 - Mass 36 t dry + 9 t propellant, Isp 3000 s, ~2.6 MN total thrust across 10 thrusters.
