@@ -31,14 +31,31 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 # Anime-strong (a boosted jump easily beats Earth gravity): mains 4 × 1 MN, the rest
 # sized by nozzle.
 const CONE_3D := [30.0, 90.0, 90.0]
-# Mains are the model's own nozzles in two backpack pods. Each pod hinges fore/aft only
-# (2D) from its top (ThrusterGuards), and the nozzles swing around that hinge
-# (Thruster.swing_pivot): ±50° around the modelled 48° back, i.e. from straight down to
-# well back, never sideways.
+# Mains are the model's own nozzles in two backpack pods, made deeper than on the source
+# (see build_mobile_suit_nu.py) so they clear the body. Each pod pivots fore/aft
+# only (2D) about its middle (ThrusterGuards), and the nozzles swing around that pivot
+# (Thruster.swing_pivot): ±30° around the modelled 48° back (18° to 78° back), never
+# sideways. Kept modest on purpose: to move forward fast the suit pitches nose-down and
+# drives with the mains, rather than the pods doing all the aiming.
 const MAIN_EXHAUST := Vector3(0.0, -0.67, 0.74)
-const MAIN_CONE := [50.0, 50.0, 0.0]
-const POD_HINGE := {MainRU = Vector3(1.4, 19.16, 2.58), MainRL = Vector3(1.4, 19.16, 2.58),
-		MainLU = Vector3(-1.38, 19.03, 2.58), MainLL = Vector3(-1.38, 19.03, 2.58)}
+const MAIN_MODEL_EXHAUST := MAIN_EXHAUST
+const MAIN_CONE := [30.0, 30.0, 0.0]
+# Slot-shaped ports (flat plume along the slot): direction × length in the body frame, and
+# the slot's width as the nozzle scale (the round plume's diameter is 0.76 × scale).
+const SLOTS := {
+	ChestR = [Vector3(-0.92, -0.14, -0.37) * 1.39, 0.74], ChestL = [Vector3(-0.92, 0.14, 0.37) * 1.39, 0.74],
+	SkRearR = [Vector3(-0.74, -0.54, 0.4) * 1.57, 0.32], SkRearL = [Vector3(-0.74, 0.54, -0.4) * 1.57, 0.32],
+	ShinCR = [Vector3(-0.1, 0.82, -0.56) * 0.76, 0.51], ShinCL = [Vector3(0.1, 0.82, -0.56) * 0.76, 0.51],
+	ShinOR = [Vector3(-0.28, 0.71, -0.65) * 1.35, 0.28], ShinOL = [Vector3(-0.28, -0.71, 0.65) * 1.35, 0.28],
+	ShinIR = [Vector3(0.05, 0.8, -0.6) * 1.35, 0.28], ShinIL = [Vector3(-0.05, 0.8, -0.6) * 1.35, 0.28],
+}
+const POD_HINGE := {MainRU = Vector3(1.33, 16.5, 3.4), MainRL = Vector3(1.33, 16.5, 3.4),
+		MainLU = Vector3(-1.3, 16.65, 3.34), MainLL = Vector3(-1.3, 16.65, 3.34)}
+# Calf nozzles swing only back and out, not into the leg: their range is centred 15°
+# further back than the modelled nozzle, which keeps its own rest direction.
+const CALF_MODEL_EXHAUST_R := Vector3(0.17, -0.9, 0.41)
+const CALF_EXHAUST_R := Vector3(0.17, -0.763, 0.629)
+const CALF_CONE := [18.0, 90.0, 90.0]
 const SOLE_3D := [20.0, 90.0, 90.0]
 const FORE_AFT := [25.0, 25.0, 0.0]      # 2D: swings fore/aft (about the port's sideways axis)
 const UP_DOWN := [20.0, 20.0, 0.0]       # 2D, for forward-facing ports
@@ -49,41 +66,41 @@ const MAIN_DYNAMICS := {spool_up_time = 0.12, spool_down_time = 0.08, gimbal_rat
 const VERNIER_DYNAMICS := {spool_up_time = 0.06, spool_down_time = 0.04, gimbal_rate_deg = 360.0}
 const THRUSTERS := [
 	# Backpack mains, 2 per side stacked, firing back and down.
-	["MainRU", "backpack", Vector3(1.25, 16.75, 3.13), MAIN_EXHAUST, 1000.0, MAIN_CONE, 14.0, 1.1, false],
-	["MainRL", "backpack", Vector3(1.25, 15.71, 2.91), MAIN_EXHAUST, 1000.0, MAIN_CONE, 14.0, 1.1, false],
-	["MainLU", "backpack", Vector3(-1.23, 16.75, 3.13), MAIN_EXHAUST, 1000.0, MAIN_CONE, 14.0, 1.1, false],
-	["MainLL", "backpack", Vector3(-1.23, 15.71, 2.91), MAIN_EXHAUST, 1000.0, MAIN_CONE, 14.0, 1.1, false],
+	["MainRU", "backpack", Vector3(1.25, 16.75, 3.85), MAIN_EXHAUST, 1000.0, MAIN_CONE, 16.0, 1.30, false],
+	["MainRL", "backpack", Vector3(1.25, 15.71, 3.53), MAIN_EXHAUST, 1000.0, MAIN_CONE, 16.0, 1.30, false],
+	["MainLU", "backpack", Vector3(-1.23, 16.75, 3.85), MAIN_EXHAUST, 1000.0, MAIN_CONE, 16.0, 1.30, false],
+	["MainLL", "backpack", Vector3(-1.23, 15.71, 3.53), MAIN_EXHAUST, 1000.0, MAIN_CONE, 16.0, 1.30, false],
 	# Soles (the "toe" thrusters).
-	["SoleR", "foot.R", Vector3(4.25, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 5.0, 0.8, false],
-	["SoleL", "foot.L", Vector3(-4.24, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 5.0, 0.8, false],
+	["SoleR", "foot.R", Vector3(4.25, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 3.0, 0.60, false],
+	["SoleL", "foot.L", Vector3(-4.24, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 3.0, 0.60, false],
 	# Behind each calf, mostly down and a little back; its guard plate moves with it.
-	["CalfR", "shin.R", Vector3(3.22, 5.8, 1.53), Vector3(0.17, -0.9, 0.41), 400.0, CONE_3D, 8.0, 0.8, false],
-	["CalfL", "shin.L", Vector3(-3.2, 5.8, 1.53), Vector3(-0.17, -0.9, 0.41), 400.0, CONE_3D, 8.0, 0.8, false],
+	["CalfR", "shin.R", Vector3(3.22, 5.8, 1.53), CALF_EXHAUST_R, 400.0, CALF_CONE, 4.5, 0.80, false],
+	["CalfL", "shin.L", Vector3(-3.2, 5.8, 1.53), CALF_EXHAUST_R * Vector3(-1, 1, 1), 400.0, CALF_CONE, 4.5, 0.80, false],
 	# Shoulder armor, two each: up-and-out (pushes the suit down) and out-and-down.
-	["ShUpR", "shoulder.R", Vector3(4.79, 19.7, 0.45), Vector3(0.74, 0.67, 0.01), 250.0, FORE_AFT, 3.5, 0.5, false],
-	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.5, 0.5, false],
-	["ShUpL", "shoulder.L", Vector3(-4.77, 19.7, 0.45), Vector3(-0.74, 0.67, 0.01), 250.0, FORE_AFT, 3.5, 0.5, false],
-	["ShOutL", "shoulder.L", Vector3(-4.93, 18.97, 0.44), Vector3(-0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.5, 0.5, false],
+	["ShUpR", "shoulder.R", Vector3(4.79, 19.7, 0.45), Vector3(0.74, 0.67, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
+	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
+	["ShUpL", "shoulder.L", Vector3(-4.77, 19.7, 0.45), Vector3(-0.74, 0.67, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
+	["ShOutL", "shoulder.L", Vector3(-4.93, 18.97, 0.44), Vector3(-0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
 	# Chest vents, firing forward (push back / brake).
-	["ChestR", "chest", Vector3(1.31, 17.26, -2.15), Vector3(0.39, -0.24, -0.89), 250.0, UP_DOWN, 4.0, 0.5, false],
-	["ChestL", "chest", Vector3(-1.29, 17.26, -2.15), Vector3(-0.39, -0.24, -0.89), 250.0, UP_DOWN, 4.0, 0.5, false],
+	["ChestR", "chest", Vector3(1.31, 17.26, -2.15), Vector3(0.39, -0.24, -0.89), 250.0, UP_DOWN, 3.5, 0.74, false],
+	["ChestL", "chest", Vector3(-1.29, 17.26, -2.15), Vector3(-0.39, -0.24, -0.89), 250.0, UP_DOWN, 3.5, 0.74, false],
 	# Front of each shin, below the knee: centre, outer, inner; left/right swing only.
-	["ShinCR", "shin.R", Vector3(3.29, 6.96, -1.57), Vector3(0.24, -0.52, -0.82), 80.0, SIDE_SIDE, 3.0, 0.4, false],
-	["ShinOR", "shin.R", Vector3(4.36, 5.83, -0.13), Vector3(0.84, -0.15, -0.53), 80.0, SIDE_SIDE, 3.0, 0.4, false],
-	["ShinIR", "shin.R", Vector3(2.58, 5.39, -0.37), Vector3(-0.52, -0.49, -0.7), 80.0, SIDE_SIDE, 3.0, 0.4, false],
-	["ShinCL", "shin.L", Vector3(-3.28, 6.96, -1.57), Vector3(-0.24, -0.52, -0.82), 80.0, SIDE_SIDE, 3.0, 0.4, false],
-	["ShinOL", "shin.L", Vector3(-4.34, 5.83, -0.13), Vector3(-0.84, -0.15, -0.53), 80.0, SIDE_SIDE, 3.0, 0.4, false],
-	["ShinIL", "shin.L", Vector3(-2.56, 5.39, -0.37), Vector3(0.52, -0.49, -0.7), 80.0, SIDE_SIDE, 3.0, 0.4, false],
+	["ShinCR", "shin.R", Vector3(3.29, 6.96, -1.57), Vector3(0.24, -0.52, -0.82), 80.0, SIDE_SIDE, 1.2, 0.30, false],
+	["ShinOR", "shin.R", Vector3(4.36, 5.83, -0.13), Vector3(0.84, -0.15, -0.53), 80.0, SIDE_SIDE, 1.2, 0.30, false],
+	["ShinIR", "shin.R", Vector3(2.58, 5.39, -0.37), Vector3(-0.52, -0.49, -0.7), 80.0, SIDE_SIDE, 1.2, 0.30, false],
+	["ShinCL", "shin.L", Vector3(-3.28, 6.96, -1.57), Vector3(-0.24, -0.52, -0.82), 80.0, SIDE_SIDE, 1.2, 0.30, false],
+	["ShinOL", "shin.L", Vector3(-4.34, 5.83, -0.13), Vector3(-0.84, -0.15, -0.53), 80.0, SIDE_SIDE, 1.2, 0.30, false],
+	["ShinIL", "shin.L", Vector3(-2.56, 5.39, -0.37), Vector3(0.52, -0.49, -0.7), 80.0, SIDE_SIDE, 1.2, 0.30, false],
 	# Rear skirts, one each, back and slightly out.
-	["SkRearR", "skirt_rear.R", Vector3(1.78, 12.55, 2.45), Vector3(0.39, 0.13, 0.91), 120.0, FIXED, 3.5, 0.5, false],
-	["SkRearL", "skirt_rear.L", Vector3(-1.76, 12.55, 2.45), Vector3(-0.39, 0.12, 0.91), 120.0, FIXED, 3.5, 0.5, false],
+	["SkRearR", "skirt_rear.R", Vector3(1.78, 12.55, 2.45), Vector3(0.39, 0.13, 0.91), 120.0, FIXED, 1.6, 0.32, false],
+	["SkRearL", "skirt_rear.L", Vector3(-1.76, 12.55, 2.45), Vector3(-0.39, 0.12, 0.91), 120.0, FIXED, 1.6, 0.32, false],
 	# Side skirts, three small each: forward-out, back-out, out.
-	["SkSideFR", "skirt_side.R", Vector3(2.11, 15.13, -0.81), Vector3(0.54, 0.25, -0.81), 70.0, FIXED, 2.5, 0.4, false],
-	["SkSideBR", "skirt_side.R", Vector3(2.11, 15.13, 0.48), Vector3(0.54, 0.25, 0.81), 70.0, FIXED, 2.5, 0.4, false],
-	["SkSideOR", "skirt_side.R", Vector3(2.61, 14.71, -0.16), Vector3(1, 0.01, 0), 70.0, FIXED, 2.5, 0.4, false],
-	["SkSideFL", "skirt_side.L", Vector3(-2.09, 15.13, -0.81), Vector3(-0.54, 0.25, -0.81), 70.0, FIXED, 2.5, 0.4, false],
-	["SkSideBL", "skirt_side.L", Vector3(-2.09, 15.13, 0.48), Vector3(-0.54, 0.25, 0.81), 70.0, FIXED, 2.5, 0.4, false],
-	["SkSideOL", "skirt_side.L", Vector3(-2.59, 14.71, -0.16), Vector3(-1, 0.01, 0), 70.0, FIXED, 2.5, 0.4, false],
+	["SkSideFR", "skirt_side.R", Vector3(2.11, 15.13, -0.81), Vector3(0.54, 0.25, -0.81), 70.0, FIXED, 1.0, 0.35, false],
+	["SkSideBR", "skirt_side.R", Vector3(2.11, 15.13, 0.48), Vector3(0.54, 0.25, 0.81), 70.0, FIXED, 1.0, 0.35, false],
+	["SkSideOR", "skirt_side.R", Vector3(2.61, 14.71, -0.16), Vector3(1, 0.01, 0), 70.0, FIXED, 1.0, 0.35, false],
+	["SkSideFL", "skirt_side.L", Vector3(-2.09, 15.13, -0.81), Vector3(-0.54, 0.25, -0.81), 70.0, FIXED, 1.0, 0.35, false],
+	["SkSideBL", "skirt_side.L", Vector3(-2.09, 15.13, 0.48), Vector3(-0.54, 0.25, 0.81), 70.0, FIXED, 1.0, 0.35, false],
+	["SkSideOL", "skirt_side.L", Vector3(-2.59, 14.71, -0.16), Vector3(-1, 0.01, 0), 70.0, FIXED, 1.0, 0.35, false],
 ]
 
 # name, center, size
@@ -269,6 +286,10 @@ func _build_thrusters(root: Node3D) -> void:
 			node.set("gimbal_rate_deg", 90.0)  # a whole pod swings, not just a nozzle
 		elif t[0].begins_with("Calf"):
 			node.set("gimbal_rate_deg", 120.0)
+		if SLOTS.has(t[0]):
+			var slot: Array = SLOTS[t[0]]
+			node.set("plume_slot", body_xf.basis.inverse() * (slot[0] as Vector3))
+			node.set("nozzle_scale", slot[1])
 		if POD_HINGE.has(t[0]):
 			node.set("swing_pivot", body_xf.affine_inverse() * (POD_HINGE[t[0]] as Vector3))
 
@@ -320,8 +341,12 @@ func _build_thruster_guards(root: Node3D) -> void:
 		guard.thrusters = PackedStringArray(g[1])
 		guard.full_rotation = g[2]
 		if g[0].begins_with("main_pod"):
-			guard.min_angle_deg = -50.0
-			guard.max_angle_deg = 50.0
+			guard.rest_thrust = -MAIN_MODEL_EXHAUST
+			guard.min_angle_deg = -30.0
+			guard.max_angle_deg = 30.0
+		if g[0].begins_with("calf_nozzle"):
+			var side := 1.0 if g[0].ends_with(".R") else -1.0
+			guard.rest_thrust = -CALF_MODEL_EXHAUST_R * Vector3(side, 1, 1)
 		if g[0].begins_with("calf_guard"):
 			guard.open_angle_deg = -35.0  # the plate swings back, away from the leg
 		guards.append(guard)

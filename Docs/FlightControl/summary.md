@@ -405,9 +405,9 @@ texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
-| 4 × 1 MN mains (the model's own nozzles, in two pods that hinge with them) | backpack, 2 per side, stacked | down, back | 2D fore/aft ±50° around 48° back (straight down to well back); pod swings at 90°/s |
+| 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | 2D fore/aft ±30° around 48° back (18°–78° back); pod swings at 90°/s. Kept modest so the suit pitches nose-down to drive forward |
 | 2 × 500 kN | soles | down | 3D, 20° cone |
-| 2 × 400 kN (the model's own nozzles; the plate over each opens while it's swung) | behind each calf | down, a little back | 3D, 30° cone |
+| 2 × 400 kN (the model's own nozzles; the plate over each opens while it's swung) | behind each calf | down, a little back | 3D, 18° cone centred 15° behind the modelled nozzle (never into the leg) |
 | 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | 2D fore/aft ±25° |
 | 2 × 250 kN | chest vents | forward (brakes) | 2D up/down ±20° |
 | 6 × 80 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
@@ -416,9 +416,15 @@ texture), and most can't aim far, so limbs have to move to point them:
 
 No added nozzle meshes on the ν (`Thruster.show_nozzle` off): small ports show only a plume from
 the armor, and the main and calf nozzles are the model's own, moved by `ThrusterGuards`:
-- **Backpack pods** (`main_pod.*`) hinge fore/aft from their top, following their two nozzles'
-  throttle-weighted, low-passed aim. The nozzles swing around that hinge (`Thruster.swing_pivot`),
-  so the push point and plume move with the pod and the allocator sees the moved position.
+- **Backpack pods** (`main_pod.*`) pivot fore/aft about their middle, following their two nozzles'
+  throttle-weighted, low-passed aim. The nozzles swing around that pivot (`Thruster.swing_pivot`),
+  so the push point and plume move with the pod and the allocator sees the moved position. The
+  pod housings are 1 m deeper than on the source model (front still on the backpack) so they
+  clear the body; the hyper bazooka between them moves back with them. White backpack panels are
+  recoloured dark navy.
+- **Plumes**: backpack 16 m (the biggest), calves 4.5, chest 3.5, shoulders and soles 3, small
+  ports 1–1.6. Slot-shaped ports (chest, rear skirts, shins) get a flat plume along the slot
+  (`Thruster.plume_slot`).
 - **Calf nozzles** (`calf_nozzle.*`) turn fully with their thrusters.
 - **Calf plates** (`calf_guard.*`) are covers: they open outward only (35°) once the nozzle swings
   more than 3°, hold, and close 0.6 s after it's back under 1.5°, at steady rates.

@@ -144,10 +144,54 @@ NOZZLE_CUPS = []
 CUP_RADIUS = 0.0
 CUP_MIN_DOT = 0.2
 
+# The pod housings are deeper than on the source: stretched POD_STRETCH m backward with
+# their front still on the backpack, so the pods stay attached but their nozzles sit
+# further out and can swing without hitting the body. The nozzle rings move back with
+# them unstretched. The hyper bazooka, hanging between the pods, moves back too.
+POD_STRETCH = 1.0
+POD_GROUPS = ("main_pod.R", "main_pod.L")
+POD_RINGS = (74, 75, 76, 83)
+BAZOOKA_OFFSET = mathutils.Vector((0.0, -1.0, 0.0))
+
+
+def move_pods(bm, groups, part):
+    """Stretches the pod housings backward; moves the rings and the bazooka rigidly."""
+    for group in POD_GROUPS:
+        faces = [f for f in bm.faces if groups[f.index] == group]
+        verts = {v for f in faces for v in f.verts}
+        front = max(v.co.y for v in verts)
+        depth = max(front - min(v.co.y for v in verts), 1e-3)
+        k = (depth + POD_STRETCH) / depth
+        rings = {}
+        for f in faces:
+            if part[f.index] in POD_RINGS:
+                for v in f.verts:
+                    rings.setdefault(part[f.index], set()).add(v)
+        ring_verts = set().union(*rings.values()) if rings else set()
+        for v in verts - ring_verts:
+            v.co.y = front - (front - v.co.y) * k
+        for rv in rings.values():
+            c = sum((v.co for v in rv), mathutils.Vector()) / len(rv)
+            shift = -(front - c.y) * (k - 1.0)
+            for v in rv:
+                v.co.y += shift
+    for v in {v for f in bm.faces if groups[f.index] == "W:HyperBazooka" for v in f.verts}:
+        v.co += BAZOOKA_OFFSET
+
+
+def print_nozzles(bm, part):
+    """Nozzle ring centres in Godot body coordinates, for build_rx93_scene.gd."""
+    for pid in POD_RINGS:
+        pts = [v.co for f in bm.faces if part[f.index] == pid for v in f.verts]
+        c = sum(pts, mathutils.Vector()) / len(pts)
+        print(f"[nu] nozzle part {pid}: godot ({c.x:.2f}, {c.z:.2f}, {-c.y:.2f})")
+
+
 # Movable bones: (group, parent bone, pivot): "top_front" = top edge toward +Y (a plate
 # hinged against the leg), "top_mid" = middle of the top (a pod hanging from the backpack),
 # "centre" = the part's centre (a nozzle on a ball joint).
-GUARDS = [("main_pod.R", "backpack", "top_mid"), ("main_pod.L", "backpack", "top_mid"),
+POD_PIVOT = "centre"
+GUARDS = [("main_pod.R", "backpack", POD_PIVOT), ("main_pod.L", "backpack", POD_PIVOT),
           ("calf_guard.R", "shin.R", "top_front"), ("calf_guard.L", "shin.L", "top_front"),
           ("calf_nozzle.R", "shin.R", "centre"), ("calf_nozzle.L", "shin.L", "centre")] + \
          [(g, "backpack", "centre") for g, _r, _h in NOZZLE_CUPS]
@@ -229,6 +273,37 @@ def load_parts(path):
     bm.normal_update()
     print(f"[nu] {count} parts")
     return bm, materials, part
+
+
+# Backpack faces whose texture is white get a dark navy instead (the source has a few
+# white panels there that look out of place).
+RECOLOR_GROUPS = ("backpack", "main_pod.R", "main_pod.L")
+BACKPACK_NAVY = (0.018, 0.022, 0.05)
+
+
+def recolor_backpack(bm, materials, groups):
+    """Moves white-textured backpack faces to a dark navy material (appended to materials)."""
+    uv = bm.loops.layers.uv.active
+    images = []
+    for m in materials:
+        img = next((n.image for n in (m.node_tree.nodes if m and m.use_nodes else [])
+                    if n.type == "TEX_IMAGE" and n.image), None)
+        images.append(None if img is None else (img.size[0], img.size[1], img.pixels[:]))
+    navy = mk.make_material("MS_BackpackNavy", BACKPACK_NAVY, roughness=0.45)
+    materials.append(navy)
+    count = 0
+    for f in bm.faces:
+        tex = images[f.material_index] if f.material_index < len(images) else None
+        if groups[f.index] not in RECOLOR_GROUPS or tex is None:
+            continue
+        w, h, px = tex
+        c = sum((l[uv].uv for l in f.loops), mathutils.Vector((0, 0))) / len(f.loops)
+        i = (int((c.y % 1.0) * (h - 1)) * w + int((c.x % 1.0) * (w - 1))) * 4
+        r, g, b = px[i], px[i + 1], px[i + 2]
+        if min(r, g, b) > 0.55 and max(r, g, b) - min(r, g, b) < 0.12:
+            f.material_index = len(materials) - 1
+            count += 1
+    print(f"[nu] backpack faces recoloured navy: {count}")
 
 
 def make_object(name, bm, materials, groups, group):
@@ -313,6 +388,13 @@ def main():
         raise SystemExit(f"[nu] unassigned parts {missing}, assigned twice {doubled}")
 
     groups = face_groups(bm, part)
+    if "--pod-pivot" in argv:
+        global GUARDS
+        piv = argv[argv.index("--pod-pivot") + 1]
+        GUARDS = [(g, p, piv if g in POD_GROUPS else v) for g, p, v in GUARDS]
+    move_pods(bm, groups, part)
+    print_nozzles(bm, part)
+    recolor_backpack(bm, materials, groups)
     arm = mk.build_armature("Armature", bones() + guard_bones(bm, groups))
     suit, weapons = [], {}
     for group in list(GROUPS) + [g for g, _r, _h in NOZZLE_CUPS]:

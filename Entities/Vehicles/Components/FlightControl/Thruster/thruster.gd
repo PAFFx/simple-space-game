@@ -40,6 +40,9 @@ extends Node3D
 @export var plume_length: float = 7.0             ## Plume length at full thrust, m
 ## Off for ports built into the armor: only the plume shows, from the model's surface.
 @export var show_nozzle: bool = true
+## Slot-shaped port: the plume is stretched into a flat sheet along this direction (local),
+## as long as the vector, instead of a round jet. Zero = round.
+@export var plume_slot := Vector3.ZERO
 @export var nozzle_scale: float = 1.0:
 	set(v):
 		nozzle_scale = v
@@ -48,6 +51,8 @@ extends Node3D
 
 ## Plane normals per thruster in FlightState.thruster_planes (pitch ×2, yaw ×2).
 const PLANES := 4
+## Diameter of the plume mesh's base at nozzle_scale 1, m.
+const PLUME_BASE_WIDTH := 0.76
 
 var throttle: float = 0.0                         ## Actual spooled throttle [0, 1]
 
@@ -60,9 +65,19 @@ var _dir := Vector3.FORWARD                       ## Actual thrust dir, local to
 @onready var _plume: Node3D = $Gimbal/Visual/PlumePivot
 
 
+var _slot_ratio := 1.0                            ## Plume width along the slot / round width
+
+
 func _ready() -> void:
 	_visual.scale = Vector3.ONE * nozzle_scale
 	$Gimbal/Visual/Nozzle.visible = show_nozzle
+	if plume_slot != Vector3.ZERO:
+		# Turn the plume about its own axis so its local X runs along the slot.
+		var y := _plume.global_basis.y.normalized()
+		var x := global_basis * plume_slot
+		x = (x - y * x.dot(y)).normalized()
+		_plume.global_basis = Basis(x, y, x.cross(y))
+		_slot_ratio = maxf(1.0, plume_slot.length() / (PLUME_BASE_WIDTH * nozzle_scale))
 	_set_layers(self, Layers.VEHICLE_EXT)
 	_update_visuals()
 
@@ -196,7 +211,7 @@ func _update_visuals() -> void:
 	if t > 0.0:
 		var flicker := 1.0 + randf_range(-0.06, 0.06)
 		var radius := lerpf(0.6, 1.0, t)
-		_plume.scale = Vector3(radius, plume_length * t * flicker / nozzle_scale, radius)
+		_plume.scale = Vector3(radius * _slot_ratio, plume_length * t * flicker / nozzle_scale, radius)
 
 
 static func _set_layers(node: Node, layers: int) -> void:
