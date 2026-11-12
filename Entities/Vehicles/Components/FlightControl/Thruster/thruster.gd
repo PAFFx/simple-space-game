@@ -16,6 +16,9 @@ extends Node3D
 ## above gimbal_limit_deg it adds nothing. Lets a nozzle swing wide sideways but only
 ## a little fore and aft.
 @export_range(0.0, 90.0) var gimbal_pitch_limit_deg: float = 90.0
+## Centre of the fore/aft range, deg: the swing runs bias ± pitch limit, so a nozzle can
+## rest at one end of its range (e.g. a calf plate that only swings back, away from the leg).
+@export_range(-60.0, 60.0) var gimbal_pitch_bias_deg: float = 0.0
 ## Same for the sideways swing (about local Y). 0 = the nozzle only swings fore/aft
 ## (one-plane, "2D" vectoring); gimbal_limit_deg 0 = fixed nozzle.
 @export_range(0.0, 90.0) var gimbal_yaw_limit_deg: float = 90.0
@@ -123,10 +126,11 @@ func get_limit_planes_in(frame: Node3D) -> PackedVector3Array:
 ## their limits (two planes each, zero when that limit adds nothing).
 func _limit_planes() -> Array[Vector3]:
 	var out: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO]
-	if gimbal_pitch_limit_deg < gimbal_limit_deg:
-		var h := deg_to_rad(gimbal_pitch_limit_deg)
-		out[0] = Vector3(0.0, cos(h), sin(h))
-		out[1] = Vector3(0.0, -cos(h), sin(h))
+	if gimbal_pitch_limit_deg < gimbal_limit_deg or gimbal_pitch_bias_deg != 0.0:
+		var hi := deg_to_rad(gimbal_pitch_bias_deg + gimbal_pitch_limit_deg)
+		var lo := deg_to_rad(gimbal_pitch_bias_deg - gimbal_pitch_limit_deg)
+		out[0] = Vector3(0.0, cos(hi), sin(hi))
+		out[1] = Vector3(0.0, -cos(lo), -sin(lo))
 	if gimbal_yaw_limit_deg < gimbal_limit_deg:
 		var h := deg_to_rad(gimbal_yaw_limit_deg)
 		out[2] = Vector3(cos(h), 0.0, sin(h))

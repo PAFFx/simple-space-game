@@ -74,13 +74,11 @@ GROUPS = {
     "shin.R": ids(48, 52),
     "shin.L": ids(59, 63),
     # Movable thruster parts (Godot's ThrusterGuards turns them with their thrusters): the
-    # backpack pods around the main nozzles, the calf nozzles and the plates over them.
+    # backpack pods around the main nozzles, and the calf plates carrying their nozzles.
     "main_pod.R": ids(70, 75, 76, 78, 81),
     "main_pod.L": ids(71, 74, 79, 82, 83),
-    "calf_nozzle.R": ids(47),
-    "calf_nozzle.L": ids(58),
-    "calf_guard.R": ids(51),
-    "calf_guard.L": ids(62),
+    "calf_guard.R": ids(47, 51),
+    "calf_guard.L": ids(58, 62),
     "foot.R": ids(2, 43, 46, 49, 50),
     "foot.L": ids(3, 54, 57, 60, 61),
     "backpack": [i for i in range(70, 109) if i not in (70, 71, 74, 75, 76, 78, 79, 81, 82, 83,
@@ -117,8 +115,10 @@ def bones():
         ("backpack", (c, 0.35, 2.3), (c, 0.35, 2.7), "chest"),
     ]
     right = [
-        ("shoulder", (c - 0.2, -0.11, 2.62), (-0.39, -0.11, 2.62), "chest"),
-        ("upper_arm", (-0.45, -0.08, 2.55), (-0.52, -0.1, 2.25), "shoulder"),
+        # The armor pivots on the arm joint but isn't the arm's parent, so it can follow the
+        # arm part way (Godot's LimbFollowers) without dragging it along.
+        ("shoulder", (-0.45, -0.08, 2.55), (-0.45, -0.08, 2.75), "chest"),
+        ("upper_arm", (-0.45, -0.08, 2.55), (-0.52, -0.1, 2.25), "chest"),
         ("forearm", (-0.52, -0.1, 2.25), (-0.62, -0.2, 1.86), "upper_arm"),
         ("hand", (-0.62, -0.2, 1.86), (-0.67, -0.3, 1.6), "forearm"),
         ("skirt_front", (-0.1, -0.43, 2.2), (-0.1, -0.5, 1.6), "pelvis"),
@@ -192,8 +192,7 @@ def print_nozzles(bm, part):
 # "centre" = the part's centre (a nozzle on a ball joint).
 POD_PIVOT = "centre"
 GUARDS = [("main_pod.R", "backpack", POD_PIVOT), ("main_pod.L", "backpack", POD_PIVOT),
-          ("calf_guard.R", "shin.R", "top_front"), ("calf_guard.L", "shin.L", "top_front"),
-          ("calf_nozzle.R", "shin.R", "centre"), ("calf_nozzle.L", "shin.L", "centre")] + \
+          ("calf_guard.R", "shin.R", "top_front"), ("calf_guard.L", "shin.L", "top_front")] + \
          [(g, "backpack", "centre") for g, _r, _h in NOZZLE_CUPS]
 
 
@@ -229,6 +228,7 @@ def guard_bones(bm, groups):
         else:
             head = sum(pts, mathutils.Vector()) / len(pts)
         length = max(hi.z - lo.z, 0.3)
+        print(f"[nu] hinge {group}: godot ({head.x:.3f}, {head.z:.3f}, {-head.y:.3f})")
         out.append((group, tuple(head), tuple(head - mathutils.Vector((0, 0, length))), parent))
     return out
 
@@ -273,37 +273,6 @@ def load_parts(path):
     bm.normal_update()
     print(f"[nu] {count} parts")
     return bm, materials, part
-
-
-# Backpack faces whose texture is white get a dark navy instead (the source has a few
-# white panels there that look out of place).
-RECOLOR_GROUPS = ("backpack", "main_pod.R", "main_pod.L")
-BACKPACK_NAVY = (0.018, 0.022, 0.05)
-
-
-def recolor_backpack(bm, materials, groups):
-    """Moves white-textured backpack faces to a dark navy material (appended to materials)."""
-    uv = bm.loops.layers.uv.active
-    images = []
-    for m in materials:
-        img = next((n.image for n in (m.node_tree.nodes if m and m.use_nodes else [])
-                    if n.type == "TEX_IMAGE" and n.image), None)
-        images.append(None if img is None else (img.size[0], img.size[1], img.pixels[:]))
-    navy = mk.make_material("MS_BackpackNavy", BACKPACK_NAVY, roughness=0.45)
-    materials.append(navy)
-    count = 0
-    for f in bm.faces:
-        tex = images[f.material_index] if f.material_index < len(images) else None
-        if groups[f.index] not in RECOLOR_GROUPS or tex is None:
-            continue
-        w, h, px = tex
-        c = sum((l[uv].uv for l in f.loops), mathutils.Vector((0, 0))) / len(f.loops)
-        i = (int((c.y % 1.0) * (h - 1)) * w + int((c.x % 1.0) * (w - 1))) * 4
-        r, g, b = px[i], px[i + 1], px[i + 2]
-        if min(r, g, b) > 0.55 and max(r, g, b) - min(r, g, b) < 0.12:
-            f.material_index = len(materials) - 1
-            count += 1
-    print(f"[nu] backpack faces recoloured navy: {count}")
 
 
 def make_object(name, bm, materials, groups, group):
@@ -394,7 +363,6 @@ def main():
         GUARDS = [(g, p, piv if g in POD_GROUPS else v) for g, p, v in GUARDS]
     move_pods(bm, groups, part)
     print_nozzles(bm, part)
-    recolor_backpack(bm, materials, groups)
     arm = mk.build_armature("Armature", bones() + guard_bones(bm, groups))
     suit, weapons = [], {}
     for group in list(GROUPS) + [g for g, _r, _h in NOZZLE_CUPS]:

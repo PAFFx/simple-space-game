@@ -23,6 +23,8 @@ extends Node
 @export var hysteresis_deg: float = 25.0
 @export var confirm_time: float = 0.15
 @export var min_dwell: float = 0.6
+## Shortest pose change, s; longer for big swings, so no joint has to exceed its own
+## max rate (a min-jerk move peaks at 1.875 × the average rate).
 @export var transition_time: float = 0.45
 ## Rebuild the FBW capability map after each pose settles (thrusters ride the limbs).
 ## Off: a rebuild costs ~1.2 s of allocator probing (spread over ticks, but enough to
@@ -36,6 +38,7 @@ var _dwell := 0.0
 var _from := PackedFloat32Array()      ## Joint targets at the start of the transition
 var _to := PackedFloat32Array()
 var _t := 1.0                          ## Transition progress 0..1
+var _T := 0.45                         ## Duration of the current transition, s
 var _settled := true
 
 
@@ -100,17 +103,20 @@ func _begin(stance: MsStance) -> void:
 	for i in ambac.joints.size():
 		_from[i] = ambac.targets[i]
 		_to[i] = 0.0
-	if stance == null:
-		return
-	for k in stance.bones.size():
-		var i := ambac.find_joint(StringName(stance.bones[k]), stance.axes[k])
-		if i >= 0:
-			_to[i] = deg_to_rad(stance.angles_deg[k])
+	if stance != null:
+		for k in stance.bones.size():
+			var i := ambac.find_joint(StringName(stance.bones[k]), stance.axes[k])
+			if i >= 0:
+				_to[i] = deg_to_rad(stance.angles_deg[k])
+	_T = transition_time
+	for i in ambac.joints.size():
+		var rate := deg_to_rad(ambac.joints[i].max_rate_deg) * 0.9
+		_T = maxf(_T, 1.875 * absf(_to[i] - _from[i]) / maxf(rate, 1e-3))
 
 
 ## Min-jerk blend from _from to _to over transition_time; locked groups go to neutral.
 func _drive(delta: float) -> void:
-	var T := maxf(transition_time, 0.01)
+	var T := maxf(_T, 0.01)
 	_t = minf(_t + delta / T, 1.0)
 	var u := _t
 	var s := u * u * u * (10.0 + u * (-15.0 + 6.0 * u))

@@ -255,9 +255,18 @@ the stance. Releasing the stick returns to neutral; the limb swinging back helps
 
 Only free limbs move: groups occupied by active equipment or hard-locked
 (`AmbacController.lock_group`) are skipped and held at their target. ν stances (legs only):
-**climb** (legs forward, knees bent), **strafe left/right** (raise the leg on that side, knee
-tucked), **forward** (legs trail), **back** (legs forward). There's no descend stance: bending the
+**climb** (legs forward, knees bent), **strafe left/right** (raise the leg on that side high,
+hip ~70°, knee tucked ~95°, toe pointed), **forward** (legs trail), **back** (legs forward). There's no descend stance: bending the
 legs made descents worse. Capability-map rebuilds per stance are available but off (too costly).
+Each joint's transition is stretched to what its `max_rate_deg` allows, so a big leg swing stays
+smooth (min-jerk) instead of hitting the rate limit.
+
+**Armor followers (`LimbFollowers`).** Visual: armor bones turn with an AMBAC joint, a factor per
+sign of its angle and a limit, so a raised leg doesn't cut through its skirt. Front skirts lift
+0.85× with a forward hip swing, rear skirts 0.85× with a backward one, side skirts open 1× with
+an outward swing and 0.35× with either fore/aft swing. Shoulder armor (pivoting on the arm joint,
+no longer the arm's parent) turns 0.8× with the arm's fore/aft swing and only 0.25×, at most 8°,
+with its sideways swing (the arm already has room there), ready for aiming.
 
 ## AMBAC
 
@@ -283,13 +292,14 @@ so it saved propellant but never made the suit turn faster.
 
 | Joint | Axes and range | Inertia (kg·m²) |
 |---|---|---|
-| Hip | flex −20…+35°, side −3…+6° (outward), twist ±15° | 1.6e5 (leg), 2e4 twist |
-| Knee | bend back up to 45°, straighten 5° | 4.5e4 |
+| Hip | flex −30…+85°, side −3…+6° (outward), twist ±15° | 1.6e5 (leg), 2e4 twist |
+| Knee | bend back up to 110°, straighten 5° | 4.5e4 |
+| Ankle | toe down 40°, up 30° | 6e3 |
 | Shoulder | flex −35…+45°, out −8…+35°, twist ±25° | 6e4, 1e4 twist |
 | Elbow | bend up to 50°, straighten 5° | 2.5e4 |
 | Waist | twist ±12°, bend −10…+6° | 1.2e5 / 1.5e5 |
 
-The side hip swing is kept small. Twists move little mass; they mostly add natural motion.
+Legs and ankles move at up to 150°/s (600°/s²) for stances; the side hip swing is kept small. Twists move little mass; they mostly add natural motion.
 
 **Rate loop.** Steering and stops were limited by a gentle rate loop (2.5 /s), not by torque, so
 `rate_gain` is now 5 /s and `stop_gain_multiplier` 2.5. Auto-rotation keeps its own gentler gain
@@ -425,8 +435,8 @@ texture), and most can't aim far, so limbs have to move to point them:
 |---|---|---|---|
 | 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward); pod swings at 90°/s |
 | 2 × 500 kN | soles | down | 3D, 20° cone |
-| 2 × 400 kN (the model's own nozzles; the plate over each opens while it's swung) | behind each calf | down, a little back | 3D, 18° cone centred 15° behind the modelled nozzle (never into the leg) |
-| 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | 2D fore/aft ±25° |
+| 2 × 400 kN (the model's own nozzles, in their calf plates) | behind each calf | down, a little back | 2D with the plate, 0…40° back only (never into the leg) |
+| 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | top: 2D from 10° below rest to 45° up (nearly straight up); outer: 2D fore/aft ±25° |
 | 2 × 250 kN | chest vents | forward (brakes) | 2D up/down ±20° |
 | 6 × 80 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
 | 2 × 120 kN | rear skirts | back | fixed |
@@ -438,17 +448,18 @@ the armor, and the main and calf nozzles are the model's own, moved by `Thruster
   throttle-weighted, low-passed aim. The nozzles swing around that pivot (`Thruster.swing_pivot`),
   so the push point and plume move with the pod and the allocator sees the moved position. The
   pod housings are 1 m deeper than on the source model (front still on the backpack) so they
-  clear the body; the hyper bazooka between them moves back with them. White backpack panels are
-  recoloured dark navy.
+  clear the body; the hyper bazooka between them moves back with them.
 - **Plumes**: backpack 16 m (the biggest), calves 4.5, chest 3.5, shoulders and soles 3, small
   ports 1–1.6. Slot-shaped ports (chest, rear skirts, shins) get a flat plume along the slot
   (`Thruster.plume_slot`).
-- **Calf nozzles** (`calf_nozzle.*`) turn fully with their thrusters.
-- **Calf plates** (`calf_guard.*`) are covers: they open outward only (35°) once the nozzle swings
-  more than 3°, hold, and close 0.6 s after it's back under 1.5°, at steady rates.
+- **Calf units** (`calf_guard.*`): each plate carries its nozzle, and the two swing together
+  about the plate's hinge at the top front of the calf (also the thruster's `swing_pivot`), back
+  only. One-sided 2D ranges use `Thruster.gimbal_pitch_bias_deg` (the swing runs bias ± limit),
+  so the nozzle rests closed at one end of its range.
+- `ThrusterGuard` still has a cover mode (open while swung, hold, close), unused on the ν now.
 
 These bones are visual: the thrusters stay on the backpack/shin bones. Idle nozzles (under 1%
-throttle, `Thruster.park_throttle`) park at centre, so covers can close. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
+throttle, `Thruster.park_throttle`) park at their rest aim, so the calf units close. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
 (sideways) tighten the cone per axis; 0 on one = 2D vectoring, `gimbal_limit_deg` 0 = fixed.
 
 Clean force capability (level, limbs at rest): up 7.1 G, forward 4.3 G, sideways 2.4 G, back

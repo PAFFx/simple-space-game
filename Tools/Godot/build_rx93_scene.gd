@@ -52,11 +52,17 @@ const SLOTS := {
 }
 const POD_HINGE := {MainRU = Vector3(1.33, 16.5, 3.4), MainRL = Vector3(1.33, 16.5, 3.4),
 		MainLU = Vector3(-1.3, 16.65, 3.34), MainLL = Vector3(-1.3, 16.65, 3.34)}
-# Calf nozzles swing only back and out, not into the leg: their range is centred 15°
-# further back than the modelled nozzle, which keeps its own rest direction.
+# Each calf nozzle sits in its plate; the two swing together about the plate's hinge at
+# the top front of the calf (from build_mobile_suit_nu.py), back only, away from the leg.
 const CALF_MODEL_EXHAUST_R := Vector3(0.17, -0.9, 0.41)
-const CALF_EXHAUST_R := Vector3(0.17, -0.763, 0.629)
-const CALF_CONE := [18.0, 90.0, 90.0]
+const CALF_HINGE := {CalfR = Vector3(3.052, 8.062, 0.796), CalfL = Vector3(-3.033, 8.062, 0.796)}
+# One-plane (2D) swings that don't sit centred on the rest direction: thruster →
+# [direction the exhaust swings toward, min deg, max deg]. The calves swing back; the top
+# shoulder nozzles from a little below their rest aim to nearly straight up.
+const SWING_2D := {
+	CalfR = [Vector3.BACK, 0.0, 40.0], CalfL = [Vector3.BACK, 0.0, 40.0],
+	ShUpR = [Vector3.UP, -10.0, 45.0], ShUpL = [Vector3.UP, -10.0, 45.0],
+}
 const SOLE_3D := [20.0, 90.0, 90.0]
 const FORE_AFT := [25.0, 25.0, 0.0]      # 2D: swings fore/aft (about the port's sideways axis)
 const UP_DOWN := [20.0, 20.0, 0.0]       # 2D, for forward-facing ports
@@ -76,8 +82,8 @@ const THRUSTERS := [
 	["SoleR", "foot.R", Vector3(4.25, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 3.0, 0.60, false],
 	["SoleL", "foot.L", Vector3(-4.24, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 3.0, 0.60, false],
 	# Behind each calf, mostly down and a little back; its guard plate moves with it.
-	["CalfR", "shin.R", Vector3(3.22, 5.8, 1.53), CALF_EXHAUST_R, 400.0, CALF_CONE, 4.5, 0.80, false],
-	["CalfL", "shin.L", Vector3(-3.2, 5.8, 1.53), CALF_EXHAUST_R * Vector3(-1, 1, 1), 400.0, CALF_CONE, 4.5, 0.80, false],
+	["CalfR", "shin.R", Vector3(3.22, 5.8, 1.53), CALF_MODEL_EXHAUST_R, 400.0, FORE_AFT, 4.5, 0.80, false],
+	["CalfL", "shin.L", Vector3(-3.2, 5.8, 1.53), CALF_MODEL_EXHAUST_R * Vector3(-1, 1, 1), 400.0, FORE_AFT, 4.5, 0.80, false],
 	# Shoulder armor, two each: up-and-out (pushes the suit down) and out-and-down.
 	["ShUpR", "shoulder.R", Vector3(4.79, 19.7, 0.45), Vector3(0.74, 0.67, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
 	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
@@ -136,14 +142,16 @@ const AMBAC := [
 	["upper_arm.L", Vector3.BACK, &"arm_l", 6.0e4, -35.0, 8.0, 0.6],
 	["upper_arm.L", Vector3.UP, &"arm_l", 1.0e4, -25.0, 25.0, 0.4],
 	["forearm.L", Vector3.RIGHT, &"arm_l", 2.5e4, -5.0, 50.0, 0.6],
-	["thigh.R", Vector3.RIGHT, &"leg_r", 1.6e5, -20.0, 35.0, 1.0],
+	["thigh.R", Vector3.RIGHT, &"leg_r", 1.6e5, -30.0, 85.0, 1.0],
 	["thigh.R", Vector3.BACK, &"leg_r", 1.6e5, -3.0, 6.0, 0.4],
 	["thigh.R", Vector3.UP, &"leg_r", 2.0e4, -15.0, 15.0, 0.5],
-	["shin.R", Vector3.RIGHT, &"leg_r", 4.5e4, -45.0, 5.0, 0.9],
-	["thigh.L", Vector3.RIGHT, &"leg_l", 1.6e5, -20.0, 35.0, 1.0],
+	["shin.R", Vector3.RIGHT, &"leg_r", 4.5e4, -110.0, 5.0, 0.9],
+	["foot.R", Vector3.RIGHT, &"leg_r", 6.0e3, -40.0, 30.0, 0.5],
+	["thigh.L", Vector3.RIGHT, &"leg_l", 1.6e5, -30.0, 85.0, 1.0],
 	["thigh.L", Vector3.BACK, &"leg_l", 1.6e5, -6.0, 3.0, 0.4],
 	["thigh.L", Vector3.UP, &"leg_l", 2.0e4, -15.0, 15.0, 0.5],
-	["shin.L", Vector3.RIGHT, &"leg_l", 4.5e4, -45.0, 5.0, 0.9],
+	["shin.L", Vector3.RIGHT, &"leg_l", 4.5e4, -110.0, 5.0, 0.9],
+	["foot.L", Vector3.RIGHT, &"leg_l", 6.0e3, -40.0, 30.0, 0.5],
 	["spine", Vector3.UP, &"torso", 1.2e5, -12.0, 12.0, 0.8],
 	["spine", Vector3.RIGHT, &"torso", 1.5e5, -10.0, 6.0, 0.5],
 ]
@@ -158,16 +166,36 @@ const STANCES := [
 			["thigh.L", Vector3.RIGHT, 25.0], ["shin.L", Vector3.RIGHT, -35.0]]],
 	# Raise the leg on the side you're moving to, knee tucked (not kicked out): its swing
 	# rolls the suit that way, and dropping it back helps roll it level.
-	["strafe_right", Vector3.RIGHT, 50.0, [["thigh.R", Vector3.RIGHT, 35.0], ["shin.R", Vector3.RIGHT, -45.0],
-			["thigh.R", Vector3.BACK, 5.0], ["thigh.L", Vector3.RIGHT, 8.0], ["shin.L", Vector3.RIGHT, -12.0]]],
-	["strafe_left", Vector3.LEFT, 50.0, [["thigh.L", Vector3.RIGHT, 35.0], ["shin.L", Vector3.RIGHT, -45.0],
-			["thigh.L", Vector3.BACK, -5.0], ["thigh.R", Vector3.RIGHT, 8.0], ["shin.R", Vector3.RIGHT, -12.0]]],
+	["strafe_right", Vector3.RIGHT, 50.0, [["thigh.R", Vector3.RIGHT, 70.0], ["shin.R", Vector3.RIGHT, -95.0],
+			["foot.R", Vector3.RIGHT, -30.0], ["thigh.R", Vector3.BACK, 6.0], ["thigh.L", Vector3.RIGHT, 10.0], ["shin.L", Vector3.RIGHT, -15.0]]],
+	["strafe_left", Vector3.LEFT, 50.0, [["thigh.L", Vector3.RIGHT, 70.0], ["shin.L", Vector3.RIGHT, -95.0],
+			["foot.L", Vector3.RIGHT, -30.0], ["thigh.L", Vector3.BACK, -6.0], ["thigh.R", Vector3.RIGHT, 10.0], ["shin.R", Vector3.RIGHT, -15.0]]],
 	# Legs trail back when driving forward, forward when braking or backing off.
 	["forward", Vector3.FORWARD, 45.0, [["thigh.R", Vector3.RIGHT, -15.0], ["shin.R", Vector3.RIGHT, -25.0],
 			["thigh.L", Vector3.RIGHT, -15.0], ["shin.L", Vector3.RIGHT, -25.0]]],
 	["back", Vector3.BACK, 45.0, [["thigh.R", Vector3.RIGHT, 30.0], ["shin.R", Vector3.RIGHT, -25.0],
 			["thigh.L", Vector3.RIGHT, 30.0], ["shin.L", Vector3.RIGHT, -25.0]]],
 	# No descend stance: bending the legs for a descent moved thrusters that help it.
+]
+
+# Armor that follows a limb (LimbFollowers): bone, axis, source bone, source axis, factor
+# when the source angle is > 0, factor when < 0, limit deg. Front skirts lift with a
+# forward leg swing, rear skirts with a backward one, side skirts open with an outward
+# swing and a little with either fore/aft swing. Shoulder armor turns with the arm's
+# fore/aft swing, only a little with its sideways one (the arm already has room there).
+const FOLLOWERS := [
+	["skirt_front.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.85, 0.0, 75.0],
+	["skirt_front.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.85, 0.0, 75.0],
+	["skirt_rear.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.0, 0.85, 75.0],
+	["skirt_rear.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.0, 0.85, 75.0],
+	["skirt_side.R", Vector3.BACK, "thigh.R", Vector3.BACK, 1.0, 0.0, 30.0],
+	["skirt_side.L", Vector3.BACK, "thigh.L", Vector3.BACK, 0.0, 1.0, 30.0],
+	["skirt_side.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.35, 0.35, 30.0],
+	["skirt_side.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.35, 0.35, 30.0],
+	["shoulder.R", Vector3.RIGHT, "upper_arm.R", Vector3.RIGHT, 0.8, 0.8, 60.0],
+	["shoulder.L", Vector3.RIGHT, "upper_arm.L", Vector3.RIGHT, 0.8, 0.8, 60.0],
+	["shoulder.R", Vector3.BACK, "upper_arm.R", Vector3.BACK, 0.25, 0.25, 8.0],
+	["shoulder.L", Vector3.BACK, "upper_arm.L", Vector3.BACK, 0.25, 0.25, 8.0],
 ]
 
 # Poses: bone → list of [axis, degrees] rotations in skeleton space (applied in order).
@@ -250,6 +278,7 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 	_build_ambac(root)
 	_build_thruster_guards(root)
 	_build_stances(root)
+	_build_limb_followers(root)
 	_build_loadout(root)
 	_build_animation(root, library)
 
@@ -288,7 +317,10 @@ func _build_thrusters(root: Node3D) -> void:
 		var exhaust: Vector3 = (t[3] as Vector3).normalized()
 		var up := Vector3.UP if absf(exhaust.dot(Vector3.UP)) < 0.95 else Vector3.BACK
 		# Thruster −Z = thrust direction = opposite of the exhaust.
-		var body_xf := Transform3D(Basis.looking_at(-exhaust, up), pos)
+		var basis := Basis.looking_at(-exhaust, up)
+		if SWING_2D.has(t[0]):
+			basis = _swing_basis(exhaust, SWING_2D[t[0]][0])
+		var body_xf := Transform3D(basis, pos)
 		var node: Node3D = thruster_scene.instantiate()
 		node.name = t[0]
 		_add(root, attachments[bone], node)
@@ -317,6 +349,15 @@ func _build_thrusters(root: Node3D) -> void:
 			node.set("nozzle_scale", slot[1])
 		if POD_HINGE.has(t[0]):
 			node.set("swing_pivot", body_xf.affine_inverse() * (POD_HINGE[t[0]] as Vector3))
+		if CALF_HINGE.has(t[0]):
+			node.set("swing_pivot", body_xf.affine_inverse() * (CALF_HINGE[t[0]] as Vector3))
+		if SWING_2D.has(t[0]):
+			var lo: float = SWING_2D[t[0]][1]
+			var hi: float = SWING_2D[t[0]][2]
+			node.set("gimbal_limit_deg", maxf(absf(lo), absf(hi)))
+			node.set("gimbal_pitch_limit_deg", (hi - lo) * 0.5)
+			node.set("gimbal_pitch_bias_deg", (hi + lo) * 0.5)
+			node.set("gimbal_yaw_limit_deg", 0.0)
 
 
 func _build_flight_computer(root: Node3D) -> void:
@@ -352,6 +393,26 @@ func _build_flight_computer(root: Node3D) -> void:
 	input.set("axis_bindings", bindings)
 
 
+func _build_limb_followers(root: Node3D) -> void:
+	var node := LimbFollowers.new()
+	node.name = "LimbFollowers"
+	_add(root, root, node)
+	node.skeleton = root.get_node(SKELETON)
+	var list: Array[LimbFollower] = []
+	for f in FOLLOWERS:
+		var follower := LimbFollower.new()
+		follower.bone_name = f[0]
+		follower.axis = f[1]
+		follower.source_bone = f[2]
+		follower.source_axis = f[3]
+		follower.positive = f[4]
+		follower.negative = f[5]
+		follower.min_angle_deg = -f[6]
+		follower.max_angle_deg = f[6]
+		list.append(follower)
+	node.followers = list
+
+
 func _build_stances(root: Node3D) -> void:
 	var node := StanceController.new()
 	node.name = "StanceController"
@@ -376,8 +437,15 @@ func _build_stances(root: Node3D) -> void:
 	node.stances = list
 
 
-## The backpack pods and the model's calf nozzles turn with their thrusters; the calf
-## plates open out of the way while their nozzle is swung and close after it's back.
+## Thruster basis for a one-plane swing: local X is the swing axis, so +pitch turns the
+## exhaust toward `toward`, and +Z is the exhaust.
+static func _swing_basis(exhaust: Vector3, toward: Vector3) -> Basis:
+	var x := exhaust.cross(toward).normalized()
+	return Basis(x, exhaust.cross(x), exhaust)
+
+
+## The backpack pods and the calf plates (each carrying its nozzle) turn with their
+## thrusters about their hinges.
 func _build_thruster_guards(root: Node3D) -> void:
 	var node := ThrusterGuards.new()
 	node.name = "ThrusterGuards"
@@ -386,7 +454,6 @@ func _build_thruster_guards(root: Node3D) -> void:
 	var guards: Array[ThrusterGuard] = []
 	# bone, thrusters, full rotation (nozzle) or hinge (guard plate)
 	for g in [["main_pod.R", ["MainRU", "MainRL"], false], ["main_pod.L", ["MainLU", "MainLL"], false],
-			["calf_nozzle.R", ["CalfR"], true], ["calf_nozzle.L", ["CalfL"], true],
 			["calf_guard.R", ["CalfR"], false], ["calf_guard.L", ["CalfL"], false]]:
 		var guard := ThrusterGuard.new()
 		guard.bone_name = g[0]
@@ -396,11 +463,12 @@ func _build_thruster_guards(root: Node3D) -> void:
 			guard.rest_thrust = -MAIN_MODEL_EXHAUST
 			guard.min_angle_deg = -30.0  # back
 			guard.max_angle_deg = 40.0   # forward, toward straight down
-		if g[0].begins_with("calf_nozzle"):
-			var side := 1.0 if g[0].ends_with(".R") else -1.0
-			guard.rest_thrust = -CALF_MODEL_EXHAUST_R * Vector3(side, 1, 1)
 		if g[0].begins_with("calf_guard"):
-			guard.open_angle_deg = -35.0  # the plate swings back, away from the leg
+			var side := 1.0 if g[0].ends_with(".R") else -1.0
+			var exhaust := (CALF_MODEL_EXHAUST_R * Vector3(side, 1, 1)).normalized()
+			guard.axis = _swing_basis(exhaust, Vector3.BACK).x
+			guard.min_angle_deg = 0.0
+			guard.max_angle_deg = 40.0
 		guards.append(guard)
 	node.guards = guards
 
@@ -420,6 +488,10 @@ func _build_ambac(root: Node3D) -> void:
 		j.min_angle_deg = a[4]
 		j.max_angle_deg = a[5]
 		j.priority = a[6]
+		if j.bone_name.begins_with("thigh") or j.bone_name.begins_with("shin") \
+				or j.bone_name.begins_with("foot"):
+			j.max_rate_deg = 150.0   # legs swing well beyond balancing travel for stances
+			j.max_accel_deg = 600.0
 		joints.append(j)
 	ambac.joints = joints
 
