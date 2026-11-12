@@ -11,7 +11,8 @@ extends RefCounted
 ## thrusters mostly cancelling each other, which burns a lot of propellant for little
 ## push in weak directions (e.g. straight down).
 ##
-## Built once from a FlightState snapshot; lookup() blends the nearest samples.
+## Built from a FlightState snapshot, all at once (build) or a few directions per tick
+## (start / step, for rebuilding while flying); lookup() blends the nearest samples.
 
 const SHARPNESS := 8.0
 const PROBE_ITERATIONS := 80
@@ -21,31 +22,64 @@ var dirs := PackedVector3Array()
 var values := PackedFloat32Array()
 
 
-static func build(state: FlightState, allocator: ThrustAllocator, min_alignment: float = 0.0,
-		count: int = 48, tolerance: float = 0.06, steps: int = 7) -> ForceCapabilityMap:
+const COUNT := 48
+const TOLERANCE := 0.06
+const STEPS := 7
+
+# Incremental build state.
+var _state: FlightState
+var _allocator: ThrustAllocator
+var _min_alignment := 0.0
+var _next := 0
+
+
+static func build(state: FlightState, allocator: ThrustAllocator, min_alignment: float = 0.0) \
+		-> ForceCapabilityMap:
+	var map := start(state, allocator, min_alignment)
+	map.step(COUNT)
+	return map
+
+
+## Begins an incremental build; call step() until it returns true.
+static func start(state: FlightState, allocator: ThrustAllocator, min_alignment: float = 0.0) \
+		-> ForceCapabilityMap:
 	var map := ForceCapabilityMap.new()
+	map._state = state
+	map._allocator = allocator
+	map._min_alignment = min_alignment
+	return map
+
+
+## Measures up to `count` more directions. True when the map is complete.
+func step(count: int) -> bool:
 	var upper := 0.0
-	for t in state.thruster_max:
+	for t in _state.thruster_max:
 		upper += t
 	var golden := PI * (3.0 - sqrt(5.0))
-	for i in count:
-		var y := 1.0 - 2.0 * (i + 0.5) / count
+	var end := mini(_next + count, COUNT)
+	for i in range(_next, end):
+		var y := 1.0 - 2.0 * (i + 0.5) / COUNT
 		var radius := sqrt(1.0 - y * y)
 		var dir := Vector3(cos(golden * i) * radius, y, sin(golden * i) * radius)
 		var lo := 0.0
 		var hi := upper
-		var probe := _probe(allocator)
-		for _s in steps:
+		var probe := _probe(_allocator)
+		for _s in STEPS:
 			var mid := (lo + hi) * 0.5
-			if _is_clean(state, probe, dir, mid, tolerance):
+			if _is_clean(_state, probe, dir, mid, TOLERANCE):
 				lo = mid
 			else:
 				hi = mid
-		if min_alignment > 0.0:
-			lo = minf(lo, _aimed_thrust(state, dir, min_alignment))
-		map.dirs.append(dir)
-		map.values.append(lo)
-	return map
+		if _min_alignment > 0.0:
+			lo = minf(lo, _aimed_thrust(_state, dir, _min_alignment))
+		dirs.append(dir)
+		values.append(lo)
+	_next = end
+	if _next >= COUNT:
+		_state = null
+		_allocator = null
+		return true
+	return false
 
 
 ## Interpolated clean authority along a unit body direction, N. A weighted

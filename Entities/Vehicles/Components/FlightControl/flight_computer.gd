@@ -55,6 +55,10 @@ var _ref_tracking := false
 var _depleted_emitted := false
 var _hatch: CockpitHatch
 var _capability_map: ForceCapabilityMap
+var _map_build: ForceCapabilityMap      ## Rebuild in progress (replaces the map when done)
+var _stance: StanceController
+## Directions of the capability map measured per tick while rebuilding in flight.
+@export var capability_rebuild_per_tick: int = 2
 
 
 func _ready() -> void:
@@ -70,6 +74,7 @@ func _ready() -> void:
 		if ambac == null:
 			ambac = vehicle.find_component(AmbacController) as AmbacController
 		_hatch = vehicle.find_component(CockpitHatch) as CockpitHatch
+		_stance = vehicle.find_component(StanceController) as StanceController
 	set_control_law(control_law if control_law != null else RateCommandControlLaw.new())
 	set_allocator(allocator if allocator != null else ConeProjectedAllocator.new())
 	_collect_thrusters(body)
@@ -82,6 +87,13 @@ func _ready() -> void:
 func rebuild_capability_map() -> void:
 	_capability_map = ForceCapabilityMap.build(state, allocator, min_thrust_alignment)
 	state.capability_map = _capability_map
+
+
+## Rebuilds the capability map for the current pose over the next few ticks (the old
+## map stays in use until then). Used when limbs carrying thrusters change pose.
+func rebuild_capability_map_async() -> void:
+	if not thrusters.is_empty():
+		_map_build = ForceCapabilityMap.start(state, allocator.duplicate(), min_thrust_alignment)
 
 
 func get_total_mass() -> float:
@@ -106,6 +118,10 @@ func set_allocator(new_allocator: ThrustAllocator) -> void:
 
 func _physics_process(delta: float) -> void:
 	_build_state(delta)
+	if _map_build != null and _map_build.step(capability_rebuild_per_tick):
+		_capability_map = _map_build
+		state.capability_map = _capability_map
+		_map_build = null
 	var command := input_source.get_command() if input_source != null else PilotCommand.new()
 
 	if fcs_enabled:
@@ -156,6 +172,15 @@ func get_thrust_fraction() -> float:
 	return now / total if total > 0.0 else 0.0
 
 
+## The pilot's movement request (stick translation) in the pilot frame; zero when
+## released. Stances follow this, not the FBW's force (which also brakes) or the body
+## frame (auto-rotation tilts it, which would make a strafe look like a climb).
+func get_translation_intent() -> Vector3:
+	if input_source == null or input_source.last_command == null:
+		return Vector3.ZERO
+	return input_source.last_command.translation
+
+
 ## Body relative to the pilot frame (body = pilot · offset); the cockpit counter-rotates by it.
 func get_pilot_offset() -> Quaternion:
 	return control_law.get_pilot_offset() if fcs_enabled else Quaternion.IDENTITY
@@ -182,7 +207,10 @@ func get_cockpit_rotation() -> Quaternion:
 func get_mode_labels() -> PackedStringArray:
 	if not fcs_enabled:
 		return PackedStringArray(["FCS OFF"])
-	return control_law.get_mode_labels()
+	var labels := control_law.get_mode_labels()
+	if _stance != null:
+		labels.append("STANCE " + String(_stance.get_stance_name()).to_upper())
+	return labels
 
 
 # --- Private ---

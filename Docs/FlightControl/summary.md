@@ -241,6 +241,24 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
 Measured on the ν (stick released after 3 s): normal flight returns to rest in ≤ 0.32 s and stops
 22 m/s in ~1.3–2.2 s; after Shift ~1.0–1.2 s, after full boost ~1.0–1.6 s, at most one small swing.
 
+## Stances (`StanceController`)
+
+Commits the limbs to a pose for the current move so fixed and 2D thrusters on them point usefully
+and their swing helps turn the suit. The stance is picked from the stick's translation (pilot
+frame, so a rolled suit strafing still counts as a strafe): the `MsStance` whose `direction` it
+falls within (`cone_deg`), else neutral. It changes only after the new pick has held `confirm_time`
+(0.15 s) and the current one `min_dwell` (0.6 s); the current stance keeps its pick until the stick
+leaves its cone by `hysteresis_deg`. Each change is one min-jerk motion (`transition_time` 0.45 s)
+fed to AMBAC as joint targets (`AmbacController.set_target`, rate and acceleration fed forward), so
+the limbs' reaction torque acts on the body like any limb motion, and AMBAC keeps balancing around
+the stance. Releasing the stick returns to neutral; the limb swinging back helps level the suit.
+
+Only free limbs move: groups occupied by active equipment or hard-locked
+(`AmbacController.lock_group`) are skipped and held at their target. ν stances (legs only):
+**climb** (legs forward, knees bent), **strafe left/right** (raise the leg on that side, knee
+tucked), **forward** (legs trail), **back** (legs forward). There's no descend stance: bending the
+legs made descents worse. Capability-map rebuilds per stance are available but off (too costly).
+
 ## AMBAC
 
 Limbs act as reaction wheels: accelerating a limb by `α` about axis `a` pushes the body with

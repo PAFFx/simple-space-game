@@ -148,6 +148,28 @@ const AMBAC := [
 	["spine", Vector3.RIGHT, &"torso", 1.5e5, -10.0, 6.0, 0.5],
 ]
 
+# Stances (StanceController): name, push direction (body frame), cone deg, joints as
+# [bone, axis, deg] (AMBAC joints; hip +X flexes forward, knee −X bends back, +Z swings a
+# right limb out, a left limb in). Legs only: arms stay free for equipment and balancing.
+const STANCES := [
+	# Legs forward, knees bent: soles and calves move in front of the COM to balance the
+	# backpack's push.
+	["climb", Vector3.UP, 50.0, [["thigh.R", Vector3.RIGHT, 25.0], ["shin.R", Vector3.RIGHT, -35.0],
+			["thigh.L", Vector3.RIGHT, 25.0], ["shin.L", Vector3.RIGHT, -35.0]]],
+	# Raise the leg on the side you're moving to, knee tucked (not kicked out): its swing
+	# rolls the suit that way, and dropping it back helps roll it level.
+	["strafe_right", Vector3.RIGHT, 50.0, [["thigh.R", Vector3.RIGHT, 35.0], ["shin.R", Vector3.RIGHT, -45.0],
+			["thigh.R", Vector3.BACK, 5.0], ["thigh.L", Vector3.RIGHT, 8.0], ["shin.L", Vector3.RIGHT, -12.0]]],
+	["strafe_left", Vector3.LEFT, 50.0, [["thigh.L", Vector3.RIGHT, 35.0], ["shin.L", Vector3.RIGHT, -45.0],
+			["thigh.L", Vector3.BACK, -5.0], ["thigh.R", Vector3.RIGHT, 8.0], ["shin.R", Vector3.RIGHT, -12.0]]],
+	# Legs trail back when driving forward, forward when braking or backing off.
+	["forward", Vector3.FORWARD, 45.0, [["thigh.R", Vector3.RIGHT, -15.0], ["shin.R", Vector3.RIGHT, -25.0],
+			["thigh.L", Vector3.RIGHT, -15.0], ["shin.L", Vector3.RIGHT, -25.0]]],
+	["back", Vector3.BACK, 45.0, [["thigh.R", Vector3.RIGHT, 30.0], ["shin.R", Vector3.RIGHT, -25.0],
+			["thigh.L", Vector3.RIGHT, 30.0], ["shin.L", Vector3.RIGHT, -25.0]]],
+	# No descend stance: bending the legs for a descent moved thrusters that help it.
+]
+
 # Poses: bone → list of [axis, degrees] rotations in skeleton space (applied in order).
 const POSE_RIFLE := {
 	"upper_arm.R": [[Vector3.RIGHT, 75.0], [Vector3.BACK, -8.0]],
@@ -227,6 +249,7 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 	_build_flight_computer(root)
 	_build_ambac(root)
 	_build_thruster_guards(root)
+	_build_stances(root)
 	_build_loadout(root)
 	_build_animation(root, library)
 
@@ -327,6 +350,30 @@ func _build_flight_computer(root: Node3D) -> void:
 		binding.deadzone = b[2]
 		bindings.append(binding)
 	input.set("axis_bindings", bindings)
+
+
+func _build_stances(root: Node3D) -> void:
+	var node := StanceController.new()
+	node.name = "StanceController"
+	_add(root, root, node)
+	var list: Array[MsStance] = []
+	for st in STANCES:
+		var stance := MsStance.new()
+		stance.stance_name = st[0]
+		stance.direction = st[1]
+		stance.cone_deg = st[2]
+		var bones := PackedStringArray()
+		var axes := PackedVector3Array()
+		var angles := PackedFloat32Array()
+		for j in st[3]:
+			bones.append(j[0])
+			axes.append(j[1])
+			angles.append(j[2])
+		stance.bones = bones
+		stance.axes = axes
+		stance.angles_deg = angles
+		list.append(stance)
+	node.stances = list
 
 
 ## The backpack pods and the model's calf nozzles turn with their thrusters; the calf

@@ -9,8 +9,14 @@ extends Node
 ## extra (get_capacity()), so limbs make the suit turn, stop and swing faster, not
 ## just save propellant. Joint accelerations are found by weighted least squares
 ## (priority × headroom, occupied groups get no weight), then a centering spring
-## pulls every limb back to neutral. Limbs can't make sustained torque, so the
-## returned *achieved* torque is subtracted from what the thrusters must give.
+## pulls every limb back to its target: neutral (0), or a stance pose set by a
+## StanceController through set_target(), whose motion is fed forward so the limb
+## follows it exactly. Moving a limb pushes the body back either way, and limbs can't
+## make sustained torque, so the returned *achieved* torque is subtracted from what
+## the thrusters must give.
+##
+## Locked groups (lock_group(), or occupied by active equipment) take no part in
+## balancing; their joints just hold their target.
 
 @export var enabled: bool = true
 @export var skeleton: Skeleton3D
@@ -29,6 +35,10 @@ extends Node
 
 var angles := PackedFloat32Array()   ## rad
 var rates := PackedFloat32Array()    ## rad/s
+var targets := PackedFloat32Array()  ## Pose each joint is held at, rad (0 = neutral)
+var target_rates := PackedFloat32Array()
+var target_accels := PackedFloat32Array()
+var _locked := {}                    ## Group → true: hard-locked (no balancing)
 var last_torque := Vector3.ZERO      ## Achieved body torque, body frame
 var _loadout: MsLoadout
 var _axes_body: Array[Vector3] = []
@@ -37,6 +47,9 @@ var _axes_body: Array[Vector3] = []
 func _ready() -> void:
 	angles.resize(joints.size())
 	rates.resize(joints.size())
+	targets.resize(joints.size())
+	target_rates.resize(joints.size())
+	target_accels.resize(joints.size())
 	var vehicle := VehicleBase.find_vehicle(self)
 	if vehicle != null:
 		_loadout = vehicle.find_component(MsLoadout) as MsLoadout
@@ -55,8 +68,40 @@ func _ready() -> void:
 
 func is_joint_available(i: int) -> bool:
 	var j := joints[i]
-	return enabled and j.priority > 0.0 and \
-			(_loadout == null or j.group == &"" or not _loadout.is_group_occupied(j.group))
+	return enabled and j.priority > 0.0 and not is_group_locked(j.group)
+
+
+## True while a group takes no part in balancing (hard-locked, or its equipment is in use).
+func is_group_locked(group: StringName) -> bool:
+	if group == &"":
+		return false
+	return _locked.has(group) or (_loadout != null and _loadout.is_group_occupied(group))
+
+
+## Holds a group at its targets and keeps it out of balancing (e.g. a limb in use).
+func lock_group(group: StringName) -> void:
+	_locked[group] = true
+
+
+func unlock_group(group: StringName) -> void:
+	_locked.erase(group)
+
+
+## Index of the joint on `bone` about `axis` (skeleton space), or -1.
+func find_joint(bone: StringName, axis: Vector3) -> int:
+	for i in joints.size():
+		if joints[i].bone_name == bone and joints[i].axis.normalized().dot(axis.normalized()) > 0.99:
+			return i
+	return -1
+
+
+## Pose target for joint i: angle (rad) plus its rate and acceleration, fed forward so
+## the limb follows a moving target without lag.
+func set_target(i: int, angle: float, rate := 0.0, accel := 0.0) -> void:
+	var j := joints[i]
+	targets[i] = clampf(angle, deg_to_rad(j.min_angle_deg), deg_to_rad(j.max_angle_deg))
+	target_rates[i] = rate
+	target_accels[i] = accel
 
 
 ## Torque the free limbs can add right now, per body axis (N·m): each available
@@ -120,7 +165,8 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 			alpha *= clampf((hi - angles[i]) / maxf(hi, 1e-4), 0.0, 1.0)
 		elif alpha < 0.0:
 			alpha *= clampf((angles[i] - lo) / maxf(-lo, 1e-4), 0.0, 1.0)
-		alpha += -w0 * w0 * angles[i] - 2.0 * centering_damping * w0 * rates[i]
+		alpha += target_accels[i] - w0 * w0 * (angles[i] - targets[i]) \
+				- 2.0 * centering_damping * w0 * (rates[i] - target_rates[i])
 		var max_accel := deg_to_rad(j.max_accel_deg)
 		alpha = clampf(alpha, -max_accel, max_accel)
 
