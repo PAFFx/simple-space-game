@@ -46,8 +46,11 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export_group("Rotation")
 ## Max commanded rate at full stick (pitch, yaw, roll), deg/s.
 @export var max_rate_deg := Vector3(40.0, 35.0, 60.0)
-## Rate loop bandwidth, 1/s. Higher = snappier, more thruster chatter.
-@export var rate_gain: float = 2.5
+## Rate loop bandwidth for steering and stops, 1/s. Higher = snappier, more chatter.
+@export var rate_gain: float = 5.0
+## Rate loop bandwidth while auto-rotating, 1/s. Gentler, so the swing never asks for
+## turning moments that spill force.
+@export var auto_rotate_rate_gain: float = 2.5
 ## Attitude loop gain, (rad/s) per rad of error.
 @export var attitude_gain: float = 1.6
 ## After the stick is released, attitude is locked once the rate drops below this, deg/s.
@@ -64,7 +67,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## rotate faster (big turning moments otherwise borrow the off-centre mains).
 @export var auto_rotate_torque_priority: float = 0.5
 ## On stick release: rate-loop gain multiplier and full torque, so rotation stops at once.
-@export var stop_gain_multiplier: float = 2.0
+@export var stop_gain_multiplier: float = 2.5
 ## Fraction of the estimated angular deceleration the braking curve plans with
 ## (slack for actuator lag and allocation losses). Higher = faster, riskier.
 @export_range(0.1, 1.0) var braking_margin: float = 0.5
@@ -141,6 +144,7 @@ var _release_timer := Vector3.ZERO
 var _turn_sign := Vector3.ZERO       ## Direction each steered axis was turning
 var _last_boost := false             ## For the HUD label
 var _last_boost_full := false
+var _thruster_limit := Vector3.INF   ## Thrusters' share of this tick's torque limit
 var _stick := Vector3.ZERO           ## Rotation demand, pilot frame (after horizon lock)
 var _horizon_up := Vector3.UP        ## Global "up" the horizon lock levels to
 var _manual_roll := false            ## Pilot is rolling (sets a new horizon)
@@ -208,6 +212,7 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	var torque := _rotation_torque(state, command, body_q)
 	var force_body := clamp_to_capability(state.to_local(force_world), state, 1.0)
 	var wrench := Wrench.new(force_body, torque)
+	wrench.thruster_torque_limit = _thruster_limit
 	# Steering and stopping keep the allocator default.
 	if _locked == Vector3.ZERO:
 		wrench.torque_priority = auto_rotate_torque_priority if _auto_rotating \
@@ -482,7 +487,8 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		if not steering:
 			gain *= hold_rate_gain_multiplier
 		var fraction := 1.0 if command.boost and steering else torque_fraction
-		var limit := state.max_torque * fraction
+		_thruster_limit = state.max_torque * fraction
+		var limit := _thruster_limit + state.ambac_torque
 		return (inertia * ((rate_cmd - omega) * gain) + gyro).clamp(-limit, limit)
 
 	# Everything below is about the pilot's axes. Locked axes: the stick commands the
@@ -518,23 +524,27 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		elif _capture[k] > 0.0:
 			gain_p[k] = gain * stop_gain_multiplier
 		elif _auto_rotating:
-			gain_p[k] = gain
+			gain_p[k] = auto_rotate_rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
 		else:
 			gain_p[k] = gain * hold_rate_gain_multiplier
 	var alpha_p := (rate_p - omega_p) * gain_p
 
 	# Locked and free axes get separate torque budgets: a boosted turn or a stop may
-	# use it all, while auto-rotation stays gentle so it never spills force.
+	# use it all, while auto-rotation stays gentle so it never spills force. The limbs'
+	# torque comes on top of both (it moves no thrusters, so it's always clean).
 	var stopping := (_capture - _active).max(Vector3.ZERO) != Vector3.ZERO
 	var lock_fraction := 1.0 if stopping or (command.boost and steering) else torque_fraction
 	var free_fraction := auto_rotate_torque_fraction if _auto_rotating else torque_fraction
-	var lock_limit := state.max_torque * lock_fraction
-	var free_limit := state.max_torque * free_fraction
+	var lock_thrust := state.max_torque * lock_fraction
+	var free_thrust := state.max_torque * free_fraction
+	var lock_limit := lock_thrust + state.ambac_torque
+	var free_limit := free_thrust + state.ambac_torque
 	var torque_lock := (inertia * (pilot_to_body * (alpha_p * _locked))).clamp(-lock_limit, lock_limit)
 	var torque_free := (inertia * (pilot_to_body * (alpha_p * free))).clamp(-free_limit, free_limit)
-	var limit := lock_limit if _locked != Vector3.ZERO else free_limit
+	_thruster_limit = lock_thrust if _locked != Vector3.ZERO else free_thrust
 	if free != Vector3.ZERO:
-		limit = limit.max(free_limit)
+		_thruster_limit = _thruster_limit.max(free_thrust)
+	var limit := _thruster_limit + state.ambac_torque
 	return (torque_lock + torque_free + gyro).clamp(-limit, limit)
 
 
@@ -547,7 +557,7 @@ func _braking_rate(state: FlightState, err: Vector3) -> Vector3:
 		return Vector3.ZERO
 	var axis := err / angle
 	var fraction := auto_rotate_torque_fraction if _auto_rotating else torque_fraction
-	var limit := state.max_torque * fraction
+	var limit := state.max_torque * fraction + state.ambac_torque
 	var per_alpha := (state.inertia_local * axis).abs()
 	var alpha := INF
 	for k in 3:

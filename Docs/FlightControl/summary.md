@@ -226,19 +226,51 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
 ## AMBAC
 
 Limbs act as reaction wheels: accelerating a limb by `α` about axis `a` pushes the body with
-`−J·α·a`. Each tick the `AmbacController` is offered `share` (30%) of the FBW torque demand:
+`−J·α·a`.
+
+**Torque on top of the thrusters.** The FBW's torque budgets (steering, stops, auto-rotation and
+the time-optimal return to rest) include what the limbs can add right now
+(`AmbacController.get_capacity()` → `FlightState.ambac_torque`): each free joint's peak reaction
+torque, scaled by its remaining travel and `capacity_fraction` (0.25, since limbs lose authority
+near their stops and while recentring). Each tick AMBAC gets everything beyond the thrusters'
+authority plus `share` (40%) of the rest; the thrusters get what's left, clamped to their own
+limit (`Wrench.thruster_torque_limit`). Before, AMBAC only took a slice of a thruster-sized demand,
+so it saved propellant but never made the suit turn faster.
 
 1. Weighted least squares: `α_i = −w_i J_i a_i·λ`, `M λ = τ_request`, `M = Σ w_i J_i² a_i a_iᵀ + εI`.
-   `w_i` = joint priority (hips 1.0, knees 0.9, waist 0.8, shoulders 0.6, elbows 0.5), zero for
-   groups occupied by active equipment (rifle raised → right arm, shield guard → left arm).
-   Hinges have one-sided travel (`min_angle_deg`/`max_angle_deg`): knees bend back up to 35° but
-   straighten only 8° past the pose, elbows bend up to 40° but straighten only 8°.
+   `w_i` = joint priority, zero for groups occupied by active equipment (rifle raised → right arm,
+   shield guard → left arm).
 2. Each joint backs off as it nears its stop, and a centering spring pulls it back to neutral.
 3. The **achieved** reaction torque is applied to the body; the thrusters get `τ − τ_ambac`.
 
-Limbs can't make sustained torque, so AMBAC mostly trims and smooths. The thrusters do the heavy
-lifting and also pay back the centering. Typical swing during a pitch command: hips ±16°,
-shoulders ±9°, knees −9…+8°, elbows ±3°.
+**Joints** (offsets from the animated pose, human-like ranges):
+
+| Joint | Axes | Range | Inertia |
+|---|---|---|---|
+| Hip | flex −20…+35°, side −3…+6° (outward), twist ±15° | | 1.6e5 (leg), 2e4 twist |
+| Knee | bend back up to 45°, straighten 5° | | 4.5e4 |
+| Shoulder | flex −35…+45°, out −8…+35°, twist ±25° | | 6e4, 1e4 twist |
+| Elbow | bend up to 50°, straighten 5° | | 2.5e4 |
+| Waist | twist ±12°, bend −10…+6° | | 1.2e5 / 1.5e5 |
+
+The side hip swing is kept small. Twists move little mass; they mostly add natural motion.
+
+**Rate loop.** Steering and stops were limited by a gentle rate loop (2.5 /s), not by torque, so
+`rate_gain` is now 5 /s and `stop_gain_multiplier` 2.5. Auto-rotation keeps its own gentler gain
+(`auto_rotate_rate_gain` 2.5) so swings don't spill force.
+
+Measured on MSP-02 (pitch 1.5 s at full stick, release; yaw likewise; return to rest after a 3 s
+boosted dive):
+
+| | Before | Now | Now, AMBAC off |
+|---|---|---|---|
+| Pitch: 90% of rate / stop | 0.90 / 0.73 s | 0.50 / 0.40 s | 0.50 / 0.42 s |
+| Yaw: 90% of rate / stop | 1.05 / 0.65 s | 0.53 / 0.32 s | 0.50 / 0.32 s |
+| Return to rest: within 2° / settled | 0.87 / 1.48 s | 0.90 / 1.15 s | 0.88 / 2.58 s |
+| Propellant: pitch / return | 29 / 99 kg | 31 / 100 kg | 43 / 141 kg |
+
+Typical swing: hips up to 26° in a return to rest, 18° in a pitch; waist 7–8°; knees 5–7°; arms
+5–9°; side hips ≤ 3°. Yaw uses mostly the waist twist.
 
 ### `DirectControlLaw`
 

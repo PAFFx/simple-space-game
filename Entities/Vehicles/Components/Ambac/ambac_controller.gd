@@ -4,17 +4,23 @@ extends Node
 ## AMBAC (Active Mass Balance Auto Control): swings limbs to produce reaction
 ## torque on the body, so attitude can be trimmed without propellant.
 ##
-## Each tick the FlightComputer hands it a torque request (a `share` of the FBW
-## demand). Joint accelerations are found by weighted least squares
-## (priority × headroom, occupied groups get no weight), then a centering
-## spring pulls every limb back to neutral. Limbs can't make sustained torque,
-## so the returned *achieved* torque is subtracted from what the thrusters must give.
+## Each tick the FlightComputer hands it a torque request: a `share` of the FBW
+## demand plus whatever exceeds the thrusters' authority. The FBW budgets for that
+## extra (get_capacity()), so limbs make the suit turn, stop and swing faster, not
+## just save propellant. Joint accelerations are found by weighted least squares
+## (priority × headroom, occupied groups get no weight), then a centering spring
+## pulls every limb back to neutral. Limbs can't make sustained torque, so the
+## returned *achieved* torque is subtracted from what the thrusters must give.
 
 @export var enabled: bool = true
 @export var skeleton: Skeleton3D
 @export var joints: Array[AmbacJoint] = []
-## Fraction of the FBW torque demand offered to AMBAC first.
-@export_range(0.0, 1.0) var share: float = 0.3
+## Fraction of the FBW torque demand offered to AMBAC first (on top of any demand
+## beyond the thrusters' authority, which AMBAC always gets).
+@export_range(0.0, 1.0) var share: float = 0.4
+## Share of the limbs' peak torque the FBW may count on (they lose authority near
+## their stops and while the centering spring pulls them home).
+@export_range(0.0, 1.0) var capacity_fraction: float = 0.25
 ## Centering spring natural frequency (rad/s) and damping ratio.
 @export var centering_frequency: float = 1.6
 @export var centering_damping: float = 1.0
@@ -51,6 +57,23 @@ func is_joint_available(i: int) -> bool:
 	var j := joints[i]
 	return enabled and j.priority > 0.0 and \
 			(_loadout == null or j.group == &"" or not _loadout.is_group_occupied(j.group))
+
+
+## Torque the free limbs can add right now, per body axis (N·m): each available
+## joint's peak reaction torque, scaled by its remaining travel.
+func get_capacity() -> Vector3:
+	var out := Vector3.ZERO
+	if not enabled or _axes_body.size() != joints.size():
+		return out
+	for i in joints.size():
+		if not is_joint_available(i):
+			continue
+		var j := joints[i]
+		var half := deg_to_rad(maxf(j.max_angle_deg - j.min_angle_deg, 1e-3)) * 0.5
+		var mid := deg_to_rad(j.max_angle_deg + j.min_angle_deg) * 0.5
+		var headroom := clampf(1.0 - absf(angles[i] - mid) / half, 0.0, 1.0)
+		out += _axes_body[i].abs() * (j.inertia * deg_to_rad(j.max_accel_deg) * headroom)
+	return out * capacity_fraction
 
 
 ## Average angle / limit (in the direction it's deflected) over all joints, 0..1 (HUD).

@@ -76,21 +76,30 @@ const COLLIDERS := [
 ]
 
 # bone, axis (skeleton space), group, inertia kg·m², min angle, max angle, priority
-# Knees bend back (−X) and elbows forward (+X), so those hinges get one-sided travel.
+# Human-like ranges, offsets from the animated pose. Signs: +X swings a hanging limb
+# forward (hip flex, elbow bend), knees bend back (−X), +Z swings a right limb outward
+# (left limbs mirror), +Y twists. Inertias are about the joint: a whole leg about the
+# hip is ~1.6e5 kg·m² (6 t, 11 m), an arm about the shoulder ~6e4. Twists move
+# little mass, so they mostly add natural motion. The side hip swing stays small.
 const AMBAC := [
-	["upper_arm.R", Vector3.RIGHT, &"arm_r", 6.0e4, -35.0, 35.0, 0.6],
-	["upper_arm.R", Vector3.BACK, &"arm_r", 6.0e4, -25.0, 25.0, 0.6],
-	["forearm.R", Vector3.RIGHT, &"arm_r", 2.5e4, -8.0, 40.0, 0.5],
-	["upper_arm.L", Vector3.RIGHT, &"arm_l", 6.0e4, -35.0, 35.0, 0.6],
-	["upper_arm.L", Vector3.BACK, &"arm_l", 6.0e4, -25.0, 25.0, 0.6],
-	["forearm.L", Vector3.RIGHT, &"arm_l", 2.5e4, -8.0, 40.0, 0.5],
-	["thigh.R", Vector3.RIGHT, &"leg_r", 8.0e4, -30.0, 30.0, 1.0],
-	["thigh.R", Vector3.BACK, &"leg_r", 8.0e4, -15.0, 15.0, 1.0],
-	["shin.R", Vector3.RIGHT, &"leg_r", 4.5e4, -35.0, 8.0, 0.9],
-	["thigh.L", Vector3.RIGHT, &"leg_l", 8.0e4, -30.0, 30.0, 1.0],
-	["thigh.L", Vector3.BACK, &"leg_l", 8.0e4, -15.0, 15.0, 1.0],
-	["shin.L", Vector3.RIGHT, &"leg_l", 4.5e4, -35.0, 8.0, 0.9],
+	["upper_arm.R", Vector3.RIGHT, &"arm_r", 6.0e4, -35.0, 45.0, 0.7],
+	["upper_arm.R", Vector3.BACK, &"arm_r", 6.0e4, -8.0, 35.0, 0.6],
+	["upper_arm.R", Vector3.UP, &"arm_r", 1.0e4, -25.0, 25.0, 0.4],
+	["forearm.R", Vector3.RIGHT, &"arm_r", 2.5e4, -5.0, 50.0, 0.6],
+	["upper_arm.L", Vector3.RIGHT, &"arm_l", 6.0e4, -35.0, 45.0, 0.7],
+	["upper_arm.L", Vector3.BACK, &"arm_l", 6.0e4, -35.0, 8.0, 0.6],
+	["upper_arm.L", Vector3.UP, &"arm_l", 1.0e4, -25.0, 25.0, 0.4],
+	["forearm.L", Vector3.RIGHT, &"arm_l", 2.5e4, -5.0, 50.0, 0.6],
+	["thigh.R", Vector3.RIGHT, &"leg_r", 1.6e5, -20.0, 35.0, 1.0],
+	["thigh.R", Vector3.BACK, &"leg_r", 1.6e5, -3.0, 6.0, 0.4],
+	["thigh.R", Vector3.UP, &"leg_r", 2.0e4, -15.0, 15.0, 0.5],
+	["shin.R", Vector3.RIGHT, &"leg_r", 4.5e4, -45.0, 5.0, 0.9],
+	["thigh.L", Vector3.RIGHT, &"leg_l", 1.6e5, -20.0, 35.0, 1.0],
+	["thigh.L", Vector3.BACK, &"leg_l", 1.6e5, -6.0, 3.0, 0.4],
+	["thigh.L", Vector3.UP, &"leg_l", 2.0e4, -15.0, 15.0, 0.5],
+	["shin.L", Vector3.RIGHT, &"leg_l", 4.5e4, -45.0, 5.0, 0.9],
 	["spine", Vector3.UP, &"torso", 1.2e5, -12.0, 12.0, 0.8],
+	["spine", Vector3.RIGHT, &"torso", 1.5e5, -10.0, 6.0, 0.5],
 ]
 
 # Poses: bone → list of [axis, degrees] rotations in skeleton space (applied in order).

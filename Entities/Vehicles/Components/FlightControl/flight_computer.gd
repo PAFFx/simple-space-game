@@ -112,9 +112,13 @@ func _physics_process(delta: float) -> void:
 		last_wrench = control_law.compute(state, command)
 		var thrust_wrench := last_wrench
 		if ambac != null and ambac.enabled:
-			ambac_torque = ambac.step(last_wrench.torque * ambac.share, delta)
+			# Limbs take what exceeds the thrusters plus a share of the rest.
+			var torque := last_wrench.torque
+			var limit := last_wrench.thruster_torque_limit
+			var beyond := torque - torque.clamp(-limit, limit)
+			ambac_torque = ambac.step(beyond + (torque - beyond) * ambac.share, delta)
 			body.apply_torque(state.to_global(ambac_torque))
-			thrust_wrench = Wrench.new(last_wrench.force, last_wrench.torque - ambac_torque)
+			thrust_wrench = Wrench.new(last_wrench.force, (torque - ambac_torque).clamp(-limit, limit))
 			thrust_wrench.torque_priority = last_wrench.torque_priority
 		var demand := allocator.allocate(state, thrust_wrench)
 		for i in thrusters.size():
@@ -206,6 +210,8 @@ func _build_state(delta: float) -> void:
 		s.thruster_cone.append(t.get_cone_rad())
 		s.thruster_max.append(t.get_available_thrust() if has_propellant else 0.0)
 	s.compute_authority()
+	if ambac != null and ambac.enabled:
+		s.ambac_torque = ambac.get_capacity()
 	# The cockpit must line up with the hull opening while the hatch is unsealed.
 	s.allow_attitude_offset = _hatch == null or not _hatch.is_unsealed()
 	s.capability_map = _capability_map

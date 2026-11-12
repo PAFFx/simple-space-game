@@ -30,6 +30,9 @@ var thruster_max := PackedFloat32Array()         ## Available thrust, N (0 = una
 var max_force_pos := Vector3.ZERO  ## Max force along +x/+y/+z (positive numbers)
 var max_force_neg := Vector3.ZERO  ## Max force along -x/-y/-z (positive numbers)
 var max_torque := Vector3.ZERO     ## Max torque per axis (symmetric, conservative)
+## Extra torque the limbs (AMBAC) can add right now, per axis. Transient: it fades as
+## the limbs run out of travel.
+var ambac_torque := Vector3.ZERO
 
 ## False while the body must stay aligned with the cockpit (e.g. hatch open).
 var allow_attitude_offset: bool = true
