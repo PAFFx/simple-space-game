@@ -24,6 +24,8 @@ var inertia_local := Basis.IDENTITY
 var thruster_positions := PackedVector3Array()
 var thruster_axes := PackedVector3Array()        ## Nominal (un-gimballed) thrust direction
 var thruster_cone := PackedFloat32Array()        ## Gimbal half-angle, radians
+## Fore/aft swing limit, two plane normals per thruster (zero = none); see Thruster.
+var thruster_planes := PackedVector3Array()
 var thruster_max := PackedFloat32Array()         ## Available thrust, N (0 = unavailable)
 
 ## Rough authority estimates derived from the geometry above.

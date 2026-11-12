@@ -16,6 +16,19 @@ extends Resource
 
 ## Projects u onto {v : angle(v, axis) <= cone, |v| <= 1}: the set of thrust
 ## vectors a gimballed thruster can actually produce (throttle-normalised).
+## Projects u onto thruster i's gimbal range: its cone, then its fore/aft planes (they
+## pass through the nozzle axis, so pulling back inside them stays in the cone).
+static func project_to_gimbal(u: Vector3, state: FlightState, i: int) -> Vector3:
+	var v := project_to_cone(u, state.thruster_axes[i], state.thruster_cone[i])
+	if state.thruster_planes.size() >= 2 * (i + 1):
+		for k in 2:
+			var m := state.thruster_planes[2 * i + k]
+			var over := m.dot(v)
+			if over > 0.0:
+				v -= m * over
+	return v
+
+
 static func project_to_cone(u: Vector3, axis: Vector3, cone: float) -> Vector3:
 	var a := u.dot(axis)
 	var perp := u - axis * a

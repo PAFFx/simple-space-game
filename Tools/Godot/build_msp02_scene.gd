@@ -23,10 +23,11 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 # name, bone, position, exhaust direction, thrust kN, gimbal deg, plume m, nozzle scale
 # Mains are tuned for anime-style performance (~5 G on main thrust alone, enough to leap
 # in an atmosphere); verniers are scaled by VERNIER_SCALE to balance their torque.
-# Backpack mains fire down and 25° back from the bottom of the pods (below the COM). Their
-# 60° vectoring lets them swing the thrust line through the COM, and, with the suit pitched
-# nose-down, push mostly downward for a fast descent.
-const MAIN_EXHAUST := Vector3(0.0, -0.906, 0.423)
+# Backpack mains fire from the bottom of the pods (below the COM). Their nozzles swing
+# fore/aft from straight down to 60° back (±30° around 30° back, MAIN_PITCH_LIMIT_DEG),
+# enough to put the thrust line through the COM, and up to 60° sideways.
+const MAIN_EXHAUST := Vector3(0.0, -0.866, 0.5)
+const MAIN_PITCH_LIMIT_DEG := 30.0
 const VERNIER_SCALE := 1.6
 ## Thrusters at or above this rating are mains (fast-spooling, fast-vectoring engines).
 const MAIN_RATING_KN := 200.0
@@ -229,6 +230,8 @@ func _build_thrusters(root: Node3D) -> void:
 		for key: String in dynamics:
 			node.set(key, dynamics[key])
 		node.set("gimbal_limit_deg", t[5])
+		if t[3] == MAIN_EXHAUST:
+			node.set("gimbal_pitch_limit_deg", MAIN_PITCH_LIMIT_DEG)
 		node.set("plume_length", t[6])
 		node.set("nozzle_scale", t[7])
 		node.set("hud_label", _short_label(t[0]))

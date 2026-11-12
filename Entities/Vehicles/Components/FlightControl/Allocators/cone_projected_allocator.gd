@@ -114,7 +114,7 @@ func _solve(state: FlightState, u: PackedVector3Array, force_target: Vector3, to
 				y[i] = Vector3.ZERO
 				continue
 			var grad := (g_force + g_torque.cross(r[i])) * t[i] + y[i] * (2.0 * lam * t[i] * t[i])
-			var u_new := project_to_cone(y[i] - grad * step, state.thruster_axes[i], state.thruster_cone[i])
+			var u_new := project_to_gimbal(y[i] - grad * step, state, i)
 			var shrink := step * price * t[i]
 			if shrink > 0.0:
 				var length := u_new.length()

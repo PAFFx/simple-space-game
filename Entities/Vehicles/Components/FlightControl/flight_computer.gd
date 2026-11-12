@@ -208,6 +208,7 @@ func _build_state(delta: float) -> void:
 		s.thruster_positions.append(t.get_position_in(body) - com_local)
 		s.thruster_axes.append(t.get_axis_in(body))
 		s.thruster_cone.append(t.get_cone_rad())
+		s.thruster_planes.append_array(t.get_pitch_planes_in(body))
 		s.thruster_max.append(t.get_available_thrust() if has_propellant else 0.0)
 	s.compute_authority()
 	if ambac != null and ambac.enabled:

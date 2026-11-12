@@ -12,6 +12,10 @@ extends Node3D
 
 @export var max_thrust: float = 150000.0          ## N
 @export_range(0.0, 60.0) var gimbal_limit_deg: float = 20.0
+## Tighter limit on the fore/aft swing (about the node's local X axis), deg. At or
+## above gimbal_limit_deg it adds nothing. Lets a nozzle swing wide sideways but only
+## a little fore and aft.
+@export_range(0.0, 90.0) var gimbal_pitch_limit_deg: float = 90.0
 @export var gimbal_rate_deg: float = 120.0        ## Max gimbal slew, deg/s
 @export var spool_up_time: float = 0.25           ## Throttle time constant rising, s
 @export var spool_down_time: float = 0.12         ## Throttle time constant falling, s
@@ -73,6 +77,24 @@ func get_cone_rad() -> float:
 	return deg_to_rad(gimbal_limit_deg)
 
 
+## Fore/aft swing limit as two plane normals m (the direction d is allowed when
+## m·d ≤ 0 for both), in `frame`'s axes. Zero vectors when there's no extra limit.
+func get_pitch_planes_in(frame: Node3D) -> PackedVector3Array:
+	if gimbal_pitch_limit_deg >= gimbal_limit_deg:
+		return PackedVector3Array([Vector3.ZERO, Vector3.ZERO])
+	var to_frame := frame.global_basis.inverse() * global_basis
+	var out := PackedVector3Array()
+	for m in _pitch_planes():
+		out.append((to_frame * m).normalized())
+	return out
+
+
+## Local plane normals: pitch φ = atan2(d.y, −d.z) stays within ±limit.
+func _pitch_planes() -> Array[Vector3]:
+	var h := deg_to_rad(gimbal_pitch_limit_deg)
+	return [Vector3(0.0, cos(h), sin(h)), Vector3(0.0, -cos(h), sin(h))]
+
+
 ## Nominal thrust direction expressed in `frame`'s local axes.
 func get_axis_in(frame: Node3D) -> Vector3:
 	return (frame.global_basis.inverse() * -global_basis.z).normalized()
@@ -115,11 +137,16 @@ func step(delta: float, body: RigidBody3D, has_propellant: bool) -> void:
 func _clamp_to_cone(local_dir: Vector3) -> Vector3:
 	var limit := deg_to_rad(gimbal_limit_deg)
 	var angle := Vector3.FORWARD.angle_to(local_dir)
-	if angle <= limit:
-		return local_dir
+	var d := local_dir
 	if limit <= 0.0:
 		return Vector3.FORWARD
-	return Vector3.FORWARD.slerp(local_dir, limit / angle).normalized()
+	if angle > limit:
+		d = Vector3.FORWARD.slerp(local_dir, limit / angle).normalized()
+	if gimbal_pitch_limit_deg < gimbal_limit_deg:
+		for m in _pitch_planes():
+			if m.dot(d) > 0.0:
+				d = (d - m * m.dot(d)).normalized()
+	return d
 
 
 static func _pick_up(dir: Vector3) -> Vector3:

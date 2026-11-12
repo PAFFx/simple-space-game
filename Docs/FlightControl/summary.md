@@ -58,7 +58,9 @@ Entities/Vehicles/Components/Ambac/
 - **Orientation:** the node's `-Z` is the thrust direction; the blue `+Z` gizmo arrow shows where the
   plume goes.
 - **Gimbal:** the `Gimbal` child slews toward the commanded direction at `gimbal_rate_deg`, limited
-  to a cone of `gimbal_limit_deg`.
+  to a cone of `gimbal_limit_deg`. `gimbal_pitch_limit_deg` can tighten the fore/aft swing (about the
+  node's local X) below the cone, as two planes through the nozzle axis that the allocator's
+  projection respects too.
 - **Throttle:** first-order lag (`spool_up_time` / `spool_down_time`).
 - The force applied to the body uses the **actual** gimbal angle and throttle, not the command, so
   actuator lag is simulated and the control laws must cope with it.
@@ -352,7 +354,10 @@ bindings, then enable `joystick_enabled`.
 
 - 30 t dry + 10 t propellant + 6.4 t equipment ≈ 46 t. Main thrust is anime-style: 2 × 900 kN
   backpack mains + 2 × 300 kN leg mains (~5.3 G), plus 18 verniers of 40–56 kN. The backpack mains sit at the bottom of the pods, below and behind the centre of
-  mass, firing down and 25° back, with 60° vectoring.
+  mass. Their nozzles swing fore/aft from straight down to 60° back (never forward of down) and up
+  to 60° sideways (`gimbal_pitch_limit_deg` 30° around a nominal 30° back, inside the 60° cone).
+  Compared with a full 60° cone: 10 s full boost forward 350 → 288 m/s, boosted strafe 69 → 62 m/s,
+  full-boost dodge 3.2 → 3.4 s; climbing, normal strafes and dodges unchanged.
 - Authority is deliberately anisotropic: strong up, weak sideways, back and down. No backpack
   verniers fire upward; down thrust comes from the shoulder tops only.
 - Verified headless:

@@ -24,7 +24,7 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 			continue
 		# Most useful direction for this thruster = negative cost gradient at zero thrust.
 		var useful := wrench.force + wrench.torque.cross(r) * wt2
-		var aimed := project_to_cone(useful.normalized(), state.thruster_axes[i], state.thruster_cone[i])
+		var aimed := project_to_gimbal(useful.normalized(), state, i)
 		if aimed.length_squared() < 1e-8:
 			continue
 		var dir := aimed.normalized()
