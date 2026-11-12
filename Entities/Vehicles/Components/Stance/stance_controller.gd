@@ -27,9 +27,10 @@ extends Node
 ## Stick deflection below which the suit goes back to neutral.
 @export var engage: float = 0.2
 ## Pose against the motion while braking (stick released) above brake_speed, until
-## below brake_release_speed (m/s, relative to the reference frame). Off: in tests it
-## didn't stop the suit any sooner (braking is thrust-limited) and settled it a bit slower.
-@export var brake_stances: bool = false
+## below brake_release_speed (m/s, relative to the reference frame). Braking is
+## thrust-limited, so the gain is small: stops ~1% sooner, AMBAC's share of the turning a
+## few points higher, about the same propellant.
+@export var brake_stances: bool = true
 @export var brake_speed: float = 8.0
 @export var brake_release_speed: float = 3.0
 @export var hysteresis_deg: float = 25.0

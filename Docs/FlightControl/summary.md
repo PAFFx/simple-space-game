@@ -260,9 +260,10 @@ hip ~70°, knee tucked ~95°, toe pointed), **forward** (legs trail), **back** (
 legs made descents worse. Capability-map rebuilds per stance are available but off (too costly).
 Without boost a stance uses 40% of its angles (`normal_scale`; normal moves barely tilt the
 suit), with boost (Shift) the full pose; pressing or releasing Shift mid-move eases between them.
-A braking counter-pose (pick the stance from the braking push while the stick is released,
-`brake_stances`) is available but off: it didn't stop the suit sooner (braking is
-thrust-limited) and settled it slightly slower.
+While braking a fast move with the stick released (`brake_stances`), the stance is picked from
+the braking push, so the limbs counter the motion (legs forward to stop a dash). Braking is
+thrust-limited, so the gain is small: stops ~1% sooner, AMBAC's share of the turning +1–4
+points, propellant within ±2%.
 Each joint's transition is stretched to what its `max_rate_deg` allows, so a big leg swing stays
 smooth (min-jerk) instead of hitting the rate limit.
 
