@@ -82,8 +82,7 @@ The body is driven to `pilot · offset`, where the offset comes from the attitud
 |------|------|-------------|----------------|
 | Rotation | `ATTITUDE_HOLD` (default) | Turn rate about the pilot's axes (`max_rate_deg`); cockpit locked rigidly to the suit on the steered axes only | Turn brakes at full torque (axis still locked), then the attitude is held |
 | Rotation | `RATE_DAMP` | Angular rate demand | Rate → 0, no hold, no auto-rotation |
-| Translation | `VELOCITY_HOLD` (default) | Accelerate along the stick, no top speed (drift across it cancelled; `max_command_speed` > 0 makes it a velocity command) | Brought to rest relative to the reference frame |
-| Translation | `NEWTONIAN` | Thrust demand (cruise fraction, or 100% with boost) | Coast |
+| Translation | (one mode) | Push along the stick, no top speed; speed on the held axes is wanted and never cancelled (precision: no pushing past `precision_speed`) | Coast. **Brake** (Ctrl, held) stops the motion on the axes the stick isn't holding, relative to the reference frame |
 
 Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
 
@@ -230,15 +229,24 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
   turning back through to the other side until the demand swings `commit_release_deg` (45°) away.
   Its shortfall term is the share of the demand left unmet (0..1), so a full-boost demand can't
   swamp it. Descents no longer flip between nose-up and nose-down.
-- **Hard stops.** In V-HOLD, releasing the stick brakes at `stop_accel_g` (6 G) with the boost gain,
-  limited by what the attitude can deliver (not in precision mode).
+- **Brake on demand.** Released keys coast. Ctrl brakes the axes the stick doesn't hold at
+  `stop_accel_g` (6 G, `brake_gain` 2.5 /s), limited by what the attitude can deliver, with the
+  without turning, like the old stop; a double-tapped Ctrl turns the suit up to the boost range
+  (30°, boost swing gain) so the big thrusters face the motion: fast moves stop 15–22% sooner
+  (Shift strafe 5.6 → 4.4 s, full-boost dash 14.8 → 12.3 s), the suit levelling ~1 s after it
+  stops; slow moves gain nothing. Precision mode brakes gently (`precision_accel_g`) without
+  turning. Holding W + Ctrl brakes only drift, not the forward speed.
+- **Held axes keep their speed.** Adding a key while moving (Shift+W, then down) pushes along the
+  new diagonal instead of cancelling the forward speed as drift across it: the backpack keeps
+  helping (2.1 G down + 2.0 G forward, as when both keys were pressed together; before, 1.1 G
+  down only).
 - **Upright when it's enough.** The solver only turns away from the pilot frame if that raises the
   capability along the demand by `min_tilt_gain` (×1.6); a full-boost climb stays head-up (~9 G on
   the ν) instead of leaning back for a bit more thrust.
 - **Boost.** Shift is capped at `boost_accel_g` 7 G; a double-tapped full boost has no cap (all the
   thrust the suit has). ν: full boost up peaks at ~11 G.
 
-Measured on the ν (stick released after 3 s): normal flight returns to rest in ≤ 0.32 s and stops
+Measured on the ν (stick released after 3 s, Ctrl held): normal flight returns to rest in ≤ 0.32 s and stops
 22 m/s in ~1.3–2.2 s; after Shift ~1.0–1.2 s, after full boost ~1.0–1.6 s, at most one small swing.
 
 ## Stances (`StanceController`)
@@ -260,7 +268,7 @@ hip ~70°, knee tucked ~95°, toe pointed), **forward** (legs trail), **back** (
 legs made descents worse. Capability-map rebuilds per stance are available but off (too costly).
 Without boost a stance uses 40% of its angles (`normal_scale`; normal moves barely tilt the
 suit), with boost (Shift) the full pose; pressing or releasing Shift mid-move eases between them.
-While braking a fast move with the stick released (`brake_stances`), the stance is picked from
+While braking a fast move with the stick released (Ctrl, `brake_stances`), the stance is picked from
 the braking push, so the limbs counter the motion (legs forward to stop a dash). Braking is
 thrust-limited, so the gain is small: stops ~1% sooner, AMBAC's share of the turning +1–4
 points, propellant within ±2%.
@@ -360,7 +368,7 @@ of it deliver (`FlightComputer.min_thrust_alignment` 0.7, applied in `ForceCapab
 that, extra force only comes from thruster pairs fighting each other. This mostly limits the weak
 directions: straight down 0.71 → 0.30 G, back 1.2 → 1.0 G.
 
-Measured on MSP-02 (normal flight, 4 s push + V-HOLD stop): climbing 98 → 66 kg of propellant at the
+Measured on MSP-02 (normal flight, 4 s push + braked stop): climbing 98 → 66 kg of propellant at the
 same speed, with the climb itself 98% efficient (net force ÷ total thrust); boosted climb −10%.
 Boosted forward and sideways keep their speeds (200 / 74 m/s). Boosted descents are slower
 (24 → 17 m/s in 4 s); a full boost tilts the suit for more.
@@ -379,15 +387,16 @@ Intentionally crude (it undershoots and cross-couples), kept for comparison and 
 | Action | Key |
 |--------|-----|
 | Translate fwd / back / left / right | W / S / A / D |
-| Translate up / down | Space or R / Ctrl or F |
+| Translate up / down | Space or R / Left Alt or F |
 | Pitch down / up | ↑ / ↓ (stick-forward convention) |
 | Yaw left / right | ← / → |
 | Roll left / right | Q / E |
 | Boost (full thrust, auto-rotation ≤ 30°) | Shift |
 | Boost with full auto-rotation (60°) | Shift double-tap, hold |
+| Brake (axes not being pushed on; released keys coast) | Ctrl, hold |
+| Hard brake (auto-rotation ≤ 30°) | Ctrl double-tap, hold |
 | Precision mode on / off | C |
 | Horizon lock on / off | L |
-| Translation mode (V-HOLD ↔ NEWTON) | T |
 | Rotation mode (ATT-HOLD ↔ RATE) | G |
 | Hatch open / close | H |
 | Cockpit / external view | V |
@@ -486,7 +495,7 @@ limit is raised (`physics/jolt_physics_3d/limits/max_linear_velocity`).
 - Forward authority ≈ 1.58 MN (≈ 3.5 g full, ≈ 1.8 g cruise). Braking is much weaker (≈ 0.42 MN):
   flip and burn, as in UC.
 - Verified headless: 0 → 29 m/s in 2 s forward; 37 °/s pitch with < 0.5 °/s residual after
-  release; V-HOLD bleeds 34 m/s to rest; idle drift 0.00 m/s.
+  release; braking bleeds 34 m/s to rest; idle drift 0.00 m/s.
 
 ## Known limitations
 

@@ -11,9 +11,10 @@ extends ControlLaw
 ##   holds it (rate command / attitude hold). RATE_DAMP just damps rates.
 ##   Locking is per axis: a steered (or still braking) axis turns the cockpit
 ##   rigidly with the suit, while the other axes keep holding and auto-rotating.
-## Translation — VELOCITY_HOLD: stick = velocity in the pilot frame relative
-##   to the reference frame; released = brought to relative rest.
-##   NEWTONIAN: stick = thrust demand, coast when released.
+## Translation — the stick pushes along its direction (pilot frame) with no top speed;
+##   speed on the axes it holds is wanted, never cancelled. Released axes coast. Brake
+##   (Ctrl) stops the motion, relative to the reference frame, on the axes the stick
+##   isn't holding; a double-tapped brake may turn the suit further, like a boost.
 ## Auto-rotation — an AttitudeOffsetSolver may turn the body away from the
 ##   pilot frame (body = pilot · offset) so its strongest thrusters face the
 ##   force demand. The cockpit counter-rotates, so the pilot's view stays put.
@@ -25,10 +26,8 @@ extends ControlLaw
 ##   it, so pitch + yaw never bank the view. Rolling by hand sets a new horizon.
 ##   It fades out looking straight up or down, so loops still work.
 
-enum TranslationMode { NEWTONIAN, VELOCITY_HOLD }
 enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 
-@export var translation_mode: TranslationMode = TranslationMode.VELOCITY_HOLD
 @export var rotation_mode: RotationMode = RotationMode.ATTITUDE_HOLD
 ## Auto-rotation for thrust vectoring (ATTITUDE_HOLD only). Empty = body stays aligned.
 @export var attitude_solver: AttitudeOffsetSolver
@@ -87,16 +86,15 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## While boosting: rate limits are multiplied by this, and torque/thrust limits open fully.
 @export var boost_rate_multiplier: float = 1.7
 @export var boost_rate_gain_multiplier: float = 1.5
-## Multiplies max_command_speed while boosting (when it's set).
-@export var boost_speed_multiplier: float = 2.5
 
 @export_group("Movement modes")
-## Auto-rotation limit in normal flight and with Shift held, deg. A double-tapped
-## Shift uses the solver's own max_offset_deg.
+## Auto-rotation limit in normal flight and with Shift held (or a
+## double-tapped brake), deg. A double-tapped Shift uses the solver's own max_offset_deg.
 @export var cruise_max_offset_deg: float = 20.0
 @export var boost_max_offset_deg: float = 30.0
-## Precision mode: no auto-rotation, these acceleration / speed limits, and the
-## turn rates scaled down. Shift still boosts normally.
+## Precision mode: no auto-rotation, this acceleration (pushing and braking), no pushing
+## past precision_speed along the stick, and the turn rates scaled down. Shift still
+## boosts normally.
 @export var precision_accel_g: float = 0.15
 @export var precision_speed: float = 20.0
 @export var precision_rate_multiplier: float = 0.5
@@ -117,16 +115,12 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var cruise_accel_g: float = 0.8
 ## Shift. A double-tapped (full) boost has no limit: everything the thrusters can give.
 @export var boost_accel_g: float = 7.0
-## VELOCITY_HOLD top speed at full stick, m/s. 0 = no limit: holding the stick keeps
-## accelerating along it (drift across it is still cancelled), releasing brings the
-## suit to rest. Precision mode keeps its own precision_speed.
-@export var max_command_speed: float = 0.0
-## Velocity loop gain, (m/s²) per (m/s) of error.
+## Precision mode's speed loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
-## Velocity loop gain while boosting: snappy starts, stops and direction changes (dodging).
-@export var boost_velocity_gain: float = 2.5
-## VELOCITY_HOLD with the stick released brakes this hard and with the boost gain (a combat
-## suit stops at once), limited by what the attitude can deliver. Not in precision mode.
+## Braking: (m/s²) per (m/s) of the motion being stopped, up to stop_accel_g (a combat
+## suit stops at once), limited by what the attitude can deliver. Precision mode brakes
+## at precision_accel_g.
+@export var brake_gain: float = 2.5
 @export var stop_accel_g: float = 6.0
 
 var _initialized := false
@@ -147,6 +141,8 @@ var _release_timer := Vector3.ZERO
 var _turn_sign := Vector3.ZERO       ## Direction each steered axis was turning
 var _last_boost := false             ## For the HUD label
 var _last_boost_full := false
+var _last_brake := false
+var _last_brake_full := false
 var _thruster_limit := Vector3.INF   ## Thrusters' share of this tick's torque limit
 var _stick := Vector3.ZERO           ## Rotation demand after horizon-lock shaping
 var _horizon_up := Vector3.UP        ## Global "up" the horizon lock levels to
@@ -189,8 +185,6 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_turn_sign = Vector3.ZERO
 		_horizon_up = body_q * Vector3.UP
 		_manual_roll = false
-	if command.toggle_translation_mode:
-		translation_mode = ((translation_mode + 1) % TranslationMode.size()) as TranslationMode
 	if command.toggle_precision:
 		precision = not precision
 	if command.toggle_rotation_mode:
@@ -204,6 +198,9 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	command.boost = command.boost or command.boost_full
 	_last_boost = command.boost
 	_last_boost_full = command.boost_full
+	command.brake = command.brake or command.brake_full
+	_last_brake = command.brake
+	_last_brake_full = command.brake_full
 	_stick = _horizon_stick(command)
 	_update_locks(state, command)
 	_update_pilot(body_q)
@@ -224,11 +221,10 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 
 
 func get_mode_labels() -> PackedStringArray:
-	var trans := "TRANS NEWTON" if translation_mode == TranslationMode.NEWTONIAN else "TRANS V-HOLD"
 	var rot := "ROT RATE"
 	if rotation_mode == RotationMode.ATTITUDE_HOLD:
 		rot = "ROT ATT-HOLD" + (" ●" if is_holding_attitude() else "")
-	var labels := PackedStringArray([trans, rot])
+	var labels := PackedStringArray([rot])
 	if attitude_solver != null and rotation_mode == RotationMode.ATTITUDE_HOLD:
 		labels.append("VECTOR %02d°" % roundi(rad_to_deg(_offset.get_angle())))
 	labels.append(_movement_label())
@@ -238,18 +234,23 @@ func get_mode_labels() -> PackedStringArray:
 
 
 func _movement_label() -> String:
+	var label := "MOVE PRECISION" if precision else "MOVE NORMAL"
 	if _last_boost_full:
-		return "MOVE BOOST FULL"
-	if _last_boost:
-		return "MOVE BOOST"
-	return "MOVE PRECISION" if precision else "MOVE NORMAL"
+		label = "MOVE BOOST FULL"
+	elif _last_boost:
+		label = "MOVE BOOST"
+	if _last_brake_full:
+		label += " · BRAKE HARD"
+	elif _last_brake:
+		label += " · BRAKE"
+	return label
 
 
 ## Auto-rotation limit for this tick, deg (0 = off).
 func _offset_limit_deg(command: PilotCommand) -> float:
 	if command.boost_full:
 		return attitude_solver.max_offset_deg
-	if command.boost:
+	if command.boost or (command.brake_full and not precision):
 		return boost_max_offset_deg
 	return 0.0 if precision else cruise_max_offset_deg
 
@@ -405,7 +406,8 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 		slew = deg_to_rad(attitude_solver.slew_rate_deg)
 		smoothing = attitude_solver.smoothing_time
 		var translating := command.translation.length() > stick_deadzone
-		var wanted := command.boost if auto_rotate_on_boost_only else (command.boost or translating)
+		var wanted := command.boost if auto_rotate_on_boost_only \
+				else (command.boost or translating or command.brake_full)
 		var limit := _offset_limit_deg(command)
 		if state.allow_attitude_offset and wanted and limit > 0.0:
 			var force_pilot := _pilot.inverse() * force_world
@@ -516,7 +518,8 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		elif _capture[k] > 0.0:
 			gain_p[k] = gain * stop_gain_multiplier
 		elif _auto_rotating:
-			gain_p[k] = auto_rotate_rate_gain * (boost_rate_gain_multiplier if command.boost else 1.0)
+			var fast := command.boost or (command.brake_full and not precision)
+			gain_p[k] = auto_rotate_rate_gain * (boost_rate_gain_multiplier if fast else 1.0)
 		else:
 			gain_p[k] = gain * hold_rate_gain_multiplier
 	var alpha_p := (rate_p - omega_p) * gain_p
@@ -594,32 +597,28 @@ func _total_thrust(state: FlightState) -> float:
 
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
 	var stick_world := _pilot * command.translation
-	var accel_g := cruise_accel_g
-	var speed := max_command_speed
-	if command.boost:
-		accel_g = boost_accel_g
-		speed *= boost_speed_multiplier
-	elif precision:
-		accel_g = precision_accel_g
-		speed = precision_speed
+	var gentle := precision and not command.boost
+	var accel_g := boost_accel_g if command.boost else (precision_accel_g if gentle else cruise_accel_g)
 	var accel_limit := accel_g * FlightComputer.G0
 	if command.boost_full:
 		accel_limit = maxf(accel_limit, _total_thrust(state) / state.mass)
-	if translation_mode == TranslationMode.NEWTONIAN:
-		return stick_world.limit_length(1.0) * accel_limit * state.mass
-
-	var gain := boost_velocity_gain if command.boost else velocity_gain
+	var v := state.linear_velocity
+	var push := Vector3.ZERO
 	var amount := stick_world.length()
-	if amount <= stick_deadzone and not precision:
-		accel_limit = maxf(accel_limit, stop_accel_g * FlightComputer.G0)
-		gain = maxf(gain, boost_velocity_gain)
-	if speed <= 0.0 and amount > stick_deadzone:
-		# No top speed: push along the stick (|stick| of the limit) and cancel any
-		# velocity across it, so the suit still flies straight toward the command.
+	if amount > stick_deadzone:
 		var dir := stick_world / amount
-		var v := state.linear_velocity
-		var across := v - dir * v.dot(dir)
-		var accel := dir * (minf(amount, 1.0) * accel_limit) - across * gain
-		return accel.limit_length(accel_limit) * state.mass
-	var v_error := stick_world * speed - state.linear_velocity
-	return (v_error * gain).limit_length(accel_limit) * state.mass
+		var push_accel := minf(amount, 1.0) * accel_limit
+		if gentle:
+			push_accel = clampf((precision_speed * minf(amount, 1.0) - v.dot(dir)) * velocity_gain,
+					0.0, push_accel)
+		push = dir * push_accel
+	if not command.brake:
+		return push * state.mass
+	# Brake only the pilot axes the stick isn't holding.
+	var held := Vector3.ZERO
+	for k in 3:
+		held[k] = 1.0 if absf(command.translation[k]) > stick_deadzone else 0.0
+	var v_free := _pilot * ((_pilot.inverse() * v) * (Vector3.ONE - held))
+	var brake_limit := (precision_accel_g if gentle else stop_accel_g) * FlightComputer.G0
+	var brake := (-v_free * brake_gain).limit_length(brake_limit)
+	return (push + brake).limit_length(maxf(accel_limit, brake_limit)) * state.mass

@@ -17,7 +17,7 @@ const YAW_RIGHT := &"ms_yaw_right"
 const ROLL_LEFT := &"ms_roll_left"
 const ROLL_RIGHT := &"ms_roll_right"
 const BOOST := &"ms_boost"
-const TOGGLE_TRANSLATION_MODE := &"ms_toggle_translation_mode"
+const BRAKE := &"ms_brake"
 const TOGGLE_ROTATION_MODE := &"ms_toggle_rotation_mode"
 const TOGGLE_PRECISION := &"ms_toggle_precision"
 const TOGGLE_HORIZON_LOCK := &"ms_toggle_horizon_lock"
@@ -36,7 +36,7 @@ const _DEFAULTS := {
 	TRANSLATE_LEFT: [KEY_A],
 	TRANSLATE_RIGHT: [KEY_D],
 	TRANSLATE_UP: [KEY_SPACE, KEY_R],
-	TRANSLATE_DOWN: [KEY_CTRL, KEY_F],
+	TRANSLATE_DOWN: [KEY_ALT, KEY_F],
 	# Flight-sim convention: pushing the stick forward (Up arrow) pitches the nose down.
 	PITCH_UP: [KEY_DOWN],
 	PITCH_DOWN: [KEY_UP],
@@ -45,7 +45,7 @@ const _DEFAULTS := {
 	ROLL_LEFT: [KEY_Q],
 	ROLL_RIGHT: [KEY_E],
 	BOOST: [KEY_SHIFT],
-	TOGGLE_TRANSLATION_MODE: [KEY_T],
+	BRAKE: [KEY_CTRL],
 	TOGGLE_ROTATION_MODE: [KEY_G],
 	TOGGLE_PRECISION: [KEY_C],
 	TOGGLE_HORIZON_LOCK: [KEY_L],
@@ -54,6 +54,9 @@ const _DEFAULTS := {
 	TOGGLE_RIFLE: [KEY_1],
 	TOGGLE_SHIELD: [KEY_2],
 }
+
+# Keys bound on the left of the keyboard only (right Alt is AltGr on many layouts).
+const _LEFT_ONLY := [KEY_ALT]
 
 const _MOUSE_DEFAULTS := {
 	MOUSE_STEER: [MOUSE_BUTTON_RIGHT],
@@ -68,6 +71,8 @@ static func ensure_defaults() -> void:
 		for key: Key in _DEFAULTS[action]:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
+			if key in _LEFT_ONLY:
+				ev.location = KEY_LOCATION_LEFT
 			InputMap.action_add_event(action, ev)
 	for action: StringName in _MOUSE_DEFAULTS:
 		if InputMap.has_action(action):

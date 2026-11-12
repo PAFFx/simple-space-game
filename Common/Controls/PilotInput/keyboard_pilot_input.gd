@@ -8,7 +8,8 @@ extends PilotInputSource
 ## Holding MOUSE_STEER turns mouse motion into pitch/yaw demand (mouse up = nose
 ## up, right = yaw right): mouse speed sets the deflection, like a stick that
 ## springs back when the mouse stops.
-## Shift boosts; double-tap Shift (and hold) to boost with full auto-rotation.
+## Shift boosts; double-tap Shift (and hold) to boost with full auto-rotation. Released
+## keys coast; Ctrl brakes the axes not being pushed on, double-tapped (and held) harder.
 
 ## Seconds for a digital axis to travel from centre to full deflection.
 @export var key_travel_time: float = 0.1
@@ -16,15 +17,15 @@ extends PilotInputSource
 @export var mouse_full_deflection_speed: float = 900.0
 ## Smoothing of the mouse demand, s (mouse events and physics ticks don't line up).
 @export var mouse_smoothing: float = 0.05
-## Max gap between the two Shift presses of a full boost, s.
+## Max gap between the two presses of a double tap (full boost, hard brake), s.
 @export var double_tap_time: float = 0.3
 
 var _translation := Vector3.ZERO
 var _rotation := Vector3.ZERO
 var _mouse_px := Vector2.ZERO        ## Motion since the last tick
 var _mouse_demand := Vector2.ZERO    ## Smoothed (yaw, pitch) deflection
-var _last_boost_press := -INF
-var _boost_full := false
+var _last_press := {}                ## Action → time of its last press, s
+var _double := {}                    ## Action → held since a double tap
 
 
 func _ready() -> void:
@@ -56,8 +57,10 @@ func poll_command() -> PilotCommand:
 	var cmd := PilotCommand.new()
 	cmd.translation = _translation
 	cmd.rotation = (_rotation + _poll_mouse(delta)).clamp(-Vector3.ONE, Vector3.ONE)
-	_poll_boost(cmd)
-	cmd.toggle_translation_mode = Input.is_action_just_pressed(a.TOGGLE_TRANSLATION_MODE)
+	cmd.boost = Input.is_action_pressed(a.BOOST)
+	cmd.boost_full = _held_after_double_tap(a.BOOST)
+	cmd.brake = Input.is_action_pressed(a.BRAKE)
+	cmd.brake_full = _held_after_double_tap(a.BRAKE)
 	cmd.toggle_rotation_mode = Input.is_action_just_pressed(a.TOGGLE_ROTATION_MODE)
 	cmd.toggle_precision = Input.is_action_just_pressed(a.TOGGLE_PRECISION)
 	cmd.toggle_horizon_lock = Input.is_action_just_pressed(a.TOGGLE_HORIZON_LOCK)
@@ -78,12 +81,12 @@ func _poll_mouse(delta: float) -> Vector3:
 	return Vector3(_mouse_demand.y, _mouse_demand.x, 0.0)
 
 
-func _poll_boost(cmd: PilotCommand) -> void:
+## True while `action` is held after being pressed twice within double_tap_time.
+func _held_after_double_tap(action: StringName) -> bool:
 	var now := Time.get_ticks_msec() / 1000.0
-	if Input.is_action_just_pressed(PilotInputActions.BOOST):
-		_boost_full = now - _last_boost_press <= double_tap_time
-		_last_boost_press = now
-	cmd.boost = Input.is_action_pressed(PilotInputActions.BOOST)
-	if not cmd.boost:
-		_boost_full = false
-	cmd.boost_full = cmd.boost and _boost_full
+	if Input.is_action_just_pressed(action):
+		_double[action] = now - float(_last_press.get(action, -INF)) <= double_tap_time
+		_last_press[action] = now
+	if not Input.is_action_pressed(action):
+		_double[action] = false
+	return _double.get(action, false)
