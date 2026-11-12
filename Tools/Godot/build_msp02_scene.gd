@@ -249,8 +249,10 @@ func _build_flight_computer(root: Node3D) -> void:
 	alloc.iterations = 60
 	fc.set("allocator", alloc)
 	fc.set("dry_mass", 30000.0)
-	fc.set("propellant_capacity", 10000.0)
-	fc.set("propellant", 10000.0)
+	# Like a fighter, every spare volume in the body holds propellant.
+	fc.set("propellant_capacity", 20000.0)
+	fc.set("propellant", 20000.0)
+	fc.set("specific_impulse", 4000.0)
 
 	var input := Node.new()
 	input.name = "PilotInput"

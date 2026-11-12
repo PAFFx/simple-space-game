@@ -405,7 +405,7 @@ texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
-| 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | 2D fore/aft ±30° around 48° back (18°–78° back); pod swings at 90°/s. Kept modest so the suit pitches nose-down to drive forward |
+| 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward); pod swings at 90°/s |
 | 2 × 500 kN | soles | down | 3D, 20° cone |
 | 2 × 400 kN (the model's own nozzles; the plate over each opens while it's swung) | behind each calf | down, a little back | 3D, 18° cone centred 15° behind the modelled nozzle (never into the leg) |
 | 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | 2D fore/aft ±25° |
@@ -435,6 +435,10 @@ throttle, `Thruster.park_throttle`) park at centre, so covers can close. Thruste
 
 Clean force capability (level, limbs at rest): up 7.1 G, forward 4.3 G, sideways 2.4 G, back
 1.8 G, down 1.4 G; pitch torque 15 MN·m. Limbs don't aim the fixed/2D thrusters yet.
+
+**Propellant and speed.** Both suits carry 20 t of propellant (every spare volume, like a fighter)
+at Isp 4000 s: the ν full-boosts for ~3 min (to ~15 km/s) on a full tank. Jolt's 500 m/s body speed
+limit is raised (`physics/jolt_physics_3d/limits/max_linear_velocity`).
 
 ## Tuning reference (MSP-01 prototype)
 

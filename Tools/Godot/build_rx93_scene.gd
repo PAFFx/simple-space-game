@@ -34,12 +34,12 @@ const CONE_3D := [30.0, 90.0, 90.0]
 # Mains are the model's own nozzles in two backpack pods, made deeper than on the source
 # (see build_mobile_suit_nu.py) so they clear the body. Each pod pivots fore/aft
 # only (2D) about its middle (ThrusterGuards), and the nozzles swing around that pivot
-# (Thruster.swing_pivot): ±30° around the modelled 48° back (18° to 78° back), never
-# sideways. Kept modest on purpose: to move forward fast the suit pitches nose-down and
-# drives with the mains, rather than the pods doing all the aiming.
-const MAIN_EXHAUST := Vector3(0.0, -0.67, 0.74)
-const MAIN_MODEL_EXHAUST := MAIN_EXHAUST
-const MAIN_CONE := [30.0, 30.0, 0.0]
+# (Thruster.swing_pivot): 8° to 78° back (±35° around 43° back; the modelled pods point 48°
+# back), never sideways. Nearly straight down for a climb; kept short of horizontal so the
+# suit pitches nose-down and drives with the mains to move forward fast.
+const MAIN_EXHAUST := Vector3(0.0, -0.731, 0.682)
+const MAIN_MODEL_EXHAUST := Vector3(0.0, -0.67, 0.74)
+const MAIN_CONE := [35.0, 35.0, 0.0]
 # Slot-shaped ports (flat plume along the slot): direction × length in the body frame, and
 # the slot's width as the nozzle scale (the round plume's diameter is 0.76 × scale).
 const SLOTS := {
@@ -306,8 +306,10 @@ func _build_flight_computer(root: Node3D) -> void:
 	alloc.iterations = 60
 	fc.set("allocator", alloc)
 	fc.set("dry_mass", 30000.0)
-	fc.set("propellant_capacity", 10000.0)
-	fc.set("propellant", 10000.0)
+	# Like a fighter, every spare volume in the body holds propellant.
+	fc.set("propellant_capacity", 20000.0)
+	fc.set("propellant", 20000.0)
+	fc.set("specific_impulse", 4000.0)
 
 	var input := Node.new()
 	input.name = "PilotInput"
@@ -342,8 +344,8 @@ func _build_thruster_guards(root: Node3D) -> void:
 		guard.full_rotation = g[2]
 		if g[0].begins_with("main_pod"):
 			guard.rest_thrust = -MAIN_MODEL_EXHAUST
-			guard.min_angle_deg = -30.0
-			guard.max_angle_deg = 30.0
+			guard.min_angle_deg = -30.0  # back
+			guard.max_angle_deg = 40.0   # forward, toward straight down
 		if g[0].begins_with("calf_nozzle"):
 			var side := 1.0 if g[0].ends_with(".R") else -1.0
 			guard.rest_thrust = -CALF_MODEL_EXHAUST_R * Vector3(side, 1, 1)

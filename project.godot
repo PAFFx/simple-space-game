@@ -26,6 +26,7 @@ project/assembly_name="Simple Space Game"
 [physics]
 
 3d/physics_engine="Jolt Physics"
+jolt_physics_3d/limits/max_linear_velocity=1e+06
 common/physics_interpolation=true
 
 [rendering]
