@@ -33,10 +33,8 @@ const MAIN_RATING_KN := 200.0
 const MAIN_DYNAMICS := {spool_up_time = 0.12, spool_down_time = 0.08, gimbal_rate_deg = 240.0}
 const VERNIER_DYNAMICS := {spool_up_time = 0.06, spool_down_time = 0.04, gimbal_rate_deg = 360.0}
 const THRUSTERS := [
-	["MainRI", "backpack", Vector3(1.15, 12.8, 3.0), MAIN_EXHAUST, 450.0, 60.0, 15.0, 1.25],
-	["MainRO", "backpack", Vector3(1.85, 12.8, 3.0), MAIN_EXHAUST, 450.0, 60.0, 15.0, 1.25],
-	["MainLI", "backpack", Vector3(-1.15, 12.8, 3.0), MAIN_EXHAUST, 450.0, 60.0, 15.0, 1.25],
-	["MainLO", "backpack", Vector3(-1.85, 12.8, 3.0), MAIN_EXHAUST, 450.0, 60.0, 15.0, 1.25],
+	["MainR", "backpack", Vector3(1.5, 12.8, 3.0), MAIN_EXHAUST, 900.0, 60.0, 18.0, 1.75],
+	["MainL", "backpack", Vector3(-1.5, 12.8, 3.0), MAIN_EXHAUST, 900.0, 60.0, 18.0, 1.75],
 	["LegR", "shin.R", Vector3(1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 300.0, 25.0, 11.0, 1.1],
 	["LegL", "shin.L", Vector3(-1.5, 3.2, 1.6), Vector3(0, -1, 0.4), 300.0, 25.0, 11.0, 1.1],
 	["ShTopR", "shoulder.R", Vector3(4.1, 19.2, 0.3), Vector3(0, 1, 0), 35.0, 30.0, 3.5, 0.6],

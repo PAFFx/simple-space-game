@@ -299,7 +299,7 @@ bindings, then enable `joystick_enabled`.
 
 ## Tuning reference (MSP-02)
 
-- 30 t dry + 10 t propellant + 6.4 t equipment ≈ 46 t. Main thrust is anime-style: 4 × 450 kN
+- 30 t dry + 10 t propellant + 6.4 t equipment ≈ 46 t. Main thrust is anime-style: 2 × 900 kN
   backpack mains + 2 × 300 kN leg mains (~5.3 G), plus 18 verniers of 40–56 kN. The backpack mains sit at the bottom of the pods, below and behind the centre of
   mass, firing down and 25° back, with 60° vectoring.
 - Authority is deliberately anisotropic: strong up, weak sideways, back and down. No backpack
