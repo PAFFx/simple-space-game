@@ -127,16 +127,14 @@ shader, sensor and HUD read `PanoramicScreen.get_display_transform()`. Gameplay 
 orientation) rather than the body's, so the outside view stays as steady as the cockpit view and
 the suit visibly leans and rolls inside it during auto-rotation. `orientation_source` overrides it.
 
-## Linear seat: gimbal and G dampening
+## Linear seat: gimbal
 
 - `CockpitGimbal` rotates the whole cockpit by the measured `body⁻¹ · pilot`, so the cockpit holds
   still in the world while the body turns, even mid-swing. Range 75°, eased (not clamped) past
   62° so an overshooting body never snaps the view. Commanded rotations move the pilot frame, so the cockpit
   turns with the suit for those.
-- `SeatDampener` models the seat suspension (spring-damper, 14 rad/s, ζ 0.8, ±0.15 m travel) plus
-  an active inertial compensator that cancels 55% of what's left. `G MS` is the suit, `G PLT` is
-  what the pilot feels; a boosted 3 G burn reads about 1.4 G at the seat. The camera sways with the
-  seat travel. `HIGH G` caution above 6 G at the seat.
+- No seat G dampening: a travel-limited seat can't reduce sustained G, so the pilot feels the
+  suit's G. `HIGH G` caution above 6 G (`G MS`).
 
 Canvas resolution is ~11.4 px/degree. Raise `canvas_size` for sharper text, at the cost of memory.
 

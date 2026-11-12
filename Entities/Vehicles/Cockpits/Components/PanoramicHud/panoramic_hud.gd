@@ -44,7 +44,6 @@ extends Node
 var projector: HudProjector
 var vehicle: VehicleBase
 var hatch: CockpitHatch
-var seat: SeatDampener
 var ambac: AmbacController
 var font: Font
 
@@ -118,5 +117,4 @@ func _auto_discover() -> void:
 	if flight_computer == null:
 		flight_computer = vehicle.find_component(FlightComputer) as FlightComputer
 	hatch = vehicle.find_component(CockpitHatch) as CockpitHatch
-	seat = vehicle.find_component(SeatDampener) as SeatDampener
 	ambac = vehicle.find_component(AmbacController) as AmbacController

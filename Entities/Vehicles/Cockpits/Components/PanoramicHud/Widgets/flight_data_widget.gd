@@ -37,8 +37,6 @@ func _draw_data_column(fc: FlightComputer) -> void:
 	begin_local(data_azimuth_deg, data_elevation_deg)
 	var w := px(data_width_deg)
 	var rows := [["G MS", "%.1f" % fc.acceleration_g]]
-	if hud.seat != null:
-		rows.append(["G PLT", "%.1f" % hud.seat.pilot_g])
 	rows.append(["ROT", "%.0f" % rad_to_deg(fc.state.angular_velocity.length())])
 	if hud.ambac != null:
 		rows.append(["AMBAC", "%d%%" % roundi(hud.ambac.get_usage() * 100.0)])
@@ -96,7 +94,7 @@ func _draw_cautions(fc: FlightComputer, line_h: float) -> void:
 		items.append(["PROPELLANT DEPLETED", hud.warning_color])
 	elif fc.get_propellant_fraction() < low_propellant_fraction:
 		items.append(["PROPELLANT LOW", hud.caution_color])
-	if hud.seat != null and hud.seat.pilot_g > high_g_caution:
+	if fc.acceleration_g > high_g_caution:
 		items.append(["HIGH G", hud.warning_color])
 	if hud.hatch != null and hud.hatch.is_unsealed():
 		items.append(["HATCH OPEN", hud.caution_color])

@@ -42,7 +42,7 @@ MobileSuitMSP02 (RigidBody3D + MobileSuitBody)
 ├── Model                     GLB (Armature/Skeleton3D)
 ├── Col*                      box colliders
 ├── SensorHeadMount/SensorHead
-├── CockpitMount/CockpitLinearSeat   (+ CockpitGimbal, SeatDampener)
+├── CockpitMount/CockpitLinearSeat   (+ CockpitGimbal)
 ├── Thrusters/Attach_<bone>/<Thruster>
 ├── FlightComputer/PilotInput        RateCommandControlLaw + ThrustVectoringAttitudeSolver
 ├── CockpitHatch

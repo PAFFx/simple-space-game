@@ -59,7 +59,6 @@ simple-space-game/
 │       │   │   │       └── panoramic_screen.gdshader  Reprojection + HUD composite + aperture
 │       │   │   ├── PanoramicHud/  Equirectangular HUD canvas + HudWidget instruments + HudSilhouette
 │       │   │   ├── SeatGimbal/    CockpitGimbal: keeps the cockpit on the pilot frame
-│       │   │   ├── SeatDampener/  Linear seat suspension + G compensation
 │       │   │   └── ControlsAnimator/  Grips/pedals follow the PilotCommand
 │       │   │
 │       │   ├── CockpitLinearSeat/ Late-UC linear seat cockpit (extends CockpitBase)

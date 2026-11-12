@@ -95,7 +95,6 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
   then the attitude is held.
 - The cockpit only turns when the pilot turns it, and then rigidly with the suit (no lead or
   lag on the steered axis). Any body rotation for thrust happens underneath on the other axes.
-  The only seat damping is linear (`SeatDampener`).
 - Locking is **per pilot axis** (pitch, yaw, roll). A steered axis, and a released one that is
   still braking, turns suit and cockpit as one unit; its offset component is frozen. The other
   axes keep their attitude hold and auto-rotation, so e.g. yawing during a boosted dive keeps the
