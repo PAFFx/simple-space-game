@@ -436,7 +436,12 @@ throttle, `Thruster.park_throttle`) park at centre, so covers can close. Thruste
 Clean force capability (level, limbs at rest): up 7.1 G, forward 4.3 G, sideways 2.4 G, back
 1.8 G, down 1.4 G; pitch torque 15 MN·m. Limbs don't aim the fixed/2D thrusters yet.
 
-**Propellant and speed.** Both suits carry 20 t of propellant (every spare volume, like a fighter)
+**Mass and thrust (ν).** Official weights: 27.9 t empty, 63.0 t max (with ~9.9 t of equipment and
+25.2 t of propellant). Thrust stays anime-strong (`THRUST_SCALE` keeps the tuned thrust-to-weight;
+an overheat limit may tame it later): upright climb ~5.8 G at full weight, forward 3.5 G,
+sideways 1.8 G, back 1.5 G, down 1.2 G.
+
+**Propellant and speed.** MSP-02 carries 20 t of propellant (every spare volume, like a fighter)
 at Isp 4000 s: the ν full-boosts for ~3 min (to ~15 km/s) on a full tank. Jolt's 500 m/s body speed
 limit is raised (`physics/jolt_physics_3d/limits/max_linear_velocity`).
 

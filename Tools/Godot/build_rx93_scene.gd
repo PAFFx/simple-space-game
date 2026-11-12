@@ -28,8 +28,9 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 # plume m, nozzle scale, nozzle model. Positions/exhausts are the model's (yellow) thruster
 # ports, measured in the body frame. 2D = swings in one plane only, fixed = no gimbal, so the
 # limbs carrying them must move to aim them. Ports built into the armor show only a plume.
-# Anime-strong (a boosted jump easily beats Earth gravity): mains 4 × 1 MN, the rest
-# sized by nozzle.
+# Ratings below are design ratios (sized by nozzle). Anime-strong for now (an overheat
+# limit may tame it later): THRUST_SCALE keeps the thrust-to-weight the suit was tuned
+# with (at 59.5 t) on the official 63.0 t max weight.
 const CONE_3D := [30.0, 90.0, 90.0]
 # Mains are the model's own nozzles in two backpack pods, made deeper than on the source
 # (see build_mobile_suit_nu.py) so they clear the body. Each pod pivots fore/aft
@@ -62,6 +63,7 @@ const UP_DOWN := [20.0, 20.0, 0.0]       # 2D, for forward-facing ports
 const SIDE_SIDE := [20.0, 0.0, 20.0]     # 2D: swings left/right only
 const FIXED := [0.0, 0.0, 0.0]
 const MAIN_RATING_KN := 200.0
+const THRUST_SCALE := 63.0 / 59.5
 const MAIN_DYNAMICS := {spool_up_time = 0.12, spool_down_time = 0.08, gimbal_rate_deg = 240.0}
 const VERNIER_DYNAMICS := {spool_up_time = 0.06, spool_down_time = 0.04, gimbal_rate_deg = 360.0}
 const THRUSTERS := [
@@ -270,7 +272,7 @@ func _build_thrusters(root: Node3D) -> void:
 		node.transform = _bone_rest_in_body(bone).affine_inverse() * body_xf
 		var rating: float = t[4]
 		var is_main := rating >= MAIN_RATING_KN
-		node.set("max_thrust", rating * 1000.0)
+		node.set("max_thrust", rating * THRUST_SCALE * 1000.0)
 		var dynamics: Dictionary = MAIN_DYNAMICS if is_main else VERNIER_DYNAMICS
 		for key: String in dynamics:
 			node.set(key, dynamics[key])
@@ -305,10 +307,11 @@ func _build_flight_computer(root: Node3D) -> void:
 	var alloc := ConeProjectedAllocator.new()
 	alloc.iterations = 60
 	fc.set("allocator", alloc)
-	fc.set("dry_mass", 30000.0)
-	# Like a fighter, every spare volume in the body holds propellant.
-	fc.set("propellant_capacity", 20000.0)
-	fc.set("propellant", 20000.0)
+	# Official empty weight 27.9 t; equipment ~9.9 t; propellant fills the rest of the
+	# official 63.0 t max weight (every spare volume, like a fighter).
+	fc.set("dry_mass", 27900.0)
+	fc.set("propellant_capacity", 25200.0)
+	fc.set("propellant", 25200.0)
 	fc.set("specific_impulse", 4000.0)
 
 	var input := Node.new()
