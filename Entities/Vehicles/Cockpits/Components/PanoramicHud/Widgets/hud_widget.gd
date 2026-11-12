@@ -93,6 +93,67 @@ func brackets(half: Vector2, corner: float, color: Color) -> void:
 			line(c, c - Vector2(0.0, corner * sy), color)
 
 
+# --- Patches: shapes laid out in degrees around a direction ---
+# Every point is turned into a direction and projected on its own, so a shape keeps
+# its form anywhere on the sphere (beside the pilot, overhead, at the feet), unlike a
+# flat drawing in a stretched local frame.
+
+## A small patch of the sphere: `centre` and its `right` / `up` axes, display frame.
+class Patch:
+	var centre: Vector3
+	var right: Vector3
+	var up: Vector3
+
+
+## Patch around `centre` (display frame) with `up_hint` as its up (made perpendicular).
+func patch(centre: Vector3, up_hint: Vector3) -> Patch:
+	var p := Patch.new()
+	p.centre = centre.normalized()
+	var up := up_hint - p.centre * up_hint.dot(p.centre)
+	if up.length_squared() < 1e-8:
+		up = Vector3.BACK - p.centre * p.centre.z
+	p.up = up.normalized()
+	p.right = p.up.cross(p.centre).normalized() * -1.0
+	return p
+
+
+## Canvas position of the point `deg` (x right, y up, degrees) from the patch centre.
+func patch_point(p: Patch, deg: Vector2) -> Vector2:
+	var d := p.centre + p.right * tan(deg_to_rad(deg.x)) + p.up * tan(deg_to_rad(deg.y))
+	return hud.projector.direction_to_canvas(d)
+
+
+func patch_line(p: Patch, a: Vector2, b: Vector2, color: Color, width: float = 0.0,
+		steps: int = 6) -> void:
+	var pts := PackedVector2Array()
+	for k in steps + 1:
+		pts.append(patch_point(p, a.lerp(b, float(k) / steps)))
+	seam_safe_polyline(pts, color, width)
+
+
+## Arc of `radius` degrees about `centre` (degrees), angles in radians from +x, CCW = up.
+func patch_arc(p: Patch, centre: Vector2, radius: float, from: float, to: float, color: Color,
+		width: float = 0.0, segments: int = 32) -> void:
+	var pts := PackedVector2Array()
+	for k in segments + 1:
+		var a := lerpf(from, to, float(k) / segments)
+		pts.append(patch_point(p, centre + Vector2(cos(a), sin(a)) * radius))
+	seam_safe_polyline(pts, color, width)
+
+
+## Filled polygon given in patch degrees.
+func patch_polygon(p: Patch, deg_points: PackedVector2Array, color: Color) -> void:
+	var pts := PackedVector2Array()
+	for d in deg_points:
+		pts.append(patch_point(p, d))
+	draw_colored_polygon(pts, color)
+
+
+func patch_text(p: Patch, deg: Vector2, value: String, color: Color = Color.TRANSPARENT,
+		align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT, size: int = 0) -> void:
+	text_at(patch_point(p, deg), value, color, align, size)
+
+
 ## Polyline through canvas points, broken where it wraps across the back seam.
 func seam_safe_polyline(points: PackedVector2Array, color: Color, width: float = 0.0) -> void:
 	var limit := hud.projector.size.x * 0.25

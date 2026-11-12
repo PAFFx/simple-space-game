@@ -4,7 +4,11 @@ extends HudWidget
 ## Numeric flight data blocks either side of the boresight, an attitude readout
 ## above it and the caution list below — kept small and out of the central view.
 
-@export var side_azimuth_deg: float = 13.0
+const MACH_1 := 340.3
+
+@export var side_azimuth_deg: float = 11.0
+## The small G / rotation / AMBAC column sits this much further out than the speed.
+@export var secondary_offset_deg: float = 9.0
 @export var block_elevation_deg: float = 3.0
 @export var caution_elevation_deg: float = -11.0
 @export var low_propellant_fraction: float = 0.2
@@ -18,28 +22,40 @@ func draw_widget() -> void:
 	var line_h := float(hud.font_size) + 8.0
 	_draw_left_block(fc, line_h)
 	_draw_right_block(fc, line_h)
-	_draw_attitude_readout()
 	_draw_cautions(fc, line_h)
 
 
 func _draw_left_block(fc: FlightComputer, line_h: float) -> void:
+	var speed := fc.state.linear_velocity.length()
+	var c := hud.primary_color
+	var dim := PanoramicHud.dimmed(c)
+	# Speed: the main number, boxed, nearest the centre.
 	begin_local(-side_azimuth_deg, block_elevation_deg)
-	var rate := rad_to_deg(fc.state.angular_velocity.length())
-	var rows := [
-		["SPD", "%7.1f" % fc.state.linear_velocity.length(), "m/s"],
-		["G MS", "%7.2f" % fc.acceleration_g, "G"],
-	]
+	var w := px(8.0)
+	var h := 44.0
+	for pt in [[Vector2(-w, -h * 0.5), Vector2(0, -h * 0.5)], [Vector2(-w, h * 0.5), Vector2(0, h * 0.5)],
+			[Vector2(-w, -h * 0.5), Vector2(-w, h * 0.5)], [Vector2(0, -h * 0.5), Vector2(0, h * 0.5)]]:
+		line(pt[0], pt[1], c)
+	text(Vector2(-8.0, 14.0), "%.0f" % speed if speed >= 100.0 else "%.1f" % speed, c,
+			HORIZONTAL_ALIGNMENT_RIGHT, 38)
+	text(Vector2(-w, -h * 0.5 - 6.0), "SPD m/s", dim, HORIZONTAL_ALIGNMENT_LEFT, 14)
+	# Mach against sea-level air (340.3 m/s): a familiar scale until there's an atmosphere.
+	text(Vector2(-8.0, h * 0.5 + 26.0), "M %.2f" % (speed / MACH_1), c, HORIZONTAL_ALIGNMENT_RIGHT, 22)
+	end_local()
+
+	# Secondary data, small and further out.
+	begin_local(-side_azimuth_deg - secondary_offset_deg, block_elevation_deg + 1.0)
+	var rows := [["G MS", "%.1f" % fc.acceleration_g]]
 	if hud.seat != null:
-		rows.append(["G PLT", "%7.2f" % hud.seat.pilot_g, "G"])
-	rows.append(["ROT", "%7.1f" % rate, "°/s"])
+		rows.append(["G PLT", "%.1f" % hud.seat.pilot_g])
+	rows.append(["ROT", "%.0f" % rad_to_deg(fc.state.angular_velocity.length())])
 	if hud.ambac != null:
-		rows.append(["AMBAC", "%7d" % roundi(hud.ambac.get_usage() * 100.0), "%"])
-	for i in rows.size():
-		var y := i * line_h
-		text(Vector2(-px(8.6), y), rows[i][0], hud.dim_color)
-		text(Vector2(0, y), rows[i][1], hud.primary_color, HORIZONTAL_ALIGNMENT_RIGHT)
-		text(Vector2(4, y), rows[i][2], hud.dim_color, HORIZONTAL_ALIGNMENT_LEFT, 14)
-	line(Vector2(-px(9.2), -line_h), Vector2(-px(9.2), line_h * (rows.size() - 0.6)), hud.dim_color)
+		rows.append(["AMBAC", "%d%%" % roundi(hud.ambac.get_usage() * 100.0)])
+	var small_h := 18.0
+	for k in rows.size():
+		var y := k * small_h
+		text(Vector2(-px(5.5), y), rows[k][0], dim, HORIZONTAL_ALIGNMENT_LEFT, 13)
+		text(Vector2(0, y), rows[k][1], dim, HORIZONTAL_ALIGNMENT_RIGHT, 14)
 	end_local()
 
 
@@ -66,16 +82,6 @@ func _bar_row(y: float, label: String, fraction: float, color: Color) -> void:
 	draw_rect(Rect2(x0, y - h - 2.0, w * clampf(fraction, 0.0, 1.0), h), color, true)
 	var pct := "%3d%%" % roundi(fraction * 100.0)
 	text(Vector2(x0 + w + 6.0, y), pct, color, HORIZONTAL_ALIGNMENT_LEFT, 15)
-
-
-func _draw_attitude_readout() -> void:
-	var euler := (hud.get_attitude_basis().inverse() * hud.get_display_basis()).get_euler()
-	var hdg := wrapf(-rad_to_deg(euler.y), 0.0, 360.0)
-	begin_local(0.0, 12.5)
-	text(Vector2.ZERO, "HDG %03d   PIT %+03d   RLL %+04d" % [
-		roundi(hdg), roundi(rad_to_deg(euler.x)), roundi(rad_to_deg(euler.z))
-	], hud.dim_color, HORIZONTAL_ALIGNMENT_CENTER, 16)
-	end_local()
 
 
 func _draw_cautions(fc: FlightComputer, line_h: float) -> void:
