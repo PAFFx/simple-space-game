@@ -81,8 +81,8 @@ const THRUSTERS := [
 	["MainLU", "backpack", Vector3(-1.23, 16.75, 3.85), MAIN_EXHAUST, 1000.0, MAIN_CONE, 16.0, 1.30, false],
 	["MainLL", "backpack", Vector3(-1.23, 15.71, 3.53), MAIN_EXHAUST, 1000.0, MAIN_CONE, 16.0, 1.30, false],
 	# Soles (the "toe" thrusters).
-	["SoleR", "foot.R", Vector3(4.25, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 3.0, 0.60, false],
-	["SoleL", "foot.L", Vector3(-4.24, 0.26, 0.37), Vector3(0, -1, 0), 500.0, SOLE_3D, 3.0, 0.60, false],
+	["SoleR", "foot.R", Vector3(4.25, 0.26, 0.37), Vector3(0, -1, 0), 400.0, SOLE_3D, 3.0, 0.60, false],
+	["SoleL", "foot.L", Vector3(-4.24, 0.26, 0.37), Vector3(0, -1, 0), 400.0, SOLE_3D, 3.0, 0.60, false],
 	# Behind each calf, mostly down and a little back; its guard plate moves with it.
 	["CalfR", "shin.R", Vector3(3.22, 5.8, 1.53), CALF_MODEL_EXHAUST_R, 400.0, FORE_AFT, 4.5, 0.80, false],
 	["CalfL", "shin.L", Vector3(-3.2, 5.8, 1.53), CALF_MODEL_EXHAUST_R * Vector3(-1, 1, 1), 400.0, FORE_AFT, 4.5, 0.80, false],
@@ -91,9 +91,10 @@ const THRUSTERS := [
 	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
 	["ShUpL", "shoulder.L", Vector3(-4.77, 19.7, 0.45), Vector3(-0.74, 0.67, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
 	["ShOutL", "shoulder.L", Vector3(-4.93, 18.97, 0.44), Vector3(-0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
-	# Chest vents, firing forward (push back / brake).
-	["ChestR", "chest", Vector3(1.31, 17.26, -2.15), Vector3(0.39, -0.24, -0.89), 250.0, UP_DOWN, 3.5, 0.74, false],
-	["ChestL", "chest", Vector3(-1.29, 17.26, -2.15), Vector3(-0.39, -0.24, -0.89), 250.0, UP_DOWN, 3.5, 0.74, false],
+	# Chest vents, firing forward (push back / brake). With the backpack mains, the nearest
+	# to the generator and the biggest-looking ports: nearly as strong as a main.
+	["ChestR", "chest", Vector3(1.31, 17.26, -2.15), Vector3(0.39, -0.24, -0.89), 850.0, UP_DOWN, 10.0, 0.74, false],
+	["ChestL", "chest", Vector3(-1.29, 17.26, -2.15), Vector3(-0.39, -0.24, -0.89), 850.0, UP_DOWN, 10.0, 0.74, false],
 	# Front of each shin, below the knee: centre, outer, inner; left/right swing only.
 	["ShinCR", "shin.R", Vector3(3.29, 6.96, -1.57), Vector3(0.24, -0.52, -0.82), 80.0, SIDE_SIDE, 1.2, 0.30, false],
 	["ShinOR", "shin.R", Vector3(4.36, 5.83, -0.13), Vector3(0.84, -0.15, -0.53), 80.0, SIDE_SIDE, 1.2, 0.30, false],

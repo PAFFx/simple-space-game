@@ -454,10 +454,10 @@ texture), and most can't aim far, so limbs have to move to point them:
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
 | 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward); pod swings at 90°/s |
-| 2 × 500 kN | soles | down | 3D, 20° cone |
+| 2 × 400 kN | soles | down | 3D, 20° cone |
 | 2 × 400 kN (the model's own nozzles, in their calf plates) | behind each calf | down, a little back | 2D with the plate, 0…40° back only (never into the leg) |
 | 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | top: 2D from 10° below rest to 45° up (nearly straight up); outer: 2D fore/aft ±25° |
-| 2 × 250 kN | chest vents | forward (brakes) | 2D up/down ±20° |
+| 2 × 850 kN (with the mains, nearest the generator) | chest vents | forward (brakes) | 2D up/down ±20° |
 | 6 × 80 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
 | 2 × 120 kN | rear skirts | back | fixed |
 | 6 × 70 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
@@ -469,7 +469,7 @@ the armor, and the main and calf nozzles are the model's own, moved by `Thruster
   so the push point and plume move with the pod and the allocator sees the moved position. The
   pod housings are 1 m deeper than on the source model (front still on the backpack) so they
   clear the body; the hyper bazooka between them moves back with them.
-- **Plumes**: backpack 16 m (the biggest), calves 4.5, chest 3.5, shoulders and soles 3, small
+- **Plumes**: backpack 16 m (the biggest), chest 10, calves 4.5, shoulders and soles 3, small
   ports 1–1.6. Slot-shaped ports (chest, rear skirts, shins) get a flat plume along the slot
   (`Thruster.plume_slot`).
 - **Calf units** (`calf_guard.*`): each plate carries its nozzle, and the two swing together
