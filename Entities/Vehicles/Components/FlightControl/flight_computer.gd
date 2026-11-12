@@ -23,6 +23,10 @@ const G0 := 9.80665
 @export var ambac: AmbacController
 ## Master FCS switch. Off = all thrusters commanded to zero.
 @export var fcs_enabled: bool = true
+## Force the FBW may ask for in a direction is capped at what the thrusters that can aim
+## within acos(this) of it deliver; more would come from pairs cancelling each other.
+## 0 = no cap.
+@export_range(0.0, 1.0) var min_thrust_alignment: float = 0.7
 
 @export_group("Mass & Propellant")
 @export var dry_mass: float = 36000.0             ## kg
@@ -76,7 +80,7 @@ func _ready() -> void:
 ## Re-measures the clean force authority (call after thrusters are added, removed
 ## or disabled). Takes a few hundred ms for ~30 thrusters.
 func rebuild_capability_map() -> void:
-	_capability_map = ForceCapabilityMap.build(state, allocator)
+	_capability_map = ForceCapabilityMap.build(state, allocator, min_thrust_alignment)
 	state.capability_map = _capability_map
 
 

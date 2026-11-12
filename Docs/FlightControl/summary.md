@@ -251,6 +251,25 @@ form (`ThrustAllocator.project_to_cone`). It's warm-started from the previous ti
 (`warm_start_decay`), which bleeds off pairs of thrusters cancelling each other out — residual
 minimisation alone never removes those. Around 0.2 ms per tick for 10 thrusters in GDScript.
 
+**Propellant.** Least squares alone fires every thruster that helps even a little (e.g. the
+down-firing shoulder tops while climbing). A price proportional to thrust, `μ Σ|Tᵢuᵢ|` (what fuel
+really costs), makes only the best-aimed thrusters fire. `μ` scales with the force demand
+(`fuel_cost` 0.1). The price leaves the demand short, so each tick solves in `fuel_passes` (3) passes
+and adds the shortfall back onto the target (Bregman iteration), which converges on the cheapest
+allocation that still meets the demand. The price fades out between 75% of the capability in that
+direction and full capability (`fuel_fade_start`), so a full-power push is never held back. Pure
+rotations have no force demand and aren't priced.
+
+The FBW also never asks for more force in a direction than the thrusters that can aim within ~45°
+of it deliver (`FlightComputer.min_thrust_alignment` 0.7, applied in `ForceCapabilityMap`). Past
+that, extra force only comes from thruster pairs fighting each other. This mostly limits the weak
+directions: straight down 0.71 → 0.30 G, back 1.2 → 1.0 G.
+
+Measured on MSP-02 (normal flight, 4 s push + V-HOLD stop): climbing 98 → 66 kg of propellant at the
+same speed, with the climb itself 98% efficient (net force ÷ total thrust); boosted climb −10%.
+Boosted forward and sideways keep their speeds (200 / 74 m/s). Boosted descents are slower
+(24 → 17 m/s in 4 s); a full boost tilts the suit for more.
+
 `torque_priority > 1` makes rotation win when demand exceeds authority.
 
 ### `GreedyAllocator`

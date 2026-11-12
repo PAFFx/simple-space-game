@@ -6,18 +6,34 @@ extends ThrustAllocator
 ##
 ## Each thruster i contributes a free 3D vector u_i (throttle-normalised) limited
 ## to its gimbal cone. We minimise
-##     |Wf (ΣTᵢuᵢ − F)|² + |Wt (Σ rᵢ×Tᵢuᵢ − τ)|² + λ Σ|Tᵢuᵢ|²
-## so when the demand exceeds authority the result degrades gracefully and the
-## λ term avoids thrusters fighting each other. The solution is warm-started from
-## the previous tick, so a few iterations per frame are enough.
+##     |Wf (ΣTᵢuᵢ − F)|² + |Wt (Σ rᵢ×Tᵢuᵢ − τ)|² + λ Σ|Tᵢuᵢ|² + μ Σ|Tᵢuᵢ|
+## so when the demand exceeds authority the result degrades gracefully. The solution
+## is warm-started from the previous tick, so a few iterations per frame are enough.
+##
+## Propellant: μ Σ|Tᵢuᵢ| is what fuel really costs (proportional to thrust). Without
+## it, least squares fires every thruster that helps even a little and lets pairs
+## fight each other (e.g. down-firing verniers while climbing); with it, the fewest,
+## best-aimed thrusters do the job. The price would leave the demand short, so the
+## solve runs in passes, adding each pass's shortfall back onto the target (Bregman
+## iteration), which converges on the cheapest allocation that meets the demand.
+## μ scales with the force demand and fades out as it nears the suit's capability in
+## that direction: a full-power push needs every thruster, so it's never held back,
+## and pure rotations (no force demand) are left alone.
 
 @export_range(1, 200) var iterations: int = 24
 ## Lever arm used to make torque errors comparable to force errors, m.
 @export var reference_arm: float = 4.0
 ## >1 favours rotation accuracy over translation when saturated.
 @export var torque_priority: float = 2.0
-## Small propellant-use penalty λ.
+## Small squared-thrust penalty λ (keeps the problem well conditioned).
 @export var fuel_weight: float = 0.01
+## Propellant price, relative to the force demand. Higher = fewer thrusters fire.
+## 0 = off.
+@export_range(0.0, 1.0) var fuel_cost: float = 0.1
+## Passes that add the shortfall back onto the target (iterations are split over them).
+@export_range(1, 8) var fuel_passes: int = 3
+## The price fades out between this fraction of the capability and full capability.
+@export_range(0.0, 1.0) var fuel_fade_start: float = 0.75
 
 ## Fraction of last tick's solution kept as the starting guess. <1 bleeds off
 ## thruster pairs that cancel each other out, which pure residual minimisation
@@ -56,17 +72,39 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 	var u := _u
 	for i in n:
 		u[i] *= warm_start_decay
+	var price := _price(state, wrench, wf2)
+	var passes := fuel_passes if price > 0.0 else 1
+	var per_pass := ceili(float(iterations) / passes)
+	var target_f := wrench.force
+	var target_t := wrench.torque
+	for p in passes:
+		_solve(state, u, target_f, target_t, per_pass, step, wf2, wt2, lam, price)
+		if p < passes - 1:
+			var achieved := _wrench_of(state, u)
+			target_f += wrench.force - achieved[0]
+			target_t += wrench.torque - achieved[1]
+	_u = u
+	return _u
+
+
+## FISTA on u (in place) toward a target force/torque, with a propellant price per
+## newton of thrust.
+func _solve(state: FlightState, u: PackedVector3Array, force_target: Vector3, torque_target: Vector3,
+		count: int, step: float, wf2: float, wt2: float, lam: float, price: float) -> void:
+	var n := u.size()
+	var r := state.thruster_positions
+	var t := state.thruster_max
 	var y := u.duplicate()
 	var momentum := 1.0
-	for _k in iterations:
+	for _k in count:
 		var force := Vector3.ZERO
 		var torque := Vector3.ZERO
 		for i in n:
 			var f := y[i] * t[i]
 			force += f
 			torque += r[i].cross(f)
-		var g_force := (force - wrench.force) * (2.0 * wf2)
-		var g_torque := (torque - wrench.torque) * (2.0 * wt2)
+		var g_force := (force - force_target) * (2.0 * wf2)
+		var g_torque := (torque - torque_target) * (2.0 * wt2)
 
 		var next_momentum := (1.0 + sqrt(1.0 + 4.0 * momentum * momentum)) * 0.5
 		var beta := (momentum - 1.0) / next_momentum
@@ -77,9 +115,33 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 				continue
 			var grad := (g_force + g_torque.cross(r[i])) * t[i] + y[i] * (2.0 * lam * t[i] * t[i])
 			var u_new := project_to_cone(y[i] - grad * step, state.thruster_axes[i], state.thruster_cone[i])
+			var shrink := step * price * t[i]
+			if shrink > 0.0:
+				var length := u_new.length()
+				u_new = u_new * (maxf(length - shrink, 0.0) / length) if length > 1e-12 else Vector3.ZERO
 			y[i] = u_new + (u_new - u[i]) * beta
 			u[i] = u_new
 		momentum = next_momentum
 
-	_u = u
-	return _u
+
+## Price per newton: fuel_cost × the force-residual gradient at u = 0 (so it scales
+## with the demand), faded out as the demand nears the capability in its direction.
+func _price(state: FlightState, wrench: Wrench, wf2: float) -> float:
+	var demand := wrench.force.length()
+	if fuel_cost <= 0.0 or demand < 1.0:
+		return 0.0
+	var capability := state.force_capability(wrench.force / demand)
+	var ratio := demand / maxf(capability, 1.0)
+	var headroom := 1.0 if fuel_fade_start >= 1.0 else \
+			clampf((1.0 - ratio) / maxf(1.0 - fuel_fade_start, 0.01), 0.0, 1.0)
+	return fuel_cost * 2.0 * wf2 * demand * headroom
+
+
+static func _wrench_of(state: FlightState, u: PackedVector3Array) -> Array[Vector3]:
+	var force := Vector3.ZERO
+	var torque := Vector3.ZERO
+	for i in u.size():
+		var f := u[i] * state.thruster_max[i]
+		force += f
+		torque += state.thruster_positions[i].cross(f)
+	return [force, torque]
