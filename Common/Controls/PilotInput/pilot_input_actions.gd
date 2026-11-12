@@ -20,6 +20,7 @@ const BOOST := &"ms_boost"
 const TOGGLE_TRANSLATION_MODE := &"ms_toggle_translation_mode"
 const TOGGLE_ROTATION_MODE := &"ms_toggle_rotation_mode"
 const TOGGLE_PRECISION := &"ms_toggle_precision"
+const TOGGLE_HORIZON_LOCK := &"ms_toggle_horizon_lock"
 ## Hold to steer pitch/yaw with the mouse (otherwise the mouse looks around).
 const MOUSE_STEER := &"ms_mouse_steer"
 const TOGGLE_HATCH := &"ms_toggle_hatch"
@@ -47,6 +48,7 @@ const _DEFAULTS := {
 	TOGGLE_TRANSLATION_MODE: [KEY_T],
 	TOGGLE_ROTATION_MODE: [KEY_G],
 	TOGGLE_PRECISION: [KEY_C],
+	TOGGLE_HORIZON_LOCK: [KEY_L],
 	TOGGLE_HATCH: [KEY_H],
 	TOGGLE_VIEW: [KEY_V],
 	TOGGLE_RIFLE: [KEY_1],

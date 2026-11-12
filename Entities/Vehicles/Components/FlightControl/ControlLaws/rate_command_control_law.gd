@@ -21,6 +21,9 @@ extends ControlLaw
 ##   are capped (cruise/boost_max_offset_deg) so the suit stays quick to change
 ##   direction; a double-tapped Shift unlocks the solver's full range. Precision
 ##   (toggle) turns auto-rotation off and gentles thrust and turn rates.
+## Horizon lock — (toggle) yaw turns about a stored "up" and roll is held level to
+##   it, so pitch + yaw never bank the view. Rolling by hand sets a new horizon.
+##   It fades out looking straight up or down, so loops still work.
 
 enum TranslationMode { NEWTONIAN, VELOCITY_HOLD }
 enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
@@ -86,6 +89,15 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var precision_rate_multiplier: float = 0.5
 @export var precision: bool = false
 
+@export_group("Horizon lock")
+@export var horizon_lock: bool = false
+## Levelling: roll rate per rad of bank, 1/s, and its limit, deg/s.
+@export var horizon_level_gain: float = 3.0
+@export var horizon_level_rate_deg: float = 30.0
+## How close to level the nose must be for the full lock (|cos pitch|). Below it the
+## lock fades toward plain body-axis yaw, so pitching over the top doesn't flip.
+@export_range(0.05, 1.0) var horizon_fade: float = 0.25
+
 @export_group("Translation")
 ## Acceleration limit, same in every direction, so the suit moves in a straight
 ## line toward the command. Auto-rotation finds the attitude that can deliver it.
@@ -113,6 +125,10 @@ var _release_timer := Vector3.ZERO
 var _turn_sign := Vector3.ZERO       ## Direction each steered axis was turning
 var _last_boost := false             ## For the HUD label
 var _last_boost_full := false
+var _stick := Vector3.ZERO           ## Rotation demand after horizon-lock shaping
+var _horizon_up := Vector3.UP        ## Global "up" the horizon lock levels to
+var _horizon_steer := false          ## Horizon lock is steering roll this tick
+var _manual_roll := false            ## Pilot is rolling (sets a new horizon)
 
 
 func reset() -> void:
@@ -149,6 +165,8 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_locked = Vector3.ZERO
 		_release_timer = Vector3.ZERO
 		_turn_sign = Vector3.ZERO
+		_horizon_up = body_q * Vector3.UP
+		_manual_roll = false
 	if command.toggle_translation_mode:
 		translation_mode = ((translation_mode + 1) % TranslationMode.size()) as TranslationMode
 	if command.toggle_precision:
@@ -156,12 +174,18 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	if command.toggle_rotation_mode:
 		rotation_mode = ((rotation_mode + 1) % RotationMode.size()) as RotationMode
 		_pilot = body_q * _offset.inverse()
+	if command.toggle_horizon_lock:
+		horizon_lock = not horizon_lock
+		_horizon_up = _pilot * Vector3.UP
+		_manual_roll = false
 
 	command.boost = command.boost or command.boost_full
 	_last_boost = command.boost
 	_last_boost_full = command.boost_full
+	_stick = _horizon_stick(command)
 	_update_locks(state, command)
 	_update_pilot(body_q)
+	_level_horizon(state.delta)
 	var force_world := _translation_force_world(state, command)
 	_update_offset(state, force_world, command)
 	var torque := _rotation_torque(state, command, body_q)
@@ -183,6 +207,8 @@ func get_mode_labels() -> PackedStringArray:
 	if attitude_solver != null and rotation_mode == RotationMode.ATTITUDE_HOLD:
 		labels.append("VECTOR %02d°" % roundi(rad_to_deg(_offset.get_angle())))
 	labels.append(_movement_label())
+	if horizon_lock:
+		labels.append("HORIZON LOCK")
 	return labels
 
 
@@ -207,6 +233,68 @@ func is_holding_attitude() -> bool:
 	return rotation_mode == RotationMode.ATTITUDE_HOLD and _locked == Vector3.ZERO
 
 
+## Horizon lock: yaw about the horizon's up instead of the pilot's, plus a roll
+## that levels any bank. Rolling by hand bypasses it and resets the horizon.
+func _horizon_stick(command: PilotCommand) -> Vector3:
+	var stick := command.rotation
+	_horizon_steer = false
+	if not horizon_lock:
+		return stick
+	if absf(stick.z) > stick_deadzone:
+		_manual_roll = true
+	elif _manual_roll and _capture.z == 0.0:
+		_manual_roll = false
+		_horizon_up = _pilot * Vector3.UP
+	if _manual_roll:
+		_horizon_up = _pilot * Vector3.UP
+		return stick
+	var steering := Vector2(stick.x, stick.y).length() > stick_deadzone
+	# Keep levelling while a released pitch/yaw still brakes (each axis stops on
+	# its own, which banks the view near vertical).
+	var braking := _capture.x > 0.0 or _capture.y > 0.0
+	if not steering and not braking:
+		return stick
+	_horizon_steer = true
+	var up_p := _horizon_up_pilot()
+	var k := _horizon_weight(up_p)
+	if not steering:
+		return Vector3(0.0, 0.0, clampf(_level_rate_deg(up_p) * k / max_rate_deg.z, -1.0, 1.0))
+	var yaw_axis := Vector3.UP.lerp(up_p, k).normalized()
+	var rate := Vector3(stick.x * max_rate_deg.x, 0.0, 0.0) + yaw_axis * (stick.y * max_rate_deg.y)
+	rate.z += _level_rate_deg(up_p) * k
+	return (rate / max_rate_deg).clamp(-Vector3.ONE, Vector3.ONE)
+
+
+## Horizon up in the pilot frame, flipped when inverted (so a loop keeps going
+## instead of rolling back upright).
+func _horizon_up_pilot() -> Vector3:
+	var up_p := _pilot.inverse() * _horizon_up
+	return -up_p if up_p.y < 0.0 else up_p
+
+
+## 1 near level, fading to 0 looking straight up or down.
+func _horizon_weight(up_p: Vector3) -> float:
+	return clampf(absf(up_p.y) / horizon_fade, 0.0, 1.0)
+
+
+## Roll rate that removes the bank, deg/s (about pilot +Z).
+func _level_rate_deg(up_p: Vector3) -> float:
+	var bank := atan2(-up_p.x, up_p.y)
+	return clampf(rad_to_deg(bank) * horizon_level_gain, -horizon_level_rate_deg, horizon_level_rate_deg)
+
+
+## Levels a held (free) roll axis by turning the pilot frame; the attitude hold
+## brings the body along.
+func _level_horizon(delta: float) -> void:
+	if not horizon_lock or _manual_roll or rotation_mode != RotationMode.ATTITUDE_HOLD \
+			or _locked.z > 0.0:
+		return
+	var up_p := _horizon_up_pilot()
+	var roll := deg_to_rad(_level_rate_deg(up_p)) * _horizon_weight(up_p) * delta
+	if absf(roll) > 1e-7:
+		_pilot = (_pilot * Quaternion(Vector3.BACK, roll)).normalized()
+
+
 ## Per-axis lock state. An axis locks while its stick is deflected (plus
 ## axis_release_time, so a noisy stick doesn't flicker) and stays locked after
 ## release until the released axes have all stopped turning the way they were
@@ -215,7 +303,7 @@ func is_holding_attitude() -> bool:
 func _update_locks(state: FlightState, command: PilotCommand) -> void:
 	var was_locked := _locked
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
-		var on := command.rotation.length() > stick_deadzone
+		var on := _stick.length() > stick_deadzone
 		_active = Vector3.ONE if on else Vector3.ZERO
 		_capture = Vector3.ZERO
 		_locked = Vector3.ONE
@@ -224,7 +312,7 @@ func _update_locks(state: FlightState, command: PilotCommand) -> void:
 	# Body turn rate about the pilot's axes, minus what the offset swing itself causes.
 	var rate_p := _pilot.inverse() * state.angular_velocity - _offset_rate
 	for k in 3:
-		if absf(command.rotation[k]) > stick_deadzone:
+		if absf(_stick[k]) > stick_deadzone or (k == 2 and _horizon_steer):
 			_active[k] = 1.0
 			_release_timer[k] = axis_release_time
 		elif _active[k] > 0.0:
@@ -341,7 +429,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	var steering := _active != Vector3.ZERO
 
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
-		var rate_cmd := command.rotation * max_rate if steering else Vector3.ZERO
+		var rate_cmd := _stick * max_rate if steering else Vector3.ZERO
 		if not steering:
 			gain *= hold_rate_gain_multiplier
 		var fraction := 1.0 if command.boost and steering else torque_fraction
@@ -354,7 +442,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	var body_to_pilot := _pilot.inverse() * body_q
 	var pilot_to_body := body_to_pilot.inverse()
 	var free := Vector3.ONE - _locked
-	var rate_p := command.rotation * max_rate * _active + _offset_rate
+	var rate_p := _stick * max_rate * _active + _offset_rate
 	if free != Vector3.ZERO:
 		var err_q := AttitudeOffsetSolver.shortest((_pilot * _offset) * body_q.inverse())
 		var err_p := Vector3.ZERO

@@ -124,6 +124,17 @@ directions (descending: 0.7 G normal, 0.8 G boost, 1.3 G full). Shift overrides 
 While boosting, the swing itself is torque-limited (the body lags the target by ~14°, so swings
 run at ~20°/s), because auto-rotation yields to force (`auto_rotate_torque_priority`).
 
+**Horizon lock** (L, toggle; `horizon_lock`). Body-axis pitch + yaw bank the view relative to
+the world: a diagonal turn tilts the horizon, and a closed loop of stick motion leaves a roll
+(pitch up 90°, yaw 90°, pitch down 90° = rolled 90°). With the lock, yaw turns about a stored
+up (set when the lock is switched on) and roll levels any bank (`horizon_level_gain` 3 /s, ≤
+`horizon_level_rate_deg` 30°/s), while steering, while a released turn brakes, and when idle.
+Roll is driven with pitch/yaw, so it locks with them. Rolling by hand sets a new horizon. The lock
+fades toward plain body-axis yaw within `horizon_fade` (|cos pitch| 0.25, ≈ 75°) of straight up or
+down, and upside down it holds the inverted horizon, so pitching over the top doesn't flip the view.
+Results: a diagonal turn ends level instead of 66° banked; mouse-style circles stay within
+0.7° (17° without); near vertical a released turn may bank up to ~9° before levelling.
+
 **Boost** (Shift): 4 G acceleration cap, velocity loop 2.5 /s (`boost_velocity_gain`, snappy
 starts, stops and dodges), 100% torque for pilot steering, rates × 1.7, commanded speed × 2.5
 (150 m/s). Auto-rotation swings at 120°/s with the target's rate fed forward into the hold.
@@ -261,6 +272,7 @@ Intentionally crude (it undershoots and cross-couples), kept for comparison and 
 | Boost (full thrust, auto-rotation ≤ 30°) | Shift |
 | Boost with full auto-rotation (60°) | Shift double-tap, hold |
 | Precision mode on / off | C |
+| Horizon lock on / off | L |
 | Translation mode (V-HOLD ↔ NEWTON) | T |
 | Rotation mode (ATT-HOLD ↔ RATE) | G |
 | Hatch open / close | H |

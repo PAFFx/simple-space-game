@@ -60,6 +60,7 @@ func poll_command() -> PilotCommand:
 	cmd.toggle_translation_mode = Input.is_action_just_pressed(a.TOGGLE_TRANSLATION_MODE)
 	cmd.toggle_rotation_mode = Input.is_action_just_pressed(a.TOGGLE_ROTATION_MODE)
 	cmd.toggle_precision = Input.is_action_just_pressed(a.TOGGLE_PRECISION)
+	cmd.toggle_horizon_lock = Input.is_action_just_pressed(a.TOGGLE_HORIZON_LOCK)
 	return cmd
 
 
