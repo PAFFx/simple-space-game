@@ -4,11 +4,7 @@ extends ControlLaw
 ## Fly-by-wire law, in the spirit of modern fighter FCS.
 ##
 ## Everything the pilot commands is in the PILOT FRAME (the cockpit's
-## orientation), not the body's. Internally the law tracks the suit's neutral frame
-## (where the body sits with no auto-rotation offset); the seat is pitched up from it
-## by seat_pitch_deg, so pilot frame = neutral · seat. Steering, per-axis locking and
-## the attitude hold work on the pilot's axes (so a yaw in the view is one axis);
-## auto-rotation works on the suit's own axes.
+## orientation), not the body's:
 ##
 ## Rotation — the stick commands an angular rate of the pilot frame. In
 ##   ATTITUDE_HOLD the frame stops when the stick is released and the body
@@ -97,14 +93,6 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var precision_rate_multiplier: float = 0.5
 @export var precision: bool = false
 
-@export_group("Seat")
-## Pilot seat pitch relative to the suit, deg (+ = looking up). The view, stick axes
-## and movement directions follow the seat. Levels out while the hatch is open, so
-## the cockpit lines up with the opening.
-@export var seat_pitch_deg: float = 15.0
-## How fast the seat tilts to and from level, deg/s.
-@export var seat_rate_deg: float = 30.0
-
 @export_group("Horizon lock")
 @export var horizon_lock: bool = true
 ## Levelling: roll rate per rad of bank, 1/s, and its limit, deg/s.
@@ -129,12 +117,11 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var boost_velocity_gain: float = 2.5
 
 var _initialized := false
-var _pilot := Quaternion.IDENTITY    ## Neutral frame orientation (global); view = _pilot · seat
-var _offset := Quaternion.IDENTITY   ## Body relative to the neutral frame
-var _offset_target_r := Vector3.ZERO ## Smoothed solver target, rotation vector (neutral frame)
-var _offset_rate := Vector3.ZERO     ## Offset swing rate, neutral frame (rad/s), fed forward
+var _pilot := Quaternion.IDENTITY    ## Pilot frame orientation (global)
+var _offset := Quaternion.IDENTITY   ## Body relative to pilot frame
+var _offset_target_r := Vector3.ZERO ## Smoothed solver target, rotation vector (pilot frame)
+var _offset_rate := Vector3.ZERO     ## Offset swing rate, pilot frame (rad/s), fed forward
 var _auto_rotating := false   ## Solver engaged this tick (force must stay clean)
-var _seat_angle := 0.0               ## Current seat pitch, rad
 # Per pilot axis masks (pitch, yaw, roll), 1 = set:
 var _active := Vector3.ZERO          ## Steered by the stick
 var _capture := Vector3.ZERO         ## Steered, or released and still braking
@@ -145,7 +132,7 @@ var _turn_sign := Vector3.ZERO       ## Direction each steered axis was turning
 var _last_boost := false             ## For the HUD label
 var _last_boost_full := false
 var _thruster_limit := Vector3.INF   ## Thrusters' share of this tick's torque limit
-var _stick := Vector3.ZERO           ## Rotation demand, pilot frame (after horizon lock)
+var _stick := Vector3.ZERO           ## Rotation demand after horizon-lock shaping
 var _horizon_up := Vector3.UP        ## Global "up" the horizon lock levels to
 var _manual_roll := false            ## Pilot is rolling (sets a new horizon)
 
@@ -159,15 +146,15 @@ func get_pilot_offset() -> Quaternion:
 
 
 func get_pilot_orientation() -> Variant:
-	return _view()
+	return _pilot
 
 
 func get_cockpit_orientation(body_q: Quaternion) -> Variant:
 	if not _initialized:
 		return null
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
-		return body_q * _seat()
-	return _follow_body(body_q) * _seat()
+		return body_q
+	return _follow_body(body_q)
 
 
 func compute(state: FlightState, command: PilotCommand) -> Wrench:
@@ -184,8 +171,7 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_locked = Vector3.ZERO
 		_release_timer = Vector3.ZERO
 		_turn_sign = Vector3.ZERO
-		_seat_angle = _seat_target(state)
-		_horizon_up = _view() * Vector3.UP
+		_horizon_up = body_q * Vector3.UP
 		_manual_roll = false
 	if command.toggle_translation_mode:
 		translation_mode = ((translation_mode + 1) % TranslationMode.size()) as TranslationMode
@@ -196,14 +182,13 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_pilot = body_q * _offset.inverse()
 	if command.toggle_horizon_lock:
 		horizon_lock = not horizon_lock
-		_horizon_up = _view() * Vector3.UP
+		_horizon_up = _pilot * Vector3.UP
 		_manual_roll = false
-	_seat_angle = move_toward(_seat_angle, _seat_target(state), deg_to_rad(seat_rate_deg) * state.delta)
 
 	command.boost = command.boost or command.boost_full
 	_last_boost = command.boost
 	_last_boost_full = command.boost_full
-	_stick = _horizon_stick(_deadzoned(command.rotation))
+	_stick = _horizon_stick(command)
 	_update_locks(state, command)
 	_update_pilot(body_q)
 	_level_horizon(state.delta)
@@ -255,53 +240,19 @@ func is_holding_attitude() -> bool:
 	return rotation_mode == RotationMode.ATTITUDE_HOLD and _locked == Vector3.ZERO
 
 
-func _seat() -> Quaternion:
-	return Quaternion(Vector3.RIGHT, _seat_angle)
-
-
-## Pilot frame (the view): the neutral frame pitched by the seat.
-func _view() -> Quaternion:
-	return _pilot * _seat()
-
-
-func _seat_target(state: FlightState) -> float:
-	return deg_to_rad(seat_pitch_deg) if state.allow_attitude_offset else 0.0
-
-
-## Stick with each axis inside the deadzone zeroed, so noise on one axis never steers it.
-func _deadzoned(stick: Vector3) -> Vector3:
-	for k in 3:
-		if absf(stick[k]) <= stick_deadzone:
-			stick[k] = 0.0
-	return stick
-
-
-## A neutral-frame vector with only its components on the given pilot axes.
-func _masked(v: Vector3, mask: Vector3) -> Vector3:
-	return _seat() * ((_seat().inverse() * v) * mask)
-
-
-## Neutral-frame axes the offset must keep while these pilot axes are locked. Pilot yaw
-## and roll mix suit yaw and roll when the seat is pitched, so they lock together.
-func _offset_lock(locked: Vector3) -> Vector3:
-	if is_zero_approx(_seat_angle) or locked.y == locked.z:
-		return locked
-	return Vector3(locked.x, 1.0, 1.0)
-
-
 ## Horizon lock: yaw about the horizon's up instead of the pilot's, plus a roll
 ## that levels any bank. Rolling by hand bypasses it and resets the horizon.
-## Pilot frame in and out.
-func _horizon_stick(stick: Vector3) -> Vector3:
+func _horizon_stick(command: PilotCommand) -> Vector3:
+	var stick := command.rotation
 	if not horizon_lock:
 		return stick
 	if absf(stick.z) > stick_deadzone:
 		_manual_roll = true
 	elif _manual_roll and _capture.z == 0.0:
 		_manual_roll = false
-		_horizon_up = _view() * Vector3.UP
+		_horizon_up = _pilot * Vector3.UP
 	if _manual_roll:
-		_horizon_up = _view() * Vector3.UP
+		_horizon_up = _pilot * Vector3.UP
 		return stick
 	var steering := Vector2(stick.x, stick.y).length() > stick_deadzone
 	# Keep levelling while a released pitch/yaw still brakes (each axis stops on
@@ -322,7 +273,7 @@ func _horizon_stick(stick: Vector3) -> Vector3:
 ## Horizon up in the pilot frame, flipped when inverted (so a loop keeps going
 ## instead of rolling back upright).
 func _horizon_up_pilot() -> Vector3:
-	var up_p := _view().inverse() * _horizon_up
+	var up_p := _pilot.inverse() * _horizon_up
 	return -up_p if up_p.y < 0.0 else up_p
 
 
@@ -346,7 +297,7 @@ func _level_horizon(delta: float) -> void:
 	var up_p := _horizon_up_pilot()
 	var roll := deg_to_rad(_level_rate_deg(up_p)) * _horizon_weight(up_p) * delta
 	if absf(roll) > 1e-7:
-		_pilot = (_view() * Quaternion(Vector3.BACK, roll) * _seat().inverse()).normalized()
+		_pilot = (_pilot * Quaternion(Vector3.BACK, roll)).normalized()
 
 
 ## Per-axis lock state. An axis locks while its stick is deflected (plus
@@ -357,13 +308,14 @@ func _level_horizon(delta: float) -> void:
 func _update_locks(state: FlightState, command: PilotCommand) -> void:
 	var was_locked := _locked
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
-		_active = Vector3.ONE if _stick != Vector3.ZERO else Vector3.ZERO
+		var on := _stick.length() > stick_deadzone
+		_active = Vector3.ONE if on else Vector3.ZERO
 		_capture = Vector3.ZERO
 		_locked = Vector3.ONE
 		_newly_locked = Vector3.ZERO
 		return
 	# Body turn rate about the pilot's axes, minus what the offset swing itself causes.
-	var rate_p := _seat().inverse() * (_pilot.inverse() * state.angular_velocity - _offset_rate)
+	var rate_p := _pilot.inverse() * state.angular_velocity - _offset_rate
 	for k in 3:
 		if absf(_stick[k]) > stick_deadzone:
 			_active[k] = 1.0
@@ -394,25 +346,25 @@ func _update_pilot(body_q: Quaternion) -> void:
 		_pilot = body_q
 		return
 	if _newly_locked != Vector3.ZERO:
-		var lag := AttitudeOffsetSolver.from_rotation_vector(_masked(_deviation(body_q), _newly_locked))
+		var lag := AttitudeOffsetSolver.from_rotation_vector(_deviation(body_q) * _newly_locked)
 		_offset = (lag * _offset).normalized()
 		_offset_target_r = AttitudeOffsetSolver.to_rotation_vector(_offset)
 	_pilot = _follow_body(body_q)
 
 
-## Body deviation from neutral · offset, as a rotation vector in the neutral frame
-## (body = neutral · D · offset).
+## Body deviation from pilot · offset, as a rotation vector in the pilot frame
+## (body = pilot · D · offset).
 func _deviation(body_q: Quaternion) -> Vector3:
 	return AttitudeOffsetSolver.to_rotation_vector(_pilot.inverse() * body_q * _offset.inverse())
 
 
-## Neutral frame that follows a body at body_q on the locked pilot axes only.
+## Pilot frame that follows a body at body_q on the locked axes only.
 func _follow_body(body_q: Quaternion) -> Quaternion:
 	if _locked == Vector3.ONE:
 		return (body_q * _offset.inverse()).normalized()
 	if _locked == Vector3.ZERO:
 		return _pilot
-	var step := AttitudeOffsetSolver.from_rotation_vector(_masked(_deviation(body_q), _locked))
+	var step := AttitudeOffsetSolver.from_rotation_vector(_deviation(body_q) * _locked)
 	return (_pilot * step).normalized()
 
 
@@ -423,12 +375,11 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
 		return
 	var r_cur := AttitudeOffsetSolver.to_rotation_vector(_offset)
-	var kept := _offset_lock(_locked)
-	if kept == Vector3.ONE:
+	if _locked == Vector3.ONE:
 		_offset_target_r = r_cur
 		return
-	var free := Vector3.ONE - kept
-	var r_target := r_cur * kept
+	var free := Vector3.ONE - _locked
+	var r_target := r_cur * _locked
 	var slew := deg_to_rad(60.0)
 	var smoothing := 0.0
 	if attitude_solver != null:
@@ -440,7 +391,7 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 		if state.allow_attitude_offset and wanted and limit > 0.0:
 			var force_pilot := _pilot.inverse() * force_world
 			r_target = AttitudeOffsetSolver.to_rotation_vector(
-					attitude_solver.solve(state, force_pilot, _offset, kept, limit))
+					attitude_solver.solve(state, force_pilot, _offset, _locked, limit))
 			_auto_rotating = true
 		else:
 			# Nothing needs the offset: aim the free axes straight back at the cockpit
@@ -448,9 +399,9 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 			_offset = AttitudeOffsetSolver.from_rotation_vector(r_target)
 			_offset_target_r = r_target
 			return
-	r_target = r_target * free + r_cur * kept
+	r_target = r_target * free + r_cur * _locked
 	# Low-pass the target first so the body eases into (and out of) a new attitude.
-	_offset_target_r = _offset_target_r * free + r_cur * kept
+	_offset_target_r = _offset_target_r * free + r_cur * _locked
 	if smoothing > 0.0:
 		_offset_target_r = _offset_target_r.lerp(r_target, 1.0 - exp(-state.delta / smoothing))
 	else:
@@ -483,7 +434,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	var steering := _active != Vector3.ZERO
 
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
-		var rate_cmd := _seat() * (_stick * max_rate) if steering else Vector3.ZERO
+		var rate_cmd := _stick * max_rate if steering else Vector3.ZERO
 		if not steering:
 			gain *= hold_rate_gain_multiplier
 		var fraction := 1.0 if command.boost and steering else torque_fraction
@@ -492,19 +443,17 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		return (inertia * ((rate_cmd - omega) * gain) + gyro).clamp(-limit, limit)
 
 	# Everything below is about the pilot's axes. Locked axes: the stick commands the
-	# rate (0 while braking a released turn). Free axes: track neutral · offset. Both
+	# rate (0 while braking a released turn). Free axes: track pilot · offset. Both
 	# get the offset swing fed forward so fast swings don't lag.
-	var view := _view()
-	var body_to_pilot := view.inverse() * body_q
+	var body_to_pilot := _pilot.inverse() * body_q
 	var pilot_to_body := body_to_pilot.inverse()
 	var free := Vector3.ONE - _locked
-	var offset_rate_p := _seat().inverse() * _offset_rate
-	var rate_p := _stick * max_rate * _active + offset_rate_p
+	var rate_p := _stick * max_rate * _active + _offset_rate
 	if free != Vector3.ZERO:
 		var err_q := AttitudeOffsetSolver.shortest((_pilot * _offset) * body_q.inverse())
 		var err_p := Vector3.ZERO
 		if err_q.get_angle() > 1e-6:
-			err_p = (view.inverse() * (err_q.get_axis() * err_q.get_angle())) * free
+			err_p = (_pilot.inverse() * (err_q.get_axis() * err_q.get_angle())) * free
 		var err := pilot_to_body * err_p
 		# Auto-rotation may swing the body faster than the pilot's own rate limits.
 		var hold_rate := max_rate * 1.2
@@ -513,7 +462,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		# Auto-rotation tracks a moving target gently (keeps force clean); realigning
 		# to rest uses the time-optimal braking curve.
 		var approach := err * attitude_gain if _auto_rotating else _braking_rate(state, err)
-		var hold_p := (body_to_pilot * approach + offset_rate_p) * free
+		var hold_p := (body_to_pilot * approach + _offset_rate) * free
 		rate_p = rate_p * _locked + hold_p.clamp(-hold_rate, hold_rate)
 
 	var omega_p := body_to_pilot * omega
@@ -574,7 +523,7 @@ func _braking_rate(state: FlightState, err: Vector3) -> Vector3:
 
 
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
-	var stick_world := _view() * command.translation
+	var stick_world := _pilot * command.translation
 	var accel_g := cruise_accel_g
 	var speed := max_command_speed
 	if command.boost:
