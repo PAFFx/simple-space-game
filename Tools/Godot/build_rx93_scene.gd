@@ -389,7 +389,7 @@ func _build_flight_computer(root: Node3D) -> void:
 	fc.set("dry_mass", 27900.0)
 	fc.set("propellant_capacity", 25200.0)
 	fc.set("propellant", 25200.0)
-	fc.set("specific_impulse", 4000.0)
+	fc.set("specific_impulse", 12000.0)
 
 	var input := Node.new()
 	input.name = "PilotInput"

@@ -1074,7 +1074,7 @@ allocator = SubResource("Resource_tlyjy")
 dry_mass = 27900.0
 propellant_capacity = 25200.0
 propellant = 25200.0
-specific_impulse = 4000.0
+specific_impulse = 12000.0
 
 [node name="PilotInput" type="Node" parent="FlightComputer" unique_id=1407680652]
 script = ExtResource("15_mkw31")
