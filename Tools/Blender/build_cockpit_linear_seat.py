@@ -21,6 +21,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import bmesh  # noqa: E402
 import bpy  # noqa: E402
+from mathutils import Matrix, Vector  # noqa: E402
 
 import mesh_kit as mk  # noqa: E402
 
@@ -99,20 +100,79 @@ def build_seat(m):
     boom.to_object(bevel=0.01)
 
 
+EYE = Vector((0.0, 0.08, 0.0))
+# Main monitor centre and size; the sub monitors (smaller) hang off its lower side edges,
+# turned toward the pilot. Blender axes: x right, y forward, z up.
+MAIN_CENTRE = Vector((0.0, 0.58, -0.44))
+MAIN_SIZE = (0.44, 0.30)
+SUB_SIZE = (0.17, 0.125)
+SUB_TURN_DEG = 35.0
+BEZEL = 0.014
+# Right armrest group (console, grip, main + right sub monitor, hatch lever) swings out
+# about a vertical axis at the armrest's back to clear the way out (Godot drives it).
+RIGHT_ARMREST_PIVOT = (0.34, -0.30, -0.5)
+# Console front faces (where the switch panel and the hatch lever sit).
+FACE_CENTRE_Y, FACE_CENTRE_Z, FACE_TILT = 0.2, -0.428, 110.0
+
+
+def _frame(right, normal, up):
+    """4x4 placing local x/y/z on right / normal / -up (quads face local +Y with their
+    texture top at local -Z after the flip Godot applies; see CockpitDisplays)."""
+    m = Matrix((right, normal, -up)).transposed().to_4x4()
+    return m
+
+
+def _place(pb, matrix, build):
+    """Runs build() (geometry at the origin) and moves the new faces by `matrix`."""
+    before = set(pb.bm.faces)
+    build()
+    new = [f for f in pb.bm.faces if f not in before]
+    bmesh.ops.transform(pb.bm, matrix=matrix, verts=list({v for f in new for v in f.verts}))
+
+
+def _strut(pb, a, b, size, mat):
+    """Box of cross-section `size` from point a to point b."""
+    a, b = Vector(a), Vector(b)
+    axis = (b - a).normalized()
+    side = axis.cross(Vector((0, 0, 1)))
+    if side.length < 1e-3:
+        side = Vector((1, 0, 0))
+    side.normalize()
+    up = side.cross(axis)
+    m = Matrix.Translation((a + b) * 0.5) @ Matrix((side, axis, up)).transposed().to_4x4()
+    _place(pb, m, lambda: pb.box((0, 0, 0), (size, (b - a).length, size), mat))
+
+
+def _monitor(name, m, centre, right, normal, up, size):
+    """Bezel box and screen quad (`Screen<name>`) facing `normal`. Returns both objects."""
+    bezel = mk.PartBuilder(f"Bezel{name}", m)
+    frame = Matrix.Translation(centre - normal * 0.012) @ _frame(right, normal, up)
+    _place(bezel, frame, lambda: bezel.box((0, 0, 0), (size[0] + 2 * BEZEL, 0.02, size[1] + 2 * BEZEL), "frame"))
+    bezel_obj = bezel.to_object(bevel=0.005)
+    scr = mk.PartBuilder(f"Screen{name}", m)
+    _place(scr, Matrix.Translation(centre) @ _frame(right, normal, up),
+           lambda: scr.quad((0, 0, 0), size[0], size[1], "screen"))
+    return bezel_obj, scr.to_object()
+
+
+def _face_matrix(s):
+    """Frame of a console's front face: x right, y forward along the face, z out of it."""
+    t = math.radians(FACE_TILT - 90.0)
+    fwd = Vector((0, math.cos(t), math.sin(t)))
+    out = Vector((0, -math.sin(t), math.cos(t)))
+    return Matrix.Translation((0.36 * s, FACE_CENTRE_Y, FACE_CENTRE_Z + 0.002)) @ \
+        Matrix((Vector((1, 0, 0)), fwd, out)).transposed().to_4x4()
+
+
 def build_consoles(m):
+    groups = {}
     for side, s in (("R", 1.0), ("L", -1.0)):
         con = mk.PartBuilder(f"Console{side}", m)
         con.box((0.34 * s, -0.02, -0.5), (0.13, 0.55, 0.07), "frame")
         con.tbox((0.36 * s, 0.27, -0.48), (0.2, 0.24), (0.18, 0.2), 0.1, "frame")
         con.box((0.36 * s, 0.27, -0.545), (0.16, 0.2, 0.03), "grip")
         con.box((0.44 * s, 0.27, -0.47), (0.012, 0.18, 0.012), "strip")
-        for i in range(3):
-            con.box(((0.30 + 0.035 * i) * s, 0.16, -0.425), (0.022, 0.022, 0.012), "yellow" if i == 1 else "grip")
-        con.to_object(bevel=0.008)
-
-        scr = mk.PartBuilder(f"ScreenConsole{side}", m)
-        scr.quad((0.36 * s, 0.2, -0.428), 0.14, 0.09, "screen", rot=(110, 0, 0))
-        scr.to_object()
+        objs = [con.to_object(bevel=0.008)]
 
         # Grip pivot sits on top of the console pod.
         grip = mk.PartBuilder(f"Grip{side}", m)
@@ -122,90 +182,102 @@ def build_consoles(m):
         grip.box((0, -0.01, 0.178), (0.018, 0.018, 0.012), "yellow")
         grip.box((0.015 * s, 0.015, 0.178), (0.012, 0.012, 0.01), "red")
         grip.box((0, 0.033, 0.12), (0.014, 0.012, 0.035), "red")
-        grip.to_object(location=(0.36 * s, 0.33, -0.43), bevel=0.004)
+        objs.append(grip.to_object(location=(0.36 * s, 0.33, -0.43), bevel=0.004))
+        groups[side] = objs
 
         pedal = mk.PartBuilder(f"Pedal{side}", m)
         pedal.box((0, 0.1, 0.03), (0.1, 0.24, 0.022), "grip", rot=(25, 0, 0))
         pedal.box((0, 0.1, 0.045), (0.07, 0.15, 0.006), "frame", rot=(25, 0, 0))
         pedal.to_object(location=(0.13 * s, 0.45, -1.0), bevel=0.004)
 
+    # Left console face: mount for Godot's switch panel (its local +Y out of the face,
+    # -Z forward along it once in Godot).
+    mount = bpy.data.objects.new("SwitchPanelMount", None)
+    bpy.context.scene.collection.objects.link(mount)
+    mount.matrix_world = _face_matrix(-1.0)
+    plate = mk.PartBuilder("SwitchPanelPlate", m)
+    _place(plate, _face_matrix(-1.0), lambda: plate.box((0, 0, -0.003), (0.15, 0.1, 0.006), "grip"))
+    groups["L"].append(plate.to_object(bevel=0.002))
+    return groups
 
-def build_footrest_and_mfd(m):
+
+def build_footrest_and_mfd(m, groups):
     rest = mk.PartBuilder("Footrest", m)
     rest.box((0, 0.24, -0.9), (0.08, 0.5, 0.06), "frame", rot=(-18, 0, 0))
     rest.box((0, 0.46, -1.0), (0.42, 0.06, 0.05), "frame")
-    rest.box((0, 0.6, -0.82), (0.05, 0.05, 0.36), "frame", rot=(-20, 0, 0))
     rest.to_object(bevel=0.006)
 
-    # Three displays in front, after the Xi Gundam's: a large centre tablet low ahead
-    # (situational awareness) and a screen either side on an arm (left: engines and fuel,
-    # right: target). Each faces the pilot's eye; Godot paints them (CockpitDisplays).
-    # The centre display hangs on a hinged arm (CentreDisplay, pivot at the pedestal)
-    # that folds it down onto the pilot's lap while the hatch is open, clearing the way.
-    pivot = bpy.data.objects.new("CentreDisplay", None)
+    # Displays after the Xi Gundam's: a large main monitor ahead (situational awareness)
+    # with two small sub monitors hinged to its lower side edges, turned toward the pilot
+    # (left: engines and fuel, right: target). No legs: the main and right sub ride an arm
+    # from the right armrest, the left sub one from the left; the arms meet the backs.
+    normal = (EYE - MAIN_CENTRE).normalized()
+    right = Vector((1, 0, 0))
+    up = right.cross(normal) * -1.0
+    up = up if up.z > 0 else -up
+    hw, hh = MAIN_SIZE[0] * 0.5, MAIN_SIZE[1] * 0.5
+    main = _monitor("Centre", m, MAIN_CENTRE, right, normal, up, MAIN_SIZE)
+    groups["R"].extend(main)
+    phi = math.radians(SUB_TURN_DEG)
+    for side, s in (("L", -1.0), ("R", 1.0)):
+        outward = right * (s * math.cos(phi)) + normal * math.sin(phi)
+        sub_normal = normal * math.cos(phi) - right * (s * math.sin(phi))
+        sub_right = outward if s > 0 else -outward
+        hinge = MAIN_CENTRE + right * (s * (hw + BEZEL)) - up * (hh - SUB_SIZE[1] * 0.5 - BEZEL)
+        centre = hinge + outward * (SUB_SIZE[0] * 0.5 + 2 * BEZEL)
+        sub = _monitor("Left" if s < 0 else "Right", m, centre, sub_right, sub_normal, up, SUB_SIZE)
+        groups[side].extend(sub)
+        # Hinge blocks joining the sub to the main.
+        hinge_obj = mk.PartBuilder(f"Hinge{side}", m)
+        for k in (-1.0, 1.0):
+            p = hinge + outward * BEZEL + up * (k * SUB_SIZE[1] * 0.3) - normal * 0.02
+            hinge_obj.box(tuple(p), (0.018, 0.024, 0.026), "grip")
+        groups[side].append(hinge_obj.to_object())
+        # Arm from the armrest's front-inner corner to the back of the monitor.
+        arm = mk.PartBuilder(f"DisplayArm{side}", m)
+        # It meets the monitor's bottom edge from below and behind, so from the seat it
+        # stays under the screens instead of crossing them.
+        bottom = (centre - up * (SUB_SIZE[1] * 0.5 + BEZEL)) if s < 0 else \
+            (MAIN_CENTRE + right * (hw * 0.55) - up * (hh + BEZEL))
+        _strut(arm, (0.28 * s, 0.34, -0.48), tuple(bottom - normal * 0.035 - up * 0.01), 0.028, "frame")
+        groups[side].append(arm.to_object(bevel=0.004))
+
+
+def build_hatch_lever(m, groups):
+    """Yellow/black striped pull handle on the right console's front face (HatchHandle,
+    origin on its pivot): pull it up toward the pilot to open the hatch."""
+    base = mk.PartBuilder("HatchLeverBase", m)
+    _place(base, _face_matrix(1.0), lambda: base.box((0, 0.0, 0.004), (0.06, 0.09, 0.008), "grip"))
+    groups["R"].append(base.to_object(bevel=0.002))
+    handle = mk.PartBuilder("HatchHandle", m)
+    # Built in the face frame (x right, y forward along the face, z out), pivot at origin.
+    for k in (-1.0, 1.0):
+        handle.box((0.022 * k, 0.025, 0.012), (0.008, 0.05, 0.008), "yellow")
+    n = 6
+    for i in range(n):
+        x = -0.03 + 0.06 * (i + 0.5) / n
+        handle.box((x, 0.05, 0.016), (0.06 / n, 0.016, 0.016), "yellow" if i % 2 == 0 else "grip")
+    obj = handle.to_object(bevel=0.001)
+    obj.matrix_world = _face_matrix(1.0) @ Matrix.Translation((0, -0.03, 0.008))
+    groups["R"].append(obj)
+
+
+def build_armrest_pivot(groups):
+    """Parents the right armrest group to RightArmrest so Godot can swing it out."""
+    pivot = bpy.data.objects.new("RightArmrest", None)
     bpy.context.scene.collection.objects.link(pivot)
-    pivot.location = CENTRE_PIVOT
-    for name, center, size, rot in DISPLAYS:
-        bezel = mk.PartBuilder(f"Bezel{name}", m)
-        bezel.box(center, (size[0] + 0.03, 0.022, size[1] + 0.03), "frame", rot=rot)
-        bezel_obj = bezel.to_object(bevel=0.006)
-        scr = mk.PartBuilder(f"Screen{name}", m)
-        # A hair in front of the bezel, toward the eye.
-        eye = (0.0, 0.08, 0.0)
-        d = [eye[i] - center[i] for i in range(3)]
-        n = math.sqrt(sum(x * x for x in d))
-        front = tuple(center[i] + d[i] / n * 0.012 for i in range(3))
-        scr.quad(front, size[0], size[1], "screen", rot=rot)
-        scr_obj = scr.to_object()
-        if name == "Centre":
-            for o in (bezel_obj, scr_obj):
-                _parent_keep(o, pivot)
-
-    arm = mk.PartBuilder("CentreArm", m)
-    arm.box((0, 0.6, -0.64), (0.06, 0.05, 0.14), "frame", rot=(-20, 0, 0))
-    _parent_keep(arm.to_object(bevel=0.005), pivot)
-
-    arms = mk.PartBuilder("DisplayArms", m)
-    for s in (1.0, -1.0):
-        arms.box((0.31 * s, 0.46, -0.42), (0.035, 0.035, 0.2), "frame", rot=(-25, 0, 0))
-    arms.to_object(bevel=0.005)
+    pivot.location = RIGHT_ARMREST_PIVOT
+    for o in groups["R"]:
+        _parent_keep(o, pivot)
 
 
 def _parent_keep(obj, parent):
     """Parents `obj` to `parent`, keeping where it is."""
     bpy.context.view_layer.update()  # parent.matrix_world must reflect its location
+    world = obj.matrix_world.copy()
     obj.parent = parent
     obj.matrix_parent_inverse = parent.matrix_world.inverted()
-
-
-def build_hatch_switch(m):
-    """Guarded hatch switch at the inner front corner of the right console: a red push
-    button under a yellow flip-up guard (HatchGuard, origin on its hinge at the back)."""
-    base = mk.PartBuilder("HatchSwitchBase", m)
-    base.box((0.25, 0.14, -0.425), (0.07, 0.07, 0.02), "frame")
-    base.box((0.25, 0.14, -0.414), (0.05, 0.05, 0.004), "grip")
-    base.to_object(bevel=0.003)
-    button = mk.PartBuilder("HatchButton", m)
-    button.cylinder((0, 0, 0.0), 0.014, 0.012, "red", segments=16)
-    button.to_object(location=(0.25, 0.14, -0.406))
-    guard = mk.PartBuilder("HatchGuard", m)
-    # Built around its hinge (back edge, top of the base): a lid with low sides.
-    guard.box((0, 0.03, 0.022), (0.056, 0.058, 0.004), "yellow")
-    for s in (1.0, -1.0):
-        guard.box((0.027 * s, 0.03, 0.012), (0.004, 0.058, 0.022), "yellow")
-    guard.box((0, 0.058, 0.012), (0.056, 0.004, 0.022), "yellow")
-    guard.to_object(location=(0.25, 0.108, -0.415), bevel=0.001)
-
-
-CENTRE_PIVOT = (0.0, 0.58, -0.74)
-
-# name, centre (Blender: x right, y forward, z up; eye at y 0.08), size (w, h), rotation
-# turning the quad's +Y face toward the eye.
-DISPLAYS = [
-    ("Centre", (0.0, 0.62, -0.5), (0.40, 0.28), (137.0, 0.0, 0.0)),
-    ("Left", (-0.33, 0.55, -0.30), (0.22, 0.16), (152.6, 0.0, 35.0)),
-    ("Right", (0.33, 0.55, -0.30), (0.22, 0.16), (152.6, 0.0, -35.0)),
-]
+    obj.matrix_world = world
 
 
 def main():
@@ -218,9 +290,10 @@ def main():
     m = materials()
     build_shell(m)
     build_seat(m)
-    build_consoles(m)
-    build_footrest_and_mfd(m)
-    build_hatch_switch(m)
+    groups = build_consoles(m)
+    build_footrest_and_mfd(m, groups)
+    build_hatch_lever(m, groups)
+    build_armrest_pivot(groups)
 
     for obj in bpy.data.objects:
         obj.select_set(False)

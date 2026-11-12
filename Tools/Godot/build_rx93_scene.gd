@@ -397,8 +397,9 @@ func _build_flight_computer(root: Node3D) -> void:
 	input.set("axis_bindings", bindings)
 
 
-## The red door at the bottom of the chest swings out and down about its bottom edge,
-## after the screen has opened its aperture down the tunnel.
+## The red door at the bottom of the chest swings out and down about its bottom edge.
+## Order: the right armrest swings clear (HatchCockpitParts, 0–0.3), the screen opens
+## below the seat and down the tunnel, then the door.
 func _build_hatch(root: Node3D) -> void:
 	var hatch := CockpitHatch.new()
 	hatch.name = "CockpitHatch"
@@ -407,9 +408,9 @@ func _build_hatch(root: Node3D) -> void:
 	door.bone_name = &"hatch"
 	door.hinge_axis = Vector3.RIGHT
 	door.open_angle_deg = -100.0
-	door.window = Vector2(0.3, 1.0)
+	door.window = Vector2(0.5, 1.0)
 	hatch.panels = [door] as Array[HatchPanel]
-	hatch.aperture_window = Vector2(0.0, 0.35)
+	hatch.aperture_window = Vector2(0.25, 0.55)
 	hatch.skeleton = root.get_node(SKELETON)
 
 

@@ -2,53 +2,44 @@ class_name CockpitSwitchPanel
 extends Node3D
 
 ## The left console's switch panel: settings that rarely change mid-fight (so no
-## HOTAS buttons), grouped like a real cockpit's panels.
-##   FCS:   FCS on/off · rotation ATT-HOLD/RATE · horizon LOCK/FREE · movement NORM/PREC
-##   LIMBS: AMBAC on/off · stance AUTO/OFF · brake pose ON/OFF
+## HOTAS buttons), on the console's front face (the model's SwitchPanelMount):
+##   FCS on/off · rotation ATT-HOLD/RATE · horizon LOCK/FREE · movement NORM/PREC · AMBAC on/off
 ## Each switch follows the state it controls every frame, and a throw changes that state
 ## (mode toggles go through FlightComputer.request_toggle, so the control law's own
 ## handling runs). Lay the panel's local −Z forward, +Y out of the panel.
 
-const SPACING := 0.034
-const ROW := 0.075
+const SPACING := 0.027
+const ROW := 0.08
 
 var _fc: FlightComputer
 var _ambac: AmbacController
-var _stance: StanceController
 var _switches := {}   # id → CockpitSwitch
 var _hold := {}       # id → s left before following the state again (a throw lands next tick)
 
 
 func _ready() -> void:
-	_face_eye()
+	_mount()
 	var vehicle := VehicleBase.find_vehicle(self)
 	if vehicle != null:
 		_fc = vehicle.find_component(FlightComputer) as FlightComputer
 		_ambac = vehicle.find_component(AmbacController) as AmbacController
-		_stance = vehicle.find_component(StanceController) as StanceController
-	_group("FCS", -ROW * 0.5, [
+	_group("FCS", 0.0, [
 		[&"fcs", "FCS", ["ON", "OFF"]],
 		[&"rot", "ROT", ["ATT", "RATE"]],
 		[&"horizon", "HRZN", ["LOCK", "FREE"]],
 		[&"move", "MOVE", ["NORM", "PREC"]],
-	])
-	_group("LIMBS", ROW * 0.5, [
 		[&"ambac", "AMBAC", ["ON", "OFF"]],
-		[&"stance", "STANCE", ["AUTO", "OFF"]],
-		[&"brake_pose", "BRK POSE", ["ON", "OFF"]],
 	])
 	CockpitLinearSeat._set_layers(self, Layers.COCKPIT | Layers.VEHICLE_EXT)
 
 
-## Tilts the panel to face the pilot's eye (the cockpit's CameraMount), forward kept forward.
-func _face_eye() -> void:
-	var mount := get_parent().get_node_or_null("CameraMount") as Node3D
+## Sits on the cockpit model's SwitchPanelMount (the left console's front face).
+func _mount() -> void:
+	var mount := get_parent().find_child("SwitchPanelMount", true, false) as Node3D
 	if mount == null:
+		push_warning("CockpitSwitchPanel: no SwitchPanelMount in the cockpit model")
 		return
-	var up := (mount.position - position).normalized()
-	var back := Vector3.BACK - up * up.dot(Vector3.BACK)
-	back = back.normalized()
-	transform.basis = Basis(up.cross(back).normalized(), up, back)
+	transform = (get_parent() as Node3D).global_transform.affine_inverse() * mount.global_transform
 
 
 func _process(delta: float) -> void:
@@ -73,7 +64,7 @@ func _group(title: String, z: float, list: Array) -> void:
 	label.font_size = 26
 	label.pixel_size = 0.00018
 	label.modulate = Color(0.4, 0.82, 1.0)
-	label.position = Vector3(-width * 0.5 + 0.004, -0.0035, z - ROW * 0.5 + 0.006)
+	label.position = Vector3(-width * 0.5 + 0.004, -0.0035, z - ROW * 0.5 + 0.009)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.basis = Basis(Vector3.RIGHT, -PI * 0.5)
 	add_child(label)
@@ -105,10 +96,6 @@ func _state(id: StringName) -> bool:
 			return law == null or not law.precision
 		&"ambac":
 			return _ambac != null and _ambac.enabled
-		&"stance":
-			return _stance != null and _stance.enabled
-		&"brake_pose":
-			return _stance != null and _stance.brake_stances
 	return false
 
 
@@ -128,7 +115,3 @@ func _on_switched(index: int, id: StringName) -> void:
 			_fc.request_toggle(&"toggle_precision")
 		&"ambac":
 			_ambac.enabled = want
-		&"stance":
-			_stance.enabled = want
-		&"brake_pose":
-			_stance.brake_stances = want

@@ -129,11 +129,13 @@ Closing plays the same timeline backwards: flaps seal first, then the screen clo
 
 ## Cockpit displays
 
-Three flat screens in front of the seat (after the Xi Gundam's cockpit), painted by
-`CockpitDisplays`: each screen mesh in the cockpit model (`ScreenCentre`, `ScreenLeft`,
-`ScreenRight`, built by `Tools/Blender/build_cockpit_linear_seat.py`) gets an `MfdPage` in its
-own SubViewport. Pages follow modern fighter large-area displays: dark field, thin outlines,
-boxed values.
+Three screens in front of the seat (after the Xi Gundam's cockpit), painted by `CockpitDisplays`:
+a large main monitor with two small sub monitors hinged to its lower side edges, turned toward the
+pilot. No legs: the main and right sub ride an arm from the right armrest, the left sub one from
+the left, meeting the monitors' bottom edges from below so nothing crosses the screens. Each screen
+mesh (`ScreenCentre`, `ScreenLeft`, `ScreenRight`, built by
+`Tools/Blender/build_cockpit_linear_seat.py`) gets an `MfdPage` in its own SubViewport. Pages
+follow modern fighter large-area displays: dark field, thin outlines, boxed values.
 
 - **Centre: SA** (`SaPage`), the biggest: plan view centred on the suit, heading up, over the
   HUD's attitude plane (`FlightComputer.get_attitude_basis()`). Range rings step to fit the
@@ -154,18 +156,20 @@ cautions. The thruster rows and propellant / thrust bars moved to the left displ
 `CockpitHatch` runs one timeline (0 = sealed, 1 = open): the screen cuts its aperture, then the
 suit's door bones swing. Around the open aperture the HUD draws orange segmented brackets and
 HATCH / UNLOCK tabs (`HatchWidget`; SEALING while closing), outside the cockpit's portal frame.
-`HatchCockpitParts` owns the hatch switch on the right console: click the yellow guard to lift
-(left) or lower (right) it; with it up, the red button opens or closes the hatch (and dips). The
-centre display folds onto the pilot's lap on the hatch timeline so it doesn't block the way out.
-The shell's portal frame sits between the screen and the shell, so it shows only through the open
-hatch (it used to float inside the screen, in the pilot's view).
+`HatchCockpitParts` owns the hatch handle (yellow/black stripes, right console face): left click
+pulls it (open), right click pushes it (close); it sits pulled while open. On the hatch timeline the
+right armrest swings 60° out first (0–0.3), carrying the main and right monitors, to clear the
+way out; the ν's screen then opens below the seat and down the tunnel (aperture centre −56°, half
+25° × 34°: the real shell and the tunnel show there), then the door swings (0.5–1). The shell's
+portal frame sits between the screen and the shell, so it shows only through the open hatch.
 
 ## Cockpit switches
 
 `CockpitClickMode` (middle mouse) frees the cursor; the nearest `CockpitClickable` under it lights
 up with a tooltip, left click throws it one way, right click the other. `CockpitSwitchPanel`
-builds the left console's toggle switches (`CockpitSwitch`: base, lever, labels) in two groups
-and keeps each lever on the state it controls.
+builds the left console's toggle switches (`CockpitSwitch`: base, lever, labels) on the model's
+`SwitchPanelMount` (the console's front face): FCS, ROT, HRZN, MOVE, AMBAC, each lever kept on the
+state it controls.
 
 **ν:** the door is the red panel at the bottom of the chest (split from the chest mesh by
 `build_mobile_suit_nu.py`, bone `hatch`, hinged on its bottom edge, swings out 100°). The sphere

@@ -52,7 +52,7 @@ omni_range = 2.4
 [node name="ControlsAnimator" type="Node" parent="." node_paths=PackedStringArray("left_grip", "right_grip", "left_pedal", "right_pedal")]
 script = ExtResource("6_anim")
 left_grip = NodePath("../Model/GripL")
-right_grip = NodePath("../Model/GripR")
+right_grip = NodePath("../Model/RightArmrest/GripR")
 left_pedal = NodePath("../Model/PedalL")
 right_pedal = NodePath("../Model/PedalR")
 
@@ -74,7 +74,6 @@ script = ExtResource("11_hatchparts")
 model_root = NodePath("../Model")
 
 [node name="SwitchPanel" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, -0.4, -0.11)
 script = ExtResource("12_panel")
 
 [node name="CockpitClickMode" type="Node" parent="."]

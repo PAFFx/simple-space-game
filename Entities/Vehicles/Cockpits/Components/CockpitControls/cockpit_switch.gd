@@ -26,7 +26,7 @@ const HOVER_COLOR := Color(0.4, 0.9, 1.0)
 func _ready() -> void:
 	var base := MeshInstance3D.new()
 	var box := BoxMesh.new()
-	box.size = Vector3(0.022, 0.008, 0.022)
+	box.size = Vector3(0.018, 0.008, 0.018)
 	base.mesh = box
 	base.material_override = _material(Color(0.06, 0.065, 0.07))
 	add_child(base)
@@ -53,10 +53,10 @@ func _ready() -> void:
 	tip.material_override = _lever_mat
 	_lever.add_child(tip)
 
-	_label(title, Vector3(0, 0.001, 0.02), 30, Color(0.86, 0.9, 0.92))
+	_label(title, Vector3(0, 0.001, 0.034), 28, Color(0.86, 0.9, 0.92))
 	if positions.size() >= 2:
-		_label(positions[0], Vector3(0, 0.001, -0.019), 24, Color(0.55, 0.62, 0.66))
-		_label(positions[1], Vector3(0, 0.001, 0.031), 24, Color(0.55, 0.62, 0.66))
+		_label(positions[0], Vector3(0, 0.001, -0.02), 22, Color(0.55, 0.62, 0.66))
+		_label(positions[1], Vector3(0, 0.001, 0.022), 22, Color(0.55, 0.62, 0.66))
 	_angle = _target_angle()
 	_apply()
 

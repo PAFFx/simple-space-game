@@ -386,10 +386,9 @@ Intentionally crude (it undershoots and cross-couples), kept for comparison and 
 ## Controls (defaults)
 
 Settings that rarely change mid-fight are cockpit switches, not keys (DCS style; middle mouse for
-click mode, left click throws a switch forward, right click back). Left console panel, FCS
-group: FCS on/off, ROT att-hold/rate, HRZN lock/free, MOVE normal/precision; LIMBS group:
-AMBAC on/off, STANCE auto/off, BRK POSE on/off. Right console: the hatch, a red button under a
-yellow guard (lift the guard, then press). Mode switches go through
+click mode, left click throws a switch forward, right click back). Left console panel: FCS on/off, ROT att-hold/rate,
+HRZN lock/free, MOVE normal/precision, AMBAC on/off. Right console: the yellow/black hatch handle
+(left click pulls it to open, right click pushes it to close). Mode switches go through
 `FlightComputer.request_toggle()`, so the control law's own toggle handling runs.
 
 | Action | Key |
