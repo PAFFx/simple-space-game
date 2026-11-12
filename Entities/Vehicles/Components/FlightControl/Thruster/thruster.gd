@@ -31,6 +31,8 @@ extends Node3D
 
 @export_group("Visuals")
 @export var plume_length: float = 7.0             ## Plume length at full thrust, m
+## Off for ports built into the armor: only the plume shows, from the model's surface.
+@export var show_nozzle: bool = true
 @export var nozzle_scale: float = 1.0:
 	set(v):
 		nozzle_scale = v
@@ -53,6 +55,7 @@ var _dir := Vector3.FORWARD                       ## Actual thrust dir, local to
 
 func _ready() -> void:
 	_visual.scale = Vector3.ONE * nozzle_scale
+	$Gimbal/Visual/Nozzle.visible = show_nozzle
 	_set_layers(self, Layers.VEHICLE_EXT)
 	_update_visuals()
 

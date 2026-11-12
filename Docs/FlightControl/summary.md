@@ -368,26 +368,32 @@ bindings, then enable `joystick_enabled`.
   - the cockpit stays within ~1° in the world through all of it
   - a commanded yaw turns cockpit and suit together and stops cleanly
 
-## RX-93 ν Gundam (`Stages/RX93TestRange`)
+## RX-93 ν Gundam (`Stages/RX93TestRange`, the main scene for now)
 
 Built from a downloaded model (`Tools/Blender/build_mobile_suit_nu.py`, `Tools/Godot/build_rx93_scene.gd`),
 with MSP-02's bone names and components. Weapons are separate equipment (rifle on `hand.R`, shield
-on `forearm.L`, hyper bazooka, beam saber and six fin funnels on `backpack`). Thrusters sit only on
-the nozzles the model has:
+on `forearm.L`, hyper bazooka and beam saber on `backpack`; the fin funnels are built but left off
+the loadout for now). Thrusters sit on the model's yellow thruster ports (found by sampling its
+texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
-| 4 × 450 kN mains | backpack, 2 per side, stacked | back + down (45°) | fore/aft only, ±25° (one plane) |
-| 2 × 300 kN | foot soles | down | fixed (moves only with the foot) |
-| 4 × 40 kN | top of the backpack's centre column | up | fixed |
+| 4 × 450 kN mains (nozzle model) | backpack, 2 per side, stacked | back + down | 3D, 30° cone |
+| 2 × 250 kN | soles | down | 3D, 20° cone |
+| 2 × 150 kN (nozzle model) | behind each calf | down, a little back | 2D fore/aft ±25° |
+| 4 × 70 kN | shoulder armor, 2 per side | up-and-out / out-and-down | 2D fore/aft ±25° |
+| 2 × 80 kN | chest vents | forward (brakes) | 2D up/down ±20° |
+| 6 × 40 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
+| 2 × 60 kN | rear skirts | back | fixed |
+| 6 × 35 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
 
-Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg` (sideways)
-tighten the cone per axis; 0 sideways = one-plane vectoring, `gimbal_limit_deg` 0 = fixed.
+Small ports have no nozzle model (`Thruster.show_nozzle` off): only the plume shows, from the
+armor. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
+(sideways) tighten the cone per axis; 0 on one = 2D vectoring, `gimbal_limit_deg` 0 = fixed.
 
-**Not flyable yet:** no nozzle fires sideways, forward or back, so nothing cancels the side force and
-torque of a burn. Clean force capability is ~0.03 G in every direction, pitch torque 0.9 MN·m
-(MSP-02: 8), and rotating drifts the suit. It needs hidden verniers (or a control scheme built
-around point-and-burn).
+Clean force capability (level, limbs at rest): up 2.85 G, forward 1.47 G, sideways 0.79 G, back
+0.64 G, down 0.41 G; pitch torque 6 MN·m. Descending is weak (boosted 4 s → 7.6 m/s), so limbs
+and attitude must point the strong thrusters; that isn't done yet.
 
 ## Tuning reference (MSP-01 prototype)
 

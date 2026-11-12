@@ -25,26 +25,56 @@ const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockp
 const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn"
 
 # name, bone, position, exhaust direction, thrust kN, gimbal: [cone, fore/aft, sideways] deg,
-# plume m, nozzle scale. Positions/exhausts measured from the model's nozzles (body frame).
+# plume m, nozzle scale, nozzle model. Positions/exhausts are the model's (yellow) thruster
+# ports, measured in the body frame. 2D = swings in one plane only, fixed = no gimbal, so the
+# limbs carrying them must move to aim them. Ports built into the armor show only a plume.
 # Total main thrust matches MSP-02 (anime-strong); the split follows the nozzle sizes.
-const BACKPACK_EXHAUST := Vector3(0.0, -0.7, 0.7)
-const MAIN_GIMBAL := [25.0, 25.0, 0.0]   # pods hinge fore/aft only (one-plane vectoring)
+const CONE_3D := [30.0, 90.0, 90.0]
+const SOLE_3D := [20.0, 90.0, 90.0]
+const FORE_AFT := [25.0, 25.0, 0.0]      # 2D: swings fore/aft (about the port's sideways axis)
+const UP_DOWN := [20.0, 20.0, 0.0]       # 2D, for forward-facing ports
+const SIDE_SIDE := [20.0, 0.0, 20.0]     # 2D: swings left/right only
 const FIXED := [0.0, 0.0, 0.0]
 const MAIN_RATING_KN := 200.0
 const MAIN_DYNAMICS := {spool_up_time = 0.12, spool_down_time = 0.08, gimbal_rate_deg = 240.0}
 const VERNIER_DYNAMICS := {spool_up_time = 0.06, spool_down_time = 0.04, gimbal_rate_deg = 360.0}
 const THRUSTERS := [
-	["MainRU", "backpack", Vector3(1.25, 16.83, 3.05), BACKPACK_EXHAUST, 450.0, MAIN_GIMBAL, 14.0, 1.1],
-	["MainRL", "backpack", Vector3(1.25, 15.78, 2.83), BACKPACK_EXHAUST, 450.0, MAIN_GIMBAL, 14.0, 1.1],
-	["MainLU", "backpack", Vector3(-1.23, 16.83, 3.05), BACKPACK_EXHAUST, 450.0, MAIN_GIMBAL, 14.0, 1.1],
-	["MainLL", "backpack", Vector3(-1.23, 15.78, 2.83), BACKPACK_EXHAUST, 450.0, MAIN_GIMBAL, 14.0, 1.1],
-	["FootR", "foot.R", Vector3(4.2, 0.43, 0.38), Vector3(0, -1, 0), 300.0, FIXED, 11.0, 1.1],
-	["FootL", "foot.L", Vector3(-4.18, 0.43, 0.38), Vector3(0, -1, 0), 300.0, FIXED, 11.0, 1.1],
-	# Four small ports on top of the backpack's centre column; they fire up.
-	["TopA", "backpack", Vector3(0.0, 20.72, 5.36), Vector3(0, 1, 0), 40.0, FIXED, 3.0, 0.4],
-	["TopB", "backpack", Vector3(0.0, 20.58, 4.95), Vector3(0, 1, 0), 40.0, FIXED, 3.0, 0.4],
-	["TopC", "backpack", Vector3(0.0, 20.43, 4.54), Vector3(0, 1, 0), 40.0, FIXED, 3.0, 0.4],
-	["TopD", "backpack", Vector3(0.0, 20.29, 4.13), Vector3(0, 1, 0), 40.0, FIXED, 3.0, 0.4],
+	# Backpack mains, 2 per side stacked, firing back and down.
+	["MainRU", "backpack", Vector3(1.25, 16.5, 3.35), Vector3(0, -0.67, 0.74), 450.0, CONE_3D, 14.0, 1.1, true],
+	["MainRL", "backpack", Vector3(1.25, 15.46, 3.12), Vector3(0, -0.67, 0.74), 450.0, CONE_3D, 14.0, 1.1, true],
+	["MainLU", "backpack", Vector3(-1.23, 16.5, 3.35), Vector3(0, -0.67, 0.74), 450.0, CONE_3D, 14.0, 1.1, true],
+	["MainLL", "backpack", Vector3(-1.23, 15.46, 3.12), Vector3(0, -0.67, 0.74), 450.0, CONE_3D, 14.0, 1.1, true],
+	# Soles (the "toe" thrusters).
+	["SoleR", "foot.R", Vector3(4.25, 0.26, 0.37), Vector3(0, -1, 0), 250.0, SOLE_3D, 5.0, 0.8, false],
+	["SoleL", "foot.L", Vector3(-4.24, 0.26, 0.37), Vector3(0, -1, 0), 250.0, SOLE_3D, 5.0, 0.8, false],
+	# Behind each calf, mostly down and a little back.
+	["CalfR", "shin.R", Vector3(3.34, 5.16, 1.8), Vector3(0.17, -0.9, 0.41), 150.0, FORE_AFT, 8.0, 0.8, true],
+	["CalfL", "shin.L", Vector3(-3.32, 5.16, 1.8), Vector3(-0.17, -0.9, 0.41), 150.0, FORE_AFT, 8.0, 0.8, true],
+	# Shoulder armor, two each: up-and-out (pushes the suit down) and out-and-down.
+	["ShUpR", "shoulder.R", Vector3(4.79, 19.7, 0.45), Vector3(0.74, 0.67, 0.01), 70.0, FORE_AFT, 3.5, 0.5, false],
+	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 70.0, FORE_AFT, 3.5, 0.5, false],
+	["ShUpL", "shoulder.L", Vector3(-4.77, 19.7, 0.45), Vector3(-0.74, 0.67, 0.01), 70.0, FORE_AFT, 3.5, 0.5, false],
+	["ShOutL", "shoulder.L", Vector3(-4.93, 18.97, 0.44), Vector3(-0.95, -0.3, 0.01), 70.0, FORE_AFT, 3.5, 0.5, false],
+	# Chest vents, firing forward (push back / brake).
+	["ChestR", "chest", Vector3(1.31, 17.26, -2.15), Vector3(0.39, -0.24, -0.89), 80.0, UP_DOWN, 4.0, 0.5, false],
+	["ChestL", "chest", Vector3(-1.29, 17.26, -2.15), Vector3(-0.39, -0.24, -0.89), 80.0, UP_DOWN, 4.0, 0.5, false],
+	# Front of each shin, below the knee: centre, outer, inner; left/right swing only.
+	["ShinCR", "shin.R", Vector3(3.29, 6.96, -1.57), Vector3(0.24, -0.52, -0.82), 40.0, SIDE_SIDE, 3.0, 0.4, false],
+	["ShinOR", "shin.R", Vector3(4.36, 5.83, -0.13), Vector3(0.84, -0.15, -0.53), 40.0, SIDE_SIDE, 3.0, 0.4, false],
+	["ShinIR", "shin.R", Vector3(2.58, 5.39, -0.37), Vector3(-0.52, -0.49, -0.7), 40.0, SIDE_SIDE, 3.0, 0.4, false],
+	["ShinCL", "shin.L", Vector3(-3.28, 6.96, -1.57), Vector3(-0.24, -0.52, -0.82), 40.0, SIDE_SIDE, 3.0, 0.4, false],
+	["ShinOL", "shin.L", Vector3(-4.34, 5.83, -0.13), Vector3(-0.84, -0.15, -0.53), 40.0, SIDE_SIDE, 3.0, 0.4, false],
+	["ShinIL", "shin.L", Vector3(-2.56, 5.39, -0.37), Vector3(0.52, -0.49, -0.7), 40.0, SIDE_SIDE, 3.0, 0.4, false],
+	# Rear skirts, one each, back and slightly out.
+	["SkRearR", "skirt_rear.R", Vector3(1.78, 12.55, 2.45), Vector3(0.39, 0.13, 0.91), 60.0, FIXED, 3.5, 0.5, false],
+	["SkRearL", "skirt_rear.L", Vector3(-1.76, 12.55, 2.45), Vector3(-0.39, 0.12, 0.91), 60.0, FIXED, 3.5, 0.5, false],
+	# Side skirts, three small each: forward-out, back-out, out.
+	["SkSideFR", "skirt_side.R", Vector3(2.11, 15.13, -0.81), Vector3(0.54, 0.25, -0.81), 35.0, FIXED, 2.5, 0.4, false],
+	["SkSideBR", "skirt_side.R", Vector3(2.11, 15.13, 0.48), Vector3(0.54, 0.25, 0.81), 35.0, FIXED, 2.5, 0.4, false],
+	["SkSideOR", "skirt_side.R", Vector3(2.61, 14.71, -0.16), Vector3(1, 0.01, 0), 35.0, FIXED, 2.5, 0.4, false],
+	["SkSideFL", "skirt_side.L", Vector3(-2.09, 15.13, -0.81), Vector3(-0.54, 0.25, -0.81), 35.0, FIXED, 2.5, 0.4, false],
+	["SkSideBL", "skirt_side.L", Vector3(-2.09, 15.13, 0.48), Vector3(-0.54, 0.25, 0.81), 35.0, FIXED, 2.5, 0.4, false],
+	["SkSideOL", "skirt_side.L", Vector3(-2.59, 14.71, -0.16), Vector3(-1, 0.01, 0), 35.0, FIXED, 2.5, 0.4, false],
 ]
 
 # name, center, size
@@ -224,6 +254,7 @@ func _build_thrusters(root: Node3D) -> void:
 		node.set("plume_length", t[6])
 		node.set("nozzle_scale", t[7])
 		node.set("hud_label", _short_label(t[0]))
+		node.set("show_nozzle", t[8])
 
 
 func _build_flight_computer(root: Node3D) -> void:
@@ -283,8 +314,7 @@ func _build_loadout(root: Node3D) -> void:
 	_add(root, root, loadout)
 	loadout.skeleton = root.get_node(SKELETON)
 	for e in [["rx93_beam_rifle", &"hand.R", &"arm_r"], ["rx93_shield", &"forearm.L", &"arm_l"],
-			["rx93_hyper_bazooka", &"backpack", &""], ["rx93_beam_saber", &"backpack", &""],
-			["rx93_fin_funnels", &"backpack", &""]]:
+			["rx93_hyper_bazooka", &"backpack", &""], ["rx93_beam_saber", &"backpack", &""]]:
 		var eq: MsEquipment = load(EQUIPMENT + e[0] + ".tscn").instantiate()
 		_add(root, loadout, eq)
 		eq.mount_bone = e[1]
