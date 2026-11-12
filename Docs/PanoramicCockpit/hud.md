@@ -9,12 +9,28 @@ display, visible from any seat position and from outside through the open hatch.
 PanoramicHud (Node)
 └── HudViewport (SubViewport, 4096×2048, transparent)   ← equirectangular canvas
     ├── Silhouettes     outlines of nearby HudSilhouette nodes (e.g. the shield)
-    ├── Attitude        horizon ring (360°, heading marks) + pitch ladder, in the cockpit frame
-    ├── Boresight       body-axis reticle (rolls with the body)
-    ├── SuitAttitude    suit vs cockpit: big PITCH gauges 90° left/right (side view), small ROLL
-                        gauge below the reticle (rear view); circle = cockpit, line = suit
-    ├── FlightPath      prograde / retrograde markers + speed
-    ├── FlightData      SPD / G MS / G PLT / ROT / AMBAC, PROP / THR bars, FCS modes, cautions
+    ├── Attitude        pitch ladder (two unnumbered tick columns ±30° off the heading, with
+                        a pointer carrying the current pitch, and a highlight running up the
+                        ticks while climbing, down while descending); small attitude indicator at
+                        the zenith inside a numbered course ring at 28° elevation (translucent), with the
+                        HDG box on its pointer (horizon ring off, reserved)
+    ├── SuitAttitude    suit vs cockpit: the suit's horizontal plane as one double-rail line
+                        all the way round, open ahead between two accent arrowheads (the suit's
+                        nose is midway); PITCH rings 90° left/right with cockpit-level marks
+    ├── ControlCentre   V above and ^^ below the direction fly-by-wire "forward" pushes (the
+                        control law's pilot frame), empty in the middle
+    ├── FlightPath      prograde ○ / retrograde × inside a wide reticle (radial dashes 17° out,
+                        left and right quarters only), each with two wide bars of slanted stripes
+                        (out to the ladder, packed toward the middle); a highlight runs across
+                        them, outward ahead and inward behind; grows in above show_speed,
+                        shrinks away below hide_speed holding its last direction
+                        BOOST: faster, wider highlight, bars stretch; FULL: second highlight,
+                        accent tint, a kick flash outward on engaging. BRAKE: highlight turns
+                        inward, bars squeeze; HARD: stripes' lean flips, bars pulse
+    ├── ThrustCue       chevron columns inside both ladder columns while boosting (^ lit upward)
+                        or braking (v lit downward); doubled, faster, accent at FULL / HARD
+    ├── FlightData      left column: G MS / G PLT / ROT / AMBAC over boxed SPD and Mach (dim);
+                        non-default modes just inside the right ladder column; cautions
     ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
     └── Contacts        brackets for nodes in group `hud_contacts`
 ```
@@ -29,16 +45,23 @@ hud_uv = (fract(UV2.x + 0.5), 1 − UV2.y)     forward = canvas centre, wraps at
 So anything drawn at a direction lines up with the sensor image of that direction, with no
 extra projection.
 
-**Colours by role** (PanoramicHud style): green = flight symbology (horizon, ladder, flight path,
-speed), pale blue-white = the suit against the cockpit (boresight, suit attitude), violet = the
-suit's equipment (shield and weapon outlines), amber = contacts; caution amber, warning red.
+**Colours by role** (PanoramicHud style, a mostly white-grey panoramic HUD with colour reserved for
+what needs attention): off-white = flight symbology (flight path, speed, modes, control centre),
+pale steel blue = the pitch ladder, grey = scales and labels, translucent grey-white = the suit
+against the cockpit (suit line, side rings), pink-violet = accents (the suit line's arrowheads,
+the control centre's lower chevron), muted lavender = the suit's equipment (shield and weapon
+outlines), orange = contacts; caution yellow, warning red.
 `PanoramicHud.dimmed(c)` tones a role colour down for scales and labels. Every line and label gets
 a dark halo (`halo_color`, `halo_width`) so it reads against a sunlit planet without being brighter.
 
 **Modes** list only what differs from the defaults (attitude hold, horizon lock, normal movement):
 ROT RATE, HORIZON FREE, PRECISION / BOOST / BOOST FULL, BRAKE / BRAKE HARD, FCS OFF.
 
-**Attitude frame.** The horizon ring, pitch ladder and HDG/PIT/RLL readout all use
+**Course ring.** A latitude circle of the display frame (`course_elevation_deg`), so it's drawn
+straight from (azimuth, elevation) rather than as a patch: patch offsets use tan(), which would
+square off a ring 62° from its centre. Mark azimuth = bearing from the current heading.
+
+**Attitude frame.** The pitch ladder, course ring and HDG readout all use
 `hud.get_attitude_basis()`: up = the horizon the flight computer holds level to (horizon lock's
 up; the reference frame's up when it's off), north = the reference frame's −Z flattened onto it.
 Before, the ladder used the reference frame, the readout world axes and the lock its own up, so
@@ -46,8 +69,16 @@ the ladder sat ~10° off from what the suit held level.
 
 **Near the poles.** The equirectangular canvas stretches horizontally by 1/cos(elevation), so
 flat text thins toward the zenith: use `text_at()` for labels at canvas positions (it widens them
-back). Long marks run along great circles (ladder rungs keep their angular length up to 80°
-instead of shrinking with the latitude circle).
+back). Ladder columns run along meridians of the attitude frame (bearing ±`ladder_column_az_deg` from
+the heading), so they lean together toward the zenith; each tick runs along a great circle, so it
+keeps its angular length up to 85° instead of shrinking with the latitude circle.
+
+At the poles themselves (the zenith attitude indicator, centred on +90°) a whole canvas row
+is one point, so a line's canvas width no longer matches its width on the sphere: a radial tick
+would vanish. `patch(centre, up, true)` makes an **exact** patch: strokes are built as quads in
+degrees and every corner projected, text gets a transform from the projection's derivative
+(upright in the patch), and both are drawn on either side of the back seam. Use it only there; it
+has no antialiasing.
 
 World-anchored symbols (silhouettes, contact brackets) take their direction from the **sensor
 head** (`hud.get_view_origin()`), where the image is rendered from, not from the pilot's seat.
@@ -56,7 +87,7 @@ otherwise sit visibly off its place in the image.
 
 The canvas is laid out in the **display frame**, the screen's own orientation
 (`hud.get_display_basis()`, `hud.world_to_display()`). It differs from the suit's body when the
-cockpit gimbal turns the seat for thrust vectoring. That's why the boresight (body axis) can move
+cockpit gimbal turns the seat for thrust vectoring. That's why the suit line's opening (body axis) can move
 away from the canvas centre (cockpit forward).
 
 ### Writing a widget

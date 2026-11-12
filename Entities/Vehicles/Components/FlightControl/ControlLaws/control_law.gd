@@ -16,6 +16,15 @@ func get_mode_labels() -> PackedStringArray:
 	return PackedStringArray()
 
 
+## Override: boost / brake for the HUD this tick: 0 off, 1 on, 2 full (double-tapped).
+func get_boost_level() -> int:
+	return 0
+
+
+func get_brake_level() -> int:
+	return 0
+
+
 ## Body orientation relative to the pilot frame (body = pilot · offset). The
 ## cockpit counter-rotates by this. Identity for laws without auto-rotation.
 func get_pilot_offset() -> Quaternion:

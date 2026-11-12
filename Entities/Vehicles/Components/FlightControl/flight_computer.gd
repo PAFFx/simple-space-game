@@ -247,6 +247,15 @@ func get_mode_labels() -> PackedStringArray:
 	return control_law.get_mode_labels()
 
 
+## Boost / brake for the HUD: 0 off, 1 on, 2 full. 0 with the FCS off.
+func get_boost_level() -> int:
+	return control_law.get_boost_level() if fcs_enabled else 0
+
+
+func get_brake_level() -> int:
+	return control_law.get_brake_level() if fcs_enabled else 0
+
+
 # --- Private ---
 
 func _build_state(delta: float) -> void:

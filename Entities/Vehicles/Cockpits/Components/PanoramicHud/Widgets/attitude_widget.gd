@@ -3,24 +3,57 @@ extends HudWidget
 
 ## The cockpit's attitude against the HUD's attitude frame (the horizon the flight
 ## computer holds level to; see PanoramicHud):
-##   - a horizon ring with heading marks that wraps the whole 360° screen, carrying a
-##     PITCH | HEADING | ROLL box at the current heading (kept on screen at the edge
-##     when the horizon is out of view)
-##   - a pitch ladder ahead
-##   - a fighter-style bank scale under the reticle (dashes at 10/20/30/45/60°)
-##   - small attitude indicators overhead and at the feet, for when you look there
+##   - a pitch ladder: two tick columns far either side of the heading, along meridians of
+##     the attitude frame (so they lean together toward the zenith): ticks every 1/5/10°
+##     and a pointer riding at the cockpit's pitch, labelled with it; marks
+##     fade away from it. Climbing or descending, a highlight runs up or down the ticks,
+##     faster the faster the climb (as on the flight path bars)
+##   - a small attitude indicator straight overhead (cockpit +90°), marking the zenith
+##   - a course ring around it at course_elevation_deg: heading marks and numbers
+##     turning with the heading, read against a fixed mark at the cockpit's forward,
+##     carrying a HDG box
+##   - optionally the 360° horizon ring with heading marks (off: reserved for other use)
 
-@export var ladder_step_deg: int = 10
-@export var ladder_half_span_deg: float = 6.0
-@export var ladder_gap_deg: float = 2.0
+## Pitch ladder: column bearing either side of the heading; ticks every 1°, longer every
+## ladder_step_deg, longest every ladder_label_step_deg.
+@export var ladder_column_az_deg: float = 30.0
+@export var ladder_step_deg: int = 5
+@export var ladder_label_step_deg: int = 10
+## Tick lengths, deg: 1°, step, numbered, horizon.
+@export var ladder_tick_deg := Vector4(0.35, 0.8, 1.4, 2.4)
+@export var ladder_max_deg: int = 85
+## Marks this far (deg) from the cockpit's pitch stay full strength, then fade over
+## ladder_fade_deg down to ladder_fade_floor.
+@export var ladder_focus_deg: float = 25.0
+@export var ladder_fade_deg: float = 30.0
+@export var ladder_fade_floor: float = 0.3
+## Climb highlight: shown above climb_show_speed (m/s along the attitude frame's up), gone
+## below climb_hide_speed; runs through the band within climb_span_deg of the cockpit's
+## pitch at the flight path's rate (sweeps/s, base + per decade of climb speed).
+@export var climb_show_speed: float = 2.0
+@export var climb_hide_speed: float = 1.0
+@export var climb_reveal_time: float = 0.45
+@export var climb_span_deg: float = 35.0
+@export var climb_width_deg: float = 5.0
+@export var climb_sweep_base: float = 0.2
+@export var climb_sweep_per_decade: float = 1.2
+@export var climb_sweep_max: float = 4.0
 @export var sample_step_deg: float = 2.0
-## The readout box stays within this many degrees above or below the cockpit's forward.
-@export var readout_clamp_deg: float = 24.0
-@export var bank_radius_deg: float = 9.0
-## Overhead / feet indicators: elevations and radius, deg.
-@export var aux_top_elevation_deg: float = 62.0
-@export var aux_bottom_elevation_deg: float = -27.0  # above the centre display (the floor is hidden by the cockpit)
+@export var show_horizon_ring := false
+## Overhead attitude indicator radius, deg.
 @export var aux_radius_deg: float = 4.5
+## Course ring elevation in the cockpit frame: inside the default view (75° vertical FOV)
+## with room for the HDG box above it, clear of the data blocks below.
+@export var course_elevation_deg: float = 28.0
+## Opacity of the ring, its marks and numbers (the HDG box and pointer stay full).
+@export var course_alpha: float = 0.55
+@export var course_label_offset_deg: float = 1.6
+
+var _climb_on := false
+var _climb_sign := 1.0
+var _climb_reveal := 0.0
+var _climb_phase := 0.0
+var _last_ms := -1
 
 
 func draw_widget() -> void:
@@ -34,21 +67,22 @@ func draw_widget() -> void:
 	flat = flat.normalized()
 	var right := flat.cross(up).normalized()
 
-	_draw_horizon_ring(ref)
-	for e in range(-90 + ladder_step_deg, 90, ladder_step_deg):
-		if e != 0:
-			_draw_ladder_rung(flat, right, up, e)
+	if show_horizon_ring:
+		_draw_horizon_ring(ref)
 
 	# Cockpit attitude in the reference frame: heading, pitch, bank (+ = right wing down).
 	var local := ref.inverse() * forward
 	var heading := wrapf(rad_to_deg(atan2(local.x, -local.z)), 0.0, 360.0)
 	var pitch := rad_to_deg(asin(clampf(local.y, -1.0, 1.0)))
+	_update_climb(up)
+	for side in [-1.0, 1.0]:
+		_draw_ladder_column(flat, right, up, side, pitch)
 	var up_d := hud.world_to_display(up)
 	var bank := rad_to_deg(atan2(up_d.x, up_d.y))
-	_draw_readout(flat, heading, pitch, bank)
-	_draw_bank_scale(bank)
-	for s in [1.0, -1.0]:
-		_draw_aux_horizon(s, pitch, bank)
+	_draw_readout(heading)
+	# Up is behind you when you look straight up.
+	_draw_aux_horizon(patch(Vector3.UP, Vector3.BACK, true), pitch, bank)
+	_draw_course_ring(heading)
 
 
 func _draw_horizon_ring(ref: Basis) -> void:
@@ -72,86 +106,167 @@ func _draw_horizon_ring(ref: Basis) -> void:
 			text_at(base - Vector2(0, tick + 6.0), "%03d" % deg, hud.dim_color, HORIZONTAL_ALIGNMENT_CENTER, 16)
 
 
-func _draw_ladder_rung(flat: Vector3, right: Vector3, up: Vector3, pitch_deg: int) -> void:
-	var e := deg_to_rad(float(pitch_deg))
-	var color := hud.primary_color if absi(pitch_deg) <= 30 else hud.dim_color
-	# Rungs run along a great circle through the rung's centre, so they keep their
-	# angular length up to the zenith instead of shrinking with the latitude circle.
-	var centre := flat * cos(e) + up * sin(e)
-	for side in [-1.0, 1.0]:
-		var points := PackedVector2Array()
-		var a := ladder_gap_deg
-		while a <= ladder_half_span_deg + 0.001:
-			var s := deg_to_rad(a * side)
-			points.append(hud.world_dir_to_canvas(centre * cos(s) + right * sin(s)))
-			a += 1.0
-		if pitch_deg < 0:
-			# Dashed below the reference plane, as on aircraft ladders.
-			for i in range(1, points.size(), 2):
-				line(points[i - 1], points[i], color)
+## One column of the ladder. side: -1 left, +1 right. Ticks reach outward from the column
+## line, the pitch pointer and its value sit inward. Below the horizon the step and numbered ticks
+## are split in two, as on aircraft ladders.
+func _draw_ladder_column(flat: Vector3, right: Vector3, up: Vector3, side: float,
+		pitch: float) -> void:
+	var c := hud.ladder_color
+	var a := deg_to_rad(ladder_column_az_deg) * side
+	var bearing := flat * cos(a) + right * sin(a)
+	var outward := (-flat * sin(a) + right * cos(a)) * side
+
+	for pitch_deg in range(-ladder_max_deg, ladder_max_deg + 1):
+		var base := _ladder_point(bearing, up, pitch_deg)
+		var fade := _ladder_fade(pitch_deg, pitch)
+		var glow := _climb_glow(pitch_deg, pitch)
+		var labelled := pitch_deg % ladder_label_step_deg == 0
+		var stepped := pitch_deg % ladder_step_deg == 0
+		if pitch_deg == 0:
+			_ladder_tick(base, outward, 0.0, ladder_tick_deg.w, _lit(c, fade, glow), 2.0)
+		elif labelled or stepped:
+			var length := ladder_tick_deg.z if labelled else ladder_tick_deg.y
+			var color := _lit(c, fade * (1.0 if labelled else 0.75), glow)
+			var w := 2.0 if labelled else 1.5
+			if pitch_deg < 0:
+				_ladder_tick(base, outward, 0.0, length * 0.4, color, w)
+				_ladder_tick(base, outward, length * 0.6, length, color, w)
+			else:
+				_ladder_tick(base, outward, 0.0, length, color, w)
 		else:
-			seam_safe_polyline(points, color)
-		var tip := points[points.size() - 1]
-		var drop := px(0.6) * (1.0 if pitch_deg > 0 else -1.0)
-		line(tip, tip + Vector2(0, drop), color)
-		var label_pos := tip + Vector2(px(0.5) * side, 6.0)
-		var align := HORIZONTAL_ALIGNMENT_LEFT if side > 0 else HORIZONTAL_ALIGNMENT_RIGHT
-		text_at(label_pos, str(absi(pitch_deg)), color, align, 15)
+			_ladder_tick(base, outward, 0.0, ladder_tick_deg.x, _lit(c, fade * 0.6, glow), 1.2, false)
+
+	# Pointer at the cockpit's pitch, aimed at the ticks from inside.
+	var at := _ladder_point(bearing, up, pitch)
+	var p := patch(hud.world_to_display(at), hud.world_to_display(up))
+	var s := side
+	var dim := PanoramicHud.dimmed(hud.primary_color)
+	patch_polygon(p, PackedVector2Array([Vector2(-0.2 * s, 0), Vector2(-0.95 * s, 0.4),
+			Vector2(-0.95 * s, -0.4)]), dim)
+	var align := HORIZONTAL_ALIGNMENT_RIGHT if side > 0 else HORIZONTAL_ALIGNMENT_LEFT
+	patch_text(p, Vector2(-1.25 * s, 0.45), "%+d" % roundi(pitch), dim, align, 16)
 
 
-## PITCH | HEADING | ROLL box riding just under the horizon at the current heading.
-func _draw_readout(flat: Vector3, heading: float, pitch: float, bank: float) -> void:
-	var d := hud.world_to_display(flat)
-	var angles := HudProjector.direction_to_angles(d)
-	var limit := deg_to_rad(readout_clamp_deg)
-	angles.y = clampf(angles.y, -limit, limit)
-	var at := Vector3(sin(angles.x) * cos(angles.y), sin(angles.y), -cos(angles.x) * cos(angles.y))
-	var p := patch(at, Vector3.UP)
+## Climb rate along the attitude frame's up: shows / hides the highlight (holding its
+## direction while it fades) and runs it at a rate that rises with the climb speed.
+func _update_climb(up: Vector3) -> void:
+	var now := Time.get_ticks_msec()
+	var dt := 0.0 if _last_ms < 0 else (now - _last_ms) / 1000.0
+	_last_ms = now
+	var fc := hud.flight_computer
+	var climb := fc.state.linear_velocity.dot(up) if fc != null else 0.0
+	var speed := absf(climb)
+	if speed > climb_show_speed:
+		_climb_on = true
+	elif speed < climb_hide_speed:
+		_climb_on = false
+	if _climb_on:
+		_climb_sign = signf(climb)
+	_climb_reveal = move_toward(_climb_reveal, 1.0 if _climb_on else 0.0,
+			dt / maxf(climb_reveal_time, 0.01))
+	var sweep := minf(climb_sweep_base + climb_sweep_per_decade * log(speed + 1.0) / log(10.0),
+			climb_sweep_max)
+	_climb_phase = fposmod(_climb_phase + dt * sweep, 1.0)
+
+
+## 0..1 highlight on the tick at pitch_deg: a soft spot running through the band around
+## the cockpit's pitch, upward while climbing, downward while descending, wrapping round.
+func _climb_glow(pitch_deg: float, pitch: float) -> float:
+	if _climb_reveal <= 0.0:
+		return 0.0
+	var off := pitch_deg - pitch
+	if absf(off) > climb_span_deg:
+		return 0.0
+	var band := climb_span_deg * 2.0
+	var head := (_climb_phase * band - climb_span_deg) * _climb_sign
+	var d := absf(off - head)
+	d = minf(d, band - d)
+	return exp(-pow(d / climb_width_deg, 2.0)) * ease(_climb_reveal, -2.0)
+
+
+## Ladder colour at `strength`, brightened toward the HUD's primary colour by `glow`.
+func _lit(c: Color, strength: float, glow: float) -> Color:
+	var lit := c.lerp(hud.primary_color, glow)
+	lit.a = lerpf(c.a * strength, hud.primary_color.a, glow)
+	return lit
+
+
+## Column point at a pitch (deg) along the column's meridian.
+func _ladder_point(bearing: Vector3, up: Vector3, pitch_deg: float) -> Vector3:
+	var e := deg_to_rad(pitch_deg)
+	return bearing * cos(e) + up * sin(e)
+
+
+## Strength of a mark by its distance from the cockpit's pitch.
+func _ladder_fade(pitch_deg: float, pitch: float) -> float:
+	var off := absf(pitch_deg - pitch) - ladder_focus_deg
+	return lerpf(1.0, ladder_fade_floor, clampf(off / ladder_fade_deg, 0.0, 1.0))
+
+
+## Tick from `from` to `to` deg outward of `base`, along a great circle so it keeps its
+## length toward the zenith.
+func _ladder_tick(base: Vector3, outward: Vector3, from: float, to: float, color: Color,
+		width: float, halo := true) -> void:
+	var pts := PackedVector2Array()
+	var steps := 3
+	for k in steps + 1:
+		var t := deg_to_rad(lerpf(from, to, float(k) / steps))
+		pts.append(hud.world_dir_to_canvas(base * cos(t) + outward * sin(t)))
+	seam_safe_polyline(pts, color, width, halo)
+
+
+## HDG box on the course ring's pointer, inside the ring.
+func _draw_readout(heading: float) -> void:
+	var p := patch(_ring_dir(0.0, deg_to_rad(course_elevation_deg)), Vector3.UP)
 	var c := hud.primary_color
 	var dim := PanoramicHud.dimmed(c)
 	var w := 2.2
-	var h := 0.75
-	var y := -2.6  # under the horizon line, clear of the flight path and boresight
-	patch_line(p, Vector2(0, 0), Vector2(0, y + h), dim, 1.5, 1)
+	var h := 1.0
+	var y := 1.4 + h  # above the pointer (0.15..1.0)
+	patch_line(p, Vector2(0, 1.0), Vector2(0, y - h), dim, 1.5, 1)
 	patch_line(p, Vector2(-w, y + h), Vector2(w, y + h), c, 0.0, 4)
 	patch_line(p, Vector2(-w, y - h), Vector2(w, y - h), c, 0.0, 4)
 	patch_line(p, Vector2(-w, y + h), Vector2(-w, y - h), c, 0.0, 1)
 	patch_line(p, Vector2(w, y + h), Vector2(w, y - h), c, 0.0, 1)
-	patch_text(p, Vector2(0, y - 0.45), "%03d" % (roundi(heading) % 360), c, HORIZONTAL_ALIGNMENT_CENTER, 24)
-	patch_text(p, Vector2(-w - 0.5, y - 0.4), "%+d" % roundi(pitch), c, HORIZONTAL_ALIGNMENT_RIGHT, 20)
-	patch_text(p, Vector2(w + 0.5, y - 0.4), "R%+d" % roundi(bank), c, HORIZONTAL_ALIGNMENT_LEFT, 20)
-	patch_text(p, Vector2(-w - 0.5, y - 1.9), "PIT", dim, HORIZONTAL_ALIGNMENT_RIGHT, 13)
-	patch_text(p, Vector2(0, y - 1.9), "HDG", dim, HORIZONTAL_ALIGNMENT_CENTER, 13)
-	patch_text(p, Vector2(w + 0.5, y - 1.9), "ROLL", dim, HORIZONTAL_ALIGNMENT_LEFT, 13)
+	patch_text(p, Vector2(0, y - 0.7), "%03d" % (roundi(heading) % 360), c, HORIZONTAL_ALIGNMENT_CENTER, 24)
+	patch_text(p, Vector2(0, y + h + 0.45), "HDG", dim, HORIZONTAL_ALIGNMENT_CENTER, 13)
 
 
-## Arc of dashes below the reticle (fixed to the cockpit) and a pointer at the bank.
-func _draw_bank_scale(bank: float) -> void:
-	var p := patch(Vector3.FORWARD, Vector3.UP)
-	var c := hud.primary_color
+## Ring of heading marks on a circle of constant elevation, turning with the heading
+## (azimuth = bearing from the current heading), numbered every 30°, against a fixed
+## pointer at the cockpit's forward. Marks hang below the ring, away from the zenith.
+func _draw_course_ring(heading: float) -> void:
+	var full := hud.primary_color
+	var c := Color(full, full.a * course_alpha)
 	var dim := PanoramicHud.dimmed(c)
-	var r := bank_radius_deg
-	for deg in [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60]:
-		var a := deg_to_rad(-90.0 + deg)
-		var dir := Vector2(cos(a), sin(a))
-		var long: bool = deg % 30 == 0
-		patch_line(p, dir * r, dir * (r + (1.2 if long else 0.6)), c if long else dim, 0.0, 1)
-	# Dashes between the marks, like a fighter's bank scale.
-	for k in range(-58, 60, 4):
-		var a := deg_to_rad(-90.0 + k)
-		patch_line(p, Vector2(cos(a), sin(a)) * r, Vector2(cos(a), sin(a)) * (r + 0.25), dim, 1.5, 1)
-	var b := deg_to_rad(-90.0 + clampf(bank, -70.0, 70.0))
-	var dir := Vector2(cos(b), sin(b))
-	var across := Vector2(-dir.y, dir.x)
-	patch_polygon(p, PackedVector2Array([dir * (r - 0.15), dir * (r - 1.1) + across * 0.5,
-			dir * (r - 1.1) - across * 0.5]), c)
+	var el := deg_to_rad(course_elevation_deg)
+	var ring := PackedVector2Array()
+	var az := -180.0
+	while az <= 180.0:
+		ring.append(hud.projector.angles_to_canvas(deg_to_rad(az), el))
+		az += sample_step_deg * 0.5
+	seam_safe_polyline(ring, dim, 1.5, false)
+	for deg in range(0, 360, 10):
+		var p := patch(_ring_dir(deg_to_rad(deg - heading), el), Vector3.UP)
+		var major := deg % 30 == 0
+		var tick := 0.9 if major else 0.45
+		patch_line(p, Vector2.ZERO, Vector2(0, -tick), c if major else dim, 0.0, 1)
+		if major:
+			patch_text(p, Vector2(0, -tick - course_label_offset_deg), "%03d" % deg, c,
+					HORIZONTAL_ALIGNMENT_CENTER, 18)
+	var mark := patch(_ring_dir(0.0, el), Vector3.UP)
+	patch_polygon(mark, PackedVector2Array([Vector2(0, 0.15), Vector2(-0.5, 1.0),
+			Vector2(0.5, 1.0)]), full)
+
+
+## Display-frame direction at azimuth (rad, + = right) and elevation (rad).
+func _ring_dir(azimuth: float, elevation: float) -> Vector3:
+	return Vector3(sin(azimuth) * cos(elevation), sin(elevation), -cos(azimuth) * cos(elevation))
 
 
 ## A small attitude indicator: the horizon line inside a ring, shifted by pitch and
-## turned by bank, as on an aircraft's attitude instrument. side: +1 overhead, -1 at the feet.
-func _draw_aux_horizon(side: float, pitch: float, bank: float) -> void:
-	var e := deg_to_rad(aux_top_elevation_deg if side > 0.0 else aux_bottom_elevation_deg)
-	var p := patch(Vector3(0, sin(e), -cos(e)), Vector3.UP)
+## turned by bank, as on an aircraft's attitude instrument.
+func _draw_aux_horizon(p: Patch, pitch: float, bank: float) -> void:
 	var c := hud.primary_color
 	var dim := PanoramicHud.dimmed(c)
 	var r := aux_radius_deg

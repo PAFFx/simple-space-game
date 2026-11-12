@@ -19,20 +19,24 @@ extends Node
 
 @export_group("Style")
 ## One colour per kind of information, so each reads apart at a glance:
-## flight symbology (horizon, ladder, flight path, speed)...
-@export var primary_color := Color(0.42, 1.0, 0.58, 0.95)
-@export var dim_color := Color(0.42, 1.0, 0.58, 0.7)
-## ...the suit's orientation against the cockpit (boresight, suit attitude gauges)...
-@export var suit_color := Color(0.78, 0.86, 1.0, 0.9)
+## flight symbology (horizon, flight path, speed)...
+@export var primary_color := Color(0.88, 0.91, 0.93, 0.92)
+@export var dim_color := Color(0.68, 0.72, 0.76, 0.7)
+## ...the pitch ladder, a pale steel blue kept quieter than the symbols over it...
+@export var ladder_color := Color(0.58, 0.72, 0.82, 0.8)
+## ...the suit's orientation against the cockpit (suit line, side rings)...
+@export var suit_color := Color(0.84, 0.87, 0.9, 0.55)
+## ...its accent: the arrowheads that mark where the suit points...
+@export var suit_accent_color := Color(0.9, 0.42, 0.66, 0.9)
 ## ...the suit's own equipment (shield and weapon outlines)...
-@export var equipment_color := Color(0.88, 0.56, 1.0, 0.9)
+@export var equipment_color := Color(0.74, 0.7, 0.86, 0.85)
 ## ...and other objects (contacts).
-@export var contact_color := Color(1.0, 0.82, 0.32, 0.95)
-@export var caution_color := Color(1.0, 0.72, 0.2, 0.95)
+@export var contact_color := Color(1.0, 0.62, 0.22, 0.95)
+@export var caution_color := Color(1.0, 0.86, 0.3, 0.95)
 @export var warning_color := Color(1.0, 0.25, 0.2, 0.95)
 ## Dark edge under every line and label, so symbols read against bright backgrounds
 ## (a sunlit planet) without being made brighter or thicker.
-@export var halo_color := Color(0.0, 0.02, 0.03, 0.6)
+@export var halo_color := Color(0.0, 0.0, 0.0, 0.55)
 @export var halo_width: float = 3.0
 @export var line_width: float = 2.5
 @export var font_size: int = 18

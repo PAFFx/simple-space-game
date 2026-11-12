@@ -244,6 +244,14 @@ func get_mode_labels() -> PackedStringArray:
 	return labels
 
 
+func get_boost_level() -> int:
+	return 2 if _last_boost_full else (1 if _last_boost else 0)
+
+
+func get_brake_level() -> int:
+	return 2 if _last_brake_full else (1 if _last_brake else 0)
+
+
 ## Auto-rotation limit for this tick, deg (0 = off).
 func _offset_limit_deg(command: PilotCommand) -> float:
 	if command.boost_full or (command.brake_full and not precision):

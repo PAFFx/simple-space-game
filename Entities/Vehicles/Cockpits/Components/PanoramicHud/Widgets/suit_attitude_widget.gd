@@ -4,21 +4,32 @@ extends HudWidget
 ## The suit's orientation against the cockpit (which auto-rotation can lean or roll
 ## away from the suit):
 ##
-##   90° left / right   side-view PITCH dials: a segmented ring around the long
-##                      cockpit-level bar, with a pointer on the ring at the suit's nose
-##   ahead              two split bars either side of the boresight, rolled and lifted
-##                      with the suit: its wings, read against the cockpit's horizon
+##   suit line          the suit's horizontal plane (its forward and right axes) as one
+##                      double-rail great circle all the way round, open ahead: ahead it
+##                      tilts with the suit's roll and lifts with its pitch, beside you
+##                      it slopes with the pitch, side-on
+##   arrowheads         at the edges of the opening, pointing in; midway between them
+##                      is the suit's nose
+##   90° left / right   segmented rings with cockpit-level marks to read the slope
+##                      against, and the suit's PITCH
 ##
 ## Mostly level; they come alive when auto-rotation leans or rolls the suit.
 
-@export var side_azimuth_deg: float = 90.0
 @export var side_radius_deg: float = 13.0
 @export var ring_segments: int = 36
-## Front bars: from bar_from_deg to bar_to_deg either side of the boresight.
-@export var bar_from_deg: float = 7.5
-@export var bar_to_deg: float = 16.5
-## Below this the readouts are drawn dim.
+## Half the opening ahead, deg along the suit line from its nose to the arrow tips.
+@export var front_gap_deg: float = 14.0
+## Rail half-spacing, deg; the rails go dim behind this bearing from the nose.
+@export var rail_offset_deg: float = 0.3
+@export var rail_bright_deg: float = 100.0
+@export var sample_step_deg: float = 1.5
+## Below this the pitch readouts are drawn dim.
 @export var active_deg: float = 1.0
+
+## Arrowhead size: 1 = 2.6° long; the rails start where it ends.
+@export var arrow_scale: float = 1.7
+
+const ARROW_LEN := 2.6
 
 
 func draw_widget() -> void:
@@ -29,24 +40,91 @@ func draw_widget() -> void:
 	var rel := display.inverse() * body
 	var fwd := rel * Vector3.FORWARD
 	var pitch := atan2(fwd.y, -fwd.z)
-	var right := rel * Vector3.RIGHT
-	var roll := atan2(-right.y, right.x)  # + = rolled right (right shoulder down)
 
-	_side_dial(-1.0, pitch)
-	_side_dial(1.0, pitch)
-	_front_bars(rel, roll)
+	_suit_line(rel)
+	for side in [-1.0, 1.0]:
+		_arrowhead(rel, side)
+		_side_ring(side, pitch)
 
 
-## side: -1 = left of the pilot, +1 = right. The suit's nose is toward the front.
-func _side_dial(side: float, pitch: float) -> void:
-	var centre := Vector3(side, 0, 0)
-	var p := patch(centre, Vector3.UP)
+## Direction on the suit line, `bearing` rad from the suit's nose (+ = right), lifted
+## `lift` rad along the suit's up. Display frame.
+func _line_dir(rel: Basis, bearing: float, lift: float) -> Vector3:
+	var flat := Vector3(sin(bearing), 0.0, -cos(bearing)) * cos(lift)
+	return rel * (flat + Vector3.UP * sin(lift))
+
+
+## Two rails from the arrow tails round the back, ticks hanging below the lower rail.
+func _suit_line(rel: Basis) -> void:
+	var c := hud.suit_color
+	var dim := PanoramicHud.dimmed(c)
+	var faint := Color(c, c.a * 0.4)
+	var start := front_gap_deg + ARROW_LEN * arrow_scale
+	var lift := deg_to_rad(rail_offset_deg)
+	for s in [-1.0, 1.0]:
+		for y in [lift, -lift]:
+			var near := PackedVector2Array()
+			var far := PackedVector2Array()
+			var b := start
+			while b <= 180.0:
+				var at := hud.projector.direction_to_canvas(_line_dir(rel, deg_to_rad(b * s), y))
+				# Overlap one sample so the bright and dim parts join.
+				if b <= rail_bright_deg + sample_step_deg:
+					near.append(at)
+				if b >= rail_bright_deg - sample_step_deg:
+					far.append(at)
+				b = minf(b + sample_step_deg, 180.0) if b < 180.0 else 181.0
+			seam_safe_polyline(near, c, 1.5, false)
+			seam_safe_polyline(far, dim, 1.2, false)
+		# Faint wide band between the rails, in front.
+		var band := PackedVector2Array()
+		var b2 := start
+		while b2 <= rail_bright_deg:
+			band.append(hud.projector.direction_to_canvas(_line_dir(rel, deg_to_rad(b2 * s), 0.0)))
+			b2 += sample_step_deg
+		seam_safe_polyline(band, Color(c, c.a * 0.22), rail_offset_deg * 2.0 * hud.projector.px_per_deg, false)
+		# Ticks every 5°, longer every 30°.
+		var k := ceili(start / 5.0) * 5
+		while k < 180:
+			var long := k % 30 == 0
+			var color := (c if k <= rail_bright_deg else dim) if long else faint
+			var a := deg_to_rad(float(k) * s)
+			var depth := deg_to_rad(0.75 if long else 0.4)
+			line(hud.projector.direction_to_canvas(_line_dir(rel, a, -lift)),
+					hud.projector.direction_to_canvas(_line_dir(rel, a, -lift - depth)), color, 1.5, false)
+			k += 5
+
+
+## Arrowhead at the edge of the opening, pointing at the nose: a tinted, outlined
+## pentagon with a chevron inside, and a small accent chevron just ahead of it.
+func _arrowhead(rel: Basis, side: float) -> void:
+	var p := patch(_line_dir(rel, deg_to_rad(front_gap_deg * side), 0.0), rel * Vector3.UP)
+	var accent := hud.suit_accent_color
+	var c := hud.suit_color
+	# u = distance outward from the tip along the line, v = up.
+	var k := arrow_scale
+	var pt := func(u: float, v: float) -> Vector2: return Vector2(u * side, v) * k
+	var shape := PackedVector2Array([pt.call(0.0, 0.0), pt.call(1.1, 0.85),
+			pt.call(ARROW_LEN, 0.85), pt.call(ARROW_LEN, -0.85), pt.call(1.1, -0.85)])
+	patch_polygon(p, shape, Color(accent, accent.a * 0.28))
+	for i in shape.size():
+		patch_line(p, shape[i], shape[(i + 1) % shape.size()], accent, 2.0, 3)
+	# Inner chevron, pointing in.
+	patch_line(p, pt.call(1.7, 0.45), pt.call(1.0, 0.0), c, 2.0, 2)
+	patch_line(p, pt.call(1.0, 0.0), pt.call(1.7, -0.45), c, 2.0, 2)
+	# Accent chevron ahead of the tip.
+	patch_line(p, pt.call(-0.35, 0.6), pt.call(-0.95, 0.0), accent, 2.5, 2)
+	patch_line(p, pt.call(-0.95, 0.0), pt.call(-0.35, -0.6), accent, 2.5, 2)
+
+
+## side: -1 = left of the pilot, +1 = right. The suit line runs through the centre;
+## the marks at the ring's front and back are cockpit level.
+func _side_ring(side: float, pitch: float) -> void:
+	var p := patch(Vector3(side, 0, 0), Vector3.UP)
 	var r := side_radius_deg
 	var c := hud.suit_color
 	var dim := PanoramicHud.dimmed(c)
 	var faint := Color(c, c.a * 0.45)
-	# Facing right the front is to the patch's left, facing left to its right.
-	var front := -side
 
 	# Dotted outer ring.
 	for i in 72:
@@ -61,41 +139,10 @@ func _side_dial(side: float, pitch: float) -> void:
 			Vector2(cos(a0), sin(a0)) * r * 0.86, Vector2(cos(a0), sin(a0)) * r,
 			Vector2(cos(a1), sin(a1)) * r, Vector2(cos(a1), sin(a1)) * r * 0.86,
 		]), faint)
-	# Long cockpit-level double bar, split around the centre.
+	# Cockpit-level marks just outside the ring, front and back.
 	for s in [-1.0, 1.0]:
-		for y in [0.18, -0.18]:
-			patch_line(p, Vector2(1.4 * s, y), Vector2(r * 1.65 * s, y), dim, 1.5, 8)
-		for k in range(2, int(r * 1.6), 2):
-			patch_line(p, Vector2(k * s, 0.18), Vector2(k * s, 0.6 if k % 6 == 0 else 0.35), dim, 1.5, 1)
-	patch_arc(p, Vector2.ZERO, 1.0, 0.0, TAU, dim, 1.5, 16)
+		patch_line(p, Vector2(r * 1.05 * s, 0), Vector2(r * 1.25 * s, 0), dim, 2.0, 1)
 
-	# The suit: a line through the centre at its pitch and a pointer on the ring at its nose.
 	var active := absf(rad_to_deg(pitch)) >= active_deg
-	var sc := c if active else dim
-	var nose := Vector2(cos(pitch) * front, sin(pitch))
-	patch_line(p, -nose * r * 0.8, nose * r * 0.8, sc, 0.0, 8)
-	var tip := nose * r * 1.12
-	var across := Vector2(-nose.y, nose.x)
-	patch_polygon(p, PackedVector2Array([tip, nose * r * 0.9 + across * 1.1, nose * r * 0.9 - across * 1.1]), sc)
-	patch_text(p, Vector2(0, -r * 1.5), "PITCH %+d°" % roundi(rad_to_deg(pitch)), sc,
-			HORIZONTAL_ALIGNMENT_CENTER, 22)
-
-
-## Split bars on the suit's body axis, along its right and up (so they roll and lift with it).
-func _front_bars(rel: Basis, roll: float) -> void:
-	var p := patch(rel * Vector3.FORWARD, rel * Vector3.UP)
-	var c := hud.suit_color
-	var dim := PanoramicHud.dimmed(c)
-	for s in [-1.0, 1.0]:
-		for y in [0.16, -0.16]:
-			patch_line(p, Vector2(bar_from_deg * s, y), Vector2(bar_to_deg * s, y), c, 2.0, 8)
-		for k in range(int(bar_from_deg) + 2, int(bar_to_deg), 2):
-			patch_line(p, Vector2(k * s, -0.16), Vector2(k * s, -0.5), dim, 1.5, 1)
-		# Diamond at the inner end, pointing at the boresight.
-		var x: float = bar_from_deg * s
-		patch_polygon(p, PackedVector2Array([
-			Vector2(x - 0.55 * s, 0), Vector2(x, 0.4), Vector2(x + 0.55 * s, 0), Vector2(x, -0.4),
-		]), c)
-	var active := absf(rad_to_deg(roll)) >= active_deg
-	patch_text(p, Vector2(bar_to_deg + 0.6, 0.35), "%+d°" % roundi(rad_to_deg(roll)),
-			c if active else dim, HORIZONTAL_ALIGNMENT_LEFT, 16)
+	patch_text(p, Vector2(0, -r * 1.5), "PITCH %+d°" % roundi(rad_to_deg(pitch)),
+			c if active else dim, HORIZONTAL_ALIGNMENT_CENTER, 22)

@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/panoramic_hud.gd" id="1_hud"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/attitude_widget.gd" id="2_att"]
-[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/boresight_widget.gd" id="3_bore"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/flight_path_widget.gd" id="4_fpm"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/flight_data_widget.gd" id="5_data"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/contacts_widget.gd" id="7_cts"]
@@ -12,6 +11,10 @@
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/suit_attitude_widget.gd" id="9_suit"]
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/hatch_widget.gd" id="10_hatch"]
+
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/control_centre_widget.gd" id="11_ctl"]
+
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/thrust_cue_widget.gd" id="12_cue"]
 
 [node name="PanoramicHud" type="Node"]
 script = ExtResource("1_hud")
@@ -28,14 +31,17 @@ script = ExtResource("8_sil")
 [node name="Attitude" type="Node2D" parent="HudViewport"]
 script = ExtResource("2_att")
 
-[node name="Boresight" type="Node2D" parent="HudViewport"]
-script = ExtResource("3_bore")
-
 [node name="SuitAttitude" type="Node2D" parent="HudViewport"]
 script = ExtResource("9_suit")
 
+[node name="ControlCentre" type="Node2D" parent="HudViewport"]
+script = ExtResource("11_ctl")
+
 [node name="FlightPath" type="Node2D" parent="HudViewport"]
 script = ExtResource("4_fpm")
+
+[node name="ThrustCue" type="Node2D" parent="HudViewport"]
+script = ExtResource("12_cue")
 
 [node name="FlightData" type="Node2D" parent="HudViewport"]
 script = ExtResource("5_data")
