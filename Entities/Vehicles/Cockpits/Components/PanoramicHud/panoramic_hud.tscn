@@ -5,7 +5,6 @@
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/boresight_widget.gd" id="3_bore"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/flight_path_widget.gd" id="4_fpm"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/flight_data_widget.gd" id="5_data"]
-[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/thruster_status_widget.gd" id="6_thr"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/contacts_widget.gd" id="7_cts"]
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/silhouette_widget.gd" id="8_sil"]
@@ -39,8 +38,6 @@ script = ExtResource("4_fpm")
 [node name="FlightData" type="Node2D" parent="HudViewport"]
 script = ExtResource("5_data")
 
-[node name="ThrusterStatus" type="Node2D" parent="HudViewport"]
-script = ExtResource("6_thr")
 
 [node name="Contacts" type="Node2D" parent="HudViewport"]
 script = ExtResource("7_cts")

@@ -13,6 +13,8 @@
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PilotCamera/pilot_camera.gd" id="9_cam"]
 
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/CockpitDisplays/cockpit_displays.gd" id="10_disp"]
+
 [node name="CockpitLinearSeat" type="Node3D"]
 script = ExtResource("1_script")
 
@@ -56,3 +58,7 @@ script = ExtResource("7_gimbal")
 [node name="SeatDampener" type="Node" parent="." node_paths=PackedStringArray("camera_mount")]
 script = ExtResource("8_damper")
 camera_mount = NodePath("../CameraMount")
+
+[node name="CockpitDisplays" type="Node" parent="." node_paths=PackedStringArray("model_root")]
+script = ExtResource("10_disp")
+model_root = NodePath("../Model")

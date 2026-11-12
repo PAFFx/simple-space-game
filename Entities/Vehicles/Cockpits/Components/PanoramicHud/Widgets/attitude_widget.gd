@@ -19,7 +19,7 @@ extends HudWidget
 @export var bank_radius_deg: float = 9.0
 ## Overhead / feet indicators: elevations and radius, deg.
 @export var aux_top_elevation_deg: float = 62.0
-@export var aux_bottom_elevation_deg: float = -45.0
+@export var aux_bottom_elevation_deg: float = -27.0  # above the centre display (the floor is hidden by the cockpit)
 @export var aux_radius_deg: float = 4.5
 
 

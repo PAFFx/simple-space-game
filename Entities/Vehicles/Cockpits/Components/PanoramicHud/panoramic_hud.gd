@@ -90,17 +90,7 @@ func get_display_basis() -> Basis:
 ## up from the flight computer (the horizon lock's, or the reference frame's), north
 ## from the reference frame's -Z, flattened onto the horizon.
 func get_attitude_basis() -> Basis:
-	var up := Vector3.UP
-	var north := Vector3.FORWARD
-	if flight_computer != null:
-		up = flight_computer.get_attitude_up()
-		if flight_computer.reference_frame != null:
-			north = -flight_computer.reference_frame.global_basis.z
-	north -= up * north.dot(up)
-	if north.length_squared() < 1e-6:
-		north = up.cross(Vector3.RIGHT if absf(up.x) < 0.9 else Vector3.BACK)
-	var back := -north.normalized()
-	return Basis(up.cross(back).normalized(), up, back)
+	return flight_computer.get_attitude_basis() if flight_computer != null else Basis.IDENTITY
 
 
 ## Where the screen's image is seen from: the sensor head (the suit's head camera),

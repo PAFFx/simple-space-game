@@ -61,27 +61,11 @@ func _draw_left_block(fc: FlightComputer, line_h: float) -> void:
 
 func _draw_right_block(fc: FlightComputer, line_h: float) -> void:
 	begin_local(side_azimuth_deg, block_elevation_deg)
-	var prop := fc.get_propellant_fraction()
-	var thr := fc.get_thrust_fraction()
-	var prop_color := hud.caution_color if prop < low_propellant_fraction else hud.primary_color
-	_bar_row(0.0, "PROP", prop, prop_color)
-	_bar_row(line_h, "THR", thr, hud.primary_color)
+	# Engines and fuel are on the cockpit's left display; only non-default modes here.
 	var modes := fc.get_mode_labels()
 	for i in modes.size():
-		text(Vector2(0, line_h * (2.2 + i)), modes[i], hud.primary_color, HORIZONTAL_ALIGNMENT_LEFT, 16)
-	line(Vector2(-px(0.6), -line_h), Vector2(-px(0.6), line_h * (1.8 + modes.size())), hud.dim_color)
+		text(Vector2(0, line_h * i), modes[i], hud.primary_color, HORIZONTAL_ALIGNMENT_LEFT, 16)
 	end_local()
-
-
-func _bar_row(y: float, label: String, fraction: float, color: Color) -> void:
-	text(Vector2(0, y), label, hud.dim_color)
-	var x0 := px(2.6)
-	var w := px(2.6)
-	var h := 8.0
-	draw_rect(Rect2(x0, y - h - 2.0, w, h), hud.dim_color, false, 1.0)
-	draw_rect(Rect2(x0, y - h - 2.0, w * clampf(fraction, 0.0, 1.0), h), color, true)
-	var pct := "%3d%%" % roundi(fraction * 100.0)
-	text(Vector2(x0 + w + 6.0, y), pct, color, HORIZONTAL_ALIGNMENT_LEFT, 15)
 
 
 func _draw_cautions(fc: FlightComputer, line_h: float) -> void:

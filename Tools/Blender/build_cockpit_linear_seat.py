@@ -119,14 +119,39 @@ def build_footrest_and_mfd(m):
     rest = mk.PartBuilder("Footrest", m)
     rest.box((0, 0.24, -0.9), (0.08, 0.5, 0.06), "frame", rot=(-18, 0, 0))
     rest.box((0, 0.46, -1.0), (0.42, 0.06, 0.05), "frame")
-    rest.box((0, 0.58, -0.82), (0.05, 0.05, 0.36), "frame", rot=(-20, 0, 0))
-    rest.box((0, 0.648, -0.601), (0.32, 0.05, 0.21), "frame", rot=(143, 0, 0))
+    rest.box((0, 0.6, -0.82), (0.05, 0.05, 0.36), "frame", rot=(-20, 0, 0))
     rest.to_object(bevel=0.006)
 
-    # Front MFD faces up and back toward the pilot's eye.
-    scr = mk.PartBuilder("ScreenFront", m)
-    scr.quad((0, 0.618, -0.578), 0.28, 0.17, "screen", rot=(143, 0, 0))
-    scr.to_object()
+    # Three displays in front, after the Xi Gundam's: a large centre tablet low ahead
+    # (situational awareness) and a screen either side on an arm (left: engines and fuel,
+    # right: target). Each faces the pilot's eye; Godot paints them (CockpitDisplays).
+    for name, center, size, rot in DISPLAYS:
+        bezel = mk.PartBuilder(f"Bezel{name}", m)
+        bezel.box(center, (size[0] + 0.03, 0.022, size[1] + 0.03), "frame", rot=rot)
+        bezel.to_object(bevel=0.006)
+        scr = mk.PartBuilder(f"Screen{name}", m)
+        # A hair in front of the bezel, toward the eye.
+        eye = (0.0, 0.08, 0.0)
+        d = [eye[i] - center[i] for i in range(3)]
+        n = math.sqrt(sum(x * x for x in d))
+        front = tuple(center[i] + d[i] / n * 0.012 for i in range(3))
+        scr.quad(front, size[0], size[1], "screen", rot=rot)
+        scr.to_object()
+
+    arms = mk.PartBuilder("DisplayArms", m)
+    arms.box((0, 0.6, -0.68), (0.06, 0.05, 0.22), "frame", rot=(-20, 0, 0))
+    for s in (1.0, -1.0):
+        arms.box((0.31 * s, 0.46, -0.42), (0.035, 0.035, 0.2), "frame", rot=(-25, 0, 0))
+    arms.to_object(bevel=0.005)
+
+
+# name, centre (Blender: x right, y forward, z up; eye at y 0.08), size (w, h), rotation
+# turning the quad's +Y face toward the eye.
+DISPLAYS = [
+    ("Centre", (0.0, 0.62, -0.5), (0.40, 0.28), (137.0, 0.0, 0.0)),
+    ("Left", (-0.33, 0.55, -0.30), (0.22, 0.16), (152.6, 0.0, 35.0)),
+    ("Right", (0.33, 0.55, -0.30), (0.22, 0.16), (152.6, 0.0, -35.0)),
+]
 
 
 def main():

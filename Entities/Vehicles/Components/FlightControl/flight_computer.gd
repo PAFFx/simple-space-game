@@ -190,6 +190,18 @@ func get_attitude_up() -> Vector3:
 	return reference_frame.global_basis.y.normalized() if reference_frame != null else Vector3.UP
 
 
+## Frame the attitude displays use (y = get_attitude_up(), −z = north): north is the
+## reference frame's −Z (world −Z without one), flattened onto the horizon.
+func get_attitude_basis() -> Basis:
+	var up := get_attitude_up()
+	var north := -reference_frame.global_basis.z if reference_frame != null else Vector3.FORWARD
+	north -= up * north.dot(up)
+	if north.length_squared() < 1e-6:
+		north = up.cross(Vector3.RIGHT if absf(up.x) < 0.9 else Vector3.BACK)
+	var back := -north.normalized()
+	return Basis(up.cross(back).normalized(), up, back)
+
+
 ## Whether the pilot is boosting (Shift, or full boost).
 func is_boosting() -> bool:
 	return input_source != null and input_source.last_command != null \

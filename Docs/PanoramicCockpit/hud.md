@@ -126,3 +126,26 @@ amount  0.0 ──── 0.3 ──────────── 0.85 ── 1.
 ```
 
 Closing plays the same timeline backwards: flaps seal first, then the screen closes.
+
+## Cockpit displays
+
+Three flat screens in front of the seat (after the Xi Gundam's cockpit), painted by
+`CockpitDisplays`: each screen mesh in the cockpit model (`ScreenCentre`, `ScreenLeft`,
+`ScreenRight`, built by `Tools/Blender/build_cockpit_linear_seat.py`) gets an `MfdPage` in its
+own SubViewport. Pages follow modern fighter large-area displays: dark field, thin outlines,
+boxed values.
+
+- **Centre: SA** (`SaPage`), the biggest: plan view centred on the suit, heading up, over the
+  HUD's attitude plane (`FlightComputer.get_attitude_basis()`). Range rings step to fit the
+  farthest contact (500 m … 200 km), compass rose, contacts as diamonds with range and height
+  above (+) / below (−) the plane, the suit's velocity as a leader line, data strip on top.
+- **Left: ENG / FUEL** (`EnginePage`): thrusters in three tiers by rating, biggest on top and
+  drawn biggest: MAIN (≥ 50% of the largest: the four backpack mains, with gimbal dots), BIG
+  (≥ 20%: soles, calves, shoulders, chest), SMALL (the verniers, for troubleshooting). Fuel
+  window: mass, %, flow (thrust ÷ Isp·g₀), time left at the current flow, Isp, BINGO under 20%.
+  Header: total thrust (% and MN) and max thrust-to-weight.
+- **Right: TGT** (`TargetPage`): placeholder until targeting exists.
+
+The panoramic HUD keeps only what's needed outside: flight symbology, non-default modes and
+cautions. The thruster rows and propellant / thrust bars moved to the left display.
+
