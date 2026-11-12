@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Entities/Equipment/Components/ms_equipment.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://Entities/Equipment/RX93/Arts/nu_beam_saber.glb" id="2_model"]
+
+[node name="BeamSaber" type="Node3D"]
+script = ExtResource("1_script")
+equipment_name = "BEAM SABER"
+mass = 300.0
+
+[node name="Model" parent="." instance=ExtResource("2_model")]

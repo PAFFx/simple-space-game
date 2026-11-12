@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Entities/Equipment/Shield/shield.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://Entities/Equipment/RX93/Arts/nu_shield.glb" id="2_model"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/hud_silhouette.gd" id="3_sil"]
+
+[node name="Shield" type="Node3D"]
+script = ExtResource("1_script")
+equipment_name = "SHIELD"
+mass = 3800.0
+input_action = &"ms_toggle_shield"
+active_pose = &"shield_guard"
+
+[node name="Model" parent="." instance=ExtResource("2_model")]
+
+[node name="HudSilhouette" type="Node3D" parent="."]
+script = ExtResource("3_sil")
+outline = PackedVector3Array(-6.6, 21.2, -1.9, -6.6, 21.2, 2.5, -6.6, 10.5, 2.6, -6.6, 6.4, 0.3, -6.6, 10.5, -2)
+label = "SHIELD"
