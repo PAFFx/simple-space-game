@@ -21,7 +21,7 @@ func draw_widget() -> void:
 		var contact := node as Node3D
 		if contact == null:
 			continue
-		var rel := contact.global_position - origin
+		var rel := contact.get_global_transform_interpolated().origin - origin
 		var dist := rel.length()
 		if dist < 1.0:
 			continue

@@ -56,7 +56,11 @@ Contacts: add any `Node3D` to group `hud_contacts`; optional metadata `hud_label
 
 Silhouettes: add a `HudSilhouette` (outline points in its local space) to anything the pilot should
 see "through". The sensor never renders the suit or its equipment, so the shield appears only as its
-outline, like an integrated shield camera.
+outline, like an integrated shield camera. With `from_meshes` the outline is built at load from the models under its parent:
+the rim seen face-on (convex hull across the model's thinnest axis), each corner at its real depth,
+so a curved shield's outline sits on its actual edge (both shields use it). Outlines and contact
+brackets use the rendered (interpolated) transforms: with the raw physics transform the shield's
+outline jumped ~20° per frame at 250 m/s on a 144 Hz display.
 
 ## Physics interpolation
 
