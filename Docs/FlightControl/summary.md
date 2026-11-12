@@ -214,6 +214,30 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
 
 ---
 
+## Stopping without wobble
+
+- **Braking curve with reaction delay.** The time-optimal approach is ω = √((α·τ)² + 2αθ) − α·τ
+  (`braking_delay` τ 0.15 s, for thruster spool-up and nozzle slew), so the body no longer arrives
+  still turning and swings past. `braking_margin` 0.8.
+- **Brake hard, accelerate gently.** Once the hold has to slow down to arrive (closing rate above
+  ~60% of the braking curve), it gets the full torque budget and the top allocator priority; while
+  speeding up it stays gentle so the push stays clean.
+- **Feasible swing.** The auto-rotation offset is moved like a body: its swing speed changes no faster
+  than the torque budget allows and it eases into its end point, so the body can follow exactly
+  (no overshoot when the target stops or turns back). If the body still lags (`tracking_lag_deg`),
+  its torque budget and priority rise toward `recover_torque_priority`.
+- **Committed attitude.** The solver remembers which side it turned to and charges `commit_weight` for
+  turning back through to the other side until the demand swings `commit_release_deg` (45°) away.
+  Its shortfall term is the share of the demand left unmet (0..1), so a full-boost demand can't
+  swamp it. Descents no longer flip between nose-up and nose-down.
+- **Hard stops.** In V-HOLD, releasing the stick brakes at `stop_accel_g` (6 G) with the boost gain,
+  limited by what the attitude can deliver (not in precision mode).
+- **Boost.** Shift is capped at `boost_accel_g` 7 G; a double-tapped full boost has no cap (all the
+  thrust the suit has). ν: full boost up peaks at ~11 G.
+
+Measured on the ν (stick released after 3 s): normal flight returns to rest in ≤ 0.32 s and stops
+22 m/s in ~1.3–2.2 s; after Shift ~1.0–1.2 s, after full boost ~1.0–1.6 s, at most one small swing.
+
 ## AMBAC
 
 Limbs act as reaction wheels: accelerating a limb by `α` about axis `a` pushes the body with
@@ -378,22 +402,21 @@ texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
-| 4 × 450 kN mains (nozzle model) | backpack, 2 per side, stacked | back + down | 3D, 30° cone |
-| 2 × 250 kN | soles | down | 3D, 20° cone |
-| 2 × 150 kN (nozzle model) | behind each calf | down, a little back | 2D fore/aft ±25° |
-| 4 × 70 kN | shoulder armor, 2 per side | up-and-out / out-and-down | 2D fore/aft ±25° |
-| 2 × 80 kN | chest vents | forward (brakes) | 2D up/down ±20° |
-| 6 × 40 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
-| 2 × 60 kN | rear skirts | back | fixed |
-| 6 × 35 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
+| 4 × 1 MN mains (nozzle model) | backpack, 2 per side, stacked | back + down | 3D, 30° cone |
+| 2 × 500 kN | soles | down | 3D, 20° cone |
+| 2 × 400 kN (nozzle model) | behind each calf | down, a little back | 2D fore/aft ±25° |
+| 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | 2D fore/aft ±25° |
+| 2 × 250 kN | chest vents | forward (brakes) | 2D up/down ±20° |
+| 6 × 80 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
+| 2 × 120 kN | rear skirts | back | fixed |
+| 6 × 70 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
 
 Small ports have no nozzle model (`Thruster.show_nozzle` off): only the plume shows, from the
 armor. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
 (sideways) tighten the cone per axis; 0 on one = 2D vectoring, `gimbal_limit_deg` 0 = fixed.
 
-Clean force capability (level, limbs at rest): up 2.85 G, forward 1.47 G, sideways 0.79 G, back
-0.64 G, down 0.41 G; pitch torque 6 MN·m. Descending is weak (boosted 4 s → 7.6 m/s), so limbs
-and attitude must point the strong thrusters; that isn't done yet.
+Clean force capability (level, limbs at rest): up 7.1 G, forward 4.3 G, sideways 2.4 G, back
+1.8 G, down 1.4 G; pitch torque 15 MN·m. Limbs don't aim the fixed/2D thrusters yet.
 
 ## Tuning reference (MSP-01 prototype)
 

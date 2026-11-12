@@ -62,11 +62,20 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Allocator torque priority while auto-rotating/holding. Low = never spill force to
 ## rotate faster (big turning moments otherwise borrow the off-centre mains).
 @export var auto_rotate_torque_priority: float = 0.5
+## When the body falls behind the auto-rotation target (across tracking_lag_deg), its torque
+## budget and priority rise to these, so thrust torque can't push it past the target.
+@export var recover_torque_priority: float = 2.0
 ## On stick release: rate-loop gain multiplier and full torque, so rotation stops at once.
 @export var stop_gain_multiplier: float = 2.5
 ## Fraction of the estimated angular deceleration the braking curve plans with
 ## (slack for actuator lag and allocation losses). Higher = faster, riskier.
-@export_range(0.1, 1.0) var braking_margin: float = 0.5
+@export_range(0.1, 1.0) var braking_margin: float = 0.8
+## Reaction delay the braking curve allows for (thruster spool-up, nozzle slew), s. Braking
+## starts this much earlier, so the body doesn't arrive still turning and swing past.
+@export var braking_delay: float = 0.15
+## Braking margin for easing an auto-rotation swing into its end point (a soft target,
+## so it can plan closer to the real deceleration than a stop).
+@export_range(0.1, 1.0) var swing_braking_margin: float = 1.0
 ## Rate-loop gain multiplier while holding / realigning, so the body can follow the
 ## braking curve tightly (a soft loop brakes late and overshoots).
 @export var hold_rate_gain_multiplier: float = 5.0
@@ -106,7 +115,8 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Acceleration limit, same in every direction, so the suit moves in a straight
 ## line toward the command. Auto-rotation finds the attitude that can deliver it.
 @export var cruise_accel_g: float = 0.8
-@export var boost_accel_g: float = 4.0
+## Shift. A double-tapped (full) boost has no limit: everything the thrusters can give.
+@export var boost_accel_g: float = 7.0
 ## VELOCITY_HOLD top speed at full stick, m/s. 0 = no limit: holding the stick keeps
 ## accelerating along it (drift across it is still cancelled), releasing brings the
 ## suit to rest. Precision mode keeps its own precision_speed.
@@ -115,13 +125,19 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var velocity_gain: float = 0.8
 ## Velocity loop gain while boosting: snappy starts, stops and direction changes (dodging).
 @export var boost_velocity_gain: float = 2.5
+## VELOCITY_HOLD with the stick released brakes this hard and with the boost gain (a combat
+## suit stops at once), limited by what the attitude can deliver. Not in precision mode.
+@export var stop_accel_g: float = 6.0
 
 var _initialized := false
 var _pilot := Quaternion.IDENTITY    ## Pilot frame orientation (global)
 var _offset := Quaternion.IDENTITY   ## Body relative to pilot frame
 var _offset_target_r := Vector3.ZERO ## Smoothed solver target, rotation vector (pilot frame)
 var _offset_rate := Vector3.ZERO     ## Offset swing rate, pilot frame (rad/s), fed forward
+var _offset_vel := Vector3.ZERO      ## Swing velocity of the commanded offset (rotation vector, rad/s)
 var _auto_rotating := false   ## Solver engaged this tick (force must stay clean)
+var _recover := 0.0           ## 0..1, how far the body lags the auto-rotation target
+var _brake := 0.0             ## 0..1, the hold is braking into its target (gets full torque)
 # Per pilot axis masks (pitch, yaw, roll), 1 = set:
 var _active := Vector3.ZERO          ## Steered by the stick
 var _capture := Vector3.ZERO         ## Steered, or released and still braking
@@ -199,9 +215,11 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	var wrench := Wrench.new(force_body, torque)
 	wrench.thruster_torque_limit = _thruster_limit
 	# Steering and stopping keep the allocator default.
+	# Braking into a target always wins: a stop matters more than a clean push.
 	if _locked == Vector3.ZERO:
-		wrench.torque_priority = auto_rotate_torque_priority if _auto_rotating \
-				else realign_torque_priority
+		var base := lerpf(auto_rotate_torque_priority, recover_torque_priority, _recover) \
+				if _auto_rotating else realign_torque_priority
+		wrench.torque_priority = lerpf(base, recover_torque_priority, _brake)
 	return wrench
 
 
@@ -372,6 +390,7 @@ func _follow_body(body_q: Quaternion) -> Quaternion:
 func _update_offset(state: FlightState, force_world: Vector3, command: PilotCommand) -> void:
 	_offset_rate = Vector3.ZERO
 	_auto_rotating = false
+	_recover = 0.0
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
 		return
 	var r_cur := AttitudeOffsetSolver.to_rotation_vector(_offset)
@@ -398,6 +417,7 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 			# and let the time-optimal hold bring the body home in one motion.
 			_offset = AttitudeOffsetSolver.from_rotation_vector(r_target)
 			_offset_target_r = r_target
+			_offset_vel = Vector3.ZERO
 			return
 	r_target = r_target * free + r_cur * _locked
 	# Low-pass the target first so the body eases into (and out of) a new attitude.
@@ -411,8 +431,22 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 	var lag_q := AttitudeOffsetSolver.shortest((_pilot * _offset) * body_q.inverse())
 	var lag := rad_to_deg(lag_q.get_angle())
 	var span := maxf(tracking_lag_deg.y - tracking_lag_deg.x, 0.01)
-	slew *= clampf(1.0 - (lag - tracking_lag_deg.x) / span, 0.0, 1.0)
-	var step := ((_offset_target_r - r_cur) * free).limit_length(slew * state.delta)
+	_recover = clampf((lag - tracking_lag_deg.x) / span, 0.0, 1.0) if _auto_rotating else 0.0
+	slew *= 1.0 - _recover
+	# The commanded offset moves like a body would: its swing speed changes no faster than
+	# the body can accelerate, and it eases into the end point the way the body can brake.
+	# So the body can always follow it exactly: no overshoot when the target stops or
+	# turns back, and no side drift from overshoot to make the solver change its mind.
+	var remaining := (_offset_target_r - r_cur) * free
+	var to_body := func(v: Vector3) -> Vector3: return state.to_local(_pilot * v)
+	var to_pilot := func(v: Vector3) -> Vector3: return _pilot.inverse() * state.to_global(v)
+	var v_want: Vector3 = to_pilot.call(_braking_rate(state, to_body.call(remaining), swing_braking_margin))
+	v_want = (v_want * free).limit_length(slew)
+	_offset_vel *= free
+	var dv := v_want - _offset_vel
+	var accel := _swing_accel(state, to_body.call(dv))
+	_offset_vel += dv.limit_length(accel * state.delta)
+	var step := _offset_vel * state.delta
 	if step.length_squared() < 1e-12:
 		return
 	var old := _offset
@@ -423,6 +457,7 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 
 func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quaternion) -> Vector3:
 	var omega := state.local_angular_velocity
+	_brake = 0.0
 	var max_rate := max_rate_deg * (PI / 180.0)
 	if command.boost:
 		max_rate *= boost_rate_multiplier
@@ -459,9 +494,17 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		var hold_rate := max_rate * 1.2
 		if attitude_solver != null:
 			hold_rate = hold_rate.max(Vector3.ONE * deg_to_rad(attitude_solver.slew_rate_deg) * 1.2)
-		# Auto-rotation tracks a moving target gently (keeps force clean); realigning
-		# to rest uses the time-optimal braking curve.
-		var approach := err * attitude_gain if _auto_rotating else _braking_rate(state, err)
+		# Realigning to rest uses the time-optimal braking curve; auto-rotation tracks
+		# gently, but never faster than it can still stop on target. Accelerating stays
+		# gentle (clean force); once the body has to slow down to arrive, it gets the
+		# full torque budget, so it stops on target instead of swinging past.
+		var approach := _braking_rate(state, err)
+		var reach := approach.length()
+		if reach > 1e-4:
+			var closing := omega.dot(err / maxf(err.length(), 1e-6))
+			_brake = clampf((closing / reach - 0.6) / 0.3, 0.0, 1.0)
+		if _auto_rotating:
+			approach = (err * attitude_gain).limit_length(reach)
 		var hold_p := (body_to_pilot * approach + _offset_rate) * free
 		rate_p = rate_p * _locked + hold_p.clamp(-hold_rate, hold_rate)
 
@@ -483,7 +526,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	# torque comes on top of both (it moves no thrusters, so it's always clean).
 	var stopping := (_capture - _active).max(Vector3.ZERO) != Vector3.ZERO
 	var lock_fraction := 1.0 if stopping or (command.boost and steering) else torque_fraction
-	var free_fraction := auto_rotate_torque_fraction if _auto_rotating else torque_fraction
+	var free_fraction := lerpf(_auto_fraction() if _auto_rotating else torque_fraction, 1.0, _brake)
 	var lock_thrust := state.max_torque * lock_fraction
 	var free_thrust := state.max_torque * free_fraction
 	var lock_limit := lock_thrust + state.ambac_torque
@@ -497,29 +540,56 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	return (torque_lock + torque_free + gyro).clamp(-limit, limit)
 
 
-## Time-optimal approach: the fastest rate from which the body can still brake to
-## rest exactly on target, ω = √(2·α·θ), with α the deceleration the torque limit
-## allows about the error axis. Linear near zero so it settles without chatter.
-func _braking_rate(state: FlightState, err: Vector3) -> Vector3:
-	var angle := err.length()
-	if angle < 1e-6:
-		return Vector3.ZERO
-	var axis := err / angle
-	var fraction := auto_rotate_torque_fraction if _auto_rotating else torque_fraction
+func _auto_fraction() -> float:
+	return lerpf(auto_rotate_torque_fraction, torque_fraction, _recover)
+
+
+## Angular acceleration the torque budget allows about a body axis, rad/s² (INF if none).
+func _max_alpha(state: FlightState, axis: Vector3) -> float:
+	var fraction := _auto_fraction() if _auto_rotating else torque_fraction
 	var limit := state.max_torque * fraction + state.ambac_torque
 	var per_alpha := (state.inertia_local * axis).abs()
 	var alpha := INF
 	for k in 3:
 		if per_alpha[k] > 1e-3:
 			alpha = minf(alpha, limit[k] / per_alpha[k])
+	return alpha
+
+
+## Acceleration limit for the commanded offset's swing speed (change dv, body frame).
+func _swing_accel(state: FlightState, dv: Vector3) -> float:
+	if dv.length_squared() < 1e-12:
+		return 0.0
+	var alpha := _max_alpha(state, dv.normalized())
+	return 1e3 if alpha == INF else alpha * swing_braking_margin
+
+
+## Time-optimal approach: the fastest rate from which the body can still brake to
+## rest exactly on target after a reaction delay τ, ω = √((α·τ)² + 2·α·θ) − α·τ, with α
+## the deceleration the torque limit allows about the error axis. Linear near zero so
+## it settles without chatter.
+func _braking_rate(state: FlightState, err: Vector3, margin: float = -1.0) -> Vector3:
+	var angle := err.length()
+	if angle < 1e-6:
+		return Vector3.ZERO
+	var axis := err / angle
+	var alpha := _max_alpha(state, axis)
 	if alpha == INF:
 		return err * attitude_gain
-	alpha *= braking_margin
+	alpha *= braking_margin if margin < 0.0 else margin
 	var linear_zone := deg_to_rad(1.5)
-	var rate := sqrt(2.0 * alpha * maxf(angle, linear_zone))
+	var lead := alpha * braking_delay
+	var rate := sqrt(lead * lead + 2.0 * alpha * maxf(angle, linear_zone)) - lead
 	if angle < linear_zone:
 		rate *= angle / linear_zone
 	return axis * rate
+
+
+func _total_thrust(state: FlightState) -> float:
+	var total := 0.0
+	for t in state.thruster_max:
+		total += t
+	return total
 
 
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
@@ -533,11 +603,16 @@ func _translation_force_world(state: FlightState, command: PilotCommand) -> Vect
 		accel_g = precision_accel_g
 		speed = precision_speed
 	var accel_limit := accel_g * FlightComputer.G0
+	if command.boost_full:
+		accel_limit = maxf(accel_limit, _total_thrust(state) / state.mass)
 	if translation_mode == TranslationMode.NEWTONIAN:
 		return stick_world.limit_length(1.0) * accel_limit * state.mass
 
 	var gain := boost_velocity_gain if command.boost else velocity_gain
 	var amount := stick_world.length()
+	if amount <= stick_deadzone and not precision:
+		accel_limit = maxf(accel_limit, stop_accel_g * FlightComputer.G0)
+		gain = maxf(gain, boost_velocity_gain)
 	if speed <= 0.0 and amount > stick_deadzone:
 		# No top speed: push along the stick (|stick| of the limit) and cancel any
 		# velocity across it, so the suit still flies straight toward the command.
