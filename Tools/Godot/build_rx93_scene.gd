@@ -31,11 +31,14 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 # Anime-strong (a boosted jump easily beats Earth gravity): mains 4 × 1 MN, the rest
 # sized by nozzle.
 const CONE_3D := [30.0, 90.0, 90.0]
-# Mains are the model's own nozzles, turned by ThrusterGuards; they swing from ~10° forward
-# of straight down to 60° back (35° cone around 25° back), and 35° sideways.
-const MAIN_EXHAUST := Vector3(0.0, -0.906, 0.423)
-const MAIN_MODEL_EXHAUST := Vector3(0.0, -0.67, 0.74)
-const MAIN_CONE := [35.0, 90.0, 90.0]
+# Mains are the model's own nozzles in two backpack pods. Each pod hinges fore/aft only
+# (2D) from its top (ThrusterGuards), and the nozzles swing around that hinge
+# (Thruster.swing_pivot): ±50° around the modelled 48° back, i.e. from straight down to
+# well back, never sideways.
+const MAIN_EXHAUST := Vector3(0.0, -0.67, 0.74)
+const MAIN_CONE := [50.0, 50.0, 0.0]
+const POD_HINGE := {MainRU = Vector3(1.4, 19.16, 2.58), MainRL = Vector3(1.4, 19.16, 2.58),
+		MainLU = Vector3(-1.38, 19.03, 2.58), MainLL = Vector3(-1.38, 19.03, 2.58)}
 const SOLE_3D := [20.0, 90.0, 90.0]
 const FORE_AFT := [25.0, 25.0, 0.0]      # 2D: swings fore/aft (about the port's sideways axis)
 const UP_DOWN := [20.0, 20.0, 0.0]       # 2D, for forward-facing ports
@@ -262,6 +265,12 @@ func _build_thrusters(root: Node3D) -> void:
 		node.set("nozzle_scale", t[7])
 		node.set("hud_label", _short_label(t[0]))
 		node.set("show_nozzle", t[8])
+		if t[0].begins_with("Main"):
+			node.set("gimbal_rate_deg", 90.0)  # a whole pod swings, not just a nozzle
+		elif t[0].begins_with("Calf"):
+			node.set("gimbal_rate_deg", 120.0)
+		if POD_HINGE.has(t[0]):
+			node.set("swing_pivot", body_xf.affine_inverse() * (POD_HINGE[t[0]] as Vector3))
 
 
 func _build_flight_computer(root: Node3D) -> void:
@@ -294,8 +303,8 @@ func _build_flight_computer(root: Node3D) -> void:
 	input.set("axis_bindings", bindings)
 
 
-## The model's main and calf nozzles turn with their thrusters; the calf plates swing
-## with the calf nozzles.
+## The backpack pods and the model's calf nozzles turn with their thrusters; the calf
+## plates open out of the way while their nozzle is swung and close after it's back.
 func _build_thruster_guards(root: Node3D) -> void:
 	var node := ThrusterGuards.new()
 	node.name = "ThrusterGuards"
@@ -303,16 +312,18 @@ func _build_thruster_guards(root: Node3D) -> void:
 	node.skeleton = root.get_node(SKELETON)
 	var guards: Array[ThrusterGuard] = []
 	# bone, thrusters, full rotation (nozzle) or hinge (guard plate)
-	for g in [["main_nozzle.RU", ["MainRU"], true], ["main_nozzle.RL", ["MainRL"], true],
-			["main_nozzle.LU", ["MainLU"], true], ["main_nozzle.LL", ["MainLL"], true],
+	for g in [["main_pod.R", ["MainRU", "MainRL"], false], ["main_pod.L", ["MainLU", "MainLL"], false],
 			["calf_nozzle.R", ["CalfR"], true], ["calf_nozzle.L", ["CalfL"], true],
 			["calf_guard.R", ["CalfR"], false], ["calf_guard.L", ["CalfL"], false]]:
 		var guard := ThrusterGuard.new()
 		guard.bone_name = g[0]
 		guard.thrusters = PackedStringArray(g[1])
 		guard.full_rotation = g[2]
-		if g[0].begins_with("main_nozzle"):
-			guard.rest_thrust = -MAIN_MODEL_EXHAUST  # the modelled cups point further back
+		if g[0].begins_with("main_pod"):
+			guard.min_angle_deg = -50.0
+			guard.max_angle_deg = 50.0
+		if g[0].begins_with("calf_guard"):
+			guard.open_angle_deg = -35.0  # the plate swings back, away from the leg
 		guards.append(guard)
 	node.guards = guards
 

@@ -405,9 +405,9 @@ texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
-| 4 × 1 MN mains (the model's own nozzles, turned to follow) | backpack, 2 per side, stacked | down, back | 3D, 35° cone around 25° back (~10° forward of straight down to 60° back) |
+| 4 × 1 MN mains (the model's own nozzles, in two pods that hinge with them) | backpack, 2 per side, stacked | down, back | 2D fore/aft ±50° around 48° back (straight down to well back); pod swings at 90°/s |
 | 2 × 500 kN | soles | down | 3D, 20° cone |
-| 2 × 400 kN (the model's own nozzles; the plate over each swings with it) | behind each calf | down, a little back | 3D, 30° cone |
+| 2 × 400 kN (the model's own nozzles; the plate over each opens while it's swung) | behind each calf | down, a little back | 3D, 30° cone |
 | 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | 2D fore/aft ±25° |
 | 2 × 250 kN | chest vents | forward (brakes) | 2D up/down ±20° |
 | 6 × 80 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
@@ -415,11 +415,16 @@ texture), and most can't aim far, so limbs have to move to point them:
 | 6 × 70 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
 
 No added nozzle meshes on the ν (`Thruster.show_nozzle` off): small ports show only a plume from
-the armor, and the main and calf nozzles are the model's own, turned by `ThrusterGuards` to follow
-their thrusters' actual gimbal (`ThrusterGuard.full_rotation`; `rest_thrust` when the modelled cup
-points elsewhere at rest). The calf plates hinge to follow their nozzles. These bones
-(`main_nozzle.*`, `calf_nozzle.*`, `calf_guard.*`) are visual only: the thrusters stay on the
-backpack/shin bones. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
+the armor, and the main and calf nozzles are the model's own, moved by `ThrusterGuards`:
+- **Backpack pods** (`main_pod.*`) hinge fore/aft from their top, following their two nozzles'
+  throttle-weighted, low-passed aim. The nozzles swing around that hinge (`Thruster.swing_pivot`),
+  so the push point and plume move with the pod and the allocator sees the moved position.
+- **Calf nozzles** (`calf_nozzle.*`) turn fully with their thrusters.
+- **Calf plates** (`calf_guard.*`) are covers: they open outward only (35°) once the nozzle swings
+  more than 3°, hold, and close 0.6 s after it's back under 1.5°, at steady rates.
+
+These bones are visual: the thrusters stay on the backpack/shin bones. Idle nozzles (under 1%
+throttle, `Thruster.park_throttle`) park at centre, so covers can close. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
 (sideways) tighten the cone per axis; 0 on one = 2D vectoring, `gimbal_limit_deg` 0 = fixed.
 
 Clean force capability (level, limbs at rest): up 7.1 G, forward 4.3 G, sideways 2.4 G, back

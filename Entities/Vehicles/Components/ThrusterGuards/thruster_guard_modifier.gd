@@ -6,7 +6,7 @@ extends SkeletonModifier3D
 var guards: ThrusterGuards
 
 
-func _process_modification_with_delta(_delta: float) -> void:
+func _process_modification_with_delta(delta: float) -> void:
 	var skel := get_skeleton()
 	if skel == null or guards == null:
 		return
@@ -16,6 +16,6 @@ func _process_modification_with_delta(_delta: float) -> void:
 		if idx < 0:
 			continue
 		var rest_global := skel.get_bone_global_rest(idx).basis.get_rotation_quaternion()
-		var q_skel := guards.rotation_of(i)
+		var q_skel := guards.rotation_of(i, delta)
 		var pose := skel.get_bone_pose_rotation(idx)
 		skel.set_bone_pose_rotation(idx, pose * (rest_global.inverse() * q_skel * rest_global))

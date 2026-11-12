@@ -19,12 +19,19 @@ extends Node3D
 ## Same for the sideways swing (about local Y). 0 = the nozzle only swings fore/aft
 ## (one-plane, "2D" vectoring); gimbal_limit_deg 0 = fixed nozzle.
 @export_range(0.0, 90.0) var gimbal_yaw_limit_deg: float = 90.0
+## For a nozzle in a pod that swings about a hinge away from the nozzle (e.g. a backpack
+## pod hanging from the top): that hinge, local to this node. The nozzle (where the force
+## acts and the plume starts) then swings around it with the gimbal. Zero = gimbal in place.
+@export var swing_pivot := Vector3.ZERO
 @export var gimbal_rate_deg: float = 120.0        ## Max gimbal slew, deg/s
 @export var spool_up_time: float = 0.25           ## Throttle time constant rising, s
 @export var spool_down_time: float = 0.12         ## Throttle time constant falling, s
 ## Below this the thruster cuts off. Keep small: coarse cut-offs break the
 ## allocator's balancing of opposing thrusters and cause drift.
 @export_range(0.0, 0.2) var min_throttle: float = 0.002
+## Below this commanded throttle the nozzle parks back at centre (an idle nozzle doesn't
+## keep its last aim).
+@export_range(0.0, 0.2) var park_throttle: float = 0.01
 @export var enabled: bool = true
 ## Short name shown on the HUD thruster page. Empty = node name.
 @export var hud_label: String = ""
@@ -135,7 +142,9 @@ func get_position_in(frame: Node3D) -> Vector3:
 ## throttle_cmd in [0, 1]; direction is the desired thrust direction in `frame`'s axes.
 func set_command(throttle_cmd: float, direction: Vector3, frame: Node3D) -> void:
 	_cmd_throttle = clampf(throttle_cmd, 0.0, 1.0) if enabled else 0.0
-	if direction.length_squared() > 1e-8:
+	if _cmd_throttle < park_throttle:
+		_cmd_dir = Vector3.FORWARD
+	elif direction.length_squared() > 1e-8:
 		var local := (global_basis.inverse() * (frame.global_basis * direction)).normalized()
 		_cmd_dir = _clamp_to_cone(local)
 
@@ -153,6 +162,8 @@ func step(delta: float, body: RigidBody3D, has_propellant: bool) -> void:
 		var max_step := deg_to_rad(gimbal_rate_deg) * delta
 		_dir = _dir.slerp(_cmd_dir, minf(1.0, max_step / angle)).normalized()
 	_gimbal.basis = Basis.looking_at(_dir, _pick_up(_dir))
+	if swing_pivot != Vector3.ZERO:
+		_gimbal.position = swing_pivot + Quaternion(Vector3.FORWARD, _dir) * -swing_pivot
 
 	var thrust := get_thrust()
 	if thrust > 0.0:

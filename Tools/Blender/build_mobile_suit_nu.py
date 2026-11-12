@@ -74,15 +74,16 @@ GROUPS = {
     "shin.R": ids(48, 52),
     "shin.L": ids(59, 63),
     # Movable thruster parts (Godot's ThrusterGuards turns them with their thrusters): the
-    # calf nozzles and the plates over them; the main nozzles are cut out of the backpack
-    # pods below (NOZZLE_CUPS).
+    # backpack pods around the main nozzles, the calf nozzles and the plates over them.
+    "main_pod.R": ids(70, 75, 76, 78, 81),
+    "main_pod.L": ids(71, 74, 79, 82, 83),
     "calf_nozzle.R": ids(47),
     "calf_nozzle.L": ids(58),
     "calf_guard.R": ids(51),
     "calf_guard.L": ids(62),
     "foot.R": ids(2, 43, 46, 49, 50),
     "foot.L": ids(3, 54, 57, 60, 61),
-    "backpack": [i for i in range(70, 109) if i not in (74, 75, 76, 83,
+    "backpack": [i for i in range(70, 109) if i not in (70, 71, 74, 75, 76, 78, 79, 81, 82, 83,
             86, 87, 88, 94, 95, 99, 100, 106, 107, 108)],
     # Weapons
     "W:BeamRifle": ids((109, 122)),
@@ -138,14 +139,16 @@ def bones():
 # Main nozzles: (group, nozzle part, pod housing part). The nozzle is the hexagonal cup
 # with the yellow rim; CUP_RADIUS > 0 would also take housing faces around it that face
 # the same way (0: the frame stays with the backpack).
-NOZZLE_CUPS = [("main_nozzle.RU", 76, 70), ("main_nozzle.RL", 75, 70),
-               ("main_nozzle.LU", 83, 71), ("main_nozzle.LL", 74, 71)]
+# Not used for the ν: its pods move as a whole, so the two nozzles never cross.
+NOZZLE_CUPS = []
 CUP_RADIUS = 0.0
 CUP_MIN_DOT = 0.2
 
 # Movable bones: (group, parent bone, pivot): "top_front" = top edge toward +Y (a plate
-# hinged against the leg), "centre" = the part's centre (a nozzle on a ball joint).
-GUARDS = [("calf_guard.R", "shin.R", "top_front"), ("calf_guard.L", "shin.L", "top_front"),
+# hinged against the leg), "top_mid" = middle of the top (a pod hanging from the backpack),
+# "centre" = the part's centre (a nozzle on a ball joint).
+GUARDS = [("main_pod.R", "backpack", "top_mid"), ("main_pod.L", "backpack", "top_mid"),
+          ("calf_guard.R", "shin.R", "top_front"), ("calf_guard.L", "shin.L", "top_front"),
           ("calf_nozzle.R", "shin.R", "centre"), ("calf_nozzle.L", "shin.L", "centre")] + \
          [(g, "backpack", "centre") for g, _r, _h in NOZZLE_CUPS]
 
@@ -177,6 +180,8 @@ def guard_bones(bm, groups):
         hi = mathutils.Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
         if pivot == "top_front":
             head = mathutils.Vector(((lo.x + hi.x) * 0.5, hi.y, hi.z))
+        elif pivot == "top_mid":
+            head = mathutils.Vector(((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5, hi.z))
         else:
             head = sum(pts, mathutils.Vector()) / len(pts)
         length = max(hi.z - lo.z, 0.3)
