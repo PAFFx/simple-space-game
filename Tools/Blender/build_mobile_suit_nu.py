@@ -301,15 +301,84 @@ def bind(obj, armature, bone):
     obj.parent = armature
 
 
-# Cockpit hatch: the red door at the bottom of the chest (part of the chest mesh, picked by
-# its box, Godot coordinates) swings out about its bottom edge (Godot's CockpitHatch). A
-# white tunnel behind it leads to the cockpit sphere (centre COCKPIT_CENTRE, Godot), so
-# the pilot looks down it when the screen opens. Keep COCKPIT_CENTRE in step with the
-# RX-93 scene's CockpitMount.
+# Taller belly: the chest below BELLY_TOP is stretched BELLY_SCALE times downward (the
+# red door and the white abs grow), and everything from the pelvis down moves BELLY_DROP
+# lower with it (Godot's scene builder lowers its lower-body positions to match). The
+# upper body (chest above, head, arms, backpack) stays where it was.
+BELLY_TOP = 15.9      # Godot height
+BELLY_BOTTOM = 14.95
+BELLY_SCALE = 1.8
+BELLY_DROP = (BELLY_TOP - BELLY_BOTTOM) * (BELLY_SCALE - 1.0)
+LOWER_PREFIXES = ("root", "pelvis", "spine", "skirt_", "thigh", "shin", "foot", "calf_guard")
+# The navy column around the door (front of the chest, |x| <= COLUMN_HALF) stretches
+# further, so its bottom edge (the door's, at COLUMN_BOTTOM) lands on the crotch armour's
+# top (COLUMN_TO, after the drop), and slides along its own slope (z per y) so the door
+# panel stays flat.
+COLUMN_HALF = 0.5
+COLUMN_BOTTOM = 15.34
+COLUMN_TO = 14.40
+COLUMN_SCALE = (BELLY_TOP - COLUMN_TO) / (BELLY_TOP - COLUMN_BOTTOM)
+COLUMN_SLOPE = (-2.30 - -1.98) / (16.17 - 15.34)  # Godot z per y along the door panel
+
+
+def _is_lower(group):
+    return group.startswith(LOWER_PREFIXES)
+
+
+def _belly_y(y):
+    if y >= BELLY_TOP:
+        return y
+    if y >= BELLY_BOTTOM:
+        return BELLY_TOP - (BELLY_TOP - y) * BELLY_SCALE
+    return y - BELLY_DROP
+
+
+def stretch_belly(bm, groups):
+    """Applies the taller belly to the welded mesh (suit space: z up, -y = Godot +z)."""
+    moved = set()
+    for f in bm.faces:
+        g = groups[f.index]
+        for v in f.verts:
+            if v.index in moved:
+                continue
+            if g == "chest" and abs(v.co.x) <= COLUMN_HALF and v.co.y > 1.25 and v.co.z < BELLY_TOP:
+                y = v.co.z
+                y_new = BELLY_TOP - (BELLY_TOP - y) * COLUMN_SCALE
+                v.co.z = y_new
+                v.co.y -= COLUMN_SLOPE * (y_new - y)  # Godot z += slope * dy
+            elif g == "chest":
+                v.co.z = _belly_y(v.co.z)
+            elif _is_lower(g):
+                v.co.z -= BELLY_DROP
+            else:
+                continue
+            moved.add(v.index)
+    print(f"[nu] belly: chest below {BELLY_TOP} x{BELLY_SCALE}, lower body {BELLY_DROP:.2f} m lower")
+
+
+def stretch_bones(bone_list):
+    out = []
+    for name, head, tail, parent in bone_list:
+        if _is_lower(name):
+            head = (head[0], head[1], head[2] - BELLY_DROP)
+            tail = (tail[0], tail[1], tail[2] - BELLY_DROP)
+        elif name == "chest":
+            head = (head[0], head[1], _belly_y(head[2]))
+        out.append((name, head, tail, parent))
+    return out
+
+
+# Cockpit hatch, an airlock: the outer door is the red panel at the bottom of the chest
+# (only the upright panel; the angled navy panel above stays), ~0.95 x 1.3 m; it slides up behind
+# the chest front (Godot's CockpitHatch). Behind it a corridor (the airlock) runs from
+# the door to the cockpit sphere (centre COCKPIT_CENTRE, Godot), where the cockpit's own
+# inner door is. Keep COCKPIT_CENTRE in step with the RX-93 scene's CockpitMount, and the
+# cockpit variant's --aperture with what this prints.
 HATCH_PART = 15
-HATCH_BOX = ((-0.50, 0.50), (15.32, 16.19), (-2.40, -1.90))  # x, y, z ranges (Godot)
-COCKPIT_CENTRE = (0.0, 17.2, -0.5)
-COCKPIT_SHELL = 1.33
+HATCH_BOX = ((-0.52, 0.52), (14.30, 16.19), (-2.40, -1.50))  # x, y, z (Godot, stretched)
+COCKPIT_CENTRE = (0.0, 16.6, -0.2)
+AIRLOCK_MOUTH = 1.24              # distance of the corridor's inner end from the centre
+AIRLOCK_HALF = (0.44, 0.56)       # corridor half width / height at the inner end, m
 
 
 def _godot(v):
@@ -321,7 +390,7 @@ def _suit(x, y, z):
 
 
 def split_hatch(bm, materials, part, groups):
-    """Moves the door's faces to the "hatch" group and adds the tunnel behind it."""
+    """Moves the door's faces to the "hatch" group and adds the airlock behind it."""
     (x0, x1), (y0, y1), (z0, z1) = HATCH_BOX
     door = []
     for f in bm.faces:
@@ -335,33 +404,112 @@ def split_hatch(bm, materials, part, groups):
     pts = [_godot(v.co) for f in door for v in f.verts]
     lo_x, hi_x = min(p.x for p in pts), max(p.x for p in pts)
     lo_y, hi_y = min(p.y for p in pts), max(p.y for p in pts)
-    # Door edge depths: the panel leans forward toward its top.
     z_bottom = max(p.z for p in pts if p.y < lo_y + 0.1)
     z_top = max(p.z for p in pts if p.y > hi_y - 0.1)
     inset = 0.03
-    corners = [(lo_x + inset, lo_y + inset, z_bottom + 0.04), (hi_x - inset, lo_y + inset, z_bottom + 0.04),
-               (hi_x - inset, hi_y - inset, z_top + 0.04), (lo_x + inset, hi_y - inset, z_top + 0.04)]
+    ends = [(lo_x + inset, lo_y + inset, z_bottom + 0.04), (hi_x - inset, lo_y + inset, z_bottom + 0.04),
+            (hi_x - inset, hi_y - inset, z_top + 0.04), (lo_x + inset, hi_y - inset, z_top + 0.04)]
     c = mathutils.Vector(COCKPIT_CENTRE)
-    mouth = [c + (mathutils.Vector(k) - c).normalized() * COCKPIT_SHELL for k in corners]
-    mat = mk.make_material("MS_HatchTunnel", (0.82, 0.84, 0.86), roughness=0.5)
-    materials.append(mat)
-    mi = len(materials) - 1
-    bm.faces.ensure_lookup_table()
-    for i in range(4):
-        j = (i + 1) % 4
-        quad = [mouth[i], mouth[j], mathutils.Vector(corners[j]), mathutils.Vector(corners[i])]
+    middle = sum((mathutils.Vector(e) for e in ends), mathutils.Vector()) / 4.0
+    axis = (middle - c).normalized()
+    right = mathutils.Vector((1, 0, 0))
+    up = right.cross(axis).normalized() * -1.0
+    if up.y < 0.0:
+        up = -up
+    hx, hy = AIRLOCK_HALF
+    mouth_c = c + axis * AIRLOCK_MOUTH
+    mouth = [mouth_c - right * hx - up * hy, mouth_c + right * hx - up * hy,
+             mouth_c + right * hx + up * hy, mouth_c - right * hx + up * hy]
+    wall = mk.make_material("MS_AirlockWall", (0.8, 0.82, 0.84), roughness=0.5)
+    light = mk.make_material("MS_AirlockLight", (0.9, 0.95, 1.0), emission=(0.85, 0.92, 1.0), strength=4.0)
+    materials.extend([wall, light])
+    wall_i, light_i = len(materials) - 2, len(materials) - 1
+
+    def add_quad(quad, mat_i, face_into, outward=False):
+        """Quad facing `face_into` (or away from it when outward)."""
         verts = [bm.verts.new(_suit(*q)) for q in quad]
         f = bm.faces.new(verts)
         f.normal_update()
-        axis_mid = (mathutils.Vector(corners[0]) + mathutils.Vector(corners[2])) * 0.5
         mid = _godot(f.calc_center_median())
-        if _godot(f.normal).dot(axis_mid - mid) < 0.0:  # walls face into the tunnel
+        if (_godot(f.normal).dot(face_into - mid) < 0.0) != outward:
             f.normal_flip()
-        f.material_index = mi
+        f.material_index = mat_i
         groups.append("chest")
         part.append(-1)
+
+    for i in range(4):
+        j = (i + 1) % 4
+        end_i, end_j = mathutils.Vector(ends[i]), mathutils.Vector(ends[j])
+        add_quad([mouth[i], mouth[j], end_j, end_i], wall_i, (middle + mouth_c) * 0.5)
+    # Panel seams, hazard stripes at both ends and grab handles, so the corridor reads as
+    # a built airlock. Wall points by (across u, along s from the mouth), lifted inward.
+    seam = mk.make_material("MS_AirlockSeam", (0.08, 0.085, 0.09), roughness=0.6)
+    yellow = mk.make_material("MS_AirlockYellow", (0.95, 0.68, 0.05), roughness=0.45)
+    black = mk.make_material("MS_AirlockBlack", (0.02, 0.02, 0.02), roughness=0.6)
+    materials.extend([seam, yellow, black])
+    seam_i, yellow_i, black_i = len(materials) - 3, len(materials) - 2, len(materials) - 1
+    centre_line = (middle + mouth_c) * 0.5
+
+    def wall_point(i, u, t, lift=0.004):
+        j = (i + 1) % 4
+        near = mouth[i].lerp(mouth[j], u)
+        far = mathutils.Vector(ends[i]).lerp(mathutils.Vector(ends[j]), u)
+        p = near.lerp(far, t)
+        axis_p = mouth_c.lerp(middle, t)
+        return p + (axis_p - p).normalized() * lift
+
+    def wall_quad(i, u0, u1, t0, t1, mat_i, lift=0.004):
+        add_quad([wall_point(i, u0, t0, lift), wall_point(i, u1, t0, lift),
+                  wall_point(i, u1, t1, lift), wall_point(i, u0, t1, lift)], mat_i, centre_line)
+
+    length = (middle - mouth_c).length
+    for i in range(4):
+        for t in (0.25, 0.5, 0.75):
+            wall_quad(i, 0.0, 1.0, t - 0.008 / length, t + 0.008 / length, seam_i)
+        n = 10
+        for k in range(n):
+            mat_i = yellow_i if k % 2 == 0 else black_i
+            for t0, t1 in ((0.0, 0.06), (0.94, 1.0)):
+                wall_quad(i, k / n, (k + 1) / n, t0, t1, mat_i)
+
+    def bar(p0, p1, size, mat_i):
+        """Box from p0 to p1 with square cross-section `size`, faces outward."""
+        d = (p1 - p0).normalized()
+        a = d.cross(mathutils.Vector((1, 0, 0)))
+        if a.length < 1e-3:
+            a = d.cross(mathutils.Vector((0, 1, 0)))
+        a = a.normalized() * size * 0.5
+        b = d.cross(a).normalized() * size * 0.5
+        ring0 = [p0 + a * sa + b * sb for sa, sb in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        ring1 = [p1 + a * sa + b * sb for sa, sb in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        centre = (p0 + p1) * 0.5
+        for k in range(4):
+            q = (k + 1) % 4
+            add_quad([ring0[k], ring0[q], ring1[q], ring1[k]], mat_i, centre, True)
+        add_quad(ring0, mat_i, centre, True)
+        add_quad(ring1, mat_i, centre, True)
+
+    # Grab handles on the side walls (walls 1 and 3), standing off them on two posts.
+    for i in (1, 3):
+        for t0, t1 in ((0.2, 0.42), (0.58, 0.8)):
+            a0, a1 = wall_point(i, 0.5, t0, 0.0), wall_point(i, 0.5, t1, 0.0)
+            b0, b1 = wall_point(i, 0.5, t0, 0.05), wall_point(i, 0.5, t1, 0.05)
+            bar(b0, b1, 0.025, yellow_i)
+            bar(a0, b0, 0.02, black_i)
+            bar(a1, b1, 0.02, black_i)
+
+    # Light strips along the side walls, a little in from them.
+    for side in (-1.0, 1.0):
+        a0 = mouth_c + right * (hx - 0.01) * side
+        a1 = middle + right * (hi_x - inset - 0.01) * side
+        strip = [a0 - up * 0.03, a1 - up * 0.03, a1 + up * 0.03, a0 + up * 0.03]
+        add_quad(strip, light_i, (middle + mouth_c) * 0.5)
     bm.faces.ensure_lookup_table()
-    print(f"[nu] hatch: {len(door)} door faces, x {lo_x:.2f}..{hi_x:.2f}, y {lo_y:.2f}..{hi_y:.2f}")
+    el = math.degrees(math.asin(axis.y))
+    dist = (middle - c).length
+    print(f"[nu] hatch: {len(door)} door faces, {hi_x - lo_x:.2f} x {hi_y - lo_y:.2f} m; airlock axis "
+          f"elevation {el:.1f} deg, door {dist:.2f} m from the centre; inner opening half angles "
+          f"{math.degrees(math.atan(hx / AIRLOCK_MOUTH)):.1f} x {math.degrees(math.atan(hy / AIRLOCK_MOUTH)):.1f} deg")
 
 
 def object_name(group):
@@ -423,6 +571,8 @@ def main():
         raise SystemExit(f"[nu] unassigned parts {missing}, assigned twice {doubled}")
 
     groups = face_groups(bm, part)
+    bm.verts.ensure_lookup_table()
+    stretch_belly(bm, groups)
     split_hatch(bm, materials, part, groups)
     if "--pod-pivot" in argv:
         global GUARDS
@@ -430,7 +580,7 @@ def main():
         GUARDS = [(g, p, piv if g in POD_GROUPS else v) for g, p, v in GUARDS]
     move_pods(bm, groups, part)
     print_nozzles(bm, part)
-    arm = mk.build_armature("Armature", bones() + guard_bones(bm, groups))
+    arm = mk.build_armature("Armature", stretch_bones(bones()) + guard_bones(bm, groups))
     suit, weapons = [], {}
     for group in list(GROUPS) + ["hatch"] + [g for g, _r, _h in NOZZLE_CUPS]:
         obj = make_object(object_name(group), bm, materials, groups, group)

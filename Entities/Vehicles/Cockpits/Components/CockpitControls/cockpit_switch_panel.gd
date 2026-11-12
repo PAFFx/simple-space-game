@@ -30,7 +30,7 @@ func _ready() -> void:
 		[&"move", "MOVE", ["NORM", "PREC"]],
 		[&"ambac", "AMBAC", ["ON", "OFF"]],
 	])
-	CockpitLinearSeat._set_layers(self, Layers.COCKPIT | Layers.VEHICLE_EXT)
+	CockpitLinearSeat._set_layers(self, Layers.COCKPIT)  # the cockpit adds outside views
 
 
 ## Sits on the cockpit model's SwitchPanelMount (the left console's front face).

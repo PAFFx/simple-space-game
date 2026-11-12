@@ -83,11 +83,16 @@ func _resolve_bones() -> void:
 			push_error("CockpitHatch: bone '%s' not found" % panel.bone_name)
 			continue
 		var global_rest := skeleton.get_bone_global_rest(idx).basis.get_rotation_quaternion()
+		var parent := skeleton.get_bone_parent(idx)
+		var parent_rest := skeleton.get_bone_global_rest(parent).basis.get_rotation_quaternion() \
+				if parent >= 0 else Quaternion.IDENTITY
 		_bones.append({
 			"panel": panel,
 			"index": idx,
 			"rest": skeleton.get_bone_rest(idx).basis.get_rotation_quaternion(),
+			"rest_origin": skeleton.get_bone_rest(idx).origin,
 			"global_rest": global_rest,
+			"parent_rest": parent_rest,
 		})
 
 
@@ -100,6 +105,9 @@ func _apply() -> void:
 		var g: Quaternion = b.global_rest
 		var q_local := g.inverse() * q_skel * g
 		skeleton.set_bone_pose_rotation(b.index, (b.rest as Quaternion) * q_local)
+		if panel.slide != Vector3.ZERO:
+			var local_slide: Vector3 = (b.parent_rest as Quaternion).inverse() * (panel.slide * t)
+			skeleton.set_bone_pose_position(b.index, (b.rest_origin as Vector3) + local_slide)
 	if _screen != null:
 		_screen.set_aperture_amount(smoothstep(0.0, 1.0, _window_progress(aperture_window)))
 

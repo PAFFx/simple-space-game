@@ -10,10 +10,34 @@ extends CockpitBase
 ## sibling's _ready() via VehicleBase — before this node's own _ready().
 
 
+var _hatch: CockpitHatch
+var _outside_visible := false
+
+
 func _ready() -> void:
-	# Interior is drawn for the pilot and for outside cameras looking in through
-	# the open hatch, but never for the sensor (which would see it on the screen).
-	_set_layers(get_node("Model"), Layers.COCKPIT | Layers.VEHICLE_EXT)
+	# Interior is drawn for the pilot always, for outside cameras only while the hatch is
+	# unsealed (looking in through it; sealed, the gimballed capsule's hatch frame could
+	# poke through the hull as it turns), and never for the sensor (which would see it on
+	# the screen).
+	_apply_layers()
+	var vehicle := VehicleBase.find_vehicle(self)
+	if vehicle != null:
+		_hatch = vehicle.find_component(CockpitHatch) as CockpitHatch
+
+
+func _process(_delta: float) -> void:
+	var outside := _hatch != null and _hatch.is_unsealed()
+	if outside != _outside_visible:
+		_outside_visible = outside
+		_apply_layers()
+
+
+func _apply_layers() -> void:
+	var layers := Layers.COCKPIT | (Layers.VEHICLE_EXT if _outside_visible else 0)
+	_set_layers(get_node("Model"), layers)
+	var panel := get_node_or_null("SwitchPanel")
+	if panel != null:
+		_set_layers(panel, layers)
 
 
 func get_camera_mount() -> Marker3D:

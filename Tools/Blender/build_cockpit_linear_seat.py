@@ -3,7 +3,8 @@
 Run:  blender -b -P Tools/Blender/build_cockpit_linear_seat.py -- <output.glb> [--aperture EL,HALF_AZ,HALF_EL]
 
 --aperture places the hatch opening in the shell (degrees, default 0,36,36 = straight
-ahead): suits whose door isn't in front of the sphere get their own variant.
+ahead): a door-shaped rectangle on the plane facing that elevation, half sizes as angles
+(matching the panoramic screen's aperture). Suits whose door isn't ahead get a variant.
 
 Origin = centre of the panoramic sphere (pilot eye is ~8 cm in front of it).
 The panoramic screen itself is generated at runtime (radius 1.25 m); everything
@@ -55,9 +56,7 @@ def build_shell(m):
         # Into the aperture's frame (its centre straight ahead), then test the half sizes.
         y = c.y * math.cos(el0) + c.z * math.sin(el0)
         z = -c.y * math.sin(el0) + c.z * math.cos(el0)
-        az = math.atan2(c.x, y)
-        el = math.asin(max(-1.0, min(1.0, z)))
-        if abs(az) < ha and abs(el) < he:
+        if y > 0.0 and abs(c.x / y) < math.tan(ha) and abs(z / y) < math.tan(he):
             doomed.append(f)
     bmesh.ops.delete(shell.bm, geom=doomed, context="FACES")
 
@@ -78,6 +77,16 @@ def build_shell(m):
     shell.box(at(0, d - 0.01, hh - 0.035), (1.4 * hw, 0.012, 0.012), "strip", rot=rot)
     shell.to_object(bevel=0.01)
 
+    # Inner hatch door: two halves just outside the screen that slide apart sideways
+    # (InnerDoorL / InnerDoorR, Godot slides them along x).
+    di = 1.27
+    iw, ih = di * math.tan(ha), di * math.tan(he)
+    for side, s in (("L", -1.0), ("R", 1.0)):
+        door = mk.PartBuilder(f"InnerDoor{side}", m)
+        door.box((0, 0, 0), (iw, 0.02, 2 * ih), "shell", rot=rot)
+        door.box(tuple(v * 1.0 for v in (0.0, -0.012, 0.0)), (0.012, 0.004, 2 * ih * 0.9), "strip", rot=rot)
+        door.to_object(location=at(iw * 0.5 * s, di, 0), bevel=0.004)
+
 
 def build_seat(m):
     seat = mk.PartBuilder("Seat", m)
@@ -90,8 +99,13 @@ def build_seat(m):
     seat.box((0, -0.305, -0.4), (0.16, 0.02, 0.55), "blue", rot=(12, 0, 0))
     seat.box((0, -0.24, 0.0), (0.28, 0.1, 0.26), "fabric")
     seat.box((0, -0.19, 0.0), (0.12, 0.012, 0.18), "blue")
-    seat.box((0, -0.1, -0.86), (0.3, 0.4, 0.14), "frame")
     seat.to_object(bevel=0.012)
+    # The seat swivels on a fixed base on the boom (the seat and right armrest turn to
+    # clear the way to the hatch; the left armrest is fixed to the base).
+    base = mk.PartBuilder("SeatBase", m)
+    base.box((0, -0.1, -0.86), (0.3, 0.4, 0.14), "frame")
+    base.cylinder((0, -0.05, -0.79), 0.13, 0.03, "grip", segments=20)
+    base.to_object(bevel=0.01)
 
     boom = mk.PartBuilder("SeatBoom", m)
     boom.box((0, -0.85, -0.55), (0.18, 0.95, 0.14), "frame")
@@ -108,11 +122,13 @@ MAIN_SIZE = (0.44, 0.30)
 SUB_SIZE = (0.17, 0.125)
 SUB_TURN_DEG = 35.0
 BEZEL = 0.014
-# Right armrest group (console, grip, main + right sub monitor, hatch lever) swings out
-# about a vertical axis at the armrest's back to clear the way out (Godot drives it).
-RIGHT_ARMREST_PIVOT = (0.34, -0.30, -0.5)
-# Console front faces (where the switch panel and the hatch lever sit).
-FACE_CENTRE_Y, FACE_CENTRE_Z, FACE_TILT = 0.2, -0.428, 110.0
+# Seat swing group: the seat, pedals, footrest, right armrest (console, grip, hatch lever)
+# and the main + right monitors turn together about a vertical axis through the seat to
+# clear the way to the hatch (Godot drives it). The left armrest and left monitor stay.
+SEAT_PIVOT = (0.0, -0.05, -0.6)
+# Console tops in front of the grips (flat, y 0.17..0.28): the switch panel (left) and
+# the hatch lever (right) lie flush on them.
+FACE_CENTRE_Y, FACE_CENTRE_Z, FACE_TILT = 0.222, -0.43, 90.0
 
 
 def _frame(right, normal, up):
@@ -190,6 +206,17 @@ def build_consoles(m):
         pedal.box((0, 0.1, 0.045), (0.07, 0.15, 0.006), "frame", rot=(25, 0, 0))
         pedal.to_object(location=(0.13 * s, 0.45, -1.0), bevel=0.004)
 
+    # Brackets joining the armrests to the seat: the right one to the swivelling seat
+    # (they turn together), the left one, an L under the cushion and up outside the seat
+    # side, to the fixed base.
+    right = mk.PartBuilder("ArmrestBracketR", m)
+    right.box((0.305, -0.04, -0.578), (0.055, 0.32, 0.09), "frame")
+    groups["R"].append(right.to_object(bevel=0.006))
+    left = mk.PartBuilder("ArmrestBracketL", m)
+    left.box((-0.24, -0.1, -0.825), (0.2, 0.08, 0.04), "frame")
+    left.box((-0.325, -0.1, -0.68), (0.04, 0.08, 0.29), "frame")
+    left.to_object(bevel=0.006)
+
     # Left console face: mount for Godot's switch panel (its local +Y out of the face,
     # -Z forward along it once in Godot).
     mount = bpy.data.objects.new("SwitchPanelMount", None)
@@ -260,13 +287,27 @@ def build_hatch_lever(m, groups):
     obj = handle.to_object(bevel=0.001)
     obj.matrix_world = _face_matrix(1.0) @ Matrix.Translation((0, -0.03, 0.008))
     groups["R"].append(obj)
+    # Guard over it (HatchGuard, origin on its hinge at the base's forward edge): a
+    # striped cover that flips forward, away from the pilot, to free the handle.
+    guard = mk.PartBuilder("HatchGuard", m)
+    gl, gw, gh = 0.095, 0.07, 0.034
+    for i in range(5):
+        guard.box((0, -gl * (i + 0.5) / 5, gh), (gw, gl / 5, 0.004), "yellow" if i % 2 == 0 else "grip")
+    for k in (-1.0, 1.0):
+        guard.box((gw * 0.5 * k, -gl * 0.5, gh * 0.5), (0.004, gl, gh), "yellow")
+    guard.box((0, -gl, gh * 0.5), (gw, 0.004, gh), "yellow")
+    gobj = guard.to_object(bevel=0.001)
+    gobj.matrix_world = _face_matrix(1.0) @ Matrix.Translation((0, 0.046, 0.008))
+    groups["R"].append(gobj)
 
 
-def build_armrest_pivot(groups):
-    """Parents the right armrest group to RightArmrest so Godot can swing it out."""
-    pivot = bpy.data.objects.new("RightArmrest", None)
+def build_seat_pivot(groups):
+    """Parents the seat swing group to SeatSwing so Godot can turn it."""
+    pivot = bpy.data.objects.new("SeatSwing", None)
     bpy.context.scene.collection.objects.link(pivot)
-    pivot.location = RIGHT_ARMREST_PIVOT
+    pivot.location = SEAT_PIVOT
+    for name in ("Seat", "Footrest", "PedalL", "PedalR"):
+        groups["R"].append(bpy.data.objects[name])
     for o in groups["R"]:
         _parent_keep(o, pivot)
 
@@ -293,7 +334,7 @@ def main():
     groups = build_consoles(m)
     build_footrest_and_mfd(m, groups)
     build_hatch_lever(m, groups)
-    build_armrest_pivot(groups)
+    build_seat_pivot(groups)
 
     for obj in bpy.data.objects:
         obj.select_set(False)

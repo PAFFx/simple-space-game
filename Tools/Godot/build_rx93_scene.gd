@@ -18,7 +18,13 @@ const ANIM_PATH := DIR + "Animations/rx93_animations.tres"
 const MODEL := DIR + "Arts/mobile_suit_nu.glb"
 const EQUIPMENT := "res://Entities/Equipment/RX93/"
 const SKELETON := ^"Model/Armature/Skeleton3D"
-const COM := Vector3(0.0, 14.6, 0.8)
+# The model's belly is stretched taller (build_mobile_suit_nu.py, BELLY_*): everything
+# from the pelvis down sits BELLY_DROP lower than on the source model. Positions below
+# are the source's; lower-body ones go through _lowered().
+const BELLY_DROP := 0.76
+const LOWER_BONE_PREFIXES := ["root", "pelvis", "spine", "skirt_", "thigh", "shin", "foot", "calf_guard"]
+# The legs carry about 45% of the mass, so the centre of mass drops ~0.45 of that.
+const COM := Vector3(0.0, 14.6 - 0.34, 0.8)
 const SENSOR_SCENE := \
 		"res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn"
 # The ν's own cockpit variant: its hatch opening faces down the tunnel to the red chest door
@@ -116,7 +122,7 @@ const THRUSTERS := [
 
 # name, center, size
 const COLLIDERS := [
-	["Torso", Vector3(0, 17.1, -0.8), Vector3(4.0, 4.2, 4.7)],
+	["Torso", Vector3(0, 16.72, -0.8), Vector3(4.0, 4.96, 4.7)],  # down over the taller belly
 	["Backpack", Vector3(0, 17.5, 3.6), Vector3(4.0, 7.0, 4.0)],
 	["Head", Vector3(0, 20.2, -0.4), Vector3(1.6, 2.0, 2.2)],
 	["Pelvis", Vector3(0, 12.8, -0.6), Vector3(5.0, 3.6, 4.6)],
@@ -255,8 +261,9 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 	root.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	root.center_of_mass = COM
 	root.mass = 46400.0
-	# The sphere and the tunnel behind the door keep the hull out of the pilot's view.
-	root.set("first_person_parts", [] as Array[StringName])
+	# Seen from the seat through the open hatch: the airlock corridor (built into the
+	# chest mesh) and the outer door.
+	root.set("first_person_parts", [&"Chest", &"Hatch"] as Array[StringName])
 
 	var model: Node3D = load(MODEL).instantiate()
 	model.name = "Model"
@@ -268,12 +275,14 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 		var box := BoxShape3D.new()
 		box.size = c[2]
 		shape.shape = box
-		shape.position = c[1]
+		shape.position = c[1] - Vector3(0, BELLY_DROP, 0) if c[0] in ["Pelvis", "LegR", "LegL", "FootR", "FootL"] else c[1]
 		_add(root, root, shape)
 
 	var sensor_mount := _marker(root, "SensorHeadMount", Vector3(0, 20.0, -1.4))
 	_add(root, sensor_mount, load(SENSOR_SCENE).instantiate())
-	var cockpit_mount := _marker(root, "CockpitMount", Vector3(0, 17.2, -0.5))
+	# Lowered (and back) so the airlock to the chest door is less steep; the fit test keeps
+	# the whole cockpit sphere inside the hull here.
+	var cockpit_mount := _marker(root, "CockpitMount", Vector3(0, 16.6, -0.2))
 	_add(root, cockpit_mount, load(COCKPIT_SCENE).instantiate())
 
 	_build_thrusters(root)
@@ -317,7 +326,7 @@ func _build_thrusters(root: Node3D) -> void:
 			attach.external_skeleton = NodePath("../../" + String(SKELETON))
 			_add(root, group, attach)
 			attachments[bone] = attach
-		var pos: Vector3 = t[2]
+		var pos: Vector3 = _lowered(t[2], t[1])
 		var exhaust: Vector3 = (t[3] as Vector3).normalized()
 		var up := Vector3.UP if absf(exhaust.dot(Vector3.UP)) < 0.95 else Vector3.BACK
 		# Thruster −Z = thrust direction = opposite of the exhaust.
@@ -354,7 +363,7 @@ func _build_thrusters(root: Node3D) -> void:
 		if POD_HINGE.has(t[0]):
 			node.set("swing_pivot", body_xf.affine_inverse() * (POD_HINGE[t[0]] as Vector3))
 		if CALF_HINGE.has(t[0]):
-			node.set("swing_pivot", body_xf.affine_inverse() * (CALF_HINGE[t[0]] as Vector3))
+			node.set("swing_pivot", body_xf.affine_inverse() * _lowered(CALF_HINGE[t[0]], "calf_guard"))
 		if SWING_2D.has(t[0]):
 			var lo: float = SWING_2D[t[0]][1]
 			var hi: float = SWING_2D[t[0]][2]
@@ -397,20 +406,24 @@ func _build_flight_computer(root: Node3D) -> void:
 	input.set("axis_bindings", bindings)
 
 
-## The red door at the bottom of the chest swings out and down about its bottom edge.
-## Order: the right armrest swings clear (HatchCockpitParts, 0–0.3), the screen opens
-## below the seat and down the tunnel, then the door.
+## An airlock: the red outer door at the bottom of the chest slides up behind the chest
+## front; behind it a corridor leads to the cockpit's own inner door. Order: the seat and
+## right armrest turn clear (HatchCockpitParts, 0–0.25), the screen opens a doorway down
+## the corridor, the inner door slides apart (0.35–0.6), then the outer door (0.6–1).
 func _build_hatch(root: Node3D) -> void:
 	var hatch := CockpitHatch.new()
 	hatch.name = "CockpitHatch"
 	_add(root, root, hatch)
 	var door := HatchPanel.new()
 	door.bone_name = &"hatch"
-	door.hinge_axis = Vector3.RIGHT
-	door.open_angle_deg = -100.0
-	door.window = Vector2(0.5, 1.0)
+	door.open_angle_deg = 0.0
+	# Along the door's own tilt (forward as it rises), past its full height, so it stays
+	# behind the chest front and clear of the airlock corridor.
+	door.slide = Vector3(0, 1.8, -0.69)
+	door.window = Vector2(0.6, 1.0)
 	hatch.panels = [door] as Array[HatchPanel]
-	hatch.aperture_window = Vector2(0.25, 0.55)
+	hatch.aperture_window = Vector2(0.2, 0.45)
+	hatch.duration = 4.0
 	hatch.skeleton = root.get_node(SKELETON)
 
 
@@ -456,6 +469,14 @@ func _build_stances(root: Node3D) -> void:
 		stance.angles_deg = angles
 		list.append(stance)
 	node.stances = list
+
+
+## Source-model position → stretched-model position: lower-body parts sit BELLY_DROP lower.
+static func _lowered(pos: Vector3, bone: String) -> Vector3:
+	for prefix: String in LOWER_BONE_PREFIXES:
+		if bone.begins_with(prefix):
+			return pos - Vector3(0, BELLY_DROP, 0)
+	return pos
 
 
 ## Thruster basis for a one-plane swing: local X is the swing axis, so +pitch turns the

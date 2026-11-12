@@ -109,59 +109,33 @@ the suit visibly leans and rolls inside it during auto-rotation. `orientation_so
 
 Canvas resolution is ~11.4 px/degree. Raise `canvas_size` for sharper text, at the cost of memory.
 
-## Hatch aperture
-
-The screen shader can cut a rectangle (in azimuth/elevation) out of the sphere:
-
-- `PanoramicScreen.aperture_center_deg`, `aperture_half_size_deg`: geometry, set to match the hatch.
-- `PanoramicScreen.set_aperture_amount(0..1)`: opens from the centre line outward.
-
-`CockpitHatch` drives this on a single timeline together with the hatch bones:
-
-```
-amount  0.0 ──── 0.3 ──────────── 0.85 ── 1.0
-        screen splits open
-                 upper flap swings up ───┘
-                       lower flap folds down ──┘
-```
-
-Closing plays the same timeline backwards: flaps seal first, then the screen closes.
-
-## Cockpit displays
-
-Three screens in front of the seat (after the Xi Gundam's cockpit), painted by `CockpitDisplays`:
-a large main monitor with two small sub monitors hinged to its lower side edges, turned toward the
-pilot. No legs: the main and right sub ride an arm from the right armrest, the left sub one from
-the left, meeting the monitors' bottom edges from below so nothing crosses the screens. Each screen
-mesh (`ScreenCentre`, `ScreenLeft`, `ScreenRight`, built by
-`Tools/Blender/build_cockpit_linear_seat.py`) gets an `MfdPage` in its own SubViewport. Pages
-follow modern fighter large-area displays: dark field, thin outlines, boxed values.
-
-- **Centre: SA** (`SaPage`), the biggest: plan view centred on the suit, heading up, over the
-  HUD's attitude plane (`FlightComputer.get_attitude_basis()`). Range rings step to fit the
-  farthest contact (500 m … 200 km), compass rose, contacts as diamonds with range and height
-  above (+) / below (−) the plane, the suit's velocity as a leader line, data strip on top.
-- **Left: ENG / FUEL** (`EnginePage`): thrusters in three tiers by rating, biggest on top and
-  drawn biggest: MAIN (≥ 50% of the largest: the four backpack mains, with gimbal dots), BIG
-  (≥ 20%: soles, calves, shoulders, chest), SMALL (the verniers, for troubleshooting). Fuel
-  window: mass, %, flow (thrust ÷ Isp·g₀), time left at the current flow, Isp, BINGO under 20%.
-  Header: total thrust (% and MN) and max thrust-to-weight.
-- **Right: TGT** (`TargetPage`): placeholder until targeting exists.
-
-The panoramic HUD keeps only what's needed outside: flight symbology, non-default modes and
-cautions. The thruster rows and propellant / thrust bars moved to the left display.
-
 ## Hatch
 
-`CockpitHatch` runs one timeline (0 = sealed, 1 = open): the screen cuts its aperture, then the
-suit's door bones swing. Around the open aperture the HUD draws orange segmented brackets and
-HATCH / UNLOCK tabs (`HatchWidget`; SEALING while closing), outside the cockpit's portal frame.
-`HatchCockpitParts` owns the hatch handle (yellow/black stripes, right console face): left click
-pulls it (open), right click pushes it (close); it sits pulled while open. On the hatch timeline the
-right armrest swings 60° out first (0–0.3), carrying the main and right monitors, to clear the
-way out; the ν's screen then opens below the seat and down the tunnel (aperture centre −56°, half
-25° × 34°: the real shell and the tunnel show there), then the door swings (0.5–1). The shell's
-portal frame sits between the screen and the shell, so it shows only through the open hatch.
+The ν's hatch is an airlock: the outer door (the red panel at the bottom of the chest), a
+corridor, and the cockpit's own inner door. `CockpitHatch` runs one timeline (0 = sealed, 1 = open)
+that `HatchCockpitParts` follows:
+
+| Timeline | What moves |
+|---|---|
+| 0–0.25 | the seat turns 40° (with the pedals, footrest, right armrest and the main and right monitors; the left armrest and monitor stay) to clear the way |
+| 0.2–0.45 | the screen cuts a door-shaped opening (flat as seen from the seat) down the airlock, framed by `HatchWidget`'s HATCH / UNLOCK brackets |
+| 0.35–0.6 | the inner door's two halves slide apart |
+| 0.6–1 | the outer door slides up along its own tilt, behind the chest front (`HatchPanel.slide`) |
+
+Control: the yellow/black hatch lever on the right console, under a striped guard. Click the guard
+to lift (left) or lower (right) it; with it up, the lever pulls (left: open) or pushes (right:
+close). The lever sits pulled while the hatch is open.
+
+**ν model** (`build_mobile_suit_nu.py`): the belly is stretched taller (the chest below 15.9 m ×1.8,
+the lower body 0.76 m lower; the scene builder lowers its lower-body positions to match), and the
+navy column around the door stretches further, along its own slope so the door stays flat, until it
+meets the crotch armour. The door is 0.95 × 1.76 m. The corridor (seams, hazard stripes at both
+ends, grab handles, light strips) runs 37° down from the cockpit sphere to it; the cockpit sits at
+(0, 16.6, −0.2), where a fit test keeps the sphere inside the hull. The corridor and door are
+`first_person_parts`, so the pilot sees them once the hatch is unsealed. The cockpit is drawn for
+outside cameras only while unsealed (sealed, the gimballed capsule's frame could poke through the
+hull). Its variant (`cockpit_linear_seat_nu.tscn`, model built with `--aperture -37.3,20.5,25.3`)
+has the shell opening and screen aperture on the corridor.
 
 ## Cockpit switches
 

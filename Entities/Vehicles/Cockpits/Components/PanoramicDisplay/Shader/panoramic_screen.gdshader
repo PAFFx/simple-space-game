@@ -38,8 +38,10 @@ uniform vec4 damaged_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform sampler2D hud_texture : source_color, hint_default_transparent, filter_linear, repeat_enable;
 uniform float hud_brightness : hint_range(0.0, 5.0) = 1.2;
 
-// Hatch aperture: a rectangle in (azimuth, elevation) radians that is cut out of
-// the screen while the hatch is open. It opens from the centre line outward.
+// Hatch aperture: a door-shaped rectangle cut out of the screen while the hatch is
+// open, flat as seen from the centre (a rectangle on the plane facing aperture_center,
+// half sizes as angles), so it reads as a doorway rather than a slice of the sphere.
+// aperture_center = (azimuth, elevation) radians. It opens from the centre line outward.
 uniform float aperture_amount : hint_range(0.0, 1.0) = 0.0;
 uniform vec2 aperture_center = vec2(0.0, 0.0);
 uniform vec2 aperture_half_size = vec2(0.61, 0.61);
@@ -54,10 +56,19 @@ void fragment() {
 
 	// --- Step 2: Cut the hatch aperture while the hatch is open ---
 	if (aperture_amount > 0.0) {
-		float d_az = mod(azimuth - aperture_center.x + PI, TAU) - PI;
-		float d_el = elevation - aperture_center.y;
-		if (abs(d_az) < aperture_half_size.x && abs(d_el) < aperture_half_size.y * aperture_amount) {
-			discard;
+		float ce = cos(aperture_center.y);
+		vec3 c = vec3(sin(aperture_center.x) * ce, sin(aperture_center.y), -cos(aperture_center.x) * ce);
+		vec3 r = vec3(cos(aperture_center.x), 0.0, sin(aperture_center.x));
+		vec3 u = cross(r, c);
+		float cel = cos(elevation);
+		vec3 d = vec3(sin(azimuth) * cel, sin(elevation), -cos(azimuth) * cel);
+		float depth = dot(d, c);
+		if (depth > 0.0) {
+			vec2 p = vec2(dot(d, r), dot(d, u)) / depth;
+			if (abs(p.x) < tan(aperture_half_size.x)
+					&& abs(p.y) < tan(aperture_half_size.y) * aperture_amount) {
+				discard;
+			}
 		}
 	}
 
