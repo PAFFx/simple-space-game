@@ -75,6 +75,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## While boosting: rate limits are multiplied by this, and torque/thrust limits open fully.
 @export var boost_rate_multiplier: float = 1.7
 @export var boost_rate_gain_multiplier: float = 1.5
+## Multiplies max_command_speed while boosting (when it's set).
 @export var boost_speed_multiplier: float = 2.5
 
 @export_group("Movement modes")
@@ -90,7 +91,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var precision: bool = false
 
 @export_group("Horizon lock")
-@export var horizon_lock: bool = false
+@export var horizon_lock: bool = true
 ## Levelling: roll rate per rad of bank, 1/s, and its limit, deg/s.
 @export var horizon_level_gain: float = 3.0
 @export var horizon_level_rate_deg: float = 30.0
@@ -103,8 +104,10 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## line toward the command. Auto-rotation finds the attitude that can deliver it.
 @export var cruise_accel_g: float = 0.8
 @export var boost_accel_g: float = 4.0
-## Velocity demanded at full stick in VELOCITY_HOLD, m/s.
-@export var max_command_speed: float = 80.0
+## VELOCITY_HOLD top speed at full stick, m/s. 0 = no limit: holding the stick keeps
+## accelerating along it (drift across it is still cancelled), releasing brings the
+## suit to rest. Precision mode keeps its own precision_speed.
+@export var max_command_speed: float = 0.0
 ## Velocity loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
 ## Velocity loop gain while boosting: snappy starts, stops and direction changes (dodging).
@@ -526,6 +529,15 @@ func _translation_force_world(state: FlightState, command: PilotCommand) -> Vect
 	if translation_mode == TranslationMode.NEWTONIAN:
 		return stick_world.limit_length(1.0) * accel_limit * state.mass
 
-	var v_error := stick_world * speed - state.linear_velocity
 	var gain := boost_velocity_gain if command.boost else velocity_gain
+	var amount := stick_world.length()
+	if speed <= 0.0 and amount > stick_deadzone:
+		# No top speed: push along the stick (|stick| of the limit) and cancel any
+		# velocity across it, so the suit still flies straight toward the command.
+		var dir := stick_world / amount
+		var v := state.linear_velocity
+		var across := v - dir * v.dot(dir)
+		var accel := dir * (minf(amount, 1.0) * accel_limit) - across * gain
+		return accel.limit_length(accel_limit) * state.mass
+	var v_error := stick_world * speed - state.linear_velocity
 	return (v_error * gain).limit_length(accel_limit) * state.mass

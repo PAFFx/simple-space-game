@@ -80,7 +80,7 @@ The body is driven to `pilot · offset`, where the offset comes from the attitud
 |------|------|-------------|----------------|
 | Rotation | `ATTITUDE_HOLD` (default) | Turn rate about the pilot's axes (`max_rate_deg`); cockpit locked rigidly to the suit on the steered axes only | Turn brakes at full torque (axis still locked), then the attitude is held |
 | Rotation | `RATE_DAMP` | Angular rate demand | Rate → 0, no hold, no auto-rotation |
-| Translation | `VELOCITY_HOLD` (default) | Velocity in the pilot frame (`max_command_speed`) | Brought to rest relative to the reference frame |
+| Translation | `VELOCITY_HOLD` (default) | Accelerate along the stick, no top speed (drift across it cancelled; `max_command_speed` > 0 makes it a velocity command) | Brought to rest relative to the reference frame |
 | Translation | `NEWTONIAN` | Thrust demand (cruise fraction, or 100% with boost) | Coast |
 
 Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
@@ -114,17 +114,17 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
 
 | Mode | Input | Accel cap | Speed | Auto-rotation |
 |------|-------|-----------|-------|---------------|
-| Normal | — | `cruise_accel_g` 0.8 G | `max_command_speed` 80 m/s | ≤ `cruise_max_offset_deg` 20° |
+| Normal | — | `cruise_accel_g` 0.8 G | no limit | ≤ `cruise_max_offset_deg` 20° |
 | Precision | C (toggle) | `precision_accel_g` 0.15 G | `precision_speed` 20 m/s | off; turn rates × 0.5 |
-| Boost | Shift | 4 G | × 2.5 | ≤ `boost_max_offset_deg` 30° |
-| Full boost | Shift double-tap + hold | 4 G | × 2.5 | solver's `max_offset_deg` 60° |
+| Boost | Shift | 4 G | no limit | ≤ `boost_max_offset_deg` 30° |
+| Full boost | Shift double-tap + hold | 4 G | no limit | solver's `max_offset_deg` 60° |
 
 Capped modes keep the suit quick to change direction but give less acceleration in weak
 directions (descending: 0.7 G normal, 0.8 G boost, 1.3 G full). Shift overrides precision.
 While boosting, the swing itself is torque-limited (the body lags the target by ~14°, so swings
 run at ~20°/s), because auto-rotation yields to force (`auto_rotate_torque_priority`).
 
-**Horizon lock** (L, toggle; `horizon_lock`). Body-axis pitch + yaw bank the view relative to
+**Horizon lock** (L, toggle; `horizon_lock`, on by default). Body-axis pitch + yaw bank the view relative to
 the world: a diagonal turn tilts the horizon, and a closed loop of stick motion leaves a roll
 (pitch up 90°, yaw 90°, pitch down 90° = rolled 90°). With the lock, yaw turns about a stored
 up (set when the lock is switched on) and roll levels any bank (`horizon_level_gain` 3 /s, ≤
@@ -136,8 +136,8 @@ Results: a diagonal turn ends level instead of 66° banked; mouse-style circles 
 0.7° (17° without); near vertical a released turn may bank up to ~9° before levelling.
 
 **Boost** (Shift): 4 G acceleration cap, velocity loop 2.5 /s (`boost_velocity_gain`, snappy
-starts, stops and dodges), 100% torque for pilot steering, rates × 1.7, commanded speed × 2.5
-(150 m/s). Auto-rotation swings at 120°/s with the target's rate fed forward into the hold.
+starts, stops and dodges), 100% torque for pilot steering, rates × 1.7. A 10 s full boost forward
+reaches ~355 m/s. Auto-rotation swings at 120°/s with the target's rate fed forward into the hold.
 
 **Clean force while auto-rotating.** Fast swings need big turning moments, and the allocator would
 borrow the off-centre mains for them, spilling force (e.g. a boosted dive first shooting upward).
