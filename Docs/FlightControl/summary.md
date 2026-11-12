@@ -245,13 +245,13 @@ so it saved propellant but never made the suit turn faster.
 
 **Joints** (offsets from the animated pose, human-like ranges):
 
-| Joint | Axes | Range | Inertia |
-|---|---|---|---|
-| Hip | flex −20…+35°, side −3…+6° (outward), twist ±15° | | 1.6e5 (leg), 2e4 twist |
-| Knee | bend back up to 45°, straighten 5° | | 4.5e4 |
-| Shoulder | flex −35…+45°, out −8…+35°, twist ±25° | | 6e4, 1e4 twist |
-| Elbow | bend up to 50°, straighten 5° | | 2.5e4 |
-| Waist | twist ±12°, bend −10…+6° | | 1.2e5 / 1.5e5 |
+| Joint | Axes and range | Inertia (kg·m²) |
+|---|---|---|
+| Hip | flex −20…+35°, side −3…+6° (outward), twist ±15° | 1.6e5 (leg), 2e4 twist |
+| Knee | bend back up to 45°, straighten 5° | 4.5e4 |
+| Shoulder | flex −35…+45°, out −8…+35°, twist ±25° | 6e4, 1e4 twist |
+| Elbow | bend up to 50°, straighten 5° | 2.5e4 |
+| Waist | twist ±12°, bend −10…+6° | 1.2e5 / 1.5e5 |
 
 The side hip swing is kept small. Twists move little mass; they mostly add natural motion.
 
