@@ -457,7 +457,7 @@ texture), and most can't aim far, so limbs have to move to point them:
 | 2 × 400 kN | soles | down | 3D, 20° cone |
 | 2 × 400 kN (the model's own nozzles, in their calf plates) | behind each calf | down, a little back | 2D with the plate, 0…40° back only (never into the leg) |
 | 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | top: 2D from 10° below rest to 45° up (nearly straight up); outer: 2D fore/aft ±25° |
-| 2 × 850 kN (with the mains, nearest the generator) | chest vents | forward (brakes) | 2D up/down ±20° |
+| 2 × 660 kN (with the mains, nearest the generator) | chest vents | forward (brakes) | 2D up/down ±20° |
 | 6 × 80 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
 | 2 × 120 kN | rear skirts | back | fixed |
 | 6 × 70 kN | side skirts, 3 each | forward-out, back-out, out | fixed |

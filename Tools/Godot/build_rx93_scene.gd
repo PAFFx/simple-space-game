@@ -93,8 +93,8 @@ const THRUSTERS := [
 	["ShOutL", "shoulder.L", Vector3(-4.93, 18.97, 0.44), Vector3(-0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
 	# Chest vents, firing forward (push back / brake). With the backpack mains, the nearest
 	# to the generator and the biggest-looking ports: nearly as strong as a main.
-	["ChestR", "chest", Vector3(1.31, 17.26, -2.15), Vector3(0.39, -0.24, -0.89), 850.0, UP_DOWN, 10.0, 0.74, false],
-	["ChestL", "chest", Vector3(-1.29, 17.26, -2.15), Vector3(-0.39, -0.24, -0.89), 850.0, UP_DOWN, 10.0, 0.74, false],
+	["ChestR", "chest", Vector3(1.31, 17.26, -2.15), Vector3(0.39, -0.24, -0.89), 660.0, UP_DOWN, 10.0, 0.74, false],
+	["ChestL", "chest", Vector3(-1.29, 17.26, -2.15), Vector3(-0.39, -0.24, -0.89), 660.0, UP_DOWN, 10.0, 0.74, false],
 	# Front of each shin, below the knee: centre, outer, inner; left/right swing only.
 	["ShinCR", "shin.R", Vector3(3.29, 6.96, -1.57), Vector3(0.24, -0.52, -0.82), 80.0, SIDE_SIDE, 1.2, 0.30, false],
 	["ShinOR", "shin.R", Vector3(4.36, 5.83, -0.13), Vector3(0.84, -0.15, -0.53), 80.0, SIDE_SIDE, 1.2, 0.30, false],
