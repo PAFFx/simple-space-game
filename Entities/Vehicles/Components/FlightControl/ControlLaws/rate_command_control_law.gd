@@ -39,7 +39,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var tracking_lag_deg := Vector2(6.0, 15.0)
 ## Auto-rotation keeps running on a steered axis at this fraction of its swing rate
 ## (the view still turns at the stick rate; the body adds the swing). 0 = pause it.
-@export_range(0.0, 1.0) var steer_auto_rotate_share: float = 0.3
+@export_range(0.0, 1.0) var steer_auto_rotate_share: float = 0.4
 ## Only auto-rotate while boosting. Off: auto-rotate whenever a translation is
 ## commanded (or boosting) and the demand needs it; plain stops never rotate.
 @export var auto_rotate_on_boost_only: bool = false
