@@ -181,6 +181,15 @@ func get_translation_intent() -> Vector3:
 	return input_source.last_command.translation
 
 
+## Global "up" the HUD's attitude is shown against: the horizon lock's when it's on,
+## else the reference frame's (world up without one).
+func get_attitude_up() -> Vector3:
+	var up: Variant = control_law.get_horizon_up() if fcs_enabled and control_law != null else null
+	if up != null:
+		return up
+	return reference_frame.global_basis.y.normalized() if reference_frame != null else Vector3.UP
+
+
 ## Whether the pilot is boosting (Shift, or full boost).
 func is_boosting() -> bool:
 	return input_source != null and input_source.last_command != null \

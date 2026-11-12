@@ -29,6 +29,17 @@ hud_uv = (fract(UV2.x + 0.5), 1 − UV2.y)     forward = canvas centre, wraps at
 So anything drawn at a direction lines up with the sensor image of that direction, with no
 extra projection.
 
+**Attitude frame.** The horizon ring, pitch ladder and HDG/PIT/RLL readout all use
+`hud.get_attitude_basis()`: up = the horizon the flight computer holds level to (horizon lock's
+up; the reference frame's up when it's off), north = the reference frame's −Z flattened onto it.
+Before, the ladder used the reference frame, the readout world axes and the lock its own up, so
+the ladder sat ~10° off from what the suit held level.
+
+**Near the poles.** The equirectangular canvas stretches horizontally by 1/cos(elevation), so
+flat text thins toward the zenith: use `text_at()` for labels at canvas positions (it widens them
+back). Long marks run along great circles (ladder rungs keep their angular length up to 80°
+instead of shrinking with the latitude circle).
+
 World-anchored symbols (silhouettes, contact brackets) take their direction from the **sensor
 head** (`hud.get_view_origin()`), where the image is rendered from, not from the pilot's seat.
 Distant things look the same either way; the suit's own shield, a few metres from the head, would

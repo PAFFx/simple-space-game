@@ -161,6 +161,10 @@ func get_pilot_orientation() -> Variant:
 	return _pilot
 
 
+func get_horizon_up() -> Variant:
+	return _horizon_up if horizon_lock and _initialized else null
+
+
 func get_cockpit_orientation(body_q: Quaternion) -> Variant:
 	if not _initialized:
 		return null

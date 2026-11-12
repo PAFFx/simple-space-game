@@ -69,7 +69,7 @@ func _bar_row(y: float, label: String, fraction: float, color: Color) -> void:
 
 
 func _draw_attitude_readout() -> void:
-	var euler := hud.get_display_basis().get_euler()
+	var euler := (hud.get_attitude_basis().inverse() * hud.get_display_basis()).get_euler()
 	var hdg := wrapf(-rad_to_deg(euler.y), 0.0, 360.0)
 	begin_local(0.0, 12.5)
 	text(Vector2.ZERO, "HDG %03d   PIT %+03d   RLL %+04d" % [

@@ -33,6 +33,11 @@ func get_cockpit_orientation(_body_q: Quaternion) -> Variant:
 	return get_pilot_orientation()
 
 
+## Global "up" the law levels the cockpit's roll to (horizon lock), or null when none.
+func get_horizon_up() -> Variant:
+	return null
+
+
 ## Called when the law is (re)engaged so stale integrators / holds are dropped.
 func reset() -> void:
 	pass

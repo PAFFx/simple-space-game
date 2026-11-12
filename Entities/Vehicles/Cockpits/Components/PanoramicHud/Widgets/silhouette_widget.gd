@@ -35,4 +35,4 @@ func draw_widget() -> void:
 			for p in canvas:
 				if p.y < top.y:
 					top = p
-			text(top + label_offset, sil.label, hud.dim_color, HORIZONTAL_ALIGNMENT_LEFT, 14)
+			text_at(top + label_offset, sil.label, hud.dim_color, HORIZONTAL_ALIGNMENT_LEFT, 14)

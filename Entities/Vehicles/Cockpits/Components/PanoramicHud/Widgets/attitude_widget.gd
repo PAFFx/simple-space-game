@@ -2,8 +2,8 @@ class_name AttitudeWidget
 extends HudWidget
 
 ## Reference-plane attitude: a horizon ring with heading marks that wraps the
-## whole 360° screen, plus a pitch ladder ahead of the suit. "Horizontal" is the
-## reference frame's XZ plane (world if none), standing in for e.g. the orbital plane.
+## whole 360° screen, plus a pitch ladder ahead of the suit, against the HUD's attitude
+## frame (the horizon the flight computer holds level to; see PanoramicHud).
 
 @export var ladder_step_deg: int = 10
 @export var ladder_half_span_deg: float = 6.0
@@ -12,7 +12,7 @@ extends HudWidget
 
 
 func draw_widget() -> void:
-	var ref := _reference_basis()
+	var ref := hud.get_attitude_basis()
 	var up := ref.y
 	var display := hud.get_display_basis()
 	var forward := -display.z
@@ -26,13 +26,6 @@ func draw_widget() -> void:
 	for e in range(-90 + ladder_step_deg, 90, ladder_step_deg):
 		if e != 0:
 			_draw_ladder_rung(flat, right, up, e)
-
-
-func _reference_basis() -> Basis:
-	var fc := hud.flight_computer
-	if fc != null and fc.reference_frame != null:
-		return fc.reference_frame.global_basis.orthonormalized()
-	return Basis.IDENTITY
 
 
 func _draw_horizon_ring(ref: Basis) -> void:
@@ -53,19 +46,21 @@ func _draw_horizon_ring(ref: Basis) -> void:
 		var tick := px(0.9 if deg % 30 == 0 else 0.45)
 		line(base, base - Vector2(0, tick), hud.dim_color)
 		if deg % 30 == 0:
-			text(base - Vector2(0, tick + 6.0), "%03d" % deg, hud.dim_color, HORIZONTAL_ALIGNMENT_CENTER, 16)
+			text_at(base - Vector2(0, tick + 6.0), "%03d" % deg, hud.dim_color, HORIZONTAL_ALIGNMENT_CENTER, 16)
 
 
 func _draw_ladder_rung(flat: Vector3, right: Vector3, up: Vector3, pitch_deg: int) -> void:
 	var e := deg_to_rad(float(pitch_deg))
 	var color := hud.primary_color if absi(pitch_deg) <= 30 else hud.dim_color
+	# Rungs run along a great circle through the rung's centre, so they keep their
+	# angular length up to the zenith instead of shrinking with the latitude circle.
+	var centre := flat * cos(e) + up * sin(e)
 	for side in [-1.0, 1.0]:
 		var points := PackedVector2Array()
 		var a := ladder_gap_deg
 		while a <= ladder_half_span_deg + 0.001:
-			var az := deg_to_rad(a * side)
-			var dir := (flat * cos(az) + right * sin(az)) * cos(e) + up * sin(e)
-			points.append(hud.world_dir_to_canvas(dir))
+			var s := deg_to_rad(a * side)
+			points.append(hud.world_dir_to_canvas(centre * cos(s) + right * sin(s)))
 			a += 1.0
 		if pitch_deg < 0:
 			# Dashed below the reference plane, as on aircraft ladders.
@@ -78,4 +73,4 @@ func _draw_ladder_rung(flat: Vector3, right: Vector3, up: Vector3, pitch_deg: in
 		line(tip, tip + Vector2(0, drop), color)
 		var label_pos := tip + Vector2(px(0.5) * side, 6.0)
 		var align := HORIZONTAL_ALIGNMENT_LEFT if side > 0 else HORIZONTAL_ALIGNMENT_RIGHT
-		text(label_pos, str(absi(pitch_deg)), color, align, 15)
+		text_at(label_pos, str(absi(pitch_deg)), color, align, 15)

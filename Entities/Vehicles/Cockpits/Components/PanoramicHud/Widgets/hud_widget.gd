@@ -63,6 +63,16 @@ func text(pos: Vector2, value: String, color: Color = Color.TRANSPARENT,
 	draw_string(hud.font, pos - Vector2(offset, 0.0), value, HORIZONTAL_ALIGNMENT_LEFT, -1, s, c)
 
 
+## Text at a canvas position (outside a local frame), widened by the canvas stretch at
+## its elevation so it keeps its shape on the sphere instead of thinning toward the poles.
+func text_at(canvas_pos: Vector2, value: String, color: Color = Color.TRANSPARENT,
+		align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT, size: int = 0) -> void:
+	var elevation := (0.5 - canvas_pos.y / hud.projector.size.y) * hud.projector.elevation_range
+	draw_set_transform(canvas_pos, 0.0, Vector2(HudProjector.stretch_at(elevation), 1.0))
+	text(Vector2.ZERO, value, color, align, size)
+	draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
 func line(a: Vector2, b: Vector2, color: Color = Color.TRANSPARENT, width: float = 0.0) -> void:
 	draw_line(a, b, hud.primary_color if color.a == 0.0 else color,
 			hud.line_width if width <= 0.0 else width, true)
