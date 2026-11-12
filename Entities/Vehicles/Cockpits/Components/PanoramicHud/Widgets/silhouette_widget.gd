@@ -2,7 +2,7 @@ class_name SilhouetteWidget
 extends HudWidget
 
 ## Draws every HudSilhouette (group `hud_silhouettes`) as an outline, seen from
-## the pilot's eye. Edges are subdivided because straight 3D edges curve on the
+## the sensor head, like the image around it. Edges are subdivided because straight 3D edges curve on the
 ## equirectangular canvas.
 
 @export var subdivisions: int = 12
@@ -10,7 +10,7 @@ extends HudWidget
 
 
 func draw_widget() -> void:
-	var origin := hud.get_display_origin()
+	var origin := hud.get_view_origin()
 	for node in get_tree().get_nodes_in_group(HudSilhouette.GROUP):
 		var sil := node as HudSilhouette
 		if sil == null or not sil.is_visible_in_tree():

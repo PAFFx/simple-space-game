@@ -69,11 +69,13 @@ func get_display_basis() -> Basis:
 	return sensor_head.global_basis.orthonormalized()
 
 
-## Pilot eye point: the centre of the panoramic sphere.
-func get_display_origin() -> Vector3:
-	if panoramic_screen != null:
-		return panoramic_screen.get_display_transform().origin
-	return sensor_head.global_position
+## Where the screen's image is seen from: the sensor head (the suit's head camera),
+## not the pilot's seat. World-anchored symbols are projected from here so they line
+## up with the image; near objects (the suit's own shield) would sit off otherwise.
+func get_view_origin() -> Vector3:
+	if sensor_head != null:
+		return sensor_head.get_global_transform_interpolated().origin
+	return panoramic_screen.get_display_transform().origin
 
 
 func _auto_discover() -> void:

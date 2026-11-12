@@ -29,6 +29,11 @@ hud_uv = (fract(UV2.x + 0.5), 1 − UV2.y)     forward = canvas centre, wraps at
 So anything drawn at a direction lines up with the sensor image of that direction, with no
 extra projection.
 
+World-anchored symbols (silhouettes, contact brackets) take their direction from the **sensor
+head** (`hud.get_view_origin()`), where the image is rendered from, not from the pilot's seat.
+Distant things look the same either way; the suit's own shield, a few metres from the head, would
+otherwise sit visibly off its place in the image.
+
 The canvas is laid out in the **display frame**, the screen's own orientation
 (`hud.get_display_basis()`, `hud.world_to_display()`). It differs from the suit's body when the
 cockpit gimbal turns the seat for thrust vectoring. That's why the boresight (body axis) can move
@@ -39,8 +44,9 @@ away from the canvas centre (cockpit forward).
 1. Extend `HudWidget` (a `Node2D`) and implement `draw_widget()`.
 2. Lay out in **degrees**: `begin_local(az_deg, el_deg)` gives you a local frame where 1 unit = 1
    canvas pixel (`px(deg)` converts), with equirectangular stretch compensated.
-3. For world-anchored symbols, convert with `hud.world_to_sensor(dir)` →
-   `HudProjector.direction_to_angles()` → `begin_local_at()`.
+3. For world-anchored symbols, take `point − hud.get_view_origin()` and place it with
+   `hud.world_dir_to_canvas(dir)` (or `hud.world_to_display(dir)` →
+   `HudProjector.direction_to_angles()` → `begin_local_at()`).
 4. Add the node under `HudViewport` in `panoramic_hud.tscn`.
 
 Data sources: `hud.flight_computer` (state, thrusters, modes, propellant), `hud.hatch`,

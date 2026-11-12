@@ -15,7 +15,7 @@ var _closure := {}
 
 
 func draw_widget() -> void:
-	var origin := hud.get_display_origin()
+	var origin := hud.get_view_origin()
 	var dt := maxf(get_process_delta_time(), 1e-3)
 	for node in get_tree().get_nodes_in_group(GROUP):
 		var contact := node as Node3D
