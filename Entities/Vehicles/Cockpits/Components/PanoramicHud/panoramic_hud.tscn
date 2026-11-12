@@ -11,6 +11,8 @@
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/suit_attitude_widget.gd" id="9_suit"]
 
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/hatch_widget.gd" id="10_hatch"]
+
 [node name="PanoramicHud" type="Node"]
 script = ExtResource("1_hud")
 
@@ -41,3 +43,6 @@ script = ExtResource("5_data")
 
 [node name="Contacts" type="Node2D" parent="HudViewport"]
 script = ExtResource("7_cts")
+
+[node name="Hatch" type="Node2D" parent="HudViewport"]
+script = ExtResource("10_hatch")

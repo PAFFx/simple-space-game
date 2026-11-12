@@ -149,3 +149,21 @@ boxed values.
 The panoramic HUD keeps only what's needed outside: flight symbology, non-default modes and
 cautions. The thruster rows and propellant / thrust bars moved to the left display.
 
+## Hatch
+
+`CockpitHatch` runs one timeline (0 = sealed, 1 = open): the screen cuts its aperture, then the
+suit's door bones swing. Around the open aperture the HUD draws orange segmented brackets and
+HATCH / UNLOCK tabs (`HatchWidget`; SEALING while closing), outside the cockpit's portal frame.
+`HatchCockpitParts` moves cockpit parts on the same timeline: the yellow guard over the red hatch
+button (right console) flips up as the hatch starts opening and drops once sealed, the button
+dips on each press, and the centre display folds onto the pilot's lap so it doesn't block the way
+out.
+
+**ν:** the door is the red panel at the bottom of the chest (split from the chest mesh by
+`build_mobile_suit_nu.py`, bone `hatch`, hinged on its bottom edge, swings out 100°). The sphere
+can't sit lower than y 17.2 without poking out under the chest, so a white tunnel runs from the
+shell down to the door, 40.7° below straight ahead; the ν's cockpit variant
+(`cockpit_linear_seat_nu.tscn`, model built with `--aperture -40.7,12.5,11.5`) has its shell
+opening and screen aperture there. A fit test (shell points inside the hull) finds the whole
+sphere inside the chest at its current place.
+

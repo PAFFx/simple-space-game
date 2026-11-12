@@ -15,6 +15,8 @@
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/CockpitDisplays/cockpit_displays.gd" id="10_disp"]
 
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/HatchCockpitParts/hatch_cockpit_parts.gd" id="11_hatchparts"]
+
 [node name="CockpitLinearSeat" type="Node3D"]
 script = ExtResource("1_script")
 
@@ -61,4 +63,8 @@ camera_mount = NodePath("../CameraMount")
 
 [node name="CockpitDisplays" type="Node" parent="." node_paths=PackedStringArray("model_root")]
 script = ExtResource("10_disp")
+model_root = NodePath("../Model")
+
+[node name="HatchCockpitParts" type="Node" parent="." node_paths=PackedStringArray("model_root")]
+script = ExtResource("11_hatchparts")
 model_root = NodePath("../Model")

@@ -1,6 +1,9 @@
 """Builds the late-UC style linear-seat cockpit capsule as a GLB.
 
-Run:  blender -b -P Tools/Blender/build_cockpit_linear_seat.py -- <output.glb>
+Run:  blender -b -P Tools/Blender/build_cockpit_linear_seat.py -- <output.glb> [--aperture EL,HALF_AZ,HALF_EL]
+
+--aperture places the hatch opening in the shell (degrees, default 0,36,36 = straight
+ahead): suits whose door isn't in front of the sphere get their own variant.
 
 Origin = centre of the panoramic sphere (pilot eye is ~8 cm in front of it).
 The panoramic screen itself is generated at runtime (radius 1.25 m); everything
@@ -22,7 +25,8 @@ import bpy  # noqa: E402
 import mesh_kit as mk  # noqa: E402
 
 SHELL_RADIUS = 1.32
-APERTURE_HALF_DEG = 36.0
+# Hatch opening in the shell: centre elevation and half sizes (deg); see --aperture.
+APERTURE = [0.0, 36.0, 36.0]
 
 
 def materials():
@@ -43,23 +47,33 @@ def build_shell(m):
     """Outer capsule (outward normals) with the hatch aperture cut out of the front."""
     shell = mk.PartBuilder("Shell", m)
     shell.sphere((0, 0, 0), SHELL_RADIUS, "shell", segments=48, rings=24)
-    limit = math.radians(APERTURE_HALF_DEG)
+    el0, ha, he = (math.radians(a) for a in APERTURE)
     doomed = []
     for f in shell.bm.faces:
-        c = f.calc_center_median()
-        az = math.atan2(c.x, c.y)
-        el = math.asin(max(-1.0, min(1.0, c.z / SHELL_RADIUS)))
-        if abs(az) < limit and abs(el) < limit:
+        c = f.calc_center_median() / SHELL_RADIUS
+        # Into the aperture's frame (its centre straight ahead), then test the half sizes.
+        y = c.y * math.cos(el0) + c.z * math.sin(el0)
+        z = -c.y * math.sin(el0) + c.z * math.cos(el0)
+        az = math.atan2(c.x, y)
+        el = math.asin(max(-1.0, min(1.0, z)))
+        if abs(az) < ha and abs(el) < he:
             doomed.append(f)
     bmesh.ops.delete(shell.bm, geom=doomed, context="FACES")
 
     # Portal frame around the aperture (visible from outside and from the seat).
     t = 0.07
-    shell.box((0, 1.12, 0.80), (1.70, 0.28, t), "frame")
-    shell.box((0, 1.12, -0.80), (1.70, 0.28, t), "frame")
+    d = 1.12
+    hw, hh = d * math.tan(ha), d * math.tan(he)
+    rot = (APERTURE[0], 0.0, 0.0)
+
+    def at(x, y, z):  # rotate an aperture-frame point up/down to the aperture's elevation
+        return (x, y * math.cos(el0) - z * math.sin(el0), y * math.sin(el0) + z * math.cos(el0))
+
+    shell.box(at(0, d, hh), (2 * hw + 0.1, 0.28, t), "frame", rot=rot)
+    shell.box(at(0, d, -hh), (2 * hw + 0.1, 0.28, t), "frame", rot=rot)
     for s in (1.0, -1.0):
-        shell.box((0.82 * s, 1.12, 0), (t, 0.28, 1.67), "frame")
-    shell.box((0, 1.04, 0.765), (1.2, 0.02, 0.012), "strip")
+        shell.box(at(hw * s, d, 0), (t, 0.28, 2 * hh + 0.07), "frame", rot=rot)
+    shell.box(at(0, d - 0.08, hh - 0.035), (1.4 * hw, 0.02, 0.012), "strip", rot=rot)
     shell.to_object(bevel=0.01)
 
 
@@ -125,10 +139,15 @@ def build_footrest_and_mfd(m):
     # Three displays in front, after the Xi Gundam's: a large centre tablet low ahead
     # (situational awareness) and a screen either side on an arm (left: engines and fuel,
     # right: target). Each faces the pilot's eye; Godot paints them (CockpitDisplays).
+    # The centre display hangs on a hinged arm (CentreDisplay, pivot at the pedestal)
+    # that folds it down onto the pilot's lap while the hatch is open, clearing the way.
+    pivot = bpy.data.objects.new("CentreDisplay", None)
+    bpy.context.scene.collection.objects.link(pivot)
+    pivot.location = CENTRE_PIVOT
     for name, center, size, rot in DISPLAYS:
         bezel = mk.PartBuilder(f"Bezel{name}", m)
         bezel.box(center, (size[0] + 0.03, 0.022, size[1] + 0.03), "frame", rot=rot)
-        bezel.to_object(bevel=0.006)
+        bezel_obj = bezel.to_object(bevel=0.006)
         scr = mk.PartBuilder(f"Screen{name}", m)
         # A hair in front of the bezel, toward the eye.
         eye = (0.0, 0.08, 0.0)
@@ -136,14 +155,47 @@ def build_footrest_and_mfd(m):
         n = math.sqrt(sum(x * x for x in d))
         front = tuple(center[i] + d[i] / n * 0.012 for i in range(3))
         scr.quad(front, size[0], size[1], "screen", rot=rot)
-        scr.to_object()
+        scr_obj = scr.to_object()
+        if name == "Centre":
+            for o in (bezel_obj, scr_obj):
+                _parent_keep(o, pivot)
+
+    arm = mk.PartBuilder("CentreArm", m)
+    arm.box((0, 0.6, -0.64), (0.06, 0.05, 0.14), "frame", rot=(-20, 0, 0))
+    _parent_keep(arm.to_object(bevel=0.005), pivot)
 
     arms = mk.PartBuilder("DisplayArms", m)
-    arms.box((0, 0.6, -0.68), (0.06, 0.05, 0.22), "frame", rot=(-20, 0, 0))
     for s in (1.0, -1.0):
         arms.box((0.31 * s, 0.46, -0.42), (0.035, 0.035, 0.2), "frame", rot=(-25, 0, 0))
     arms.to_object(bevel=0.005)
 
+
+def _parent_keep(obj, parent):
+    """Parents `obj` to `parent`, keeping where it is."""
+    obj.parent = parent
+    obj.matrix_parent_inverse = parent.matrix_world.inverted()
+
+
+def build_hatch_switch(m):
+    """Guarded hatch switch at the inner front corner of the right console: a red push
+    button under a yellow flip-up guard (HatchGuard, origin on its hinge at the back)."""
+    base = mk.PartBuilder("HatchSwitchBase", m)
+    base.box((0.25, 0.14, -0.425), (0.07, 0.07, 0.02), "frame")
+    base.box((0.25, 0.14, -0.414), (0.05, 0.05, 0.004), "grip")
+    base.to_object(bevel=0.003)
+    button = mk.PartBuilder("HatchButton", m)
+    button.cylinder((0, 0, 0.0), 0.014, 0.012, "red", segments=16)
+    button.to_object(location=(0.25, 0.14, -0.406))
+    guard = mk.PartBuilder("HatchGuard", m)
+    # Built around its hinge (back edge, top of the base): a lid with low sides.
+    guard.box((0, 0.03, 0.022), (0.056, 0.058, 0.004), "yellow")
+    for s in (1.0, -1.0):
+        guard.box((0.027 * s, 0.03, 0.012), (0.004, 0.058, 0.022), "yellow")
+    guard.box((0, 0.058, 0.012), (0.056, 0.004, 0.022), "yellow")
+    guard.to_object(location=(0.25, 0.108, -0.415), bevel=0.001)
+
+
+CENTRE_PIVOT = (0.0, 0.58, -0.74)
 
 # name, centre (Blender: x right, y forward, z up; eye at y 0.08), size (w, h), rotation
 # turning the quad's +Y face toward the eye.
@@ -157,6 +209,8 @@ DISPLAYS = [
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     out = argv[0] if argv else "cockpit_linear_seat.glb"
+    if "--aperture" in argv:
+        APERTURE[:] = [float(v) for v in argv[argv.index("--aperture") + 1].split(",")]
 
     mk.reset_scene()
     m = materials()
@@ -164,6 +218,7 @@ def main():
     build_seat(m)
     build_consoles(m)
     build_footrest_and_mfd(m)
+    build_hatch_switch(m)
 
     for obj in bpy.data.objects:
         obj.select_set(False)

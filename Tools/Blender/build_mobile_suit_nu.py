@@ -191,7 +191,8 @@ def print_nozzles(bm, part):
 # hinged against the leg), "top_mid" = middle of the top (a pod hanging from the backpack),
 # "centre" = the part's centre (a nozzle on a ball joint).
 POD_PIVOT = "centre"
-GUARDS = [("main_pod.R", "backpack", POD_PIVOT), ("main_pod.L", "backpack", POD_PIVOT),
+GUARDS = [("hatch", "chest", "bottom_front"),
+          ("main_pod.R", "backpack", POD_PIVOT), ("main_pod.L", "backpack", POD_PIVOT),
           ("calf_guard.R", "shin.R", "top_front"), ("calf_guard.L", "shin.L", "top_front")] + \
          [(g, "backpack", "centre") for g, _r, _h in NOZZLE_CUPS]
 
@@ -223,6 +224,8 @@ def guard_bones(bm, groups):
         hi = mathutils.Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
         if pivot == "top_front":
             head = mathutils.Vector(((lo.x + hi.x) * 0.5, hi.y, hi.z))
+        elif pivot == "bottom_front":
+            head = mathutils.Vector(((lo.x + hi.x) * 0.5, hi.y, lo.z))
         elif pivot == "top_mid":
             head = mathutils.Vector(((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5, hi.z))
         else:
@@ -298,6 +301,69 @@ def bind(obj, armature, bone):
     obj.parent = armature
 
 
+# Cockpit hatch: the red door at the bottom of the chest (part of the chest mesh, picked by
+# its box, Godot coordinates) swings out about its bottom edge (Godot's CockpitHatch). A
+# white tunnel behind it leads to the cockpit sphere (centre COCKPIT_CENTRE, Godot), so
+# the pilot looks down it when the screen opens. Keep COCKPIT_CENTRE in step with the
+# RX-93 scene's CockpitMount.
+HATCH_PART = 15
+HATCH_BOX = ((-0.50, 0.50), (15.32, 16.19), (-2.40, -1.90))  # x, y, z ranges (Godot)
+COCKPIT_CENTRE = (0.0, 17.2, -0.5)
+COCKPIT_SHELL = 1.33
+
+
+def _godot(v):
+    return mathutils.Vector((v.x, v.z, -v.y))
+
+
+def _suit(x, y, z):
+    return mathutils.Vector((x, -z, y))
+
+
+def split_hatch(bm, materials, part, groups):
+    """Moves the door's faces to the "hatch" group and adds the tunnel behind it."""
+    (x0, x1), (y0, y1), (z0, z1) = HATCH_BOX
+    door = []
+    for f in bm.faces:
+        if part[f.index] != HATCH_PART:
+            continue
+        c = _godot(f.calc_center_median())
+        n = _godot(f.normal)
+        if x0 < c.x < x1 and y0 < c.y < y1 and z0 < c.z < z1 and n.z < -0.3:
+            groups[f.index] = "hatch"
+            door.append(f)
+    pts = [_godot(v.co) for f in door for v in f.verts]
+    lo_x, hi_x = min(p.x for p in pts), max(p.x for p in pts)
+    lo_y, hi_y = min(p.y for p in pts), max(p.y for p in pts)
+    # Door edge depths: the panel leans forward toward its top.
+    z_bottom = max(p.z for p in pts if p.y < lo_y + 0.1)
+    z_top = max(p.z for p in pts if p.y > hi_y - 0.1)
+    inset = 0.03
+    corners = [(lo_x + inset, lo_y + inset, z_bottom + 0.04), (hi_x - inset, lo_y + inset, z_bottom + 0.04),
+               (hi_x - inset, hi_y - inset, z_top + 0.04), (lo_x + inset, hi_y - inset, z_top + 0.04)]
+    c = mathutils.Vector(COCKPIT_CENTRE)
+    mouth = [c + (mathutils.Vector(k) - c).normalized() * COCKPIT_SHELL for k in corners]
+    mat = mk.make_material("MS_HatchTunnel", (0.82, 0.84, 0.86), roughness=0.5)
+    materials.append(mat)
+    mi = len(materials) - 1
+    bm.faces.ensure_lookup_table()
+    for i in range(4):
+        j = (i + 1) % 4
+        quad = [mouth[i], mouth[j], mathutils.Vector(corners[j]), mathutils.Vector(corners[i])]
+        verts = [bm.verts.new(_suit(*q)) for q in quad]
+        f = bm.faces.new(verts)
+        f.normal_update()
+        axis_mid = (mathutils.Vector(corners[0]) + mathutils.Vector(corners[2])) * 0.5
+        mid = _godot(f.calc_center_median())
+        if _godot(f.normal).dot(axis_mid - mid) < 0.0:  # walls face into the tunnel
+            f.normal_flip()
+        f.material_index = mi
+        groups.append("chest")
+        part.append(-1)
+    bm.faces.ensure_lookup_table()
+    print(f"[nu] hatch: {len(door)} door faces, x {lo_x:.2f}..{hi_x:.2f}, y {lo_y:.2f}..{hi_y:.2f}")
+
+
 def object_name(group):
     return "".join(w.capitalize() for w in group.replace(".", "_").split("_")) if not group.startswith("W:") \
         else group[2:]
@@ -357,6 +423,7 @@ def main():
         raise SystemExit(f"[nu] unassigned parts {missing}, assigned twice {doubled}")
 
     groups = face_groups(bm, part)
+    split_hatch(bm, materials, part, groups)
     if "--pod-pivot" in argv:
         global GUARDS
         piv = argv[argv.index("--pod-pivot") + 1]
@@ -365,7 +432,7 @@ def main():
     print_nozzles(bm, part)
     arm = mk.build_armature("Armature", bones() + guard_bones(bm, groups))
     suit, weapons = [], {}
-    for group in list(GROUPS) + [g for g, _r, _h in NOZZLE_CUPS]:
+    for group in list(GROUPS) + ["hatch"] + [g for g, _r, _h in NOZZLE_CUPS]:
         obj = make_object(object_name(group), bm, materials, groups, group)
         if group.startswith("W:"):
             kind = group[2:].rstrip("0123456789")

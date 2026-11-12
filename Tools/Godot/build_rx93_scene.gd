@@ -21,7 +21,9 @@ const SKELETON := ^"Model/Armature/Skeleton3D"
 const COM := Vector3(0.0, 14.6, 0.8)
 const SENSOR_SCENE := \
 		"res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn"
-const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat.tscn"
+# The ν's own cockpit variant: its hatch opening faces down the tunnel to the red chest door
+# (the door is 40° below the sphere's centre, which can't move lower and stay in the chest).
+const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat_nu.tscn"
 const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn"
 
 # name, bone, position, exhaust direction, thrust kN, gimbal: [cone, fore/aft, sideways] deg,
@@ -252,7 +254,7 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 	root.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	root.center_of_mass = COM
 	root.mass = 46400.0
-	# The model has no hatch or open cockpit cavity, so the pilot never sees the hull.
+	# The sphere and the tunnel behind the door keep the hull out of the pilot's view.
 	root.set("first_person_parts", [] as Array[StringName])
 
 	var model: Node3D = load(MODEL).instantiate()
@@ -274,6 +276,7 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 	_add(root, cockpit_mount, load(COCKPIT_SCENE).instantiate())
 
 	_build_thrusters(root)
+	_build_hatch(root)
 	_build_flight_computer(root)
 	_build_ambac(root)
 	_build_thruster_guards(root)
@@ -391,6 +394,22 @@ func _build_flight_computer(root: Node3D) -> void:
 		binding.deadzone = b[2]
 		bindings.append(binding)
 	input.set("axis_bindings", bindings)
+
+
+## The red door at the bottom of the chest swings out and down about its bottom edge,
+## after the screen has opened its aperture down the tunnel.
+func _build_hatch(root: Node3D) -> void:
+	var hatch := CockpitHatch.new()
+	hatch.name = "CockpitHatch"
+	_add(root, root, hatch)
+	var door := HatchPanel.new()
+	door.bone_name = &"hatch"
+	door.hinge_axis = Vector3.RIGHT
+	door.open_angle_deg = -100.0
+	door.window = Vector2(0.3, 1.0)
+	hatch.panels = [door] as Array[HatchPanel]
+	hatch.aperture_window = Vector2(0.0, 0.35)
+	hatch.skeleton = root.get_node(SKELETON)
 
 
 func _build_limb_followers(root: Node3D) -> void:
