@@ -2,9 +2,8 @@ class_name SeatDampener
 extends Node
 
 ## Linear seat G dampening. The seat rides on a spring-damper suspension with
-## limited travel, which smooths jolts (thruster kicks, impacts), and an
-## active inertial compensator cancels a fraction of the sustained
-## acceleration (UC fiction: no suspension can reduce steady G on its own).
+## limited travel, which smooths jolts (thruster kicks, impacts) but cannot
+## reduce sustained G: once the travel is used up the seat moves with the cabin.
 ##
 ## Exposes the cabin (suit) G and the G the pilot actually feels, and sways
 ## the camera mount by the seat travel.
@@ -16,8 +15,6 @@ const G0 := 9.80665
 @export var natural_frequency: float = 14.0      ## rad/s
 @export var damping_ratio: float = 0.8
 @export var travel: float = 0.15                 ## m, each axis
-## Fraction of the remaining acceleration cancelled by the active dampener.
-@export_range(0.0, 0.95) var inertial_compensation: float = 0.55
 @export var sway_scale: float = 0.6
 @export var filter_time: float = 0.05            ## s, smooths the cabin accel estimate
 
@@ -77,7 +74,7 @@ func _physics_process(delta: float) -> void:
 
 	var seat_accel := a_local + rel_accel
 	cabin_g = _accel.length() / G0
-	pilot_g = seat_accel.length() * (1.0 - inertial_compensation) / G0
+	pilot_g = seat_accel.length() / G0
 	peak_pilot_g = maxf(peak_pilot_g * exp(-delta / 3.0), pilot_g)
 	if camera_mount != null:
 		camera_mount.position = _mount_rest + _x * sway_scale
