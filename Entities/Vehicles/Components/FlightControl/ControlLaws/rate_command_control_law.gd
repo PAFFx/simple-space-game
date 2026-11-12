@@ -10,7 +10,8 @@ extends ControlLaw
 ##   ATTITUDE_HOLD the frame stops when the stick is released and the body
 ##   holds it (rate command / attitude hold). RATE_DAMP just damps rates.
 ##   Locking is per axis: a steered (or still braking) axis turns the cockpit
-##   rigidly with the suit, while the other axes keep holding and auto-rotating.
+##   rigidly with the suit, while the other axes keep holding and auto-rotating
+##   (steered axes keep auto-rotating too, slower: steer_auto_rotate_share).
 ## Translation — the stick pushes along its direction (pilot frame) with no top speed;
 ##   speed on the axes it holds is wanted, never cancelled. Released axes coast. Brake
 ##   (Ctrl) stops the motion, relative to the reference frame, on the axes the stick
@@ -36,6 +37,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Auto-rotation waits for the body: the offset swing slows once the body lags the
 ## target by the first angle and stops at the second, so it never runs away (deg).
 @export var tracking_lag_deg := Vector2(6.0, 15.0)
+## Auto-rotation keeps running on a steered axis at this fraction of its swing rate
+## (the view still turns at the stick rate; the body adds the swing). 0 = pause it.
+@export_range(0.0, 1.0) var steer_auto_rotate_share: float = 0.3
 ## Only auto-rotate while boosting. Off: auto-rotate whenever a translation is
 ## commanded (or boosting) and the demand needs it; plain stops never rotate.
 @export var auto_rotate_on_boost_only: bool = false
@@ -422,10 +426,15 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
 		return
 	var r_cur := AttitudeOffsetSolver.to_rotation_vector(_offset)
-	if _locked == Vector3.ONE:
+	var share := steer_auto_rotate_share
+	if _locked == Vector3.ONE and share <= 0.0:
 		_offset_target_r = r_cur
 		return
 	var free := Vector3.ONE - _locked
+	# Axes whose offset may not move at all, and each axis's share of the swing rate.
+	var frozen := _locked if share <= 0.0 else Vector3.ZERO
+	var moving := Vector3.ONE - frozen
+	var speed := free + _locked * share
 	var r_target := r_cur * _locked
 	var slew := deg_to_rad(60.0)
 	var smoothing := 0.0
@@ -439,7 +448,7 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 		if state.allow_attitude_offset and wanted and limit > 0.0:
 			var force_pilot := _pilot.inverse() * force_world
 			r_target = AttitudeOffsetSolver.to_rotation_vector(
-					attitude_solver.solve(state, force_pilot, _offset, _locked, limit))
+					attitude_solver.solve(state, force_pilot, _offset, frozen, limit))
 			_auto_rotating = true
 		else:
 			# Nothing needs the offset: aim the free axes straight back at the cockpit
@@ -448,9 +457,9 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 			_offset_target_r = r_target
 			_offset_vel = Vector3.ZERO
 			return
-	r_target = r_target * free + r_cur * _locked
+	r_target = r_target * moving + r_cur * frozen
 	# Low-pass the target first so the body eases into (and out of) a new attitude.
-	_offset_target_r = _offset_target_r * free + r_cur * _locked
+	_offset_target_r = _offset_target_r * moving + r_cur * frozen
 	if smoothing > 0.0:
 		_offset_target_r = _offset_target_r.lerp(r_target, 1.0 - exp(-state.delta / smoothing))
 	else:
@@ -466,12 +475,12 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 	# the body can accelerate, and it eases into the end point the way the body can brake.
 	# So the body can always follow it exactly: no overshoot when the target stops or
 	# turns back, and no side drift from overshoot to make the solver change its mind.
-	var remaining := (_offset_target_r - r_cur) * free
+	var remaining := (_offset_target_r - r_cur) * moving
 	var to_body := func(v: Vector3) -> Vector3: return state.to_local(_pilot * v)
 	var to_pilot := func(v: Vector3) -> Vector3: return _pilot.inverse() * state.to_global(v)
 	var v_want: Vector3 = to_pilot.call(_braking_rate(state, to_body.call(remaining), swing_braking_margin))
-	v_want = (v_want * free).limit_length(slew)
-	_offset_vel *= free
+	v_want = (v_want * moving).limit_length(slew) * speed
+	_offset_vel *= moving
 	var dv := v_want - _offset_vel
 	var accel := _swing_accel(state, to_body.call(dv))
 	_offset_vel += dv.limit_length(accel * state.delta)
