@@ -6,11 +6,16 @@ extends Camera3D
 ## So the camera is top-level, not interpolated itself, and each frame follows
 ## its parent's *interpolated* transform plus the look rotation. That keeps the
 ## view smooth at any refresh rate without lagging the mouse.
+##
+## The hull's inner parts (chest cavity, hatch flaps) are only drawn while the hatch
+## is unsealed. Sealed, the pilot sees the panoramic screen, and the cockpit gimbal
+## turns inside the hull, so the cavity walls would cut through the screen.
 
 
 var look_rotation := Basis.IDENTITY
 
 var _mount: Node3D
+var _hatch: CockpitHatch
 
 
 func _ready() -> void:
@@ -20,6 +25,10 @@ func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	# Before the sensor head and HUD read the camera this frame.
 	process_priority = -10
+	var vehicle := VehicleBase.find_vehicle(self)
+	if vehicle != null:
+		_hatch = vehicle.find_component(CockpitHatch) as CockpitHatch
+	_update_hull_layer()
 	_follow()
 
 
@@ -30,7 +39,13 @@ func set_look_rotation(value: Basis) -> void:
 
 
 func _process(_delta: float) -> void:
+	_update_hull_layer()
 	_follow()
+
+
+func _update_hull_layer() -> void:
+	if _hatch != null:
+		set_cull_mask_value(3, _hatch.is_unsealed())  # Layers.VEHICLE_FP (bit 2)
 
 
 func _follow() -> void:
