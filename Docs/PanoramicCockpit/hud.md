@@ -29,6 +29,15 @@ hud_uv = (fract(UV2.x + 0.5), 1 − UV2.y)     forward = canvas centre, wraps at
 So anything drawn at a direction lines up with the sensor image of that direction, with no
 extra projection.
 
+**Colours by role** (PanoramicHud style): green = flight symbology (horizon, ladder, flight path,
+speed), pale blue-white = the suit against the cockpit (boresight, suit attitude), violet = the
+suit's equipment (shield and weapon outlines), amber = contacts; caution amber, warning red.
+`PanoramicHud.dimmed(c)` tones a role colour down for scales and labels. Every line and label gets
+a dark halo (`halo_color`, `halo_width`) so it reads against a sunlit planet without being brighter.
+
+**Modes** list only what differs from the defaults (attitude hold, horizon lock, normal movement):
+ROT RATE, HORIZON FREE, PRECISION / BOOST / BOOST FULL, BRAKE / BRAKE HARD, FCS OFF.
+
 **Attitude frame.** The horizon ring, pitch ladder and HDG/PIT/RLL readout all use
 `hud.get_attitude_basis()`: up = the horizon the flight computer holds level to (horizon lock's
 up; the reference frame's up when it's off), north = the reference frame's −Z flattened onto it.

@@ -29,10 +29,10 @@ func draw_widget() -> void:
 			canvas.append(hud.world_dir_to_canvas(pts[-1] - origin))
 		elif not canvas.is_empty():
 			canvas.append(canvas[0])
-		seam_safe_polyline(canvas, hud.dim_color)
+		seam_safe_polyline(canvas, hud.equipment_color)
 		if sil.label != "":
 			var top := canvas[0]
 			for p in canvas:
 				if p.y < top.y:
 					top = p
-			text_at(top + label_offset, sil.label, hud.dim_color, HORIZONTAL_ALIGNMENT_LEFT, 14)
+			text_at(top + label_offset, sil.label, hud.equipment_color, HORIZONTAL_ALIGNMENT_LEFT, 14)

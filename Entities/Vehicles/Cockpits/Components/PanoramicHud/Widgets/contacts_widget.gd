@@ -35,13 +35,13 @@ func draw_widget() -> void:
 		begin_local_at(hud.projector.angles_to_canvas(angles.x, angles.y), angles.y)
 		var radius: float = contact.get_meta("hud_radius", default_radius)
 		var half := px(maxf(min_box_deg, rad_to_deg(atan(radius / dist))))
-		brackets(Vector2(half, half), maxf(half * 0.35, 8.0), hud.primary_color)
+		brackets(Vector2(half, half), maxf(half * 0.35, 8.0), hud.contact_color)
 		var label: String = contact.get_meta("hud_label", String(contact.name))
 		var left := HORIZONTAL_ALIGNMENT_LEFT
 		var x := half + 6.0
-		text(Vector2(x, -half + 14.0), label.to_upper(), hud.primary_color, left, 15)
-		text(Vector2(x, -half + 32.0), _format_range(dist), hud.dim_color, left, 14)
-		text(Vector2(x, -half + 48.0), "Vc %+.1f" % _closure.get(id, 0.0), hud.dim_color, left, 14)
+		text(Vector2(x, -half + 14.0), label.to_upper(), hud.contact_color, left, 15)
+		text(Vector2(x, -half + 32.0), _format_range(dist), PanoramicHud.dimmed(hud.contact_color), left, 14)
+		text(Vector2(x, -half + 48.0), "Vc %+.1f" % _closure.get(id, 0.0), PanoramicHud.dimmed(hud.contact_color), left, 14)
 		end_local()
 
 

@@ -48,8 +48,8 @@ func _gauge(az: float, el: float, radius_deg: float, dir: Vector2, label: String
 	# Strokes and text scale gently with gauge size so the big side gauges stay legible.
 	var k := clampf(radius_deg / 2.0, 1.0, 2.0)
 	var active := absf(rad_to_deg(angle)) >= active_deg
-	var ref := hud.dim_color
-	var c := hud.primary_color if active else hud.dim_color
+	var ref := PanoramicHud.dimmed(hud.suit_color)
+	var c := hud.suit_color if active else PanoramicHud.dimmed(hud.suit_color)
 	var w := (hud.line_width + 0.5) * k
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, 72, ref, 1.5 * k, true)
 	for s in [-1.0, 1.0]:

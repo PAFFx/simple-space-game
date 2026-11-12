@@ -224,30 +224,24 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	return wrench
 
 
+## Only what differs from the defaults (attitude hold, horizon lock, normal movement).
 func get_mode_labels() -> PackedStringArray:
-	var rot := "ROT RATE"
-	if rotation_mode == RotationMode.ATTITUDE_HOLD:
-		rot = "ROT ATT-HOLD" + (" ●" if is_holding_attitude() else "")
-	var labels := PackedStringArray([rot])
-	if attitude_solver != null and rotation_mode == RotationMode.ATTITUDE_HOLD:
-		labels.append("VECTOR %02d°" % roundi(rad_to_deg(_offset.get_angle())))
-	labels.append(_movement_label())
-	if horizon_lock:
-		labels.append("HORIZON LOCK")
-	return labels
-
-
-func _movement_label() -> String:
-	var label := "MOVE PRECISION" if precision else "MOVE NORMAL"
+	var labels := PackedStringArray()
+	if rotation_mode != RotationMode.ATTITUDE_HOLD:
+		labels.append("ROT RATE")
+	if not horizon_lock:
+		labels.append("HORIZON FREE")
 	if _last_boost_full:
-		label = "MOVE BOOST FULL"
+		labels.append("BOOST FULL")
 	elif _last_boost:
-		label = "MOVE BOOST"
+		labels.append("BOOST")
+	elif precision:
+		labels.append("PRECISION")
 	if _last_brake_full:
-		label += " · BRAKE HARD"
+		labels.append("BRAKE HARD")
 	elif _last_brake:
-		label += " · BRAKE"
-	return label
+		labels.append("BRAKE")
+	return labels
 
 
 ## Auto-rotation limit for this tick, deg (0 = off).

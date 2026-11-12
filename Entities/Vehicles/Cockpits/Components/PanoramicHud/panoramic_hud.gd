@@ -18,11 +18,23 @@ extends Node
 @export var canvas_size := Vector2i(4096, 2048)
 
 @export_group("Style")
-@export var primary_color := Color(0.62, 1.0, 0.9, 0.92)
-@export var dim_color := Color(0.62, 1.0, 0.9, 0.45)
+## One colour per kind of information, so each reads apart at a glance:
+## flight symbology (horizon, ladder, flight path, speed)...
+@export var primary_color := Color(0.42, 1.0, 0.58, 0.95)
+@export var dim_color := Color(0.42, 1.0, 0.58, 0.7)
+## ...the suit's orientation against the cockpit (boresight, suit attitude gauges)...
+@export var suit_color := Color(0.78, 0.86, 1.0, 0.9)
+## ...the suit's own equipment (shield and weapon outlines)...
+@export var equipment_color := Color(0.88, 0.56, 1.0, 0.9)
+## ...and other objects (contacts).
+@export var contact_color := Color(1.0, 0.82, 0.32, 0.95)
 @export var caution_color := Color(1.0, 0.72, 0.2, 0.95)
 @export var warning_color := Color(1.0, 0.25, 0.2, 0.95)
-@export var line_width: float = 2.0
+## Dark edge under every line and label, so symbols read against bright backgrounds
+## (a sunlit planet) without being made brighter or thicker.
+@export var halo_color := Color(0.0, 0.02, 0.03, 0.6)
+@export var halo_width: float = 3.0
+@export var line_width: float = 2.5
 @export var font_size: int = 18
 
 var projector: HudProjector
@@ -50,6 +62,11 @@ func _ready() -> void:
 
 func is_live() -> bool:
 	return projector != null and sensor_head != null
+
+
+## A role colour toned down for secondary marks (scales, labels).
+static func dimmed(c: Color) -> Color:
+	return Color(c, c.a * 0.7)
 
 
 ## World direction → canvas position (through the screen's panoramic frame).

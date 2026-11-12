@@ -23,7 +23,7 @@ func draw_widget() -> void:
 
 	draw_set_transform(pos, roll, Vector2(HudProjector.stretch_at(angles.y), 1.0))
 	var r := px(ring_radius_deg)
-	var c := hud.primary_color
+	var c := hud.suit_color
 	# Ring broken into four arcs with ticks in the gaps; the top tick is longer (body up).
 	for i in 4:
 		var start := i * PI * 0.5 + 0.25
@@ -31,4 +31,4 @@ func draw_widget() -> void:
 		var dir := Vector2.from_angle(i * PI * 0.5)
 		line(dir * r * 0.75, dir * r * (1.9 if i == 3 else 1.35), c)
 	draw_circle(Vector2.ZERO, 2.5, c, true, -1.0, true)
-	brackets(Vector2(px(frame_half_deg.x), px(frame_half_deg.y)), px(1.2), hud.dim_color)
+	brackets(Vector2(px(frame_half_deg.x), px(frame_half_deg.y)), px(1.2), PanoramicHud.dimmed(hud.suit_color))

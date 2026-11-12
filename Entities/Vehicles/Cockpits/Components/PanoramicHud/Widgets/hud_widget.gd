@@ -60,7 +60,11 @@ func text(pos: Vector2, value: String, color: Color = Color.TRANSPARENT,
 	if align != HORIZONTAL_ALIGNMENT_LEFT:
 		var w := hud.font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x
 		offset = w * (0.5 if align == HORIZONTAL_ALIGNMENT_CENTER else 1.0)
-	draw_string(hud.font, pos - Vector2(offset, 0.0), value, HORIZONTAL_ALIGNMENT_LEFT, -1, s, c)
+	var at := pos - Vector2(offset, 0.0)
+	if hud.halo_color.a > 0.0:
+		draw_string_outline(hud.font, at, value, HORIZONTAL_ALIGNMENT_LEFT, -1, s,
+				roundi(hud.halo_width * 1.5), hud.halo_color)
+	draw_string(hud.font, at, value, HORIZONTAL_ALIGNMENT_LEFT, -1, s, c)
 
 
 ## Text at a canvas position (outside a local frame), widened by the canvas stretch at
@@ -74,8 +78,10 @@ func text_at(canvas_pos: Vector2, value: String, color: Color = Color.TRANSPAREN
 
 
 func line(a: Vector2, b: Vector2, color: Color = Color.TRANSPARENT, width: float = 0.0) -> void:
-	draw_line(a, b, hud.primary_color if color.a == 0.0 else color,
-			hud.line_width if width <= 0.0 else width, true)
+	var w := hud.line_width if width <= 0.0 else width
+	if hud.halo_color.a > 0.0:
+		draw_line(a, b, hud.halo_color, w + hud.halo_width, true)
+	draw_line(a, b, hud.primary_color if color.a == 0.0 else color, w, true)
 
 
 ## Corner brackets around a rectangle centred at the local origin.

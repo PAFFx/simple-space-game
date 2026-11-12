@@ -222,10 +222,7 @@ func get_cockpit_rotation() -> Quaternion:
 func get_mode_labels() -> PackedStringArray:
 	if not fcs_enabled:
 		return PackedStringArray(["FCS OFF"])
-	var labels := control_law.get_mode_labels()
-	if _stance != null:
-		labels.append("STANCE " + String(_stance.get_stance_name()).to_upper())
-	return labels
+	return control_law.get_mode_labels()
 
 
 # --- Private ---
