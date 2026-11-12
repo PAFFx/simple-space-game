@@ -118,9 +118,12 @@ that `HatchCockpitParts` follows:
 | Timeline | What moves |
 |---|---|
 | 0–0.25 | the seat turns 40° (with the pedals, footrest, right armrest and the main and right monitors; the left armrest and monitor stay) to clear the way |
-| 0.2–0.45 | the screen cuts a door-shaped opening (flat as seen from the seat) down the airlock, framed by `HatchWidget`'s HATCH / UNLOCK brackets |
+| 0.2–0.45 | the screen cuts a door-shaped opening (flat as seen from the seat) down the airlock, framed by `HatchWidget`'s orange segmented brackets hugging all four edges and HATCH / UNLOCK tabs over the top corners |
 | 0.35–0.6 | the inner door's two halves slide apart |
 | 0.6–1 | the outer door slides up along its own tilt, behind the chest front (`HatchPanel.slide`) |
+
+While unsealed, the linear seat holds still: the cockpit gimbal eases to centre (so the capsule
+lines up with its doorway and can't turn into the hull) and the seat dampener stops responding.
 
 Control: the yellow/black hatch lever on the right console, under a striped guard. Click the guard
 to lift (left) or lower (right) it; with it up, the lever pulls (left: open) or pushes (right:
