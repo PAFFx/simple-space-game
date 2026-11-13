@@ -1,6 +1,8 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.gd" id="1_thr"]
+[ext_resource type="Shader" path="res://Entities/Vehicles/Components/FlightControl/Thruster/plume.gdshader" id="2_plume"]
+[ext_resource type="Shader" path="res://Entities/Vehicles/Components/FlightControl/Thruster/plume_glow.gdshader" id="3_glow"]
 
 [sub_resource type="StandardMaterial3D" id="Mat_nozzle"]
 albedo_color = Color(0.16, 0.16, 0.18, 1)
@@ -52,6 +54,52 @@ rings = 1
 cap_top = false
 cap_bottom = false
 
+[sub_resource type="ShaderMaterial" id="Mat_fx_plume"]
+render_priority = 0
+shader = ExtResource("2_plume")
+
+[sub_resource type="CylinderMesh" id="Mesh_fx_plume"]
+material = SubResource("Mat_fx_plume")
+top_radius = 0.06
+bottom_radius = 0.38
+height = 1.0
+radial_segments = 20
+rings = 16
+cap_top = false
+cap_bottom = false
+
+[sub_resource type="ShaderMaterial" id="Mat_fx_core"]
+render_priority = 1
+shader = ExtResource("2_plume")
+shader_parameter/hot_color = Color(1, 1, 1, 1)
+shader_parameter/mid_color = Color(0.85, 0.93, 1, 1)
+shader_parameter/tail_color = Color(0.45, 0.68, 1, 1)
+shader_parameter/energy = 2.7
+shader_parameter/edge_power = 3.0
+shader_parameter/taper_power = 0.9
+shader_parameter/base_radius = 0.2
+shader_parameter/tip_radius = 0.02
+shader_parameter/diamond_strength = 1.2
+shader_parameter/diamond_dip = 0.4
+shader_parameter/turbulence = 0.25
+
+[sub_resource type="CylinderMesh" id="Mesh_fx_core"]
+material = SubResource("Mat_fx_core")
+top_radius = 0.02
+bottom_radius = 0.2
+height = 1.0
+radial_segments = 16
+rings = 16
+cap_top = false
+cap_bottom = false
+
+[sub_resource type="ShaderMaterial" id="Mat_glow"]
+render_priority = 2
+shader = ExtResource("3_glow")
+
+[sub_resource type="QuadMesh" id="Mesh_glow"]
+material = SubResource("Mat_glow")
+
 [node name="Thruster" type="Node3D"]
 script = ExtResource("1_thr")
 
@@ -75,3 +123,21 @@ mesh = SubResource("Mesh_plume")
 transform = Transform3D(1, 0, 0, 0, 0.5, 0, 0, 0, 1, 0, 0.25, 0)
 cast_shadow = 0
 mesh = SubResource("Mesh_core")
+
+[node name="FxPlume" type="MeshInstance3D" parent="Gimbal/Visual/PlumePivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+visible = false
+cast_shadow = 0
+mesh = SubResource("Mesh_fx_plume")
+
+[node name="FxCore" type="MeshInstance3D" parent="Gimbal/Visual/PlumePivot"]
+transform = Transform3D(1, 0, 0, 0, 0.6, 0, 0, 0, 1, 0, 0.3, 0)
+visible = false
+cast_shadow = 0
+mesh = SubResource("Mesh_fx_core")
+
+[node name="Glow" type="MeshInstance3D" parent="Gimbal/Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.75)
+visible = false
+cast_shadow = 0
+mesh = SubResource("Mesh_glow")

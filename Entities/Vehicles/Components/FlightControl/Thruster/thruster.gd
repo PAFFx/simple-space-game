@@ -51,11 +51,20 @@ extends Node3D
 		nozzle_scale = v
 		if is_node_ready():
 			_visual.scale = Vector3.ONE * v
+## Shader plume (turbulence, shock diamonds, nozzle flare) instead of the plain cones.
+@export var exhaust_fx: bool = false
+## Energy of a light at the nozzle that lights the suit while firing (exhaust_fx only). 0 = none.
+@export var glow_light_energy: float = 0.0
+@export var glow_light_color := Color(0.6, 0.8, 1.0)
 
 ## Plane normals per thruster in FlightState.thruster_planes (pitch ×2, yaw ×2).
 const PLANES := 4
 ## Diameter of the plume mesh's base at nozzle_scale 1, m.
 const PLUME_BASE_WIDTH := 0.76
+## Shock diamond spacing, in nozzle widths.
+const DIAMOND_SPACING := 1.7
+## FxCore's length as a fraction of the plume's (its scale in the scene).
+const FX_CORE_LENGTH := 0.6
 
 var throttle: float = 0.0                         ## Actual spooled throttle [0, 1]
 
@@ -69,6 +78,11 @@ var _dir := Vector3.FORWARD                       ## Actual thrust dir, local to
 
 
 var _slot_ratio := 1.0                            ## Plume width along the slot / round width
+var _fx_plume: GeometryInstance3D
+var _fx_core: GeometryInstance3D
+var _glow: GeometryInstance3D
+var _light: OmniLight3D
+var _flicker := 1.0
 
 
 func _ready() -> void:
@@ -81,8 +95,31 @@ func _ready() -> void:
 		x = (x - y * x.dot(y)).normalized()
 		_plume.global_basis = Basis(x, y, x.cross(y))
 		_slot_ratio = maxf(1.0, plume_slot.length() / (PLUME_BASE_WIDTH * nozzle_scale))
+	if exhaust_fx:
+		_setup_fx()
 	_set_layers(self, Layers.VEHICLE_EXT)
 	_update_visuals()
+
+
+func _setup_fx() -> void:
+	_plume.get_node("Plume").visible = false
+	_plume.get_node("Core").visible = false
+	_fx_plume = _plume.get_node("FxPlume")
+	_fx_core = _plume.get_node("FxCore")
+	_glow = $Gimbal/Visual/Glow
+	_fx_plume.visible = true
+	_fx_core.visible = true
+	var noise_seed := randf() * 100.0
+	_fx_plume.set_instance_shader_parameter("seed", noise_seed)
+	_fx_core.set_instance_shader_parameter("seed", noise_seed + 31.0)
+	if glow_light_energy > 0.0:
+		_light = OmniLight3D.new()
+		_light.light_color = glow_light_color
+		_light.omni_range = maxf(4.0, plume_length * 0.6)
+		_light.omni_attenuation = 1.5
+		_light.position = Vector3(0.0, 0.0, 1.2)
+		_light.visible = false
+		$Gimbal/Visual.add_child(_light)
 
 
 ## Current thrust in Newtons.
@@ -212,10 +249,32 @@ static func _pick_up(dir: Vector3) -> Vector3:
 func _update_visuals() -> void:
 	var t := throttle if enabled else 0.0
 	_plume.visible = t > 0.0
-	if t > 0.0:
+	if _glow:
+		_glow.visible = t > 0.0
+	if _light:
+		_light.visible = t > 0.0
+	if t <= 0.0:
+		return
+	var radius := lerpf(0.6, 1.0, t)
+	if not exhaust_fx:
 		var flicker := 1.0 + randf_range(-0.06, 0.06)
-		var radius := lerpf(0.6, 1.0, t)
 		_plume.scale = Vector3(radius * _slot_ratio, plume_length * t * flicker / nozzle_scale, radius)
+		return
+	# The shader adds the turbulence, so the length only wavers gently.
+	_flicker = lerpf(_flicker, 1.0 + randf_range(-0.04, 0.04), 0.35)
+	var plume_len := plume_length * t * _flicker
+	_plume.scale = Vector3(radius * _slot_ratio, plume_len / nozzle_scale, radius)
+	var diamonds := plume_len / (DIAMOND_SPACING * PLUME_BASE_WIDTH * nozzle_scale * radius)
+	_fx_plume.set_instance_shader_parameter("throttle", t)
+	_fx_plume.set_instance_shader_parameter("length_m", plume_len)
+	_fx_plume.set_instance_shader_parameter("diamonds", diamonds)
+	_fx_core.set_instance_shader_parameter("throttle", t)
+	_fx_core.set_instance_shader_parameter("length_m", plume_len * FX_CORE_LENGTH)
+	_fx_core.set_instance_shader_parameter("diamonds", diamonds * FX_CORE_LENGTH)
+	_glow.scale = Vector3.ONE * 1.8 * radius * sqrt(_slot_ratio) * _flicker
+	_glow.set_instance_shader_parameter("throttle", t)
+	if _light:
+		_light.light_energy = glow_light_energy * t * _flicker
 
 
 static func _set_layers(node: Node, layers: int) -> void:
