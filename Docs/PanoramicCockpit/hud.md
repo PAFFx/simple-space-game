@@ -16,7 +16,7 @@ PanoramicHud (Node)
                         HDG box on its pointer (horizon ring off, reserved)
     ├── SuitAttitude    suit vs cockpit: the suit's horizontal plane as one double-rail line
                         all the way round, open ahead between two accent arrowheads (the suit's
-                        nose is midway); PITCH rings 90° left/right with cockpit-level marks
+                        nose is midway); rings 90° left/right with cockpit-level marks
     ├── ControlCentre   V above and ^^ below the direction fly-by-wire "forward" pushes (the
                         control law's pilot frame), empty in the middle
     ├── FlightPath      prograde ○ / retrograde × inside a wide reticle (radial dashes 17° out,
@@ -44,6 +44,25 @@ hud_uv = (fract(UV2.x + 0.5), 1 − UV2.y)     forward = canvas centre, wraps at
 
 So anything drawn at a direction lines up with the sensor image of that direction, with no
 extra projection.
+
+**Fixed layers.** Most of the HUD only *turns* with the attitude, so it isn't redrawn every frame.
+`PanoramicHud.add_layer_drawer(layer, draw_fn)` draws it once into an extra equirectangular
+SubViewport, in the layer's own frame, and the screen shader (`PanoramicHud/Shader/hud_layers.gdshaderinc`)
+turns it into place per pixel with a `hud_<layer>_frame` uniform (display direction → layer direction):
+
+| Layer | Frame | Content |
+|---|---|---|
+| `static` | display (fixed) | side rings, course ring line and pointer, HDG box frame, overhead indicator ring and wings, pitch pointers |
+| `heading` | `Basis(UP, heading − 15°)⁻¹` | course marks and numbers, drawn for heading 15° so none sits on the layer's back seam |
+| `ladder` | `Basis(RIGHT, pitch)` | the pitch ladder drawn level, as coverage (R stroke, G halo, B stroke × tick strength); the shader applies fade and climb highlight from `hud_pitch_deg` / `hud_climb`, blending as the 2D canvas would |
+| `suit` | `(display⁻¹ · body)⁻¹` | suit line and arrowheads, drawn with the body level |
+
+Layers composite under the per-frame canvas, which keeps only what changes: numbers, the overhead
+horizon line, flight path, data blocks, contacts. Before this, the ladder alone projected ~1,400
+points a frame in GDScript and the HUD cost ~14 ms of CPU; now ~1.5 ms. `PanoramicHud.redraw_layers()`
+draws them again after changing what they show (layers don't follow export edits at runtime).
+Colour uniforms the shader blends as canvas colours need `source_color, color_conversion_disabled`:
+Godot otherwise linearizes every `Color` passed to a `vec4` of a 3D material.
 
 **Colours by role** (PanoramicHud style, a mostly white-grey panoramic HUD with colour reserved for
 what needs attention): off-white = flight symbology (flight path, speed, modes, control centre),
@@ -99,6 +118,9 @@ away from the canvas centre (cockpit forward).
    `hud.world_dir_to_canvas(dir)` (or `hud.world_to_display(dir)` →
    `HudProjector.direction_to_angles()` → `begin_local_at()`).
 4. Add the node under `HudViewport` in `panoramic_hud.tscn`.
+5. Parts that only turn with the attitude belong in a fixed layer: override `setup_layers()` and
+   register `hud.add_layer_drawer(layer, func(w): ...)`, drawing through `w` (a `HudLayerCanvas`)
+   in the layer's frame. Per frame, set the layer's frame uniform with `hud.set_hud_parameter()`.
 
 Data sources: `hud.flight_computer` (state, thrusters, modes, propellant), `hud.hatch`,
 `hud.sensor_head`.

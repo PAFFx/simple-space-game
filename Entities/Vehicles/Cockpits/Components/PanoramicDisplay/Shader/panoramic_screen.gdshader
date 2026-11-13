@@ -46,6 +46,8 @@ uniform float aperture_amount : hint_range(0.0, 1.0) = 0.0;
 uniform vec2 aperture_center = vec2(0.0, 0.0);
 uniform vec2 aperture_half_size = vec2(0.61, 0.61);
 
+#include "res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Shader/hud_layers.gdshaderinc"
+
 
 void fragment() {
 	// --- Step 1: Recover azimuth and elevation from UV2 ---
@@ -114,6 +116,8 @@ void fragment() {
 		}
 
 		// --- Step 7: Composite the HUD on top of the sensor image ---
+		// Fixed layers first (drawn once, turned into place), then the per-frame canvas.
+		color = hud_layers(color, local_dir, hud_brightness);
 		vec2 hud_uv = vec2(fract(UV2.x + 0.5), 1.0 - UV2.y);
 		vec4 hud = texture(hud_texture, hud_uv);
 		color = mix(color, hud.rgb * hud_brightness, hud.a);

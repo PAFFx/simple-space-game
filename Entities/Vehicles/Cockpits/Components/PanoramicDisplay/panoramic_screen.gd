@@ -51,6 +51,7 @@ const _SHADER := preload("res://Entities/Vehicles/Cockpits/Components/PanoramicD
 
 var _material: ShaderMaterial
 var _hud_texture: Texture2D
+var _hud_parameters := {}
 var _aperture_amount: float = 0.0
 var _mask_image: Image
 var _mask_texture: ImageTexture
@@ -131,6 +132,8 @@ func _setup_material() -> void:
 	_material.set_shader_parameter("aperture_half_size", _deg_to_rad_v2(aperture_half_size_deg))
 	_material.set_shader_parameter("aperture_amount", _aperture_amount)
 	_material.set_shader_parameter("hud_texture", _hud_texture)
+	for param: StringName in _hud_parameters:
+		_material.set_shader_parameter(param, _hud_parameters[param])
 	_mesh_instance.material_override = _material
 
 
@@ -204,6 +207,13 @@ func set_hud_texture(texture: Texture2D) -> void:
 	_hud_texture = texture
 	if _material != null:
 		_material.set_shader_parameter("hud_texture", texture)
+
+
+## A HUD layer texture or uniform (see PanoramicHud/Shader/hud_layers.gdshaderinc).
+func set_hud_parameter(param: StringName, value: Variant) -> void:
+	_hud_parameters[param] = value
+	if _material != null:
+		_material.set_shader_parameter(param, value)
 
 
 # --- Hatch aperture API ---
