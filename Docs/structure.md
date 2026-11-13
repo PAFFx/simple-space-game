@@ -6,7 +6,8 @@
 simple-space-game/
 ├── Core/                          Base classes and project-wide singletons
 │   ├── AutoLoad/                  Godot autoload singletons (registered in project.godot)
-│   │   └── layers.gd              Render layer bitmask definitions (Layers.WORLD, COCKPIT, etc.)
+│   │   ├── layers.gd              Render layer bitmask definitions (Layers.WORLD, COCKPIT, etc.)
+│   │   └── perf_overlay.gd        F3 performance overlay (FPS / frame times / render stats)
 │   └── Base/                      Abstract base classes (interfaces)
 │       ├── vehicle_base.gd        Abstract root for all pilotable vehicles
 │       └── cockpit_base.gd        Abstract root for all cockpit interiors
