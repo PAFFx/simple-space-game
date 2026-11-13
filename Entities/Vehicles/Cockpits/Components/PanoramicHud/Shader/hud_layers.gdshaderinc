@@ -26,6 +26,23 @@ uniform vec3 hud_ladder_fade = vec3(25.0, 30.0, 0.3);
 // x = eased reveal (0 = off), y = highlight head (deg from pitch), z = span, w = width (deg).
 uniform vec4 hud_climb = vec4(0.0, 0.0, 35.0, 5.0);
 
+// Flight path markers, prograde drawn at the layer's -X and retrograde at +X (both upright),
+// turned onto the velocity. Coverage: R = stripe, G = halo, B = other strokes × their fade;
+// the highlight, tint, fade-in and pulse are applied here.
+uniform sampler2D hud_fpm_texture : hint_default_transparent, filter_linear, repeat_enable;
+uniform mat3 hud_fpm_frame = mat3(1.0);
+uniform vec4 hud_fpm_color : source_color, color_conversion_disabled = vec4(0.88, 0.91, 0.93, 0.92);
+uniform vec4 hud_fpm_retro_color : source_color, color_conversion_disabled = vec4(0.88, 0.91, 0.93, 0.644);
+uniform vec4 hud_fpm_accent_color : source_color, color_conversion_disabled = vec4(0.9, 0.42, 0.66, 0.9);
+uniform vec4 hud_fpm_halo_color : source_color, color_conversion_disabled = vec4(0.0, 0.0, 0.0, 0.55);
+// As drawn: x = bar start, y = bar length, z = stripe lean (signed), w = stripe half height (deg).
+uniform vec4 hud_fpm_bar = vec4(3.0, 24.0, 0.75, 0.45);
+// x = stripe count, y = spacing power, z = base alpha, w = highlight width (fraction of bar).
+uniform vec4 hud_fpm_stripes = vec4(16.0, 1.7, 0.3, 0.12);
+// x = grow (0 = hidden), y = highlight head, z = full boost, w = kick.
+uniform vec4 hud_fpm_anim = vec4(0.0);
+uniform float hud_fpm_pulse = 1.0;
+
 
 vec2 hud_layer_uv(mat3 frame, vec3 local_dir) {
 	vec3 d = frame * local_dir;
@@ -89,10 +106,85 @@ vec3 hud_ladder(vec3 color, vec3 local_dir, float brightness) {
 }
 
 
+float hud_fpm_glow(float u, float head, float width) {
+	float d = abs(u - head);
+	d = min(d, 1.0 - d);
+	return exp(-pow(d / width, 2.0));
+}
+
+
+// Bar position (0 = inner end) of the stripe nearest the patch point p (deg). A stripe at
+// x runs from (x + lean, h) to (x − lean, −h), its lean growing a little outward.
+float hud_fpm_stripe_u(vec2 p) {
+	float n = hud_fpm_stripes.x - 1.0;
+	float k = p.y / hud_fpm_bar.w;
+	float ax = abs(p.x);
+	float x0 = ax - hud_fpm_bar.z * 0.85 * k;
+	float guess = round(pow(clamp((x0 - hud_fpm_bar.x) / hud_fpm_bar.y, 0.0, 1.0),
+			1.0 / hud_fpm_stripes.y) * n);
+	float best = 1e9;
+	float best_u = 0.0;
+	for (float i = max(guess - 1.0, 0.0); i <= min(guess + 1.0, n); i += 1.0) {
+		float u = i / n;
+		float x = hud_fpm_bar.x + hud_fpm_bar.y * pow(u, hud_fpm_stripes.y)
+				+ hud_fpm_bar.z * (0.7 + 0.3 * u) * k;
+		float e = abs(ax - x);
+		if (e < best) {
+			best = e;
+			best_u = u;
+		}
+	}
+	return best_u;
+}
+
+
+vec3 hud_fpm(vec3 color, vec3 local_dir, float brightness) {
+	float grow = hud_fpm_anim.x;
+	if (grow <= 0.0) {
+		return color;
+	}
+	vec4 cov = hud_sample(hud_fpm_texture, hud_fpm_frame, local_dir);
+	if (cov.r + cov.g + cov.b < 0.002) {
+		return color;
+	}
+	vec3 d = hud_fpm_frame * local_dir;
+	bool pro = d.x < 0.0;
+	vec4 c = pro ? hud_fpm_color : hud_fpm_retro_color;
+
+	float stripe_a = 0.0;
+	vec3 stripe_rgb = mix(c.rgb, hud_fpm_accent_color.rgb, hud_fpm_anim.z * 0.7);
+	if (cov.r > 0.002) {
+		// Patch degrees: right is -Z for the prograde marker, +Z for the retrograde one.
+		float depth = abs(d.x);
+		vec2 p = degrees(vec2(atan(pro ? -d.z : d.z, depth), atan(d.y, depth)));
+		float u = hud_fpm_stripe_u(p);
+		float shown = clamp((grow * 1.15 - u) / 0.15, 0.0, 1.0);
+		float head = pro ? hud_fpm_anim.y : 1.0 - hud_fpm_anim.y;
+		float width = hud_fpm_stripes.w;
+		float glow = hud_fpm_glow(u, head, width);
+		glow = max(glow, hud_fpm_glow(u, fract(head + 0.5), width) * hud_fpm_anim.z);
+		if (pro && hud_fpm_anim.w > 0.0) {
+			glow = max(glow, exp(-pow((u - (1.0 - hud_fpm_anim.w)) / 0.08, 2.0)) * hud_fpm_anim.w);
+		}
+		stripe_a = c.a * mix(hud_fpm_stripes.z, 1.0, glow) * shown * hud_fpm_pulse * min(cov.r, 1.0);
+	}
+	float mark_a = c.a * grow * min(cov.b, 1.0);
+
+	float a = hud_fpm_halo_color.a * min(cov.g, 1.0);
+	vec3 rgb = hud_fpm_halo_color.rgb * a;
+	float stroke_a = min(stripe_a + mark_a, 1.0);
+	vec3 stroke = (stripe_rgb * stripe_a + c.rgb * mark_a) / max(stripe_a + mark_a, 1e-5);
+	rgb = stroke * stroke_a + rgb * (1.0 - stroke_a);
+	a = stroke_a + a * (1.0 - stroke_a);
+	return mix(color, hud_srgb_to_linear(rgb) * brightness, a);
+}
+
+
 vec3 hud_layers(vec3 color, vec3 local_dir, float brightness) {
 	color = hud_over(color, hud_sample(hud_static_texture, mat3(1.0), local_dir), brightness);
 	color = hud_over(color, hud_sample(hud_heading_texture, hud_heading_frame, local_dir), brightness);
 	color = hud_ladder(color, local_dir, brightness);
 	color = hud_over(color, hud_sample(hud_suit_texture, hud_suit_frame, local_dir), brightness);
+	color = hud_fpm(color, local_dir, brightness);
 	return color;
 }

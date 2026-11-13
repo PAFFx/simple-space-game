@@ -53,6 +53,7 @@ const _LAYER_TEXTURES := {
 	&"heading": &"hud_heading_texture",
 	&"ladder": &"hud_ladder_texture",
 	&"suit": &"hud_suit_texture",
+	&"fpm": &"hud_fpm_texture",
 }
 
 var _layers := {}
@@ -83,7 +84,7 @@ func is_live() -> bool:
 ## Draws `draw_fn(canvas: HudWidget)` into a fixed layer, once: content that only turns
 ## with the attitude is drawn in the layer's own frame and turned into place by the
 ## screen shader (a `hud_<layer>_frame` uniform), instead of being redrawn every frame.
-## Layers: static (display frame), heading, ladder (coverage, `additive`), suit.
+## Layers: static (display frame), heading, ladder and fpm (coverage, `additive`), suit.
 func add_layer_drawer(layer: StringName, draw_fn: Callable, additive := false) -> void:
 	var layer_viewport: SubViewport = _layers.get(layer)
 	if layer_viewport == null:
@@ -107,10 +108,16 @@ func add_layer_drawer(layer: StringName, draw_fn: Callable, additive := false) -
 
 ## Draws every layer again (after changing what they show).
 func redraw_layers() -> void:
-	for layer_viewport: SubViewport in _layers.values():
-		for canvas in layer_viewport.get_children():
-			canvas.queue_redraw()
-		layer_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	for layer in _layers:
+		redraw_layer(layer)
+
+
+## Draws one layer again this frame.
+func redraw_layer(layer: StringName) -> void:
+	var layer_viewport: SubViewport = _layers[layer]
+	for canvas in layer_viewport.get_children():
+		canvas.queue_redraw()
+	layer_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 ## A HUD uniform of the screen shader (layer frames, ladder state).

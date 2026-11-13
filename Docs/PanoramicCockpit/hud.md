@@ -56,9 +56,10 @@ turns it into place per pixel with a `hud_<layer>_frame` uniform (display direct
 | `heading` | `Basis(UP, heading − 15°)⁻¹` | course marks and numbers, drawn for heading 15° so none sits on the layer's back seam |
 | `ladder` | `Basis(RIGHT, pitch)` | the pitch ladder drawn level, as coverage (R stroke, G halo, B stroke × tick strength); the shader applies fade and climb highlight from `hud_pitch_deg` / `hud_climb`, blending as the 2D canvas would |
 | `suit` | `(display⁻¹ · body)⁻¹` | suit line and arrowheads, drawn with the body level |
+| `fpm` | layer −X onto the velocity, up as `patch()` makes it | flight path markers as coverage (R stripe, G halo, B the rest × its fade), prograde at −X and retrograde at +X, off the back seam; the shader finds each stripe from its position and runs the highlight, tint, fade-in and pulse. Redrawn only while the shape changes (growing in/out, boost stretch, brake squeeze, hard-brake lean) |
 
 Layers composite under the per-frame canvas, which keeps only what changes: numbers, the overhead
-horizon line, flight path, data blocks, contacts. Before this, the ladder alone projected ~1,400
+horizon line, data blocks, contacts. Before this, the ladder alone projected ~1,400
 points a frame in GDScript and the HUD cost ~14 ms of CPU; now ~1.5 ms. `PanoramicHud.redraw_layers()`
 draws them again after changing what they show (layers don't follow export edits at runtime).
 Colour uniforms the shader blends as canvas colours need `source_color, color_conversion_disabled`:
