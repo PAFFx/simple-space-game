@@ -11,7 +11,7 @@ extends HudWidget
 ##   arrowheads         at the edges of the opening, pointing in; midway between them
 ##                      is the suit's nose
 ##   90° left / right   segmented rings with cockpit-level marks to read the slope
-##                      against, and the suit's PITCH
+##                      against
 ##
 ## Mostly level; they come alive when auto-rotation leans or rolls the suit.
 
@@ -23,8 +23,6 @@ extends HudWidget
 @export var rail_offset_deg: float = 0.3
 @export var rail_bright_deg: float = 100.0
 @export var sample_step_deg: float = 1.5
-## Below this the pitch readouts are drawn dim.
-@export var active_deg: float = 1.0
 
 ## Arrowhead size: 1 = 2.6° long; the rails start where it ends.
 @export var arrow_scale: float = 1.7
@@ -38,13 +36,11 @@ func draw_widget() -> void:
 	var display := hud.get_display_basis()
 	var body := hud.vehicle.get_global_transform_interpolated().basis.orthonormalized()
 	var rel := display.inverse() * body
-	var fwd := rel * Vector3.FORWARD
-	var pitch := atan2(fwd.y, -fwd.z)
 
 	_suit_line(rel)
 	for side in [-1.0, 1.0]:
 		_arrowhead(rel, side)
-		_side_ring(side, pitch)
+		_side_ring(side)
 
 
 ## Direction on the suit line, `bearing` rad from the suit's nose (+ = right), lifted
@@ -119,7 +115,7 @@ func _arrowhead(rel: Basis, side: float) -> void:
 
 ## side: -1 = left of the pilot, +1 = right. The suit line runs through the centre;
 ## the marks at the ring's front and back are cockpit level.
-func _side_ring(side: float, pitch: float) -> void:
+func _side_ring(side: float) -> void:
 	var p := patch(Vector3(side, 0, 0), Vector3.UP)
 	var r := side_radius_deg
 	var c := hud.suit_color
@@ -142,7 +138,3 @@ func _side_ring(side: float, pitch: float) -> void:
 	# Cockpit-level marks just outside the ring, front and back.
 	for s in [-1.0, 1.0]:
 		patch_line(p, Vector2(r * 1.05 * s, 0), Vector2(r * 1.25 * s, 0), dim, 2.0, 1)
-
-	var active := absf(rad_to_deg(pitch)) >= active_deg
-	patch_text(p, Vector2(0, -r * 1.5), "PITCH %+d°" % roundi(rad_to_deg(pitch)),
-			c if active else dim, HORIZONTAL_ALIGNMENT_CENTER, 22)
