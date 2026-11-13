@@ -67,7 +67,9 @@ func _full_text() -> String:
 		worst = maxf(worst, ms)
 	var lines := PackedStringArray([
 		"%d FPS   %.2f ms   worst %.1f ms" % [Engine.get_frames_per_second(), _frame_ms[-1], worst],
-		"process %.2f ms   physics %.2f ms" % [
+		# Engine monitors: worst frame of the last second. "main" covers scripts plus
+		# render submission and waiting on the GPU.
+		"main %.2f ms   physics %.2f ms (worst/s)" % [
 				Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
 				Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0],
 		"render cpu %.2f ms   gpu %.2f ms (main view)" % [cpu_ms, gpu_ms],
