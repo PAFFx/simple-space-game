@@ -166,6 +166,7 @@ var _last_brake_full := false
 var _thruster_limit := Vector3.INF   ## Thrusters' share of this tick's torque limit
 var _stick := Vector3.ZERO           ## Rotation demand after horizon-lock shaping
 var _horizon_up := Vector3.UP        ## Global "up" the horizon lock levels to
+var _display_up := Vector3.UP        ## HUD's up: re-levelled by a roll like _horizon_up, keeping pitch
 var _manual_roll := false            ## Pilot is rolling (sets a new horizon)
 var _v_expect := Vector3.ZERO        ## Velocity the commands alone would give (global)
 var _intent_accel := Vector3.ZERO    ## Last tick's commanded acceleration (global)
@@ -184,8 +185,10 @@ func get_pilot_orientation() -> Variant:
 	return _pilot
 
 
+## The HUD's horizon, not _horizon_up: a roll resets that one to the cockpit's up
+## (so yaw stays flat), which would also reset the displayed pitch.
 func get_horizon_up() -> Variant:
-	return _horizon_up if horizon_lock and _initialized else null
+	return _display_up if horizon_lock and _initialized else null
 
 
 func get_cockpit_orientation(body_q: Quaternion) -> Variant:
@@ -211,6 +214,7 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_release_timer = Vector3.ZERO
 		_turn_sign = Vector3.ZERO
 		_horizon_up = body_q * Vector3.UP
+		_display_up = _horizon_up
 		_manual_roll = false
 	if command.toggle_precision:
 		precision = not precision
@@ -220,6 +224,7 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	if command.toggle_horizon_lock:
 		horizon_lock = not horizon_lock
 		_horizon_up = _pilot * Vector3.UP
+		_display_up = _horizon_up
 		_manual_roll = false
 
 	command.boost = command.boost or command.boost_full
@@ -301,8 +306,10 @@ func _horizon_stick(command: PilotCommand) -> Vector3:
 	elif _manual_roll and _capture.z == 0.0:
 		_manual_roll = false
 		_horizon_up = _pilot * Vector3.UP
+		_roll_display_up()
 	if _manual_roll:
 		_horizon_up = _pilot * Vector3.UP
+		_roll_display_up()
 		return stick
 	var steering := Vector2(stick.x, stick.y).length() > stick_deadzone
 	# Keep levelling while a released pitch/yaw still brakes (each axis stops on
@@ -318,6 +325,14 @@ func _horizon_stick(command: PilotCommand) -> Vector3:
 	var rate := Vector3(stick.x * max_rate_deg.x, 0.0, 0.0) + yaw_axis * (stick.y * max_rate_deg.y)
 	rate.z += _level_rate_deg(up_p) * k
 	return (rate / max_rate_deg).clamp(-Vector3.ONE, Vector3.ONE)
+
+
+## Turns the HUD's horizon about the pilot's forward until it carries no bank, keeping
+## its pitch.
+func _roll_display_up() -> void:
+	var up_p := _pilot.inverse() * _display_up
+	var y := sqrt(maxf(1.0 - up_p.z * up_p.z, 0.0))
+	_display_up = _pilot * Vector3(0.0, -y if up_p.y < 0.0 else y, up_p.z)
 
 
 ## Horizon up in the pilot frame, flipped when inverted (so a loop keeps going

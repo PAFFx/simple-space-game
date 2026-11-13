@@ -3,8 +3,9 @@ extends HudWidget
 
 ## The cockpit's attitude against the HUD's attitude frame (the horizon the flight
 ## computer holds level to; see PanoramicHud):
-##   - a pitch ladder: two tick columns far either side of the heading, along meridians of
-##     the attitude frame (so they lean together toward the zenith): ticks every 1/5/10°
+##   - a pitch ladder: two tick columns either side of the nose, upright in the cockpit,
+##     each on a small circle around the cockpit's right axis (so they never meet
+##     overhead), scrolling with the cockpit's pitch: ticks every 1/5/10°
 ##     and a pointer riding at the cockpit's pitch, labelled with it; marks
 ##     fade away from it. Climbing or descending, a highlight runs up or down the ticks,
 ##     faster the faster the climb (as on the flight path bars)
@@ -61,11 +62,6 @@ func draw_widget() -> void:
 	var up := ref.y
 	var display := hud.get_display_basis()
 	var forward := -display.z
-	var flat := forward - up * forward.dot(up)
-	if flat.length_squared() < 1e-6:
-		flat = -display.y  # looking straight up/down: use cockpit down as heading
-	flat = flat.normalized()
-	var right := flat.cross(up).normalized()
 
 	if show_horizon_ring:
 		_draw_horizon_ring(ref)
@@ -75,8 +71,13 @@ func draw_widget() -> void:
 	var heading := wrapf(rad_to_deg(atan2(local.x, -local.z)), 0.0, 360.0)
 	var pitch := rad_to_deg(asin(clampf(local.y, -1.0, 1.0)))
 	_update_climb(up)
+	# Ladder frame: the cockpit pitched back down by its pitch, so the columns stand
+	# upright in the cockpit and the tick at the current pitch sits level with the nose.
+	var p_rad := deg_to_rad(pitch)
+	var level := forward * cos(p_rad) - display.y * sin(p_rad)
+	var level_up := display.y * cos(p_rad) + forward * sin(p_rad)
 	for side in [-1.0, 1.0]:
-		_draw_ladder_column(flat, right, up, side, pitch)
+		_draw_ladder_column(level, display.x, level_up, side, pitch)
 	var up_d := hud.world_to_display(up)
 	var bank := rad_to_deg(atan2(up_d.x, up_d.y))
 	_draw_readout(heading)
@@ -112,12 +113,13 @@ func _draw_horizon_ring(ref: Basis) -> void:
 func _draw_ladder_column(flat: Vector3, right: Vector3, up: Vector3, side: float,
 		pitch: float) -> void:
 	var c := hud.ladder_color
-	var a := deg_to_rad(ladder_column_az_deg) * side
-	var bearing := flat * cos(a) + right * sin(a)
-	var outward := (-flat * sin(a) + right * cos(a)) * side
+	var a := deg_to_rad(ladder_column_az_deg)
+	var offset := right * side * sin(a)
+	var radius := cos(a)
 
 	for pitch_deg in range(-ladder_max_deg, ladder_max_deg + 1):
-		var base := _ladder_point(bearing, up, pitch_deg)
+		var base := _ladder_point(flat, up, offset, radius, pitch_deg)
+		var outward := (right * side - base * base.dot(right * side)).normalized()
 		var fade := _ladder_fade(pitch_deg, pitch)
 		var glow := _climb_glow(pitch_deg, pitch)
 		var labelled := pitch_deg % ladder_label_step_deg == 0
@@ -137,8 +139,10 @@ func _draw_ladder_column(flat: Vector3, right: Vector3, up: Vector3, side: float
 			_ladder_tick(base, outward, 0.0, ladder_tick_deg.x, _lit(c, fade * 0.6, glow), 1.2, false)
 
 	# Pointer at the cockpit's pitch, aimed at the ticks from inside.
-	var at := _ladder_point(bearing, up, pitch)
-	var p := patch(hud.world_to_display(at), hud.world_to_display(up))
+	var at := _ladder_point(flat, up, offset, radius, pitch)
+	var e := deg_to_rad(pitch)
+	var along := up * cos(e) - flat * sin(e)
+	var p := patch(hud.world_to_display(at), hud.world_to_display(along))
 	var s := side
 	var dim := PanoramicHud.dimmed(hud.primary_color)
 	patch_polygon(p, PackedVector2Array([Vector2(-0.2 * s, 0), Vector2(-0.95 * s, 0.4),
@@ -191,10 +195,12 @@ func _lit(c: Color, strength: float, glow: float) -> Color:
 	return lit
 
 
-## Column point at a pitch (deg) along the column's meridian.
-func _ladder_point(bearing: Vector3, up: Vector3, pitch_deg: float) -> Vector3:
+## Column point at a pitch (deg): the heading pitched up by it, moved sideways onto the
+## column's small circle.
+func _ladder_point(flat: Vector3, up: Vector3, offset: Vector3, radius: float,
+		pitch_deg: float) -> Vector3:
 	var e := deg_to_rad(pitch_deg)
-	return bearing * cos(e) + up * sin(e)
+	return offset + (flat * cos(e) + up * sin(e)) * radius
 
 
 ## Strength of a mark by its distance from the cockpit's pitch.
