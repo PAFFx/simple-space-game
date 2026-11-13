@@ -102,7 +102,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Auto-rotation limit in normal flight and with Shift held, deg. A double-tapped Shift
 ## or brake uses the solver's own max_offset_deg.
 @export var cruise_max_offset_deg: float = 20.0
-@export var boost_max_offset_deg: float = 30.0
+@export var boost_max_offset_deg: float = 45.0
 ## Precision mode: no auto-rotation, this acceleration (pushing and braking), no pushing
 ## past precision_speed along the stick, and the turn rates scaled down. Shift still
 ## boosts normally.
