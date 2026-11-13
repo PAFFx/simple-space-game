@@ -94,9 +94,9 @@ const THRUSTERS := [
 	["CalfL", "shin.L", Vector3(-3.2, 5.8, 1.53), CALF_MODEL_EXHAUST_R * Vector3(-1, 1, 1), 400.0, FORE_AFT, 4.5, 0.80, false],
 	# Shoulder armor, two each: up-and-out (pushes the suit down) and out-and-down.
 	["ShUpR", "shoulder.R", Vector3(4.79, 19.7, 0.45), Vector3(0.74, 0.67, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
-	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
+	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 440.0, FORE_AFT, 3.0, 0.50, false],
 	["ShUpL", "shoulder.L", Vector3(-4.77, 19.7, 0.45), Vector3(-0.74, 0.67, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
-	["ShOutL", "shoulder.L", Vector3(-4.93, 18.97, 0.44), Vector3(-0.95, -0.3, 0.01), 250.0, FORE_AFT, 3.0, 0.50, false],
+	["ShOutL", "shoulder.L", Vector3(-4.93, 18.97, 0.44), Vector3(-0.95, -0.3, 0.01), 440.0, FORE_AFT, 3.0, 0.50, false],
 	# Chest vents, firing forward (push back / brake). With the backpack mains, the nearest
 	# to the generator and the biggest-looking ports: nearly as strong as a main.
 	["ChestR", "chest", Vector3(1.31, 17.26, -2.15), Vector3(0.39, -0.24, -0.89), 660.0, UP_DOWN, 10.0, 0.74, false],
@@ -112,12 +112,12 @@ const THRUSTERS := [
 	["SkRearR", "skirt_rear.R", Vector3(1.78, 12.55, 2.45), Vector3(0.39, 0.13, 0.91), 120.0, FIXED, 1.6, 0.32, false],
 	["SkRearL", "skirt_rear.L", Vector3(-1.76, 12.55, 2.45), Vector3(-0.39, 0.12, 0.91), 120.0, FIXED, 1.6, 0.32, false],
 	# Side skirts, three small each: forward-out, back-out, out.
-	["SkSideFR", "skirt_side.R", Vector3(2.11, 15.13, -0.81), Vector3(0.54, 0.25, -0.81), 70.0, FIXED, 1.0, 0.35, false],
-	["SkSideBR", "skirt_side.R", Vector3(2.11, 15.13, 0.48), Vector3(0.54, 0.25, 0.81), 70.0, FIXED, 1.0, 0.35, false],
-	["SkSideOR", "skirt_side.R", Vector3(2.61, 14.71, -0.16), Vector3(1, 0.01, 0), 70.0, FIXED, 1.0, 0.35, false],
-	["SkSideFL", "skirt_side.L", Vector3(-2.09, 15.13, -0.81), Vector3(-0.54, 0.25, -0.81), 70.0, FIXED, 1.0, 0.35, false],
-	["SkSideBL", "skirt_side.L", Vector3(-2.09, 15.13, 0.48), Vector3(-0.54, 0.25, 0.81), 70.0, FIXED, 1.0, 0.35, false],
-	["SkSideOL", "skirt_side.L", Vector3(-2.59, 14.71, -0.16), Vector3(-1, 0.01, 0), 70.0, FIXED, 1.0, 0.35, false],
+	["SkSideFR", "skirt_side.R", Vector3(2.11, 15.13, -0.81), Vector3(0.54, 0.25, -0.81), 120.0, FIXED, 1.0, 0.35, false],
+	["SkSideBR", "skirt_side.R", Vector3(2.11, 15.13, 0.48), Vector3(0.54, 0.25, 0.81), 120.0, FIXED, 1.0, 0.35, false],
+	["SkSideOR", "skirt_side.R", Vector3(2.61, 14.71, -0.16), Vector3(1, 0.01, 0), 120.0, FIXED, 1.0, 0.35, false],
+	["SkSideFL", "skirt_side.L", Vector3(-2.09, 15.13, -0.81), Vector3(-0.54, 0.25, -0.81), 120.0, FIXED, 1.0, 0.35, false],
+	["SkSideBL", "skirt_side.L", Vector3(-2.09, 15.13, 0.48), Vector3(-0.54, 0.25, 0.81), 120.0, FIXED, 1.0, 0.35, false],
+	["SkSideOL", "skirt_side.L", Vector3(-2.59, 14.71, -0.16), Vector3(-1, 0.01, 0), 120.0, FIXED, 1.0, 0.35, false],
 ]
 
 # name, center, size
@@ -152,12 +152,12 @@ const AMBAC := [
 	["upper_arm.L", Vector3.UP, &"arm_l", 1.0e4, -25.0, 25.0, 0.4],
 	["forearm.L", Vector3.RIGHT, &"arm_l", 2.5e4, -5.0, 50.0, 0.6],
 	["thigh.R", Vector3.RIGHT, &"leg_r", 1.6e5, -30.0, 85.0, 1.0],
-	["thigh.R", Vector3.BACK, &"leg_r", 1.6e5, -3.0, 6.0, 0.4],
+	["thigh.R", Vector3.BACK, &"leg_r", 1.6e5, -3.0, 15.0, 0.4],
 	["thigh.R", Vector3.UP, &"leg_r", 2.0e4, -15.0, 15.0, 0.5],
 	["shin.R", Vector3.RIGHT, &"leg_r", 4.5e4, -110.0, 5.0, 0.9],
 	["foot.R", Vector3.RIGHT, &"leg_r", 6.0e3, -40.0, 30.0, 0.5],
 	["thigh.L", Vector3.RIGHT, &"leg_l", 1.6e5, -30.0, 85.0, 1.0],
-	["thigh.L", Vector3.BACK, &"leg_l", 1.6e5, -6.0, 3.0, 0.4],
+	["thigh.L", Vector3.BACK, &"leg_l", 1.6e5, -15.0, 3.0, 0.4],
 	["thigh.L", Vector3.UP, &"leg_l", 2.0e4, -15.0, 15.0, 0.5],
 	["shin.L", Vector3.RIGHT, &"leg_l", 4.5e4, -110.0, 5.0, 0.9],
 	["foot.L", Vector3.RIGHT, &"leg_l", 6.0e3, -40.0, 30.0, 0.5],
