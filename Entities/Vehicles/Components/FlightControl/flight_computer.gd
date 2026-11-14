@@ -135,10 +135,10 @@ func _physics_process(delta: float) -> void:
 			# Limbs take what exceeds the thrusters plus a share of the rest.
 			var torque := last_wrench.torque
 			var limit := last_wrench.thruster_torque_limit
-			var beyond := torque - torque.clamp(-limit, limit)
+			var beyond := torque - ControlLaw.scale_to_box(torque, limit)
 			ambac_torque = ambac.step(beyond + (torque - beyond) * ambac.share, delta)
 			body.apply_torque(state.to_global(ambac_torque))
-			thrust_wrench = Wrench.new(last_wrench.force, (torque - ambac_torque).clamp(-limit, limit))
+			thrust_wrench = Wrench.new(last_wrench.force, ControlLaw.scale_to_box(torque - ambac_torque, limit))
 			thrust_wrench.torque_priority = last_wrench.torque_priority
 		var demand := allocator.allocate(state, thrust_wrench)
 		for i in thrusters.size():

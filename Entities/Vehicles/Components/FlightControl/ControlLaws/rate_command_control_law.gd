@@ -40,6 +40,8 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Auto-rotation keeps running on a steered axis at this fraction of its swing rate
 ## (the view still turns at the stick rate; the body adds the swing). 0 = pause it.
 @export_range(0.0, 1.0) var steer_auto_rotate_share: float = 0.4
+## Swing rate left to the axes that aren't steered while another one is.
+@export_range(0.0, 1.0) var steer_free_swing_share: float = 0.0
 ## Only auto-rotate while boosting. Off: auto-rotate whenever a translation is
 ## commanded (or boosting) and the demand needs it; plain stops never rotate.
 @export var auto_rotate_on_boost_only: bool = false
@@ -88,6 +90,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Low keeps the force clean: hard turns otherwise buy torque with off-centre thrust,
 ## which shoves the suit sideways. AMBAC still adds its torque on top.
 @export var steer_torque_priority: float = 0.35
+## Share of the force capability given up while steering or stopping a turn, so the
+## thrusters have room left to make torque.
+@export_range(0.0, 0.9) var steer_force_reserve: float = 0.3
 ## Allocator torque priority while realigning to rest (< 0 = allocator default).
 ## Lower keeps the suit's braking push clean at the cost of a slower return.
 @export var realign_torque_priority: float = 0.5
@@ -241,11 +246,17 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	var drift_force := _drift_correction(state, command, force_world)
 	_update_offset(state, force_world, command)
 	var torque := _rotation_torque(state, command, body_q)
-	var force_body := clamp_to_capability(state.to_local(force_world + drift_force), state, 1.0)
+	# Attitude needs thrust too: a push at full capability leaves the allocator nothing
+	# to turn with, so the force gives way while the pilot steers or a turn is stopping.
+	var reserve := steer_force_reserve if _locked != Vector3.ZERO else 0.0
+	var force_body := clamp_to_capability(state.to_local(force_world + drift_force), state,
+			1.0 - reserve)
 	var wrench := Wrench.new(force_body, torque)
 	wrench.thruster_torque_limit = _thruster_limit
-	# Braking into a target always wins: a stop matters more than a clean push.
-	if _locked != Vector3.ZERO:
+	# Stopping a turn or braking into a target always wins: it matters more than a clean push.
+	if _is_stopping():
+		wrench.torque_priority = recover_torque_priority
+	elif _locked != Vector3.ZERO:
 		wrench.torque_priority = steer_torque_priority
 	else:
 		var base := lerpf(auto_rotate_torque_priority, recover_torque_priority, _recover) \
@@ -449,7 +460,9 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 	# Axes whose offset may not move at all, and each axis's share of the swing rate.
 	var frozen := _locked if share <= 0.0 else Vector3.ZERO
 	var moving := Vector3.ONE - frozen
-	var speed := free + _locked * share
+	# While any axis is steered the whole swing slows, not just that axis: a full-rate
+	# swing on the others takes the torque the turn (and its stop) needs.
+	var speed := Vector3.ONE if _locked == Vector3.ZERO else free * steer_free_swing_share + _locked * share
 	var r_target := r_cur * _locked
 	var slew := deg_to_rad(60.0)
 	var smoothing := 0.0
@@ -530,7 +543,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 		var fraction := 1.0 if fast_turn and steering else torque_fraction
 		_thruster_limit = state.max_torque * fraction
 		var limit := _thruster_limit + state.ambac_torque
-		return (inertia * ((rate_cmd - omega) * gain) + gyro).clamp(-limit, limit)
+		return scale_to_box(inertia * ((rate_cmd - omega) * gain) + gyro, limit)
 
 	# Everything below is about the pilot's axes. Locked axes: the stick commands the
 	# rate (0 while braking a released turn). Free axes: track pilot · offset. Both
@@ -579,20 +592,25 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 	# Locked and free axes get separate torque budgets: a boosted turn or a stop may
 	# use it all, while auto-rotation stays gentle so it never spills force. The limbs'
 	# torque comes on top of both (it moves no thrusters, so it's always clean).
-	var stopping := (_capture - _active).max(Vector3.ZERO) != Vector3.ZERO
+	var stopping := _is_stopping()
 	var lock_fraction := 1.0 if stopping or (fast_turn and steering) else torque_fraction
 	var free_fraction := lerpf(_auto_fraction() if _auto_rotating else torque_fraction, 1.0, _brake)
 	var lock_thrust := state.max_torque * lock_fraction
 	var free_thrust := state.max_torque * free_fraction
 	var lock_limit := lock_thrust + state.ambac_torque
 	var free_limit := free_thrust + state.ambac_torque
-	var torque_lock := (inertia * (pilot_to_body * (alpha_p * _locked))).clamp(-lock_limit, lock_limit)
-	var torque_free := (inertia * (pilot_to_body * (alpha_p * free))).clamp(-free_limit, free_limit)
+	var torque_lock := scale_to_box(inertia * (pilot_to_body * (alpha_p * _locked)), lock_limit)
+	var torque_free := scale_to_box(inertia * (pilot_to_body * (alpha_p * free)), free_limit)
 	_thruster_limit = lock_thrust if _locked != Vector3.ZERO else free_thrust
 	if free != Vector3.ZERO:
 		_thruster_limit = _thruster_limit.max(free_thrust)
 	var limit := _thruster_limit + state.ambac_torque
-	return (torque_lock + torque_free + gyro).clamp(-limit, limit)
+	return scale_to_box(torque_lock + torque_free + gyro, limit)
+
+
+## A released turn is still being braked on some axis.
+func _is_stopping() -> bool:
+	return (_capture - _active).max(Vector3.ZERO) != Vector3.ZERO
 
 
 func _auto_fraction() -> float:

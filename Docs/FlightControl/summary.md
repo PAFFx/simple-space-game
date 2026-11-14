@@ -224,6 +224,15 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
   than the torque budget allows and it eases into its end point, so the body can follow exactly
   (no overshoot when the target stops or turns back). If the body still lags (`tracking_lag_deg`),
   its torque budget and priority rise toward `recover_torque_priority`.
+- **Turning under a hard brake.** A released turn is stopped at the top allocator priority
+  (`recover_torque_priority`; it used to run at the steering priority and got ~8% of the yaw
+  torque it asked for against a saturated brake). While an axis is steered or stopping, the
+  force gives up `steer_force_reserve` (30%) of its capability so the thrusters can still make
+  torque, and the swing on the other axes waits (`steer_free_swing_share` 0), so the body no
+  longer flips its lean in the middle of a turn. Saturated torque is scaled as a vector
+  (`ControlLaw.scale_to_box`), not clamped per axis, which used to turn a yaw stop into roll.
+  Full brake + 1 s yaw: body 49° → 22° off target, back in hand 2.2 s → 0.6 s after release.
+  Measure with `Tools/Flight/run_fbw_probe.sh`.
 - **Committed attitude.** The solver remembers which side it turned to and charges `commit_weight` for
   turning back through to the other side until the demand swings `commit_release_deg` (45°) away.
   Its shortfall term is the share of the demand left unmet (0..1), so a full-boost demand can't
