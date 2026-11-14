@@ -77,12 +77,15 @@ headroom first.
 
 ## Leads (not done yet)
 
-- **CockpitDisplays, 2.2 ms/frame.** The screens redraw every frame. Updating them at
-  20–30 Hz (or only when their data changes) would likely remove most of it.
+- ~~**CockpitDisplays, 2.2 ms/frame.**~~ Done 2026-11-15: each page redraws at its own rate
+  (`MfdPage.refresh_hz`: SA 30, ENG 20, TGT 2), one page per frame, and its viewport renders
+  only then. Measured 2.18 + 0.36 ms (process + draw) before, ~0.4 + 0.1 ms after at
+  ~170 fps. The cost now scales with the pages' rates, not the frame rate.
 - **FlightComputer, 2.9 ms per physics step.** The largest fixed cost. It needs a
   per-function breakdown (allocator vs AMBAC solver vs control law).
-- **ControlCentre, 0.29 ms for 3 chevrons.** Probably the per-frame
-  `control_law.get_pilot_orientation()` call, not the drawing.
+- **ControlCentre, 0.29 ms for 3 chevrons.** Now drawn by the screen shader (no canvas
+  drawing left, not re-measured); what remains is the per-frame
+  `control_law.get_pilot_orientation()` call.
 - **Silhouettes, 0.37 ms.** 12 projected points per outline edge every frame. Fewer
   subdivisions, or skipping when the shield hasn't moved, would cut it.
 

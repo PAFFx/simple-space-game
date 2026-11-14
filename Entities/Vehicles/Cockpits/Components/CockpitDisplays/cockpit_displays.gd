@@ -5,6 +5,10 @@ extends Node
 ## (an MfdPage) rendered into its own SubViewport. The screens are flat panels in the
 ## cockpit, not part of the panoramic monitor, so detail pages (engines, map, target)
 ## live here instead of cluttering the view outside.
+##
+## A page is drawn again at its own refresh rate (MfdPage.refresh_hz), not every rendered
+## frame, and its viewport renders only then. The pages take turns, so two never redraw
+## in the same frame.
 
 ## Screen mesh name in the cockpit model → page script, and the page's pixel size
 ## (matching the screen's aspect).
@@ -18,6 +22,10 @@ extends Node
 @export var brightness: float = 1.15
 
 var pages := {}
+
+var _viewports := {}
+# Seconds until each page is due, by mesh name.
+var _due := {}
 
 
 func _ready() -> void:
@@ -33,7 +41,7 @@ func _ready() -> void:
 		vp.name = mesh_name + "Viewport"
 		vp.size = spec[1]
 		vp.disable_3d = true
-		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 		add_child(vp)
 		var page: MfdPage = (spec[0] as GDScript).new()
 		page.name = mesh_name.trim_prefix("Screen") + "Page"
@@ -41,6 +49,8 @@ func _ready() -> void:
 		vp.add_child(page)
 		page.setup(vehicle)
 		pages[mesh_name] = page
+		_viewports[mesh_name] = vp
+		_due[mesh_name] = 0.0
 		var mat := StandardMaterial3D.new()
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mat.albedo_texture = vp.get_texture()
@@ -51,3 +61,18 @@ func _ready() -> void:
 		mat.uv1_scale = Vector3(1, -1, 1)
 		mat.uv1_offset = Vector3(0, 1, 0)
 		mesh.material_override = mat
+
+
+func _process(delta: float) -> void:
+	# At most one page per frame: the most overdue one.
+	var next := ""
+	for mesh_name: String in _due:
+		_due[mesh_name] -= delta
+		if _due[mesh_name] <= 0.0 and (next == "" or _due[mesh_name] < _due[next]):
+			next = mesh_name
+	if next == "":
+		return
+	var page: MfdPage = pages[next]
+	_due[next] = 1.0 / maxf(page.refresh_hz, 0.1)
+	page.queue_redraw()
+	(_viewports[next] as SubViewport).render_target_update_mode = SubViewport.UPDATE_ONCE
