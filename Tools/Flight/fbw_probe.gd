@@ -49,6 +49,11 @@ class Scripted extends PilotInputSource:
 					c.boost = scenario != "cruise_fwd_roll"
 					c.boost_full = scenario == "full_fwd_roll"
 				if t >= 2.5 and t < 3.5: c.rotation = Vector3(0, 0, 1)
+			"cruise_boost_fwd", "cruise_boost_right", "cruise_boost_down":
+				if t >= 0.5:
+					c.translation = Vector3(0, 0, -1) if scenario.ends_with("fwd") \
+							else (Vector3(1, 0, 0) if scenario.ends_with("right") else Vector3(0, -1, 0))
+					c.boost = t >= 2.0
 			"brake_yaw", "brake_roll", "brake_full_yaw", "brake_full_pitch", "brake_full_roll", "brake_full_only":
 				if on and t < 3.5:
 					c.translation = Vector3(0, 0, -1); c.boost = true; c.boost_full = true
@@ -68,7 +73,7 @@ var v_prev := Vector3.ZERO
 var w_prev := Vector3.ZERO
 var series := false
 var next_log := 0.0
-var duration := 6.0
+var duration := 4.0
 # accumulators
 var a_final := 0.0
 var t50 := -1.0
@@ -90,6 +95,11 @@ var real_perp := 0.0
 var sum_alloc := 0.0
 var sum_real := 0.0
 var n_perp := 0
+var dodge := 0.0
+var dodge05 := 0.0
+var dodge10 := 0.0
+var dodge_v0 := 0.0
+var dodge_started := false
 var turn_dev := 0.0
 var turn_settle := 3.5
 
@@ -122,6 +132,8 @@ func _tick() -> void:
 				var value := float(o.get_slice("=", 1))
 				if key.begins_with("fc."):
 					fc.set(key.trim_prefix("fc."), value)
+				elif key.begins_with("solver."):
+					(fc.control_law as RateCommandControlLaw).attitude_solver.set(key.trim_prefix("solver."), value)
 				elif key.begins_with("alloc."):
 					fc.allocator.set(key.trim_prefix("alloc."), value)
 				else:
@@ -155,6 +167,17 @@ func _tick() -> void:
 			if t > 1.0: max_fpm = maxf(max_fpm, fpm)
 	if t >= 2.5: turn_dev = maxf(turn_dev, (law._deviation(body_q) as Vector3).length() * (180.0 / PI))
 	if t >= 3.5 and (law._deviation(body_q) as Vector3).length() > deg_to_rad(15.0): turn_settle = t
+	# Dodge distance: metres moved along the command 0.5 s and 1 s after it starts
+	# (after the reversal at 2.0 s in the reversal scenarios, from the speed held then).
+	var t0 := 2.0 if inp.scenario.begins_with("rev") or inp.scenario.begins_with("cruise_boost") else 0.5
+	if has_dir and t >= t0 + 2.0 * dt and t < t0 + 1.0 + dt:
+		var d := (pilot * cmd.translation).normalized()
+		if not dodge_started:
+			dodge_started = true
+			dodge_v0 = v.dot(d)
+		dodge += (v.dot(d) - dodge_v0) * dt
+		if t < t0 + 0.5: dodge05 = dodge
+		dodge10 = dodge
 	max_rate = maxf(max_rate, w)
 	max_lag = maxf(max_lag, lag)
 	if inp.scenario.begins_with("brake"):
@@ -193,8 +216,8 @@ func _tick() -> void:
 			sum_alloc += aerr; sum_real += rerr; n_perp += 1
 	if series and t >= next_log:
 		next_log += 0.1
-		print("%5.2f |v| %6.1f off %5.1f dev(%5.1f %5.1f %5.1f) lock %d%d%d w(%6.1f %6.1f %6.1f) tq_cmd/max(%5.2f %5.2f %5.2f) tq_act/max(%5.2f %5.2f %5.2f) F %5.2fg(%.2fcap) Fact %5.2fg ferr %4.1f° prio %.2f thr %.2f" % [
-			t, v.length(), off, dev.x, dev.y, dev.z, law._locked.x, law._locked.y, law._locked.z,
+		print("%5.2f tgt %5.1f vel %5.1f |v| %6.1f off %5.1f dev(%5.1f %5.1f %5.1f) lock %d%d%d w(%6.1f %6.1f %6.1f) tq_cmd/max(%5.2f %5.2f %5.2f) tq_act/max(%5.2f %5.2f %5.2f) F %5.2fg(%.2fcap) Fact %5.2fg ferr %4.1f° prio %.2f thr %.2f" % [
+			t, rad_to_deg(law._offset_target_r.length()), rad_to_deg(law._offset_vel.length()), v.length(), off, dev.x, dev.y, dev.z, law._locked.x, law._locked.y, law._locked.z,
 			rad_to_deg(w_loc.x), rad_to_deg(w_loc.y), rad_to_deg(w_loc.z),
 			tq_cmd.x / mt.x, tq_cmd.y / mt.y, tq_cmd.z / mt.z, tq_act.x / mt.x, tq_act.y / mt.y, tq_act.z / mt.z,
 			f_cmd.length() / body.mass / 9.80665, capf, f_act.length() / body.mass / 9.80665,
@@ -209,13 +232,18 @@ func _report() -> void:
 	if a_hist.size() > 10:
 		# steady accel = mean of the last 0.5 s before any change at t=2.0
 		var end_t := 2.0 if inp.scenario.begins_with("rev") else 2.4
+		var from_t := 0.5
+		if inp.scenario.begins_with("cruise_boost"):
+			end_t = 3.9
+			from_t = 2.0
 		var sum := 0.0; var n := 0
 		for e in a_hist:
 			if e[0] > end_t - 0.4 and e[0] <= end_t: sum += e[1]; n += 1
 		a_final = sum / maxi(n, 1)
 		for e in a_hist:
-			if t50 < 0.0 and e[1] >= 0.5 * a_final: t50 = e[0] - 0.5
-			if t90 < 0.0 and e[1] >= 0.9 * a_final: t90 = e[0] - 0.5
+			if e[0] < from_t: continue
+			if t50 < 0.0 and e[1] >= 0.5 * a_final: t50 = e[0] - from_t
+			if t90 < 0.0 and e[1] >= 0.9 * a_final: t90 = e[0] - from_t
 		s += " a=%5.2fg t50=%.2fs t90=%.2fs  max a⊥=%.2fg  max fpm err=%5.1f°" % [a_final, t50, t90, max_perp_g, max_fpm]
 		if inp.scenario.begins_with("rev"):
 			var r50 := -1.0; var r90 := -1.0
@@ -230,6 +258,8 @@ func _report() -> void:
 	if inp.scenario.begins_with("brake"):
 		s = "%-16s brake: max dev %.1f°, dev>15° until +%.2fs after release, max force err %.1f°, stopped (<5 m/s) %.2fs after braking, |v| end %.1f" % [
 			inp.scenario, brake_dev, maxf(settle_t - 5.0, 0.0), brake_ferr, stop_t - 3.5 if stop_t > 0.0 else -1.0, body.linear_velocity.length()]
+	if not inp.scenario.begins_with("brake"):
+		s += "  | moved %.1f m in 0.5 s, %.1f m in 1 s" % [dodge05, dodge10]
 	s += "  | off-demand force: alloc max %.2fg avg %.2fg, real max %.2fg avg %.2fg" % [
 		alloc_perp, sum_alloc / maxi(n_perp, 1), real_perp, sum_real / maxi(n_perp, 1)]
 	print(s)

@@ -43,6 +43,12 @@ extends AttitudeOffsetSolver
 ## more thrust). Other pushes tilt whenever it helps.
 @export var min_tilt_gain: float = 1.6
 @export var upright_cone_deg: float = 45.0
+## In any direction, only turn away from the pilot frame if that raises the force
+## capability along the demand by at least this factor. Below it the suit answers at once
+## with what it has (a Shift strafe: 2.5 G now instead of 3.6 G a second later).
+@export var min_lean_gain: float = 1.5
+## Share of that margin a lean already taken must still earn to be kept (hysteresis).
+@export_range(0.0, 1.0) var lean_keep_share: float = 0.7
 @export var initial_step_deg: float = 12.0
 @export var iterations: int = 6
 
@@ -95,10 +101,17 @@ func solve(state: FlightState, force_pilot: Vector3, current: Quaternion,
 					improved = true
 		if not improved:
 			step *= 0.5
-	if best != Vector3.ZERO and f_dir.dot(Vector3.UP) >= cos(deg_to_rad(upright_cone_deg)) \
-			and _capability(state, force_pilot, Vector3.ZERO) * min_tilt_gain \
-			>= _capability(state, force_pilot, best):
-		best = _limit(Vector3.ZERO, r_pin, locked)
+	if best != Vector3.ZERO:
+		# Turning costs thrust while it lasts and leaves the suit leaning the wrong way for
+		# the next move, so it has to pay: stay with the pilot frame unless it raises the
+		# capability by min_lean_gain (a little less to keep a lean already taken).
+		var upright := f_dir.dot(Vector3.UP) >= cos(deg_to_rad(upright_cone_deg))
+		var needed := maxf(min_lean_gain, min_tilt_gain if upright else 0.0)
+		if _commit != Vector3.ZERO:
+			needed = lerpf(1.0, needed, lean_keep_share)
+		if _capability(state, force_pilot, Vector3.ZERO) * needed > _capability(state, force_pilot, best):
+			best = _limit(Vector3.ZERO, r_pin, locked)
+			_commit = Vector3.ZERO
 	# Commit to the side of this solution (not of the current attitude, which after a
 	# release still points the old way).
 	if _commit == Vector3.ZERO and best.length() > deg_to_rad(commit_angle_deg):

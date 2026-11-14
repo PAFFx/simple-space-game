@@ -252,6 +252,16 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
   the demand costs `trim_sideways_weight` (30) times a shortfall along it: when the thrusters
   can't keep up the suit pushes less, not sideways. Result: velocity within 2° of the command
   in every straight push (was 5–12°), ≤ 0.25 g sideways (was 1–3 g).
+- **Lean only when it pays.** A swing costs thrust while it lasts (the torque comes from the same
+  thrusters) and leaves the suit leaning the wrong way for the next move. The solver now stays
+  with the pilot frame unless turning raises the capability along the demand by `min_lean_gain`
+  (×1.5; `lean_keep_share` keeps a lean already taken). A Shift strafe gains only ×1.4 from its
+  30° roll, so it no longer rolls: 2.4 G within 0.28 s instead of 3.6 G after 1.4 s, and a
+  right → left reversal covers 8.9 m in its first second instead of 3.1 m. Forward boosts
+  (×1.6) and full boosts lean as before; a full boost is the commitment mode (sideways it leans
+  60° for 5.9 G, and reverses slowly).
+- **Snap keys.** With boost or brake held the movement keys travel in `boost_key_travel_time`
+  (0.03 s) instead of 0.1 s.
 - **Committed attitude.** The solver remembers which side it turned to and charges `commit_weight` for
   turning back through to the other side until the demand swings `commit_release_deg` (45°) away.
   Its shortfall term is the share of the demand left unmet (0..1), so a full-boost demand can't
