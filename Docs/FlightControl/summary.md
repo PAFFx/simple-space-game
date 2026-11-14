@@ -473,12 +473,12 @@ names don't). With either stick missing it is plain keyboard input.
 | Forward / back | Both sticks fore/aft, their average |
 | Yaw | Both sticks fore/aft, their difference (right stick forward = yaw left) |
 | Strafe left / right | Both sticks left/right (axis 0), their average |
-| Roll | The yaw control, while left button 3 is held (right stick forward = roll left; yaw off), at twice the gain (`roll_sensitivity`) |
+| Roll | The yaw control, while left button 4 is held (right stick forward = roll left; yaw off), at twice the gain (`roll_sensitivity`) |
 | Up / down | Both sticks' twist (axis 2), their average, clockwise = up |
 | Pitch | Twist difference (right clockwise, left counter-clockwise = nose up) |
 | Full boost (hold) | Right button 4 |
 | Brake / hard brake (hold) | Left button 21 / 20 |
-| Precision on / off | Left button 4 |
+| Precision on / off | Left button 3 |
 | Look around (cockpit), orbit (external view) | Left mini-stick (axes 3, 4) |
 | Recentre the look / orbit | Left button 19, tap |
 | Cockpit / external view | Left button 19, hold 0.35 s |

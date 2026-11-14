@@ -32,8 +32,8 @@ extends KeyboardPilotInput
 @export var full_boost_button: int = 4   ## Right stick, hold
 @export var brake_button: int = 21       ## Left stick, hold
 @export var full_brake_button: int = 20  ## Left stick, hold
-@export var roll_button: int = 3         ## Left stick, hold: the yaw control rolls
-@export var precision_button: int = 4    ## Left stick, toggles
+@export var roll_button: int = 4         ## Left stick, hold: the yaw control rolls
+@export var precision_button: int = 3    ## Left stick, toggles
 
 @export_group("Response")
 ## Expo softens the centre: 0 = linear, 1 = fully cubic. Full travel is always full demand.
