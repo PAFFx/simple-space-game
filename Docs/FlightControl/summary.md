@@ -475,15 +475,16 @@ names don't). With either stick missing it is plain keyboard input.
 | Strafe left / right | Right stick X (axis 0) |
 | Up / down | Right stick twist (axis 2), clockwise = up |
 | Roll | Left stick X (axis 0) |
-| Pitch | Left stick twist (axis 2), counter-clockwise = nose up |
+| Pitch | Left stick twist (axis 2), clockwise = nose up |
 | Full boost (hold) | Right button 4 |
 | Brake / hard brake (hold) | Left button 21 / 20 |
 | Precision on / off | Left button 4 |
-| Look around (cockpit) | Right mini-stick (axes 3, 4) |
-| Recentre the look | Right button 19 |
+| Look around (cockpit), orbit (external view) | Right mini-stick (axes 3, 4) |
+| Recentre the look / orbit | Right button 19, tap |
+| Cockpit / external view | Right button 19, hold 0.35 s |
 
-The twist directions assume grips canted inward (the twist then tips the hand up or down);
-`invert_heave` / `invert_pitch` flip them.
+`invert_heave` / `invert_pitch` flip the twists. On these sticks pushing forward reads positive
+on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around together).
 
 - **Stick travel is the throttle** (`PilotCommand.analog_thrust`): up to `analog_boost_onset`
   (0.6 of the shaped demand, ~73% of the travel) spans the cruise limit; beyond it the
@@ -498,7 +499,7 @@ The twist directions assume grips canted inward (the twist then tips the hand up
   doesn't yaw.
 - **Look:** the mini-stick pans the pilot camera at up to `stick_rate` 110°/s (expo 0.6), easing
   in and out over `stick_smoothing` 0.12 s; the view stays where it is left
-  (`MouseLookController`, "Stick look" group).
+  (`StickLook`, shared by `MouseLookController`, `OrbitCamera` and `ViewSwitcher`).
 
 Tank mixing means one stick alone gives half the forward demand and half the yaw; full yaw
 takes opposed sticks.

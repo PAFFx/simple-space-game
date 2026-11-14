@@ -3,11 +3,12 @@ extends KeyboardPilotInput
 
 ## Keyboard plus two flight sticks flown tank style (found by name, see JoyDevices):
 ##   both sticks fore/aft   average = forward / back, difference = yaw
-##                          (right stick forward = yaw left)
+##                          (right stick forward = yaw left; on these sticks
+##                          forward reads positive, see invert_surge)
 ##   right stick            left/right = strafe, twist = up / down
 ##   left stick             left/right = roll, twist = pitch
-## Twist directions assume grips canted inward: right stick clockwise = up, left
-## stick counter-clockwise = nose up (invert_heave / invert_pitch flip them).
+## Twist: right stick clockwise = up, left stick clockwise = nose up
+## (invert_heave / invert_pitch flip them).
 ##
 ## Stick travel is the throttle (PilotCommand.analog_thrust), so there is no boost
 ## button, only full boost. The stick demand adds onto the keyboard's; with a stick
@@ -18,7 +19,9 @@ extends KeyboardPilotInput
 @export var right_stick_name: String = "EVO R"
 
 @export_group("Axes")
-@export var surge_axis: int = 1    ## Both sticks, forward = negative
+@export var surge_axis: int = 1    ## Both sticks
+## Stick forward reads positive on this axis (the VKB default), not negative.
+@export var invert_surge: bool = true
 @export var strafe_axis: int = 0   ## Right stick
 @export var heave_axis: int = 2    ## Right stick twist
 @export var roll_axis: int = 0     ## Left stick
@@ -68,8 +71,9 @@ func poll_command() -> PilotCommand:
 	var cmd := super.poll_command()
 	if not has_sticks():
 		return cmd
-	var left_surge := _axis(_left, surge_axis)
-	var right_surge := _axis(_right, surge_axis)
+	var fore := -1.0 if invert_surge else 1.0
+	var left_surge := _axis(_left, surge_axis) * fore
+	var right_surge := _axis(_right, surge_axis) * fore
 	var target_t := _read_translation((left_surge + right_surge) * 0.5)
 	var target_r := _read_rotation((left_surge - right_surge) * 0.5)
 	var delta := get_physics_process_delta_time()
@@ -109,7 +113,7 @@ func _read_translation(surge: float) -> Vector3:
 
 ## PilotCommand signs: +x = pitch up, +y = yaw left, +z = roll left.
 func _read_rotation(yaw: float) -> Vector3:
-	var pitch := _axis(_left, pitch_axis) * (1.0 if invert_pitch else -1.0)
+	var pitch := _axis(_left, pitch_axis) * (-1.0 if invert_pitch else 1.0)
 	return Vector3(
 		JoyDevices.shape(pitch, twist_deadzone, rotation_expo),
 		JoyDevices.shape(yaw, yaw_deadzone, rotation_expo),
