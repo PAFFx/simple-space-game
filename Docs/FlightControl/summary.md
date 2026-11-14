@@ -472,10 +472,10 @@ names don't). With either stick missing it is plain keyboard input.
 |--------|-------|
 | Forward / back | Both sticks fore/aft, their average |
 | Yaw | Both sticks fore/aft, their difference (right stick forward = yaw left) |
-| Strafe left / right | Right stick X (axis 0) |
-| Up / down | Right stick twist (axis 2), clockwise = up |
-| Roll | Left stick X (axis 0) |
-| Pitch | Left stick twist (axis 2), clockwise = nose up |
+| Strafe left / right | Both sticks left/right (axis 0), their average |
+| Roll | The yaw control, while left button 3 is held (right stick forward = roll left; yaw off) |
+| Up / down | Both sticks' twist (axis 2), their average, clockwise = up |
+| Pitch | Twist difference (right clockwise, left counter-clockwise = nose up) |
 | Full boost (hold) | Right button 4 |
 | Brake / hard brake (hold) | Left button 21 / 20 |
 | Precision on / off | Left button 4 |
@@ -501,8 +501,9 @@ on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around to
   in and out over `stick_smoothing` 0.12 s; the view stays where it is left
   (`StickLook`, shared by `MouseLookController`, `OrbitCamera` and `ViewSwitcher`).
 
-Tank mixing means one stick alone gives half the forward demand and half the yaw; full yaw
-takes opposed sticks.
+Mixing means one stick alone gives half the translation and half the turn on that pair of
+axes; a full turn takes opposed sticks. The fore/aft and twist mixes are shaped after mixing,
+with `yaw_deadzone` (0.1) and `pitch_deadzone` (0.12) on the differences.
 
 ### Generic HOTAS / joystick
 
