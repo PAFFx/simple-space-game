@@ -85,6 +85,11 @@ var brake_ferr := 0.0
 var stop_t := -1.0
 var overrides := PackedStringArray()
 var applied := false
+var alloc_perp := 0.0
+var real_perp := 0.0
+var sum_alloc := 0.0
+var sum_real := 0.0
+var n_perp := 0
 var turn_dev := 0.0
 var turn_settle := 3.5
 
@@ -113,7 +118,14 @@ func _tick() -> void:
 		applied = true
 		for o in overrides:
 			if "=" in o:  # control law property override, e.g. rate_gain=9
-				fc.control_law.set(o.get_slice("=", 0), float(o.get_slice("=", 1)))
+				var key := o.get_slice("=", 0)
+				var value := float(o.get_slice("=", 1))
+				if key.begins_with("fc."):
+					fc.set(key.trim_prefix("fc."), value)
+				elif key.begins_with("alloc."):
+					fc.allocator.set(key.trim_prefix("alloc."), value)
+				else:
+					fc.control_law.set(key, value)
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	inp.t += dt
 	var t := inp.t
@@ -168,6 +180,17 @@ func _tick() -> void:
 	var f_act := body.global_basis.orthonormalized().transposed() * a * body.mass
 	var capf := 0.0
 	if f_cmd.length() > 1.0: capf = f_cmd.length() / fc.state.force_capability(f_cmd.normalized())
+	# Allocation error (ideal actuators) against the demand, and the real force against it.
+	var alloc := ConeProjectedAllocator._wrench_of(fc.state, (fc.allocator as ConeProjectedAllocator)._u)
+	var aerr := 0.0
+	var rerr := 0.0
+	if f_cmd.length() > 0.3 * 9.80665 * body.mass:
+		aerr = (alloc[0] - f_cmd * (alloc[0].dot(f_cmd) / f_cmd.length_squared())).length() / body.mass / 9.80665
+		rerr = (f_act - f_cmd * (f_act.dot(f_cmd) / f_cmd.length_squared())).length() / body.mass / 9.80665
+		if t > 0.55:
+			alloc_perp = maxf(alloc_perp, aerr)
+			real_perp = maxf(real_perp, rerr)
+			sum_alloc += aerr; sum_real += rerr; n_perp += 1
 	if series and t >= next_log:
 		next_log += 0.1
 		print("%5.2f |v| %6.1f off %5.1f dev(%5.1f %5.1f %5.1f) lock %d%d%d w(%6.1f %6.1f %6.1f) tq_cmd/max(%5.2f %5.2f %5.2f) tq_act/max(%5.2f %5.2f %5.2f) F %5.2fg(%.2fcap) Fact %5.2fg ferr %4.1f° prio %.2f thr %.2f" % [
@@ -207,4 +230,6 @@ func _report() -> void:
 	if inp.scenario.begins_with("brake"):
 		s = "%-16s brake: max dev %.1f°, dev>15° until +%.2fs after release, max force err %.1f°, stopped (<5 m/s) %.2fs after braking, |v| end %.1f" % [
 			inp.scenario, brake_dev, maxf(settle_t - 5.0, 0.0), brake_ferr, stop_t - 3.5 if stop_t > 0.0 else -1.0, body.linear_velocity.length()]
+	s += "  | off-demand force: alloc max %.2fg avg %.2fg, real max %.2fg avg %.2fg" % [
+		alloc_perp, sum_alloc / maxi(n_perp, 1), real_perp, sum_real / maxi(n_perp, 1)]
 	print(s)

@@ -27,6 +27,9 @@ const G0 := 9.80665
 ## within acos(this) of it deliver; more would come from pairs cancelling each other.
 ## 0 = no cap.
 @export_range(0.0, 1.0) var min_thrust_alignment: float = 0.7
+## Set the throttles against where the nozzles really are each tick (see
+## _trim_to_actuators). Off = thrusters get the ideal allocation as is.
+@export var actuator_trim: bool = true
 
 @export_group("Mass & Propellant")
 @export var dry_mass: float = 36000.0             ## kg
@@ -143,6 +146,8 @@ func _physics_process(delta: float) -> void:
 		var demand := allocator.allocate(state, thrust_wrench)
 		for i in thrusters.size():
 			thrusters[i].set_command(demand[i].length(), demand[i], body)
+		if actuator_trim:
+			_trim_to_actuators(thrust_wrench, demand, delta)
 	else:
 		last_wrench = Wrench.new()
 		for t in thrusters:
@@ -158,6 +163,32 @@ func _physics_process(delta: float) -> void:
 	var accel := (body.linear_velocity - _prev_velocity) / delta
 	_prev_velocity = body.linear_velocity
 	acceleration_g = lerpf(acceleration_g, accel.length() / G0, 0.15)
+
+
+## The allocation assumes every nozzle is already aimed and every throttle already
+## there. Thrusters spool and slew at different speeds, so in a transient their sum
+## points somewhere else. This sets the throttles for where the nozzles really will be
+## this tick, within what each can reach.
+func _trim_to_actuators(wrench: Wrench, demand: PackedVector3Array, delta: float) -> void:
+	var n := thrusters.size()
+	var dirs := PackedVector3Array()
+	var lo := PackedFloat32Array()
+	var hi := PackedFloat32Array()
+	var start := PackedFloat32Array()
+	dirs.resize(n)
+	lo.resize(n)
+	hi.resize(n)
+	start.resize(n)
+	var live := propellant > 0.0
+	for i in n:
+		dirs[i] = thrusters[i].predict_direction_in(body, delta)
+		var reach := thrusters[i].reachable_throttle(delta) if live else Vector2.ZERO
+		lo[i] = reach.x
+		hi[i] = reach.y
+		start[i] = demand[i].length()
+	var throttles := allocator.trim(state, wrench, dirs, lo, hi, start)
+	for i in n:
+		thrusters[i].set_throttle_now(throttles[i], delta)
 
 
 # --- Telemetry (used by the HUD) ---

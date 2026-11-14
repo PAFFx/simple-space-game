@@ -14,6 +14,18 @@ extends Resource
 @abstract func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array
 
 
+## Second stage, against the real actuators: given where each nozzle will point this
+## tick (`dirs`, body frame) and the throttle range each thruster can reach (`lo`..`hi`),
+## returns the throttles that come closest to the wrench. `start` is the first stage's
+## throttle. Default: the first stage's throttles, limited to what's reachable.
+func trim(_state: FlightState, _wrench: Wrench, _dirs: PackedVector3Array,
+		lo: PackedFloat32Array, hi: PackedFloat32Array, start: PackedFloat32Array) -> PackedFloat32Array:
+	var out := start.duplicate()
+	for i in out.size():
+		out[i] = clampf(out[i], lo[i], hi[i])
+	return out
+
+
 ## Projects u onto {v : angle(v, axis) <= cone, |v| <= 1}: the set of thrust
 ## vectors a gimballed thruster can actually produce (throttle-normalised).
 ## Projects u onto thruster i's gimbal range: its cone, then its swing-limit planes

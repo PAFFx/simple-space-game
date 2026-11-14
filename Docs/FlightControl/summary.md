@@ -242,6 +242,16 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
   up to `max_inertia_weight` 1.5; more starves its convergence), since a small error spins the
   light yaw axis. Cruise + 1 s roll: 3.4 g → 0.5 g sideways, body 27° → 12° off target.
   `Tools/Flight/torque_probe.gd` prints the authority.
+- **Actuator trim.** The allocation assumes every nozzle is aimed and every throttle is there
+  already; thrusters spool (0.06–0.12 s) and slew (90–360°/s) at different speeds, so in every
+  transient their sum pointed elsewhere (1–1.8 g off the demand at a boost onset, though the
+  plan itself was within 0.2 g). After aiming the nozzles, `FlightComputer._trim_to_actuators`
+  asks the allocator's `trim()` for the throttles that fit the wrench with the nozzles where
+  they will really be this tick, inside the throttle range each can reach, and drives each valve
+  past its target so the spool lag lands on it (`Thruster.set_throttle_now`). Force error across
+  the demand costs `trim_sideways_weight` (30) times a shortfall along it: when the thrusters
+  can't keep up the suit pushes less, not sideways. Result: velocity within 2° of the command
+  in every straight push (was 5–12°), ≤ 0.25 g sideways (was 1–3 g).
 - **Committed attitude.** The solver remembers which side it turned to and charges `commit_weight` for
   turning back through to the other side until the demand swings `commit_release_deg` (45°) away.
   Its shortfall term is the share of the demand left unmet (0..1), so a full-boost demand can't
