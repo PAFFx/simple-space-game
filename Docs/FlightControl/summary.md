@@ -479,9 +479,9 @@ names don't). With either stick missing it is plain keyboard input.
 | Full boost (hold) | Right button 4 |
 | Brake / hard brake (hold) | Left button 21 / 20 |
 | Precision on / off | Left button 4 |
-| Look around (cockpit), orbit (external view) | Right mini-stick (axes 3, 4) |
-| Recentre the look / orbit | Right button 19, tap |
-| Cockpit / external view | Right button 19, hold 0.35 s |
+| Look around (cockpit), orbit (external view) | Left mini-stick (axes 3, 4) |
+| Recentre the look / orbit | Left button 19, tap |
+| Cockpit / external view | Left button 19, hold 0.35 s |
 
 `invert_heave` / `invert_pitch` flip the twists. On these sticks pushing forward reads positive
 on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around together).
