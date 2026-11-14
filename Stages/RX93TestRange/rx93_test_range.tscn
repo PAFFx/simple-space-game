@@ -68,10 +68,12 @@ script = ExtResource("4_debris")
 [node name="BuoyAlpha" parent="." unique_id=1806167688 instance=ExtResource("5_buoy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -167.8, -66.8, 311.8)
 label = "Buoy A"
+hostile = true
 
 [node name="BuoyBravo" parent="." unique_id=2135996755 instance=ExtResource("5_buoy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -486.6, -121.8, 141.3)
 label = "Buoy B"
+metadata/hud_selected = true
 beacon_color = Color(0.3, 1, 0.4, 1)
 
 [node name="BuoyCharlie" parent="." unique_id=273717116 instance=ExtResource("5_buoy")]
