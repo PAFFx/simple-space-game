@@ -8,18 +8,22 @@ display, visible from any seat position and from outside through the open hatch.
 ```
 PanoramicHud (Node)
 └── HudViewport (SubViewport, 4096×2048, transparent)   ← equirectangular canvas
-    ├── Silhouettes     outlines of nearby HudSilhouette nodes (e.g. the shield)
+    ├── Silhouettes     outlines of nearby HudSilhouette nodes (e.g. the shield): a fine rim, a
+                        bold bracket at every corner, the label on a tab
     ├── Attitude        pitch ladder (two unnumbered tick columns ±30° off the heading, with
                         a pointer carrying the current pitch, and a highlight running up the
                         ticks while climbing, down while descending); small attitude indicator at
                         the zenith inside a numbered course ring at 28° elevation (translucent), with the
                         HDG box on its pointer (horizon ring off, reserved)
     ├── SuitAttitude    suit vs cockpit: the suit's horizontal plane as one double-rail line
-                        all the way round, open ahead between two accent arrowheads (the suit's
-                        nose is midway); rings 90° left/right with cockpit-level marks
-    ├── ControlCentre   V above and ^^ below the direction fly-by-wire "forward" pushes (the
-                        control law's pilot frame), empty in the middle
-    ├── FlightPath      prograde ○ / retrograde × inside a wide reticle (radial dashes 17° out,
+                        all the way round, open ahead between two arrowhead badges (a plate in
+                        a broken outer band with an inner outline and chevron, an accent chevron
+                        ahead of each; the suit's nose is midway); rings 90° left/right with cockpit-level marks
+    ├── ControlCentre   wide V above and ^^ below (the lower one in the accent), each a band
+                        with a bright border and a fainter fill, around the direction fly-by-wire "forward" pushes (the control
+                        law's pilot frame), empty in the middle; drawn by the screen shader
+    ├── FlightPath      prograde ▽ (filled, solid core, wings) / retrograde △ (empty: the rim's
+                        three corners and a hollow core) inside a wide reticle (radial dashes 17° out,
                         left and right quarters only), each with two wide bars of slanted stripes
                         (out to the ladder, packed toward the middle); a highlight runs across
                         them, outward ahead and inward behind; grows in above show_speed,
@@ -56,7 +60,15 @@ turns it into place per pixel with a `hud_<layer>_frame` uniform (display direct
 | `heading` | `Basis(UP, heading − 15°)⁻¹` | course marks and numbers, drawn for heading 15° so none sits on the layer's back seam |
 | `ladder` | `Basis(RIGHT, pitch)` | the pitch ladder drawn level, as coverage (R stroke, G halo, B stroke × tick strength); the shader applies fade and climb highlight from `hud_pitch_deg` / `hud_climb`, blending as the 2D canvas would |
 | `suit` | `(display⁻¹ · body)⁻¹` | suit line and arrowheads, drawn with the body level |
-| `fpm` | layer −X onto the velocity, up as `patch()` makes it | flight path markers as coverage (R stripe, G halo, B the rest × its fade), prograde at −X and retrograde at +X, off the back seam; the shader finds each stripe from its position and runs the highlight, tint, fade-in and pulse. Redrawn only while the shape changes (growing in/out, boost stretch, brake squeeze, hard-brake lean) |
+| `fpm` | layer −X onto the velocity, up as `patch()` makes it | flight path bars and reticles as coverage (R stripe, G halo, B the reticle × its fade), prograde at −X and retrograde at +X, off the back seam; the shader finds each stripe from its position and runs the highlight, tint, fade-in and pulse. Redrawn only while the shape changes (growing in/out, boost stretch, brake squeeze, hard-brake lean) |
+
+**Shader symbols.** The control centre and the flight path's middle marker aren't in any
+texture: `hud_layers.gdshaderinc` draws them per pixel from distance functions (`hud_chevron`,
+`hud_triangle`), around a frame uniform like a layer's. They stay sharp however far the view
+zooms in (the canvas has ~11 px per degree) and there is nothing to redraw. `hud_ink()` adds a
+stroke the way the canvas blends, so they match canvas-drawn symbols; the dark edge comes from
+`hud_symbol_halo_color` / `hud_symbol_halo_deg`. Use this for small symbols of a few straight
+strokes that only turn or scale; text and anything data-heavy stays on the canvas.
 
 Layers composite under the per-frame canvas, which keeps only what changes: numbers, the overhead
 horizon line, data blocks, contacts. Before this, the ladder alone projected ~1,400

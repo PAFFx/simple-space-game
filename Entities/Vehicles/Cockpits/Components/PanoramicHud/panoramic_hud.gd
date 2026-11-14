@@ -72,6 +72,8 @@ func _ready() -> void:
 	projector = HudProjector.new(Vector2(canvas_size), elevation_range)
 	if panoramic_screen != null:
 		panoramic_screen.set_hud_texture(viewport.get_texture())
+	set_hud_parameter(&"hud_symbol_halo_color", halo_color)
+	set_hud_parameter(&"hud_symbol_halo_deg", halo_width * 0.5 / projector.px_per_deg)
 	for widget in viewport.get_children():
 		if widget is HudWidget:
 			widget.setup_layers()
