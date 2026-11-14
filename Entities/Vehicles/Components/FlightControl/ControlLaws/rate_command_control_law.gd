@@ -140,6 +140,10 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var cruise_accel_g: float = 0.8
 ## Shift. A double-tapped (full) boost has no limit: everything the thrusters can give.
 @export var boost_accel_g: float = 7.0
+## Analog sticks (PilotCommand.analog_thrust): travel up to this spans the cruise limit,
+## the rest eases up to boost_accel_g and counts as boosting. Precision uses the whole
+## travel for its own limit.
+@export_range(0.1, 0.95) var analog_boost_onset: float = 0.6
 ## Precision mode's speed loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
 ## Braking: (m/s²) per (m/s) of the motion being stopped, up to stop_accel_g (a combat
@@ -174,6 +178,8 @@ var _locked := Vector3.ZERO          ## Cockpit locked to the body
 var _newly_locked := Vector3.ZERO
 var _release_timer := Vector3.ZERO
 var _turn_sign := Vector3.ZERO       ## Direction each steered axis was turning
+var _analog := false                 ## Stick travel sets the acceleration this tick
+var _analog_boost := false           ## ...and is past the boost onset
 var _last_boost := false             ## For the HUD label
 var _last_boost_full := false
 var _last_brake := false
@@ -242,7 +248,11 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_display_up = _horizon_up
 		_manual_roll = false
 
-	command.boost = command.boost or command.boost_full
+	_analog = command.analog_thrust and not (precision or command.boost or command.boost_full)
+	# A little hysteresis, so a stick resting at the onset doesn't flicker the boost.
+	var onset := analog_boost_onset - (0.05 if _analog_boost else 0.0)
+	_analog_boost = _analog and command.translation.length() > onset
+	command.boost = command.boost or command.boost_full or _analog_boost
 	_last_boost = command.boost
 	_last_boost_full = command.boost_full
 	command.brake = command.brake or command.brake_full
@@ -736,6 +746,19 @@ func _drift_correction(state: FlightState, command: PilotCommand, intent_world: 
 	return (-err * drift_gain).limit_length(limit) * state.mass
 
 
+## Acceleration for a stick deflection of `amount` (0..1). Keys and buttons scale the
+## mode's limit; an analog stick spans cruise up to the boost onset and eases into
+## boost beyond it, the same curve whichever side of the onset's hysteresis it is on.
+func _push_accel(amount: float, accel_limit: float) -> float:
+	if not _analog:
+		return amount * accel_limit
+	var cruise := cruise_accel_g * FlightComputer.G0
+	if amount <= analog_boost_onset:
+		return amount / analog_boost_onset * cruise
+	var t := (amount - analog_boost_onset) / (1.0 - analog_boost_onset)
+	return lerpf(cruise, maxf(boost_accel_g * FlightComputer.G0, cruise), t * t)
+
+
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
 	var stick_world := _pilot * command.translation
 	var gentle := precision and not command.boost
@@ -748,7 +771,7 @@ func _translation_force_world(state: FlightState, command: PilotCommand) -> Vect
 	var amount := stick_world.length()
 	if amount > stick_deadzone:
 		var dir := stick_world / amount
-		var push_accel := minf(amount, 1.0) * accel_limit
+		var push_accel := _push_accel(minf(amount, 1.0), accel_limit)
 		if gentle:
 			push_accel = clampf((precision_speed * minf(amount, 1.0) - v.dot(dir)) * velocity_gain,
 					0.0, push_accel)

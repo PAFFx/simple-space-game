@@ -13,7 +13,7 @@ PilotInputSource ──PilotCommand──▶ ControlLaw ──Wrench──▶ Am
 
 | Stage | Base class | Implementations | How to swap |
 |-------|-----------|-----------------|-------------|
-| Input | `PilotInputSource` (Node) | `KeyboardPilotInput`, `HotasPilotInput` | Replace the `PilotInput` child of `FlightComputer` |
+| Input | `PilotInputSource` (Node) | `KeyboardPilotInput`, `TwinStickPilotInput`, `HotasPilotInput` | Replace the `PilotInput` child of `FlightComputer` |
 | Control law | `ControlLaw` (Resource) | `RateCommandControlLaw` (FBW), `DirectControlLaw` | Inspector dropdown on `FlightComputer.control_law`, or `set_control_law()` |
 | Allocator | `ThrustAllocator` (Resource) | `ConeProjectedAllocator`, `GreedyAllocator` | Inspector dropdown on `FlightComputer.allocator`, or `set_allocator()` |
 | Auto-rotation | `AttitudeOffsetSolver` (Resource) | `ThrustVectoringAttitudeSolver` | `RateCommandControlLaw.attitude_solver` (empty = body stays aligned) |
@@ -32,6 +32,8 @@ Common/Controls/PilotInput/
   pilot_command.gd          Device-independent intent (translation, rotation, boost, toggles)
   pilot_input_source.gd     Abstract input node
   keyboard_pilot_input.gd   Keyboard actions, slewed so keys "travel" like a stick
+  twin_stick_pilot_input.gd Keyboard + two flight sticks, tank style (the suits' default)
+  joy_devices.gd            Finds sticks by name, deadzone + expo shaping
   hotas_pilot_input.gd      Keyboard + raw joystick axes (JoyAxisBinding list)
   joy_axis_binding.gd       One axis → one channel, with deadzone / expo / invert
   pilot_input_actions.gd    Action names + keyboard defaults (registered only if missing)
@@ -460,15 +462,55 @@ HRZN lock/free, MOVE normal/precision, AMBAC on/off. Right console: the yellow/b
 Defaults are registered only for actions missing from the InputMap, so bindings set in
 **Project Settings → Input Map** take precedence.
 
-### HOTAS / joystick
+### Twin sticks (tank style)
+
+`TwinStickPilotInput` is the suits' input source: the keyboard, plus two flight sticks found by
+name (`left_stick_name` "EVO L", `right_stick_name` "EVO R"; device indices follow plug order,
+names don't). With either stick missing it is plain keyboard input.
+
+| Action | Stick |
+|--------|-------|
+| Forward / back | Both sticks fore/aft, their average |
+| Yaw | Both sticks fore/aft, their difference (right stick forward = yaw left) |
+| Strafe left / right | Both sticks left/right (axis 0), their average |
+| Roll | The yaw control, while left button 3 is held (right stick forward = roll left; yaw off) |
+| Up / down | Both sticks' twist (axis 2), their average, clockwise = up |
+| Pitch | Twist difference (right clockwise, left counter-clockwise = nose up) |
+| Full boost (hold) | Right button 4 |
+| Brake / hard brake (hold) | Left button 21 / 20 |
+| Precision on / off | Left button 4 |
+| Look around (cockpit), orbit (external view) | Right mini-stick (axes 3, 4) |
+| Recentre the look / orbit | Right button 19, tap |
+| Cockpit / external view | Right button 19, hold 0.35 s |
+
+`invert_heave` / `invert_pitch` flip the twists. On these sticks pushing forward reads positive
+on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around together).
+
+- **Stick travel is the throttle** (`PilotCommand.analog_thrust`): up to `analog_boost_onset`
+  (0.6 of the shaped demand, ~73% of the travel) spans the cruise limit; beyond it the
+  acceleration eases (quadratic) up to `boost_accel_g` and the suit counts as boosting (rates,
+  auto-rotation cap, HUD), with 0.05 hysteresis. So there is no boost button, only full boost.
+  Precision uses the whole travel for its own limit. Measured on the ν, both sticks forward:
+  50% → 0.48 G, 75% → 0.76 G, 90% → 2.7 G, 100% → 7.2 G.
+- **Shaping:** each raw axis goes through a median of `spike_filter_ticks` (3) samples (the left
+  stick's X spikes to 0.07 for a tick or two at rest), then deadzone and expo
+  (`rotation_expo` 0.4, `translation_expo` 0.3), then `smoothing` (0.04 s). The fore/aft mix is
+  shaped after mixing, with its own `yaw_deadzone` (0.1), so pushing both sticks unevenly
+  doesn't yaw.
+- **Look:** the mini-stick pans the pilot camera at up to `stick_rate` 110°/s (expo 0.6), easing
+  in and out over `stick_smoothing` 0.12 s; the view stays where it is left
+  (`StickLook`, shared by `MouseLookController`, `OrbitCamera` and `ViewSwitcher`).
+
+Mixing means one stick alone gives half the translation and half the turn on that pair of
+axes; a full turn takes opposed sticks. The fore/aft and twist mixes are shaped after mixing,
+with `yaw_deadzone` (0.1) and `pitch_deadzone` (0.12) on the differences.
+
+### Generic HOTAS / joystick
 
 `HotasPilotInput` reads raw axes through `JoyAxisBinding` resources (channel, device, axis,
-invert, deadzone, expo). The prototype ships bindings for X→roll, Y→pitch, axis 5→yaw, but
-`joystick_enabled` is **off by default**: on the dev machine one stick's X axis showed spikes
-around 0.24 at rest, which a deadzone alone can't reject.
-
-To set up: enable `log_axis_activity`, move each axis, read the indices in the Output panel, fix the
-bindings, then enable `joystick_enabled`.
+invert, deadzone, expo), one axis per channel. `joystick_enabled` is off by default. To set up:
+swap it in as the `PilotInput` node, enable `log_axis_activity`, move each axis, read the indices
+in the Output panel, add the bindings, then enable `joystick_enabled`.
 
 ---
 

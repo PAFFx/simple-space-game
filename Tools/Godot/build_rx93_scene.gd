@@ -399,17 +399,8 @@ func _build_flight_computer(root: Node3D) -> void:
 
 	var input := Node.new()
 	input.name = "PilotInput"
-	input.set_script(load("res://Common/Controls/PilotInput/hotas_pilot_input.gd"))
+	input.set_script(load("res://Common/Controls/PilotInput/twin_stick_pilot_input.gd"))
 	_add(root, fc, input)
-	var bindings: Array[JoyAxisBinding] = []
-	for b in [[JoyAxisBinding.Channel.ROLL, 0, 0.05], [JoyAxisBinding.Channel.PITCH, 1, 0.05],
-			[JoyAxisBinding.Channel.YAW, 5, 0.08]]:
-		var binding := JoyAxisBinding.new()
-		binding.channel = b[0]
-		binding.axis = b[1]
-		binding.deadzone = b[2]
-		bindings.append(binding)
-	input.set("axis_bindings", bindings)
 
 
 ## An airlock: the red outer door at the bottom of the chest slides up behind the chest

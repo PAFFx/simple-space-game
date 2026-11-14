@@ -8,8 +8,7 @@
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/flight_computer.gd" id="fc"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/ControlLaws/rate_command_control_law.gd" id="law"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/Allocators/cone_projected_allocator.gd" id="alloc"]
-[ext_resource type="Script" path="res://Common/Controls/PilotInput/hotas_pilot_input.gd" id="hotas"]
-[ext_resource type="Script" path="res://Common/Controls/PilotInput/joy_axis_binding.gd" id="joybind"]
+[ext_resource type="Script" path="res://Common/Controls/PilotInput/twin_stick_pilot_input.gd" id="hotas"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/Hatch/cockpit_hatch.gd" id="hatch"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/Hatch/hatch_panel.gd" id="panel"]
 [ext_resource type="Script" path="res://Common/Controls/OrbitCamera/orbit_camera.gd" id="orbit"]
@@ -50,22 +49,6 @@ size = Vector3(1.7, 1.0, 3.4)
 
 [sub_resource type="BoxShape3D" id="Box_FootL"]
 size = Vector3(1.7, 1.0, 3.4)
-
-[sub_resource type="Resource" id="JoyRoll"]
-script = ExtResource("joybind")
-channel = 0
-axis = 0
-
-[sub_resource type="Resource" id="JoyPitch"]
-script = ExtResource("joybind")
-channel = 1
-axis = 1
-
-[sub_resource type="Resource" id="JoyYaw"]
-script = ExtResource("joybind")
-channel = 2
-axis = 5
-deadzone = 0.08
 
 [sub_resource type="Resource" id="ControlLaw"]
 script = ExtResource("law")
@@ -292,7 +275,6 @@ allocator = SubResource("Allocator")
 
 [node name="PilotInput" type="Node" parent="FlightComputer"]
 script = ExtResource("hotas")
-axis_bindings = Array[ExtResource("joybind")]([SubResource("JoyRoll"), SubResource("JoyPitch"), SubResource("JoyYaw")])
 
 [node name="CockpitHatch" type="Node" parent="." node_paths=PackedStringArray("skeleton")]
 script = ExtResource("hatch")

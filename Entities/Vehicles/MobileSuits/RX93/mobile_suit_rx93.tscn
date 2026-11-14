@@ -14,8 +14,7 @@
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/AttitudeSolvers/thrust_vectoring_attitude_solver.gd" id="12_xasfn"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/ControlLaws/rate_command_control_law.gd" id="13_wm7ti"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/Allocators/cone_projected_allocator.gd" id="14_evfqv"]
-[ext_resource type="Script" path="res://Common/Controls/PilotInput/hotas_pilot_input.gd" id="15_mkw31"]
-[ext_resource type="Script" path="res://Common/Controls/PilotInput/joy_axis_binding.gd" id="16_olg5y"]
+[ext_resource type="Script" path="res://Common/Controls/PilotInput/twin_stick_pilot_input.gd" id="15_mkw31"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/Ambac/ambac_controller.gd" id="17_yc2j0"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/Ambac/ambac_joint.gd" id="18_m7phv"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/ThrusterGuards/thruster_guards.gd" id="19_8tkr0"]
@@ -91,20 +90,6 @@ attitude_solver = SubResource("Resource_wt230")
 [sub_resource type="Resource" id="Resource_tlyjy"]
 script = ExtResource("14_evfqv")
 iterations = 60
-
-[sub_resource type="Resource" id="Resource_ekny4"]
-script = ExtResource("16_olg5y")
-
-[sub_resource type="Resource" id="Resource_w1186"]
-script = ExtResource("16_olg5y")
-channel = 1
-axis = 1
-
-[sub_resource type="Resource" id="Resource_psp0r"]
-script = ExtResource("16_olg5y")
-channel = 2
-axis = 5
-deadzone = 0.08
 
 [sub_resource type="Resource" id="Resource_n0lxo"]
 script = ExtResource("18_m7phv")
@@ -1120,7 +1105,6 @@ specific_impulse = 12000.0
 
 [node name="PilotInput" type="Node" parent="FlightComputer" unique_id=568538215]
 script = ExtResource("15_mkw31")
-axis_bindings = Array[ExtResource("16_olg5y")]([SubResource("Resource_ekny4"), SubResource("Resource_w1186"), SubResource("Resource_psp0r")])
 
 [node name="Ambac" type="Node" parent="." unique_id=604181777 node_paths=PackedStringArray("skeleton")]
 script = ExtResource("17_yc2j0")
