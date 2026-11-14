@@ -45,6 +45,8 @@ extends KeyboardPilotInput
 ## On the differences, so moving both sticks unevenly doesn't turn the suit.
 @export_range(0.0, 0.5) var yaw_deadzone: float = 0.1
 @export_range(0.0, 0.5) var pitch_deadzone: float = 0.12
+## Gain on the fore/aft difference while it rolls: at 2 one stick alone gives full roll.
+@export_range(1.0, 4.0) var roll_sensitivity: float = 2.0
 ## Smoothing of the shaped demand, s. 0 = off.
 @export var smoothing: float = 0.04
 ## Median over this many ticks of each raw axis, against sensor spikes. 1 = off.
@@ -85,7 +87,8 @@ func poll_command() -> PilotCommand:
 		JoyDevices.shape(side, deadzone, translation_expo),
 		JoyDevices.shape((left_twist + right_twist) * 0.5 * up, twist_deadzone, translation_expo),
 		JoyDevices.shape((left_surge + right_surge) * 0.5, deadzone, translation_expo))
-	var turn := JoyDevices.shape((left_surge - right_surge) * 0.5, yaw_deadzone, rotation_expo)
+	var turn_gain := roll_sensitivity if rolling else 1.0
+	var turn := JoyDevices.shape((left_surge - right_surge) * 0.5 * turn_gain, yaw_deadzone, rotation_expo)
 	# PilotCommand signs: +x = pitch up, +y = yaw left, +z = roll left.
 	var target_r := Vector3(
 		JoyDevices.shape((right_twist - left_twist) * 0.5 * nose_up, pitch_deadzone, rotation_expo),
