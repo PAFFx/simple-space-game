@@ -86,11 +86,13 @@ simple-space-game/
 │   ├── structure.md               This file
 │   ├── FlightControl/             Thrusters, FBW control laws, allocation, controls
 │   ├── MobileSuit/                Prototype suit + linear seat cockpit
+│   ├── Performance/               Frame budget snapshots (where the frame time goes)
 │   └── PanoramicCockpit/          Deep-dive docs for the panoramic display system + HUD
 │
 ├── Tools/                         Non-Godot tooling (ignored by Godot via .gdignore)
 │   ├── Blender/                   Procedural model build scripts
-│   └── Godot/                     Scene generators (MSP-02 scene + animation library)
+│   ├── Godot/                     Scene generators (MSP-02 scene + animation library)
+│   └── Profiling/                 Frame-time probes (phases, cost per subtree)
 │
 └── addons/                        Editor plugins (gdshader, plugin_refresher, gdLinter)
 ```
@@ -264,3 +266,4 @@ types. Any cockpit that extends `CockpitBase` and has a `PanoramicDisplayMount` 
 | `Docs/PanoramicCockpit/hud.md` | HUD canvas mapping, writing widgets, hatch aperture timeline |
 | `Docs/FlightControl/summary.md` | Input → FBW → allocator → thruster pipeline, swapping stages, controls, HOTAS |
 | `Docs/MobileSuit/prototype.md` | Prototype suit scene tree, rig, render layers, regenerating models |
+| `Docs/Performance/frame_budget.md` | Frame time by phase, subtree and GPU pass (dated snapshot), measuring pitfalls |
