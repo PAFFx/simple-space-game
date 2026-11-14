@@ -20,7 +20,7 @@ simple-space-game/
 │       │   ├── mouse_look_controller.gd   Rotates parent Node3D from mouse input (current camera only)
 │       │   └── mouse_look_controller.tscn
 │       ├── OrbitCamera/           External camera orbiting a target in its own frame
-│       └── PilotInput/            PilotCommand + swappable input sources (keyboard, HOTAS)
+│       └── PilotInput/            PilotCommand + swappable input sources (keyboard, twin sticks, HOTAS)
 │
 ├── Entities/                      All game entities (characters, vehicles, environment)
 │   ├── Characters/
