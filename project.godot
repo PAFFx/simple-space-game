@@ -12,12 +12,13 @@ config_version=5
 
 config/name="Simple Space Game"
 run/main_scene="res://Stages/RX93TestRange/rx93_test_range.tscn"
-config/features=PackedStringArray("4.7", "Forward Plus")
+config/features=PackedStringArray("4.7", "Double Precision", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
 Layers="*uid://bi6ju22pgh4ru"
+PerfOverlay="*res://Core/AutoLoad/perf_overlay.gd"
 
 [dotnet]
 

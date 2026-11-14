@@ -47,6 +47,17 @@ var hatch: CockpitHatch
 var ambac: AmbacController
 var font: Font
 
+## Fixed layers (see add_layer_drawer) and the screen shader texture each one feeds.
+const _LAYER_TEXTURES := {
+	&"static": &"hud_static_texture",
+	&"heading": &"hud_heading_texture",
+	&"ladder": &"hud_ladder_texture",
+	&"suit": &"hud_suit_texture",
+	&"fpm": &"hud_fpm_texture",
+}
+
+var _layers := {}
+
 @onready var viewport: SubViewport = $HudViewport
 
 
@@ -61,10 +72,58 @@ func _ready() -> void:
 	projector = HudProjector.new(Vector2(canvas_size), elevation_range)
 	if panoramic_screen != null:
 		panoramic_screen.set_hud_texture(viewport.get_texture())
+	for widget in viewport.get_children():
+		if widget is HudWidget:
+			widget.setup_layers()
 
 
 func is_live() -> bool:
 	return projector != null and sensor_head != null
+
+
+## Draws `draw_fn(canvas: HudWidget)` into a fixed layer, once: content that only turns
+## with the attitude is drawn in the layer's own frame and turned into place by the
+## screen shader (a `hud_<layer>_frame` uniform), instead of being redrawn every frame.
+## Layers: static (display frame), heading, ladder and fpm (coverage, `additive`), suit.
+func add_layer_drawer(layer: StringName, draw_fn: Callable, additive := false) -> void:
+	var layer_viewport: SubViewport = _layers.get(layer)
+	if layer_viewport == null:
+		layer_viewport = SubViewport.new()
+		layer_viewport.name = "Layer_%s" % layer
+		layer_viewport.size = canvas_size
+		layer_viewport.transparent_bg = true
+		layer_viewport.disable_3d = true
+		layer_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+		add_child(layer_viewport)
+		_layers[layer] = layer_viewport
+		set_hud_parameter(_LAYER_TEXTURES[layer], layer_viewport.get_texture())
+	var canvas := HudLayerCanvas.new()
+	canvas.draw_fn = draw_fn
+	if additive:
+		var material := CanvasItemMaterial.new()
+		material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		canvas.material = material
+	layer_viewport.add_child(canvas)
+
+
+## Draws every layer again (after changing what they show).
+func redraw_layers() -> void:
+	for layer in _layers:
+		redraw_layer(layer)
+
+
+## Draws one layer again this frame.
+func redraw_layer(layer: StringName) -> void:
+	var layer_viewport: SubViewport = _layers[layer]
+	for canvas in layer_viewport.get_children():
+		canvas.queue_redraw()
+	layer_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+## A HUD uniform of the screen shader (layer frames, ladder state).
+func set_hud_parameter(param: StringName, value: Variant) -> void:
+	if panoramic_screen != null:
+		panoramic_screen.set_hud_parameter(param, value)
 
 
 ## A role colour toned down for secondary marks (scales, labels).

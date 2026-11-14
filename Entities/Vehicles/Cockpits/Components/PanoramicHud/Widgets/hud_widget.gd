@@ -26,8 +26,14 @@ func _draw() -> void:
 		end_local()
 
 
-## Override: draw this instrument.
+## Override: draw this instrument (every frame).
 @abstract func draw_widget() -> void
+
+
+## Override: register the parts that only turn with the attitude, drawn once
+## (hud.add_layer_drawer). Called by PanoramicHud once it is set up.
+func setup_layers() -> void:
+	pass
 
 
 # --- Layout helpers ---
@@ -254,9 +260,23 @@ func _seam_copies(lo: float, hi: float, margin: float) -> Array[float]:
 
 
 ## Polyline through canvas points, broken where it wraps across the back seam.
+## Each unbroken run is one halo and one stroke polyline, not a line per segment.
 func seam_safe_polyline(points: PackedVector2Array, color: Color, width: float = 0.0,
 		halo := true) -> void:
 	var limit := hud.projector.size.x * 0.25
-	for i in range(1, points.size()):
-		if points[i].distance_to(points[i - 1]) < limit:
-			line(points[i - 1], points[i], color, width, halo)
+	var run := PackedVector2Array()
+	for i in points.size():
+		if i > 0 and points[i].distance_to(points[i - 1]) >= limit:
+			_polyline(run, color, width, halo)
+			run = PackedVector2Array()
+		run.append(points[i])
+	_polyline(run, color, width, halo)
+
+
+func _polyline(points: PackedVector2Array, color: Color, width: float, halo: bool) -> void:
+	if points.size() < 2:
+		return
+	var w := hud.line_width if width <= 0.0 else width
+	if halo and hud.halo_color.a > 0.0:
+		draw_polyline(points, hud.halo_color, w + hud.halo_width, true)
+	draw_polyline(points, hud.primary_color if color.a == 0.0 else color, w, true)

@@ -10,6 +10,11 @@ extends HudWidget
 ##
 ## Below show_speed the markers grow out from the middle; below hide_speed they shrink
 ## back and hold their last direction, so they don't wander about at a near-stop.
+##
+## The markers are drawn into the HUD's fpm layer and turned onto the velocity by the
+## screen shader, which also runs the highlight, tint, fade-in and pulse
+## (hud_layers.gdshaderinc). The layer is redrawn only while the shape changes: growing in
+## or out, boost / brake stretching the bars, hard brake flipping the lean.
 
 @export var show_speed: float = 2.0   ## m/s
 @export var hide_speed: float = 1.0   ## m/s
@@ -58,6 +63,18 @@ var _brake := 0.0
 var _kick := 0.0
 var _was_full := false
 var _last_ms := -1
+# Shape the layer was drawn in: grow, bar end (deg), lean sign.
+var _drawn := Vector3(0.0, 0.0, 1.0)
+
+
+func setup_layers() -> void:
+	_drawn.y = bar_to_deg
+	hud.add_layer_drawer(&"fpm", _draw_markers, true)
+	hud.set_hud_parameter(&"hud_fpm_color", hud.primary_color)
+	hud.set_hud_parameter(&"hud_fpm_retro_color", PanoramicHud.dimmed(hud.primary_color))
+	hud.set_hud_parameter(&"hud_fpm_accent_color", hud.suit_accent_color)
+	hud.set_hud_parameter(&"hud_fpm_halo_color", hud.halo_color)
+	_push_shape()
 
 
 func draw_widget() -> void:
@@ -79,6 +96,7 @@ func draw_widget() -> void:
 	_reveal = move_toward(_reveal, 1.0 if _visible else 0.0, dt / maxf(reveal_time, 0.01))
 	_update_modes(fc, dt)
 	if _reveal <= 0.0:
+		hud.set_hud_parameter(&"hud_fpm_anim", Vector4.ZERO)
 		return
 
 	var sweep := minf(sweep_base + sweep_per_decade * log(speed + 1.0) / log(10.0), sweep_max)
@@ -86,9 +104,25 @@ func draw_widget() -> void:
 	# Outward on the prograde bars; braking turns it round smoothly.
 	var heading := 1.0 - 2.0 * clampf(_brake, 0.0, 1.0)
 	_head = fposmod(_head + dt * sweep * heading, 1.0)
+
 	var grow := ease(_reveal, -2.0)  # ease in-out
-	_marker(patch(hud.world_to_display(_dir), Vector3.UP), grow, true)
-	_marker(patch(hud.world_to_display(-_dir), Vector3.UP), grow, false)
+	var hard := clampf(_brake - 1.0, 0.0, 1.0)
+	var shape := Vector3(grow, bar_to_deg + boost_stretch_deg * minf(_boost, 1.0)
+			- brake_squeeze_deg * minf(_brake, 1.0), lerpf(1.0, -1.0, hard))
+	if shape != _drawn:
+		_drawn = shape
+		hud.redraw_layer(&"fpm")
+		_push_shape()
+
+	var boost := minf(_boost, 1.0)
+	# Hard brake: the bars pulse.
+	var pulse := lerpf(1.0, 0.7 + 0.3 * sin(now / 1000.0 * 14.0), hard)
+	hud.set_hud_parameter(&"hud_fpm_frame", _layer_frame(hud.world_to_display(_dir)))
+	hud.set_hud_parameter(&"hud_fpm_stripes", Vector4(stripe_count, spacing_power,
+			base_alpha * (1.0 + 0.4 * boost), highlight_width * (1.0 + 0.5 * boost)))
+	hud.set_hud_parameter(&"hud_fpm_anim",
+			Vector4(grow, _head, clampf(_boost - 1.0, 0.0, 1.0), _kick))
+	hud.set_hud_parameter(&"hud_fpm_pulse", pulse)
 
 
 func _update_modes(fc: FlightComputer, dt: float) -> void:
@@ -102,61 +136,81 @@ func _update_modes(fc: FlightComputer, dt: float) -> void:
 	_kick = move_toward(_kick, 0.0, dt / maxf(kick_time, 0.01))
 
 
-## grow: 0..1, how far out the bars have appeared.
-func _marker(p: Patch, grow: float, prograde: bool) -> void:
-	var c := hud.primary_color if prograde else PanoramicHud.dimmed(hud.primary_color)
+func _push_shape() -> void:
+	hud.set_hud_parameter(&"hud_fpm_bar", Vector4(bar_from_deg, _drawn.y - bar_from_deg,
+			stripe_lean_deg * _drawn.z, stripe_half_height_deg))
+
+
+## Display → layer: the layer's -X (where the prograde marker is drawn) onto `dir`, with
+## up made the way patch() makes it, so the markers sit as if drawn around `dir`.
+static func _layer_frame(dir: Vector3) -> Basis:
+	var c := dir.normalized()
+	var up := Vector3.UP - c * c.y
+	if up.length_squared() < 1e-8:
+		up = Vector3.BACK - c * c.z
+	up = up.normalized()
+	return Basis(-c, up, (-c).cross(up)).transposed()
+
+
+## Both markers as coverage for the fpm layer (R stripes, G halo, B the rest × its fade),
+## off the layer's back seam: prograde at -X, retrograde at +X.
+func _draw_markers(w: HudWidget) -> void:
+	var strokes: Array = []  # [canvas points, coverage colour]
+	_marker_strokes(w.patch(Vector3.LEFT, Vector3.UP), true, strokes)
+	_marker_strokes(w.patch(Vector3.RIGHT, Vector3.UP), false, strokes)
+	if hud.halo_color.a > 0.0:
+		for s: Array in strokes:
+			w.draw_polyline(s[0], Color(0, 1, 0), 2.0 + hud.halo_width, true)
+	for s: Array in strokes:
+		w.draw_polyline(s[0], s[1], 2.0, true)
+
+
+func _marker_strokes(p: Patch, prograde: bool, out: Array) -> void:
+	var grow := _drawn.x
+	var mark := Color(0, 0, 1)
 	var r := marker_deg
-	var centre := Color(c, c.a * grow)
 	if prograde:
-		patch_arc(p, Vector2.ZERO, r, 0.0, TAU, centre, 2.0, 20)
+		var ring := PackedVector2Array()
+		for k in 21:
+			var a := TAU * k / 20.0
+			ring.append(Vector2(cos(a), sin(a)) * r)
+		out.append([_points(p, ring), mark])
 	else:
 		var k := r * 0.75
-		patch_line(p, Vector2(-k, -k), Vector2(k, k), centre, 2.0, 2)
-		patch_line(p, Vector2(-k, k), Vector2(k, -k), centre, 2.0, 2)
+		out.append([_points(p, _line(Vector2(-k, -k), Vector2(k, k))), mark])
+		out.append([_points(p, _line(Vector2(-k, k), Vector2(k, -k))), mark])
 
-	_reticle(p, c, grow, prograde)
+	_reticle(p, grow, out)
 
-	var full := clampf(_boost - 1.0, 0.0, 1.0)
-	var hard := clampf(_brake - 1.0, 0.0, 1.0)
-	var stripe_c := c.lerp(Color(hud.suit_accent_color, c.a), full * 0.7)
-	# Highlight position along the bar, 0 = inner end; mirrored behind.
-	var head := _head if prograde else 1.0 - _head
-	var width := highlight_width * (1.0 + 0.5 * minf(_boost, 1.0))
-	var to := bar_to_deg + boost_stretch_deg * minf(_boost, 1.0) \
-			- brake_squeeze_deg * minf(_brake, 1.0)
-	var span := to - bar_from_deg
+	var span := _drawn.y - bar_from_deg
 	var h := stripe_half_height_deg
-	# Hard brake: the lean swings through upright to the other way, and the bars pulse.
-	var lean_sign := lerpf(1.0, -1.0, hard)
-	var pulse := lerpf(1.0, 0.7 + 0.3 * sin(Time.get_ticks_msec() / 1000.0 * 14.0), hard)
 	for side in [-1.0, 1.0]:
 		for i in stripe_count:
 			var u := float(i) / (stripe_count - 1)
-			var x := bar_from_deg + span * pow(u, spacing_power)
-			# Grow from the inside out: each stripe fades in as the front passes it.
-			var shown := clampf((grow * 1.15 - u) / 0.15, 0.0, 1.0)
-			if shown <= 0.0:
+			# Stripes fade in from the inside out; the shader does the fade.
+			if grow * 1.15 - u <= 0.0:
 				continue
-			var glow := _glow(u, head, width)
-			glow = maxf(glow, _glow(u, fposmod(head + 0.5, 1.0), width) * full)
-			if prograde and _kick > 0.0:
-				glow = maxf(glow, exp(-pow((u - (1.0 - _kick)) / 0.08, 2.0)) * _kick)
-			var a := lerpf(base_alpha * (1.0 + 0.4 * minf(_boost, 1.0)), 1.0, glow) * shown * pulse
-			var lean := stripe_lean_deg * (0.7 + 0.3 * u) * lean_sign
-			patch_line(p, Vector2((x + lean) * side, h), Vector2((x - lean) * side, -h),
-					Color(stripe_c, stripe_c.a * a), 2.0, 2)
+			var x := bar_from_deg + span * pow(u, spacing_power)
+			var lean := stripe_lean_deg * (0.7 + 0.3 * u) * _drawn.z
+			out.append([_points(p, _line(Vector2((x + lean) * side, h),
+					Vector2((x - lean) * side, -h))), Color(1, 0, 0)])
 
 
-## Highlight strength at `u` for a highlight at `head`, wrapping round the bar.
-func _glow(u: float, head: float, width: float) -> float:
-	var d := absf(u - head)
-	d = minf(d, 1.0 - d)
-	return exp(-pow(d / width, 2.0))
+static func _line(a: Vector2, b: Vector2) -> PackedVector2Array:
+	return PackedVector2Array([a, a.lerp(b, 0.5), b])
+
+
+func _points(p: Patch, deg: PackedVector2Array) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for d in deg:
+		pts.append(patch_point(p, d))
+	return pts
+
 
 ## Radial dashes on a wide circle around the marker, only in the left and right quarters
 ## (within 45° of the bars' line, leaving a narrow gap at the bars); the top and bottom
 ## quarters stay open. Grows out with the bars.
-func _reticle(p: Patch, c: Color, grow: float, _prograde: bool) -> void:
+func _reticle(p: Patch, grow: float, out: Array) -> void:
 	var radius := deg_to_rad(reticle_radius_deg * lerpf(0.6, 1.0, grow))
 	var half := deg_to_rad(reticle_dash_deg) * 0.5
 	var from := deg_to_rad(reticle_arc_deg.x)
@@ -169,9 +223,8 @@ func _reticle(p: Patch, c: Color, grow: float, _prograde: bool) -> void:
 			# so each arc reads from its bar toward the top / bottom.
 			var a := base + (lerpf(from, to, t) if q % 2 == 0 else PI * 0.5 - lerpf(from, to, t))
 			var fade := 1.0 - 0.5 * absf(t - 0.5) * 2.0
-			var col := Color(c, c.a * grow * fade)
-			seam_safe_polyline(PackedVector2Array([_ring_point(p, a, radius - half),
-					_ring_point(p, a, radius + half)]), col, 2.0)
+			out.append([PackedVector2Array([_ring_point(p, a, radius - half),
+					_ring_point(p, a, radius + half)]), Color(0, 0, fade)])
 
 
 ## Canvas point `radius` rad from the patch centre, at angle `a` (from patch right, up = CCW).
