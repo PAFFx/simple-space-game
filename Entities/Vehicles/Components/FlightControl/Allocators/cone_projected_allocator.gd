@@ -40,7 +40,18 @@ extends ThrustAllocator
 ## never removes.
 @export_range(0.0, 1.0) var warm_start_decay: float = 0.85
 
+## Iterations of the actuator trim (throttles only, nozzle directions as they really are).
+@export_range(0, 200) var trim_iterations: int = 24
+## In the trim, force error across the demand counts this much more than a shortfall
+## along it: when the thrusters can't keep up, the suit pushes less, not sideways.
+@export var trim_sideways_weight: float = 30.0
+## Weight each axis's torque error by its inertia (heaviest / axis, up to the limit).
+@export var inertia_weighting: bool = true
+@export var max_inertia_weight: float = 1.5
+
 var _u := PackedVector3Array()
+var _wt2 := Vector3.ZERO   ## Last allocate()'s weights, reused by trim()
+var _wf2 := 0.0
 
 
 func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
@@ -62,11 +73,19 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 
 	var wf2 := 1.0 / (total * total)
 	var tp := wrench.torque_priority if wrench.torque_priority >= 0.0 else torque_priority
-	var wt2 := wf2 * tp * tp / (reference_arm * reference_arm)
+	# Torque errors count by the turning they cause: an axis with little inertia (yaw on
+	# a tall suit) spins up from an error the heavy axes wouldn't notice.
+	var wt2 := Vector3.ONE * (wf2 * tp * tp / (reference_arm * reference_arm))
+	var inertia := Vector3(state.inertia_local.x.x, state.inertia_local.y.y, state.inertia_local.z.z)
+	var heaviest := maxf(inertia.x, maxf(inertia.y, inertia.z))
+	if inertia_weighting and heaviest > 0.0:
+		for k in 3:
+			wt2[k] *= minf(heaviest / maxf(inertia[k], 1e-6), max_inertia_weight) ** 2
+	var wt2_max := maxf(wt2.x, maxf(wt2.y, wt2.z))
 	var lam := fuel_weight * wf2
 	var lipschitz := 2.0 * lam * t_max * t_max
 	for i in n:
-		lipschitz += 2.0 * t[i] * t[i] * (wf2 + wt2 * r[i].length_squared())
+		lipschitz += 2.0 * t[i] * t[i] * (wf2 + wt2_max * r[i].length_squared())
 	var step := 1.0 / lipschitz
 
 	var u := _u
@@ -84,13 +103,63 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 			target_f += wrench.force - achieved[0]
 			target_t += wrench.torque - achieved[1]
 	_u = u
+	_wt2 = wt2
+	_wf2 = wf2
 	return _u
+
+
+## Bounded least squares on the throttles alone (FISTA), started from the first stage.
+func trim(state: FlightState, wrench: Wrench, dirs: PackedVector3Array,
+		lo: PackedFloat32Array, hi: PackedFloat32Array, start: PackedFloat32Array) -> PackedFloat32Array:
+	var n := dirs.size()
+	var x := start.duplicate()
+	for i in n:
+		x[i] = clampf(x[i], lo[i], hi[i])
+	if trim_iterations <= 0 or _wf2 <= 0.0:
+		return x
+	var t := state.thruster_max
+	var fcol := PackedVector3Array()   # Force and torque per unit throttle
+	var tcol := PackedVector3Array()
+	fcol.resize(n)
+	tcol.resize(n)
+	var demand := wrench.force.length()
+	var f_dir := wrench.force / demand if demand > 1.0 else Vector3.ZERO
+	var side := maxf(trim_sideways_weight, 1.0) if demand > 1.0 else 1.0
+	var wt2_max := maxf(_wt2.x, maxf(_wt2.y, _wt2.z))
+	var lipschitz := 0.0
+	for i in n:
+		fcol[i] = dirs[i] * t[i]
+		tcol[i] = state.thruster_positions[i].cross(fcol[i])
+		lipschitz += 2.0 * (_wf2 * side * fcol[i].length_squared() + wt2_max * tcol[i].length_squared())
+	if lipschitz <= 0.0:
+		return x
+	var step := 1.0 / lipschitz
+	var y := x.duplicate()
+	var momentum := 1.0
+	for _k in trim_iterations:
+		var force := Vector3.ZERO
+		var torque := Vector3.ZERO
+		for i in n:
+			force += fcol[i] * y[i]
+			torque += tcol[i] * y[i]
+		var e := force - wrench.force
+		var along := f_dir * e.dot(f_dir)
+		var g_force := (along + (e - along) * side) * (2.0 * _wf2)
+		var g_torque := (torque - wrench.torque) * _wt2 * 2.0
+		var next_momentum := (1.0 + sqrt(1.0 + 4.0 * momentum * momentum)) * 0.5
+		var beta := (momentum - 1.0) / next_momentum
+		for i in n:
+			var x_new := clampf(y[i] - step * (g_force.dot(fcol[i]) + g_torque.dot(tcol[i])), lo[i], hi[i])
+			y[i] = x_new + (x_new - x[i]) * beta
+			x[i] = x_new
+		momentum = next_momentum
+	return x
 
 
 ## FISTA on u (in place) toward a target force/torque, with a propellant price per
 ## newton of thrust.
 func _solve(state: FlightState, u: PackedVector3Array, force_target: Vector3, torque_target: Vector3,
-		count: int, step: float, wf2: float, wt2: float, lam: float, price: float) -> void:
+		count: int, step: float, wf2: float, wt2: Vector3, lam: float, price: float) -> void:
 	var n := u.size()
 	var r := state.thruster_positions
 	var t := state.thruster_max
@@ -104,7 +173,7 @@ func _solve(state: FlightState, u: PackedVector3Array, force_target: Vector3, to
 			force += f
 			torque += r[i].cross(f)
 		var g_force := (force - force_target) * (2.0 * wf2)
-		var g_torque := (torque - torque_target) * (2.0 * wt2)
+		var g_torque := (torque - torque_target) * wt2 * 2.0
 
 		var next_momentum := (1.0 + sqrt(1.0 + 4.0 * momentum * momentum)) * 0.5
 		var beta := (momentum - 1.0) / next_momentum

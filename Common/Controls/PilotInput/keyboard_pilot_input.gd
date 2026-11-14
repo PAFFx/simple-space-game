@@ -13,6 +13,8 @@ extends PilotInputSource
 
 ## Seconds for a digital axis to travel from centre to full deflection.
 @export var key_travel_time: float = 0.1
+## Same for the movement keys while boost or brake is held.
+@export var boost_key_travel_time: float = 0.03
 ## Mouse speed that gives full stick deflection, px/s.
 @export var mouse_full_deflection_speed: float = 900.0
 ## Smoothing of the mouse demand, s (mouse events and physics ticks don't line up).
@@ -51,7 +53,10 @@ func poll_command() -> PilotCommand:
 		Input.get_axis(a.ROLL_RIGHT, a.ROLL_LEFT)
 	)
 	var step := delta / maxf(key_travel_time, 0.001)
-	_translation = _translation.move_toward(target_t, step)
+	# Boosting or braking, the movement keys are slammed, not eased: a dodge can't wait.
+	var urgent := Input.is_action_pressed(a.BOOST) or Input.is_action_pressed(a.BRAKE)
+	var step_t := delta / maxf(boost_key_travel_time, 0.001) if urgent else step
+	_translation = _translation.move_toward(target_t, step_t)
 	_rotation = _rotation.move_toward(target_r, step)
 
 	var cmd := PilotCommand.new()

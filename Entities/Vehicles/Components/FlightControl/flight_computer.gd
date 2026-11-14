@@ -27,6 +27,9 @@ const G0 := 9.80665
 ## within acos(this) of it deliver; more would come from pairs cancelling each other.
 ## 0 = no cap.
 @export_range(0.0, 1.0) var min_thrust_alignment: float = 0.7
+## Set the throttles against where the nozzles really are each tick (see
+## _trim_to_actuators). Off = thrusters get the ideal allocation as is.
+@export var actuator_trim: bool = true
 
 @export_group("Mass & Propellant")
 @export var dry_mass: float = 36000.0             ## kg
@@ -135,14 +138,16 @@ func _physics_process(delta: float) -> void:
 			# Limbs take what exceeds the thrusters plus a share of the rest.
 			var torque := last_wrench.torque
 			var limit := last_wrench.thruster_torque_limit
-			var beyond := torque - torque.clamp(-limit, limit)
+			var beyond := torque - ControlLaw.scale_to_box(torque, limit)
 			ambac_torque = ambac.step(beyond + (torque - beyond) * ambac.share, delta)
 			body.apply_torque(state.to_global(ambac_torque))
-			thrust_wrench = Wrench.new(last_wrench.force, (torque - ambac_torque).clamp(-limit, limit))
+			thrust_wrench = Wrench.new(last_wrench.force, ControlLaw.scale_to_box(torque - ambac_torque, limit))
 			thrust_wrench.torque_priority = last_wrench.torque_priority
 		var demand := allocator.allocate(state, thrust_wrench)
 		for i in thrusters.size():
 			thrusters[i].set_command(demand[i].length(), demand[i], body)
+		if actuator_trim:
+			_trim_to_actuators(thrust_wrench, demand, delta)
 	else:
 		last_wrench = Wrench.new()
 		for t in thrusters:
@@ -158,6 +163,32 @@ func _physics_process(delta: float) -> void:
 	var accel := (body.linear_velocity - _prev_velocity) / delta
 	_prev_velocity = body.linear_velocity
 	acceleration_g = lerpf(acceleration_g, accel.length() / G0, 0.15)
+
+
+## The allocation assumes every nozzle is already aimed and every throttle already
+## there. Thrusters spool and slew at different speeds, so in a transient their sum
+## points somewhere else. This sets the throttles for where the nozzles really will be
+## this tick, within what each can reach.
+func _trim_to_actuators(wrench: Wrench, demand: PackedVector3Array, delta: float) -> void:
+	var n := thrusters.size()
+	var dirs := PackedVector3Array()
+	var lo := PackedFloat32Array()
+	var hi := PackedFloat32Array()
+	var start := PackedFloat32Array()
+	dirs.resize(n)
+	lo.resize(n)
+	hi.resize(n)
+	start.resize(n)
+	var live := propellant > 0.0
+	for i in n:
+		dirs[i] = thrusters[i].predict_direction_in(body, delta)
+		var reach := thrusters[i].reachable_throttle(delta) if live else Vector2.ZERO
+		lo[i] = reach.x
+		hi[i] = reach.y
+		start[i] = demand[i].length()
+	var throttles := allocator.trim(state, wrench, dirs, lo, hi, start)
+	for i in n:
+		thrusters[i].set_throttle_now(throttles[i], delta)
 
 
 # --- Telemetry (used by the HUD) ---
@@ -282,6 +313,8 @@ func _build_state(delta: float) -> void:
 		s.thruster_planes.append_array(t.get_limit_planes_in(body))
 		s.thruster_max.append(t.get_available_thrust() if has_propellant else 0.0)
 	s.compute_authority()
+	if _capability_map != null:
+		s.max_torque = _capability_map.clean_torque.min(s.max_torque_ideal)
 	if ambac != null and ambac.enabled:
 		s.ambac_torque = ambac.get_capacity()
 	# The cockpit must line up with the hull opening while the hatch is unsealed.

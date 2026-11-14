@@ -69,6 +69,16 @@ static func clamp_to_capability(force: Vector3, state: FlightState, fraction: fl
 	return force * (limit / magnitude) if magnitude > limit else force
 
 
+## Scales `v` down (keeping its direction) to fit inside ±limit on every axis. A per-axis
+## clamp would turn a saturated torque onto the other axes.
+static func scale_to_box(v: Vector3, limit: Vector3) -> Vector3:
+	var scale := 1.0
+	for k in 3:
+		if absf(v[k]) > limit[k]:
+			scale = minf(scale, limit[k] / absf(v[k]))
+	return v * scale
+
+
 static func clamp_to_authority(force: Vector3, state: FlightState, fraction: float) -> Vector3:
 	var out := Vector3.ZERO
 	for k in 3:

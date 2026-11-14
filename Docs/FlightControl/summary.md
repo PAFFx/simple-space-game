@@ -224,6 +224,54 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
   than the torque budget allows and it eases into its end point, so the body can follow exactly
   (no overshoot when the target stops or turns back). If the body still lags (`tracking_lag_deg`),
   its torque budget and priority rise toward `recover_torque_priority`.
+- **Turning under a hard brake.** A released turn is stopped at the top allocator priority
+  (`recover_torque_priority`; it used to run at the steering priority and got ~8% of the yaw
+  torque it asked for against a saturated brake). While an axis is steered or stopping, the
+  force gives up `steer_force_reserve` (30%) of its capability so the thrusters can still make
+  torque, and the swing on the other axes slows to `steer_free_swing_share` (0.4, like the
+  steered axis; pausing it felt laggy). Saturated torque is scaled as a vector
+  (`ControlLaw.scale_to_box`), not clamped per axis, which used to turn a yaw stop into roll.
+  Full brake + 1 s yaw: body 49° → 22° off target, back in hand 2.2 s → 0.6 s after release.
+  Measure with `Tools/Flight/run_fbw_probe.sh`.
+- **Clean torque authority.** The geometric torque limit (`max_torque_ideal`) counts thrust that
+  only turns the suit by also shoving it: on the ν, roll is clean up to 42% of it, yaw 24%, pitch
+  33%, and asking for more spilled up to 3.5 g. The capability map now measures the clean torque
+  per axis through the allocator (`ForceCapabilityMap.clean_torque`) and the FBW plans turns,
+  stops and swings with that (`FlightState.max_torque`), so `auto_rotate_torque_fraction` is up
+  from 0.4 to 0.85. The allocator also weights torque errors by inertia (`inertia_weighting`,
+  up to `max_inertia_weight` 1.5; more starves its convergence), since a small error spins the
+  light yaw axis. Cruise + 1 s roll: 3.4 g → 0.5 g sideways, body 27° → 12° off target.
+  `Tools/Flight/torque_probe.gd` prints the authority.
+- **Actuator trim.** The allocation assumes every nozzle is aimed and every throttle is there
+  already; thrusters spool (0.06–0.12 s) and slew (90–360°/s) at different speeds, so in every
+  transient their sum pointed elsewhere (1–1.8 g off the demand at a boost onset, though the
+  plan itself was within 0.2 g). After aiming the nozzles, `FlightComputer._trim_to_actuators`
+  asks the allocator's `trim()` for the throttles that fit the wrench with the nozzles where
+  they will really be this tick, inside the throttle range each can reach, and drives each valve
+  past its target so the spool lag lands on it (`Thruster.set_throttle_now`). Force error across
+  the demand costs `trim_sideways_weight` (30) times a shortfall along it: when the thrusters
+  can't keep up the suit pushes less, not sideways. Result: velocity within 2° of the command
+  in every straight push (was 5–12°), ≤ 0.25 g sideways (was 1–3 g).
+- **Lean only when it pays.** A swing costs thrust while it lasts (the torque comes from the same
+  thrusters) and leaves the suit leaning the wrong way for the next move. The solver now stays
+  with the pilot frame unless turning raises the capability along the demand by `min_lean_gain`
+  (×1.2; `lean_keep_share` keeps a lean already taken), so only marginal leans are skipped: a
+  Shift strafe (×1.4 from its 30° roll) still leans. At 1.5 it wouldn't: 2.4 G within 0.28 s
+  instead of 3.6 G after 1.4 s, and a right → left reversal covers 8.9 m in its first second
+  instead of 3.1 m.
+- **Snap keys.** With boost or brake held the movement keys travel in `boost_key_travel_time`
+  (0.03 s) instead of 0.1 s.
+- **A turn ends where the stick is released.** The stick used to ask for up to 120°/s (204°/s
+  boosting or braking hard) on axes the thrusters can only slow at ~130°/s² cleanly, so after
+  release the view span on for 0.5–1.2 s and 40–95°. The commanded rate is now capped at what
+  can be stopped within `stop_time` (0.4 s) with the clean torque, `braking_margin` and, under a
+  full push, `loaded_torque_share` (0.6: the thrusters are busy). A stopping turn takes
+  `stop_force_reserve` (60%) of the force capability for the moment it lasts, and the pilot's
+  axes get the torque budget first; holding the others takes what's left. After a 1 s full-stick
+  turn the view now coasts 4–20° (cruise roll 47° → 13°, full boost roll 95° → 11°, full brake
+  pitch 76° → 9°, full brake yaw 55° → 20°). The price is a lower top rate on pitch and roll.
+- **Attitude hold deadband.** The hold took its error from `get_axis() * get_angle()`, whose
+  axis isn't normalised below ~0.5°, so it barely corrected until the body had drifted that far.
 - **Committed attitude.** The solver remembers which side it turned to and charges `commit_weight` for
   turning back through to the other side until the demand swings `commit_release_deg` (45°) away.
   Its shortfall term is the share of the demand left unmet (0..1), so a full-boost demand can't
@@ -503,8 +551,8 @@ limit is raised (`physics/jolt_physics_3d/limits/max_linear_velocity`).
 
 ## Known limitations
 
-- `FlightState.max_torque` is a per-thruster best case, not a net-force-free guarantee. That's why
-  the FBW only requests `torque_fraction` of it.
+- `FlightState.max_torque` is the clean torque per axis with no force demand; turning on two axes
+  at once, or while pushing hard, can still ask for more than the thrusters give together.
 - No minimum impulse bit / thruster deadband modelling yet.
 - The reference frame's velocity is a finite difference on its position (low-passed), so frames
   moved in `_process` add a little noise.

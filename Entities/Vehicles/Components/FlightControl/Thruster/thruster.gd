@@ -205,6 +205,39 @@ func set_command(throttle_cmd: float, direction: Vector3, frame: Node3D) -> void
 		_cmd_dir = _clamp_to_cone(local)
 
 
+## Where the nozzle will point after this tick's slew toward the commanded aim, in
+## `frame`'s axes.
+func predict_direction_in(frame: Node3D, delta: float) -> Vector3:
+	var d := _dir
+	var angle := _dir.angle_to(_cmd_dir)
+	if angle > 1e-5:
+		d = _dir.slerp(_cmd_dir, minf(1.0, deg_to_rad(gimbal_rate_deg) * delta / angle)).normalized()
+	return (frame.global_basis.inverse() * (global_basis * d)).normalized()
+
+
+## Throttle range reachable this tick: x = lowest, y = highest.
+func reachable_throttle(delta: float) -> Vector2:
+	if not enabled:
+		return Vector2.ZERO
+	var down := exp(-delta / maxf(spool_down_time, 0.001))
+	var up := 1.0 - exp(-delta / maxf(spool_up_time, 0.001))
+	return Vector2(throttle * down, throttle + (1.0 - throttle) * up)
+
+
+## Sets the throttle the thruster should have *after* this tick (within
+## reachable_throttle()), keeping the aim from set_command(): the valve is driven past
+## it so the spool lag lands exactly there.
+func set_throttle_now(wanted: float, delta: float) -> void:
+	if not enabled:
+		_cmd_throttle = 0.0
+		return
+	var tau := spool_up_time if wanted > throttle else spool_down_time
+	var k := 1.0 - exp(-delta / maxf(tau, 0.001))
+	_cmd_throttle = clampf(throttle + (wanted - throttle) / k, 0.0, 1.0)
+	if wanted < min_throttle:
+		_cmd_throttle = 0.0
+
+
 ## Advances actuator dynamics and applies the resulting force to `body`.
 func step(delta: float, body: RigidBody3D, has_propellant: bool) -> void:
 	var target := _cmd_throttle if has_propellant else 0.0
