@@ -46,7 +46,7 @@ extends AttitudeOffsetSolver
 ## In any direction, only turn away from the pilot frame if that raises the force
 ## capability along the demand by at least this factor. Below it the suit answers at once
 ## with what it has (a Shift strafe: 2.5 G now instead of 3.6 G a second later).
-@export var min_lean_gain: float = 1.5
+@export var min_lean_gain: float = 1.2
 ## Share of that margin a lean already taken must still earn to be kept (hysteresis).
 @export_range(0.0, 1.0) var lean_keep_share: float = 0.7
 @export var initial_step_deg: float = 12.0

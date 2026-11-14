@@ -100,6 +100,12 @@ var dodge05 := 0.0
 var dodge10 := 0.0
 var dodge_v0 := 0.0
 var dodge_started := false
+var pilot_prev := Quaternion.IDENTITY
+var view_turn := 0.0
+var view_off := 0.0
+var view_coast := 0.0
+var view_off_after := 0.0
+var view_still := 0.0
 var turn_dev := 0.0
 var turn_settle := 3.5
 
@@ -115,7 +121,8 @@ func _start() -> void:
 	inp.scenario = args[0]
 	series = "series" in args
 	overrides = args
-	if args[0].begins_with("brake"): duration = 12.0
+	if args[0].begins_with("brake"): duration = 10.0
+	elif args[0].ends_with("_yaw") or args[0].ends_with("_pitch") or args[0].ends_with("_roll"): duration = 6.5
 	fc.add_child(inp)
 	fc.input_source = inp
 	body = suit as RigidBody3D
@@ -178,6 +185,24 @@ func _tick() -> void:
 		dodge += (v.dot(d) - dodge_v0) * dt
 		if t < t0 + 0.5: dodge05 = dodge
 		dodge10 = dodge
+	# What the pilot sees: the pilot frame's own rotation, split into the commanded axis
+	# and everything else, during the turn and after the stick is released.
+	var turning := inp.scenario.ends_with("_yaw") or inp.scenario.ends_with("_pitch") or inp.scenario.ends_with("_roll")
+	if turning:
+		var ts := 4.0 if inp.scenario.begins_with("brake") else 2.5
+		var dq := AttitudeOffsetSolver.shortest(pilot_prev.inverse() * pilot)
+		var rot := AttitudeOffsetSolver.to_rotation_vector(dq) * (180.0 / PI)   # deg this tick, pilot axes
+		var k := 0 if inp.scenario.ends_with("_pitch") else (1 if inp.scenario.ends_with("_yaw") else 2)
+		var off_axis := rot
+		off_axis[k] = 0.0
+		if t >= ts and t < ts + 1.0:
+			view_turn += absf(rot[k])
+			view_off += off_axis.length()
+		elif t >= ts + 1.0:
+			view_coast += absf(rot[k])
+			view_off_after += off_axis.length()
+			if rot.length() / dt > 3.0: view_still = t - ts - 1.0
+	pilot_prev = pilot
 	max_rate = maxf(max_rate, w)
 	max_lag = maxf(max_lag, lag)
 	if inp.scenario.begins_with("brake"):
@@ -260,6 +285,9 @@ func _report() -> void:
 			inp.scenario, brake_dev, maxf(settle_t - 5.0, 0.0), brake_ferr, stop_t - 3.5 if stop_t > 0.0 else -1.0, body.linear_velocity.length()]
 	if not inp.scenario.begins_with("brake"):
 		s += "  | moved %.1f m in 0.5 s, %.1f m in 1 s" % [dodge05, dodge10]
+	if inp.scenario.ends_with("_yaw") or inp.scenario.ends_with("_pitch") or inp.scenario.ends_with("_roll"):
+		s = "%-16s VIEW: turned %.0f° in 1 s, wandered %.1f° off-axis; after release coasted %.1f°, wandered %.1f°, still after %.2fs | body max dev %.0f°" % [
+			inp.scenario, view_turn, view_off, view_coast, view_off_after, view_still, maxf(turn_dev, brake_dev)]
 	s += "  | off-demand force: alloc max %.2fg avg %.2fg, real max %.2fg avg %.2fg" % [
 		alloc_perp, sum_alloc / maxi(n_perp, 1), real_perp, sum_real / maxi(n_perp, 1)]
 	print(s)

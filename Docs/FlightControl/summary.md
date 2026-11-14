@@ -228,8 +228,8 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
   (`recover_torque_priority`; it used to run at the steering priority and got ~8% of the yaw
   torque it asked for against a saturated brake). While an axis is steered or stopping, the
   force gives up `steer_force_reserve` (30%) of its capability so the thrusters can still make
-  torque, and the swing on the other axes waits (`steer_free_swing_share` 0), so the body no
-  longer flips its lean in the middle of a turn. Saturated torque is scaled as a vector
+  torque, and the swing on the other axes slows to `steer_free_swing_share` (0.4, like the
+  steered axis; pausing it felt laggy). Saturated torque is scaled as a vector
   (`ControlLaw.scale_to_box`), not clamped per axis, which used to turn a yaw stop into roll.
   Full brake + 1 s yaw: body 49° → 22° off target, back in hand 2.2 s → 0.6 s after release.
   Measure with `Tools/Flight/run_fbw_probe.sh`.
@@ -255,13 +255,23 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
 - **Lean only when it pays.** A swing costs thrust while it lasts (the torque comes from the same
   thrusters) and leaves the suit leaning the wrong way for the next move. The solver now stays
   with the pilot frame unless turning raises the capability along the demand by `min_lean_gain`
-  (×1.5; `lean_keep_share` keeps a lean already taken). A Shift strafe gains only ×1.4 from its
-  30° roll, so it no longer rolls: 2.4 G within 0.28 s instead of 3.6 G after 1.4 s, and a
-  right → left reversal covers 8.9 m in its first second instead of 3.1 m. Forward boosts
-  (×1.6) and full boosts lean as before; a full boost is the commitment mode (sideways it leans
-  60° for 5.9 G, and reverses slowly).
+  (×1.2; `lean_keep_share` keeps a lean already taken), so only marginal leans are skipped: a
+  Shift strafe (×1.4 from its 30° roll) still leans. At 1.5 it wouldn't: 2.4 G within 0.28 s
+  instead of 3.6 G after 1.4 s, and a right → left reversal covers 8.9 m in its first second
+  instead of 3.1 m.
 - **Snap keys.** With boost or brake held the movement keys travel in `boost_key_travel_time`
   (0.03 s) instead of 0.1 s.
+- **A turn ends where the stick is released.** The stick used to ask for up to 120°/s (204°/s
+  boosting or braking hard) on axes the thrusters can only slow at ~130°/s² cleanly, so after
+  release the view span on for 0.5–1.2 s and 40–95°. The commanded rate is now capped at what
+  can be stopped within `stop_time` (0.4 s) with the clean torque, `braking_margin` and, under a
+  full push, `loaded_torque_share` (0.6: the thrusters are busy). A stopping turn takes
+  `stop_force_reserve` (60%) of the force capability for the moment it lasts, and the pilot's
+  axes get the torque budget first; holding the others takes what's left. After a 1 s full-stick
+  turn the view now coasts 4–20° (cruise roll 47° → 13°, full boost roll 95° → 11°, full brake
+  pitch 76° → 9°, full brake yaw 55° → 20°). The price is a lower top rate on pitch and roll.
+- **Attitude hold deadband.** The hold took its error from `get_axis() * get_angle()`, whose
+  axis isn't normalised below ~0.5°, so it barely corrected until the body had drifted that far.
 - **Committed attitude.** The solver remembers which side it turned to and charges `commit_weight` for
   turning back through to the other side until the demand swings `commit_release_deg` (45°) away.
   Its shortfall term is the share of the demand left unmet (0..1), so a full-boost demand can't
