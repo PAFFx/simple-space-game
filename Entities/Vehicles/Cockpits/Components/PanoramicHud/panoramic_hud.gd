@@ -30,8 +30,10 @@ extends Node
 @export var suit_accent_color := Color(0.9, 0.42, 0.66, 0.9)
 ## ...the suit's own equipment (shield and weapon outlines)...
 @export var equipment_color := Color(0.74, 0.7, 0.86, 0.85)
-## ...and other objects (contacts).
-@export var contact_color := Color(1.0, 0.62, 0.22, 0.95)
+## ...and other objects: contacts, hostile ones, and the mark on the selected one.
+@export var contact_color := Color(0.62, 0.67, 0.96, 0.7)
+@export var hostile_color := Color(0.96, 0.42, 0.4, 0.85)
+@export var selected_color := Color(0.92, 0.95, 1.0, 0.95)
 @export var caution_color := Color(1.0, 0.86, 0.3, 0.95)
 @export var warning_color := Color(1.0, 0.25, 0.2, 0.95)
 ## Dark edge under every line and label, so symbols read against bright backgrounds

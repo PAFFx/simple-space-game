@@ -36,7 +36,12 @@ PanoramicHud (Node)
     ├── FlightData      left column: G MS / G PLT / ROT / AMBAC over boxed SPD and Mach (dim);
                         non-default modes just inside the right ladder column; cautions
     ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
-    └── Contacts        brackets for nodes in group `hud_contacts`
+    └── Contacts        a triangle pointing down around each node in group `hud_contacts`: three
+                        see-through bars short of its corners (a faint fill in a fine border), or
+                        a bracket at each corner of a square when it's too big for the triangle; hostile adds an inner triangle's corners and
+                        two strokes across each corner outside; the selected one a fine winged V
+                        (triangles drawn by the screen shader; the text in its own fine atlas,
+                        one slot per contact, redrawn 10 times a second)
 ```
 
 `PanoramicScreen.set_hud_texture()` hands the viewport texture to the screen shader, which samples
@@ -62,7 +67,8 @@ turns it into place per pixel with a `hud_<layer>_frame` uniform (display direct
 | `suit` | `(display⁻¹ · body)⁻¹` | suit line and arrowheads, drawn with the body level |
 | `fpm` | layer −X onto the velocity, up as `patch()` makes it | flight path bars and reticles as coverage (R stripe, G halo, B the reticle × its fade), prograde at −X and retrograde at +X, off the back seam; the shader finds each stripe from its position and runs the highlight, tint, fade-in and pulse. Redrawn only while the shape changes (growing in/out, boost stretch, brake squeeze, hard-brake lean) |
 
-**Shader symbols.** The control centre and the flight path's middle marker aren't in any
+**Shader symbols.** The control centre, the flight path's middle marker and the contact
+triangles aren't in any
 texture: `hud_layers.gdshaderinc` draws them per pixel from distance functions (`hud_chevron`,
 `hud_triangle`), around a frame uniform like a layer's. They stay sharp however far the view
 zooms in (the canvas has ~11 px per degree) and there is nothing to redraw. `hud_ink()` adds a
@@ -82,7 +88,8 @@ what needs attention): off-white = flight symbology (flight path, speed, modes, 
 pale steel blue = the pitch ladder, grey = scales and labels, translucent grey-white = the suit
 against the cockpit (suit line, side rings), pink-violet = accents (the suit line's arrowheads,
 the control centre's lower chevron), muted lavender = the suit's equipment (shield and weapon
-outlines), orange = contacts; caution yellow, warning red.
+outlines), periwinkle blue = contacts, soft red = hostile contacts, near white = the mark on
+the selected contact; caution yellow, warning red.
 `PanoramicHud.dimmed(c)` tones a role colour down for scales and labels. Every line and label gets
 a dark halo (`halo_color`, `halo_width`) so it reads against a sunlit planet without being brighter.
 
@@ -138,7 +145,10 @@ away from the canvas centre (cockpit forward).
 Data sources: `hud.flight_computer` (state, thrusters, modes, propellant), `hud.hatch`,
 `hud.sensor_head`.
 
-Contacts: add any `Node3D` to group `hud_contacts`; optional metadata `hud_label` and `hud_radius`.
+Contacts: add any `Node3D` to group `hud_contacts`; optional metadata `hud_label`, `hud_radius`
+and `hud_hostile` (`NavBuoy.hostile` sets it). Nothing selects a contact yet
+(`ContactsWidget.selected`; metadata `hud_selected` marks one for now). The shader draws the
+16 nearest.
 
 Silhouettes: add a `HudSilhouette` (outline points in its local space) to anything the pilot should
 see "through". The sensor never renders the suit or its equipment, so the shield appears only as its
