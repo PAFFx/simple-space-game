@@ -7,7 +7,7 @@ extends Resource
 ## button's press time stays right.
 
 ## Joystick carrying the mini-stick, by name (see JoyDevices). Empty = off.
-@export var stick_name: String = "EVO R"
+@export var stick_name: String = "EVO L"
 @export var yaw_axis: int = 3
 @export var pitch_axis: int = 4
 @export var invert_yaw: bool = false
