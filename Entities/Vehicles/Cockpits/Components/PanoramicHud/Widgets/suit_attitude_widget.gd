@@ -112,26 +112,54 @@ func _suit_line(w: HudWidget, rel: Basis) -> void:
 			k += 5
 
 
-## Arrowhead at the edge of the opening, pointing at the nose: a tinted, outlined
-## pentagon with a chevron inside, and a small accent chevron just ahead of it.
+## Arrowhead at the edge of the opening, pointing at the nose: a plate with chamfered
+## back corners inside a broken outer band, a fine inner outline, a bold chevron and two
+## dashes inside, and the accent chevron just ahead of its tip.
 func _arrowhead(w: HudWidget, rel: Basis, side: float) -> void:
 	var p := w.patch(_line_dir(rel, deg_to_rad(front_gap_deg * side), 0.0), rel * Vector3.UP)
 	var accent := hud.suit_accent_color
-	var c := hud.suit_color
+	var c := Color(hud.primary_color, hud.primary_color.a * 0.85)
+	var band := Color(hud.suit_color, hud.suit_color.a * 0.75)
 	# u = distance outward from the tip along the line, v = up.
 	var k := arrow_scale
 	var pt := func(u: float, v: float) -> Vector2: return Vector2(u * side, v) * k
-	var shape := PackedVector2Array([pt.call(0.0, 0.0), pt.call(1.1, 0.85),
-			pt.call(ARROW_LEN, 0.85), pt.call(ARROW_LEN, -0.85), pt.call(1.1, -0.85)])
-	w.patch_polygon(p, shape, Color(accent, accent.a * 0.28))
-	for i in shape.size():
-		w.patch_line(p, shape[i], shape[(i + 1) % shape.size()], accent, 2.0, 3)
-	# Inner chevron, pointing in.
-	w.patch_line(p, pt.call(1.7, 0.45), pt.call(1.0, 0.0), c, 2.0, 2)
-	w.patch_line(p, pt.call(1.0, 0.0), pt.call(1.7, -0.45), c, 2.0, 2)
+	var plate := PackedVector2Array([pt.call(0.0, 0.0), pt.call(1.05, 0.88), pt.call(2.25, 0.88),
+			pt.call(ARROW_LEN, 0.55), pt.call(ARROW_LEN, -0.55), pt.call(2.25, -0.88),
+			pt.call(1.05, -0.88)])
+	w.patch_polygon(p, plate, Color(hud.halo_color, hud.halo_color.a * 0.6))
+	w.patch_polygon(p, plate, Color(hud.suit_color, hud.suit_color.a * 0.16))
+	# Outer band, open at the middle of the top and bottom edges and of the back.
+	for sv in [1.0, -1.0]:
+		var run := PackedVector2Array([pt.call(1.5, 0.88 * sv), pt.call(1.05, 0.88 * sv), pt.call(0.0, 0.0)])
+		_strokes(w, p, run, band, 4.0)
+		run = PackedVector2Array([pt.call(1.85, 0.88 * sv), pt.call(2.25, 0.88 * sv),
+				pt.call(ARROW_LEN, 0.55 * sv), pt.call(ARROW_LEN, 0.2 * sv)])
+		_strokes(w, p, run, band, 4.0)
+	# Inner outline.
+	var inner := PackedVector2Array([pt.call(0.5, 0.0), pt.call(1.2, 0.58), pt.call(2.12, 0.58),
+			pt.call(2.3, 0.4), pt.call(2.3, -0.4), pt.call(2.12, -0.58), pt.call(1.2, -0.58),
+			pt.call(0.5, 0.0)])
+	_strokes(w, p, inner, c, 1.5, false)
+	# Chevron pointing in, two dashes behind it.
+	_strokes(w, p, PackedVector2Array([pt.call(1.5, 0.36), pt.call(0.95, 0.0), pt.call(1.5, -0.36)]), c, 2.5, false)
+	for sv in [1.0, -1.0]:
+		_strokes(w, p, PackedVector2Array([pt.call(1.75, 0.16 * sv), pt.call(2.1, 0.16 * sv)]),
+				PanoramicHud.dimmed(c), 1.5, false)
 	# Accent chevron ahead of the tip.
-	w.patch_line(p, pt.call(-0.35, 0.6), pt.call(-0.95, 0.0), accent, 2.5, 2)
-	w.patch_line(p, pt.call(-0.95, 0.0), pt.call(-0.35, -0.6), accent, 2.5, 2)
+	_strokes(w, p, PackedVector2Array([pt.call(-0.4, 0.66), pt.call(-1.05, 0.0), pt.call(-0.4, -0.66)]), accent, 3.0)
+
+
+## One polyline through patch points (degrees), each piece cut in three so it follows
+## the sphere.
+func _strokes(w: HudWidget, p: HudWidget.Patch, deg: PackedVector2Array, color: Color, width: float,
+		halo := true) -> void:
+	var pts := PackedVector2Array()
+	for i in deg.size():
+		if i > 0:
+			for t in [1.0 / 3.0, 2.0 / 3.0]:
+				pts.append(w.patch_point(p, deg[i - 1].lerp(deg[i], t)))
+		pts.append(w.patch_point(p, deg[i]))
+	w.seam_safe_polyline(pts, color, width, halo)
 
 
 ## side: -1 = left of the pilot, +1 = right. The suit line runs through the centre;

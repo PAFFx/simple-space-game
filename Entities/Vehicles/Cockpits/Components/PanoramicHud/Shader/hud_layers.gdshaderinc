@@ -1,5 +1,6 @@
 // HUD layers: fixed pictures drawn once by GDScript (PanoramicHud.add_layer_drawer), each
-// in its own frame, turned into place here per pixel by a rotation uniform. Same
+// in its own frame, turned into place here per pixel by a rotation uniform. Small symbols
+// (control centre, flight path marker, contact triangles) are drawn here outright. Same
 // equirectangular layout as hud_texture; `frame` maps a display direction into the layer's.
 // Needs panoramic_elevation_range (declared by the including shader).
 
@@ -42,6 +43,41 @@ uniform vec4 hud_fpm_stripes = vec4(16.0, 1.7, 0.3, 0.12);
 // x = grow (0 = hidden), y = highlight head, z = full boost, w = kick.
 uniform vec4 hud_fpm_anim = vec4(0.0);
 uniform float hud_fpm_pulse = 1.0;
+// Half the side of the marker triangle at the middle, deg.
+uniform float hud_fpm_marker = 1.0;
+
+// Symbols drawn here from distance functions instead of from a layer: sharp at any zoom,
+// and nothing to redraw. Their dark edge, as on the canvas:
+uniform vec4 hud_symbol_halo_color : source_color, color_conversion_disabled = vec4(0.0, 0.0, 0.0, 0.55);
+uniform float hud_symbol_halo_deg = 0.13;
+
+// Control centre: chevrons around the control frame's -Z (display → control frame).
+// Off while the colour's alpha is 0.
+uniform mat3 hud_control_frame = mat3(1.0);
+uniform vec4 hud_control_color : source_color, color_conversion_disabled = vec4(0.0);
+uniform vec4 hud_control_accent_color : source_color, color_conversion_disabled = vec4(0.9, 0.42, 0.66, 0.54);
+// The bands' fill, as a share of their border's alpha.
+uniform float hud_control_fill = 0.75;
+
+// Contacts: a triangle pointing down around each. Per contact: xyz = direction (display
+// frame), w = half the triangle's side in deg (0 = unused); then x = hostile, y = selected,
+// z = cos of the angle that bounds everything drawn for it (mark and text), w = 1 for a
+// big contact: corner brackets of a square (half its side in at.w) instead of the triangle.
+const int HUD_CONTACT_MAX = 16;
+uniform vec4 hud_contact_at[16];
+uniform vec4 hud_contact_state[16];
+uniform vec4 hud_contact_color : source_color, color_conversion_disabled = vec4(0.62, 0.67, 0.96, 0.7);
+// The bars' fill, as a share of their border's alpha.
+uniform float hud_contact_fill = 0.5;
+uniform vec4 hud_contact_hostile_color : source_color, color_conversion_disabled = vec4(0.96, 0.42, 0.4, 0.85);
+uniform vec4 hud_contact_selected_color : source_color, color_conversion_disabled = vec4(0.92, 0.95, 1.0, 0.95);
+// Each contact's text block, in its own slot of an atlas (HUD_CONTACT_SLOTS across and
+// down) far finer than the HUD canvas, shown beside the triangle's lower right side.
+uniform sampler2D hud_contact_labels : source_color, hint_default_transparent, filter_linear;
+const vec2 HUD_CONTACT_SLOTS = vec2(2.0, 8.0);
+// Size of a slot on the screen, deg.
+const vec2 HUD_CONTACT_LABEL_DEG = vec2(10.0, 5.0);
+uniform float hud_control_scale = 1.0;
 
 
 vec2 hud_layer_uv(mat3 frame, vec3 local_dir) {
@@ -70,6 +106,53 @@ vec3 hud_over(vec3 color, vec4 layer, float brightness) {
 
 vec3 hud_srgb_to_linear(vec3 c) {
 	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
+
+// One more stroke on a symbol built up the way the canvas blends (premultiplied).
+void hud_ink(inout vec4 acc, vec4 c, float coverage) {
+	float a = c.a * clamp(coverage, 0.0, 1.0);
+	acc = vec4(c.rgb * a + acc.rgb * (1.0 - a), a + acc.a * (1.0 - a));
+}
+
+
+// Converted and composited like hud_texture.
+vec3 hud_compose(vec3 color, vec4 acc, float brightness) {
+	return mix(color, hud_srgb_to_linear(acc.rgb) * brightness, acc.a);
+}
+
+
+// Coverage of a shape from its signed distance (deg, < 0 inside), antialiased over `aa`.
+float hud_fill(float sd, float aa) {
+	return 1.0 - smoothstep(-aa, aa, sd);
+}
+
+
+float hud_segment(vec2 p, vec2 a, vec2 b) {
+	vec2 pa = p - a;
+	vec2 ba = b - a;
+	return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
+}
+
+
+// Chevron with its point at `tip`, mirrored in x (q.x = |x|): one arm runs along `arm`
+// (unit) for `len`, `half_width` to each side. Sharp at the point, cut square at the ends.
+float hud_chevron(vec2 q, vec2 tip, vec2 arm, float len, float half_width) {
+	vec2 r = q - tip;
+	return max(abs(dot(r, vec2(-arm.y, arm.x))) - half_width, dot(r, arm) - len);
+}
+
+
+// Triangle with a corner pointing up, sides 2 × r, centred on its middle.
+float hud_triangle(vec2 p, float r) {
+	const float k = 1.7320508;
+	p.x = abs(p.x) - r;
+	p.y = p.y + r / k;
+	if (p.x + k * p.y > 0.0) {
+		p = vec2(p.x - k * p.y, -k * p.x - p.y) / 2.0;
+	}
+	p.x -= clamp(p.x, -2.0 * r, 0.0);
+	return -length(p) * sign(p.y);
 }
 
 
@@ -138,25 +221,55 @@ float hud_fpm_stripe_u(vec2 p) {
 }
 
 
-vec3 hud_fpm(vec3 color, vec3 local_dir, float brightness) {
+// The marker at the middle: prograde a filled triangle pointing down with a solid core and
+// wings; retrograde its empty counterpart pointing up, only the rim's three corners and a
+// hollow core. `m` in marker units.
+void hud_fpm_marker_ink(inout vec4 acc, vec2 m, bool pro, vec4 c, float aa) {
+	vec2 up = pro ? vec2(m.x, -m.y) : m;
+	float tri = hud_triangle(up, 1.0);
+	float rim = abs(tri + 0.07) - 0.07;
+	float strokes = rim;
+	if (pro) {
+		float core = hud_triangle(up, 0.36);
+		float wings = max(abs(m.y) - 0.065, abs(abs(m.x) - 1.95) - 0.45);
+		float inner = abs(tri + 0.36) - 0.03;
+		strokes = min(rim, min(core, wings));
+		hud_ink(acc, hud_symbol_halo_color, hud_fill(strokes - hud_symbol_halo_deg, aa));
+		hud_ink(acc, vec4(c.rgb, c.a * 0.16), hud_fill(tri, aa));
+		hud_ink(acc, vec4(c.rgb, c.a * 0.5), hud_fill(max(inner, -core), aa));
+		hud_ink(acc, c, hud_fill(strokes, aa));
+	} else {
+		// Only the three corners of the rim, and a hollow core.
+		float corner = min(length(vec2(abs(up.x) - 1.0, up.y + 0.57735)), length(up - vec2(0.0, 1.1547)));
+		float core = abs(hud_triangle(up, 0.46) + 0.05) - 0.05;
+		strokes = min(max(rim, corner - 0.72), core);
+		hud_ink(acc, hud_symbol_halo_color, hud_fill(strokes - hud_symbol_halo_deg, aa));
+		hud_ink(acc, c, hud_fill(strokes, aa));
+	}
+}
+
+
+vec3 hud_fpm(vec3 color, vec3 local_dir, float brightness, float aa) {
 	float grow = hud_fpm_anim.x;
 	if (grow <= 0.0) {
 		return color;
 	}
-	vec4 cov = hud_sample(hud_fpm_texture, hud_fpm_frame, local_dir);
-	if (cov.r + cov.g + cov.b < 0.002) {
-		return color;
-	}
 	vec3 d = hud_fpm_frame * local_dir;
 	bool pro = d.x < 0.0;
+	// Patch degrees: right is -Z for the prograde marker, +Z for the retrograde one.
+	float depth = abs(d.x);
+	vec2 p = degrees(vec2(atan(pro ? -d.z : d.z, depth), atan(d.y, depth)));
+	float unit = hud_fpm_marker * grow;
+	bool at_marker = depth > 0.5 && max(abs(p.x), abs(p.y)) < unit * 2.8;
+	vec4 cov = hud_sample(hud_fpm_texture, hud_fpm_frame, local_dir);
+	if (cov.r + cov.g + cov.b < 0.002 && !at_marker) {
+		return color;
+	}
 	vec4 c = pro ? hud_fpm_color : hud_fpm_retro_color;
 
 	float stripe_a = 0.0;
 	vec3 stripe_rgb = mix(c.rgb, hud_fpm_accent_color.rgb, hud_fpm_anim.z * 0.7);
 	if (cov.r > 0.002) {
-		// Patch degrees: right is -Z for the prograde marker, +Z for the retrograde one.
-		float depth = abs(d.x);
-		vec2 p = degrees(vec2(atan(pro ? -d.z : d.z, depth), atan(d.y, depth)));
 		float u = hud_fpm_stripe_u(p);
 		float shown = clamp((grow * 1.15 - u) / 0.15, 0.0, 1.0);
 		float head = pro ? hud_fpm_anim.y : 1.0 - hud_fpm_anim.y;
@@ -170,21 +283,163 @@ vec3 hud_fpm(vec3 color, vec3 local_dir, float brightness) {
 	}
 	float mark_a = c.a * grow * min(cov.b, 1.0);
 
-	float a = hud_fpm_halo_color.a * min(cov.g, 1.0);
-	vec3 rgb = hud_fpm_halo_color.rgb * a;
-	float stroke_a = min(stripe_a + mark_a, 1.0);
+	vec4 acc = vec4(0.0);
+	hud_ink(acc, hud_fpm_halo_color, cov.g);
 	vec3 stroke = (stripe_rgb * stripe_a + c.rgb * mark_a) / max(stripe_a + mark_a, 1e-5);
-	rgb = stroke * stroke_a + rgb * (1.0 - stroke_a);
-	a = stroke_a + a * (1.0 - stroke_a);
-	return mix(color, hud_srgb_to_linear(rgb) * brightness, a);
+	hud_ink(acc, vec4(stroke, 1.0), stripe_a + mark_a);
+	if (at_marker) {
+		hud_fpm_marker_ink(acc, p / unit, pro, vec4(c.rgb, c.a * min(grow * 2.0, 1.0)), aa / unit);
+	}
+	return hud_compose(color, acc, brightness);
+}
+
+
+vec3 hud_control(vec3 color, vec3 local_dir, float brightness, float aa) {
+	if (hud_control_color.a <= 0.0) {
+		return color;
+	}
+	vec3 d = hud_control_frame * local_dir;
+	if (d.z > -0.985) {
+		return color;
+	}
+	vec2 q = degrees(vec2(atan(abs(d.x), -d.z), atan(d.y, -d.z))) / hud_control_scale;
+	aa /= hud_control_scale;
+	vec2 arm = normalize(vec2(1.0, 0.6));
+	vec2 arm_down = vec2(arm.x, -arm.y);
+	// V above the middle, ^ and an accent ^ below: wide bands with a bright border and a
+	// faint fill.
+	float above = hud_chevron(q, vec2(0.0, 1.7), arm, 1.2, 0.21);
+	float below = hud_chevron(q, vec2(0.0, -1.7), arm_down, 1.2, 0.21);
+	float accent = hud_chevron(q, vec2(0.0, -2.8), arm_down, 1.2, 0.21);
+	float plain = min(above, below);
+	float plain_border = abs(plain + 0.04) - 0.04;
+	float accent_border = abs(accent + 0.04) - 0.04;
+
+	vec4 acc = vec4(0.0);
+	float halo = hud_symbol_halo_deg / hud_control_scale;
+	hud_ink(acc, hud_symbol_halo_color, hud_fill(min(plain_border, accent_border) - halo, aa));
+	hud_ink(acc, vec4(hud_control_color.rgb, hud_control_color.a * hud_control_fill), hud_fill(plain, aa));
+	hud_ink(acc, vec4(hud_control_accent_color.rgb, hud_control_accent_color.a * hud_control_fill), hud_fill(accent, aa));
+	hud_ink(acc, hud_control_color, hud_fill(plain_border, aa));
+	hud_ink(acc, hud_control_accent_color, hud_fill(accent_border, aa));
+	return hud_compose(color, acc, brightness);
+}
+
+
+// Distance to the nearest corner of hud_triangle(p, r).
+float hud_triangle_corner(vec2 p, float r) {
+	return min(length(vec2(abs(p.x) - r, p.y + r * 0.57735)), length(p - vec2(0.0, r * 1.1547)));
+}
+
+
+// Every contact: three bars along the triangle's sides, short of its corners. Hostile adds
+// the corners of a smaller triangle inside and two strokes across each corner outside;
+// the selected one a fine winged V in the middle.
+vec3 hud_contacts(vec3 color, vec3 d, float brightness, float aa) {
+	for (int i = 0; i < HUD_CONTACT_MAX; i++) {
+		vec4 at = hud_contact_at[i];
+		vec4 state = hud_contact_state[i];
+		if (at.w <= 0.0 || dot(d, at.xyz) < state.z) {
+			continue;
+		}
+		vec3 c = at.xyz;
+		vec3 up = vec3(0.0, 1.0, 0.0) - c * c.y;
+		up = dot(up, up) < 1e-6 ? vec3(0.0, 0.0, 1.0) - c * c.z : up;
+		up = normalize(up);
+		vec3 right = cross(c, up);
+		// Triangle units (1 = half a side), y up; `t` is the same turned point-up.
+		vec2 m = degrees(atan(vec2(dot(d, right), dot(d, up)) / dot(d, c))) / at.w;
+		vec2 t = vec2(m.x, -m.y);
+		float unit_aa = aa / at.w;
+
+		// The text block: four taps across the pixel, as the atlas is finer than the screen.
+		bool box = state.w > 0.5;
+		vec2 label_at = box ? vec2(at.w + 0.6, at.w) : vec2(at.w * 0.62 + 0.5, 1.0 - at.w * 0.3);
+		vec2 label_uv = (m * at.w - label_at) / HUD_CONTACT_LABEL_DEG;
+		label_uv.y = -label_uv.y;
+		if (label_uv.x > 0.0 && label_uv.x < 1.0 && label_uv.y > 0.0 && label_uv.y < 1.0) {
+			vec2 slot = vec2(mod(float(i), HUD_CONTACT_SLOTS.x), floor(float(i) / HUD_CONTACT_SLOTS.x));
+			vec2 uv = (slot + label_uv) / HUD_CONTACT_SLOTS;
+			vec2 spread = aa / 0.7 / HUD_CONTACT_LABEL_DEG / HUD_CONTACT_SLOTS * 0.25;
+			vec4 label = texture(hud_contact_labels, uv + spread) + texture(hud_contact_labels, uv - spread)
+					+ texture(hud_contact_labels, uv + vec2(spread.x, -spread.y))
+					+ texture(hud_contact_labels, uv + vec2(-spread.x, spread.y));
+			label *= 0.25;
+			color = mix(color, label.rgb * brightness, label.a);
+		}
+
+		// Strokes keep a least width however small the triangle is drawn.
+		float thin = 0.05 / at.w;
+
+		float bars;
+		float hostile = 1e9;
+		if (box) {
+			// A big contact: a bracket at each corner of a square, laid out in degrees.
+			vec2 pd = abs(m) * at.w;
+			float len = clamp(at.w * 0.3, 1.5, 5.0);
+			float edge = max(pd.x, pd.y) - at.w;
+			float from_corner = max(at.w - pd.x, at.w - pd.y);
+			bars = max(abs(edge + 0.3) - 0.22, from_corner - len) / at.w;
+			if (state.x > 0.5) {
+				// Smaller brackets inside, two strokes outside the middle of each side.
+				hostile = max(abs(edge + 1.3) - 0.07, from_corner - 1.3 - len * 0.55);
+				vec2 out_d = pd - at.w;
+				vec2 lines = min(abs(out_d - 0.7), abs(out_d - 1.25)) - 0.07;
+				vec2 caps = max(lines, pd.yx - len * 0.6);
+				hostile = min(hostile, min(caps.x, caps.y)) / at.w;
+			}
+		} else {
+			float tri = hud_triangle(t, 1.0);
+			bars = max(abs(tri + 0.08) - max(0.05, thin), 0.5 - hud_triangle_corner(t, 1.0));
+			if (state.x > 0.5) {
+				float inner = hud_triangle(t, 0.6);
+				hostile = max(abs(inner + 0.03) - max(0.024, thin * 0.6), hud_triangle_corner(t, 0.6) - 0.36);
+				// Across each corner: along its bisector, mirrored in x.
+				vec2 q = vec2(abs(t.x), t.y);
+				vec2 along = vec2(dot(q, vec2(0.0, 1.0)), dot(q, vec2(0.866, -0.5)));
+				vec2 across = abs(vec2(q.x, dot(q, vec2(0.5, 0.866))));
+				vec2 lines = min(abs(along - 1.36), abs(along - 1.52)) - max(0.028, thin * 0.6);
+				vec2 caps = max(lines, across - 0.3);
+				hostile = min(hostile, min(caps.x, caps.y));
+			}
+		}
+		// The bars are a faint fill inside a fine border, so what's behind shows through.
+		float border_width = box ? 0.045 / at.w : max(0.012, thin * 0.4);
+		float border = abs(bars + border_width) - border_width;
+		float strokes = min(border, hostile);
+		float selected = 1e9;
+		if (state.y > 0.5) {
+			// On a big box the V keeps the size it has on a 3° triangle.
+			float size = box ? min(1.0, 3.0 / at.w) : 1.0;
+			vec2 q = vec2(abs(m.x), m.y) / size;
+			selected = min(hud_segment(q, vec2(0.62, 0.1), vec2(0.3, 0.1)),
+					hud_segment(q, vec2(0.3, 0.1), vec2(0.0, -0.42)));
+			selected = min(selected, hud_segment(q, vec2(0.15, 0.1), vec2(0.0, -0.16)));
+			selected = selected * size - max(0.016 * size, thin * 0.5);
+			strokes = min(strokes, selected);
+		}
+
+		vec4 acc = vec4(0.0);
+		hud_ink(acc, hud_symbol_halo_color, hud_fill(strokes - hud_symbol_halo_deg / at.w, unit_aa));
+		hud_ink(acc, vec4(hud_contact_color.rgb, hud_contact_color.a * hud_contact_fill), hud_fill(bars, unit_aa));
+		hud_ink(acc, hud_contact_color, hud_fill(border, unit_aa));
+		hud_ink(acc, hud_contact_hostile_color, hud_fill(hostile, unit_aa));
+		hud_ink(acc, hud_contact_selected_color, hud_fill(selected, unit_aa));
+		color = hud_compose(color, acc, brightness);
+	}
+	return color;
 }
 
 
 vec3 hud_layers(vec3 color, vec3 local_dir, float brightness) {
+	// Degrees across a pixel, for the edges of the symbols drawn here.
+	float aa = degrees(length(fwidth(local_dir))) * 0.7;
 	color = hud_over(color, hud_sample(hud_static_texture, mat3(1.0), local_dir), brightness);
 	color = hud_over(color, hud_sample(hud_heading_texture, hud_heading_frame, local_dir), brightness);
 	color = hud_ladder(color, local_dir, brightness);
 	color = hud_over(color, hud_sample(hud_suit_texture, hud_suit_frame, local_dir), brightness);
-	color = hud_fpm(color, local_dir, brightness);
+	color = hud_control(color, local_dir, brightness, aa);
+	color = hud_fpm(color, local_dir, brightness, aa);
+	color = hud_contacts(color, local_dir, brightness, aa);
 	return color;
 }

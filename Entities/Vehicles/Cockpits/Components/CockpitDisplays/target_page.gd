@@ -5,6 +5,10 @@ extends MfdPage
 ## target selected.
 
 
+func _init() -> void:
+	refresh_hz = 2.0
+
+
 func draw_page() -> void:
 	label(Vector2(20, 34), "TGT", INFO, 22)
 	var r := Rect2(20, 64, size.x - 40, size.y - 100)

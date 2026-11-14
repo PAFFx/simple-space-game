@@ -4,6 +4,8 @@ extends Node3D
 ## Navigation buoy with a blinking beacon. Registers itself as a HUD contact.
 
 @export var label: String = "BUOY"
+## Shown as a hostile contact on the HUD.
+@export var hostile: bool = false
 @export var blink_period: float = 1.5
 @export var beacon_color := Color(1.0, 0.35, 0.2)
 
@@ -15,6 +17,7 @@ func _ready() -> void:
 	add_to_group(&"hud_contacts")
 	set_meta(&"hud_label", label)
 	set_meta(&"hud_radius", 4.0)
+	set_meta(&"hud_hostile", hostile)
 	_light.light_color = beacon_color
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

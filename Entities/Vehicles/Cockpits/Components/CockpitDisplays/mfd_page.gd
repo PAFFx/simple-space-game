@@ -15,6 +15,10 @@ const INFO := Color(0.4, 0.82, 1.0)
 const CAUTION := Color(1.0, 0.75, 0.2)
 const WARNING := Color(1.0, 0.28, 0.22)
 
+## Redraws per second. The page is drawn again only this often (CockpitDisplays
+## schedules it), not every rendered frame: like a real display's own refresh rate.
+var refresh_hz: float = 20.0
+
 var fc: FlightComputer
 var vehicle: VehicleBase
 var font: Font
@@ -27,10 +31,6 @@ func setup(p_vehicle: VehicleBase) -> void:
 
 func _ready() -> void:
 	font = ThemeDB.fallback_font
-
-
-func _process(_delta: float) -> void:
-	queue_redraw()
 
 
 func _draw() -> void:

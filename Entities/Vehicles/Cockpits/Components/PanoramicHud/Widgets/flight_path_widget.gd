@@ -5,7 +5,9 @@ extends HudWidget
 ## slanted stripes either side of the flight path, reaching out to the pitch ladder, the
 ## stripes closer together toward the middle. The stripes stay put; a highlight runs
 ## across them, outward on the way you're moving (prograde, small circle) and inward on
-## the way you're coming from (retrograde, small X). Each sits inside a wide reticle of
+## the way you're coming from. The marker in the middle tells them apart: prograde a filled
+## triangle pointing down with a solid core and wings, retrograde its empty counterpart
+## pointing up, only the three corners of the rim and a hollow core (drawn by the screen shader, so it stays sharp). Each sits inside a wide reticle of
 ## radial dashes on the diagonals, so it's easy to find anywhere around you.
 ##
 ## Below show_speed the markers grow out from the middle; below hide_speed they shrink
@@ -20,7 +22,8 @@ extends HudWidget
 @export var hide_speed: float = 1.0   ## m/s
 ## Seconds to grow in or shrink away.
 @export var reveal_time: float = 0.45
-@export var marker_deg: float = 0.6
+## Half the side of the marker triangle, deg.
+@export var marker_deg: float = 1.0
 ## Each bar runs from bar_from_deg to bar_to_deg either side of the marker.
 @export var bar_from_deg: float = 3.0
 @export var bar_to_deg: float = 27.0
@@ -74,6 +77,7 @@ func setup_layers() -> void:
 	hud.set_hud_parameter(&"hud_fpm_retro_color", PanoramicHud.dimmed(hud.primary_color))
 	hud.set_hud_parameter(&"hud_fpm_accent_color", hud.suit_accent_color)
 	hud.set_hud_parameter(&"hud_fpm_halo_color", hud.halo_color)
+	hud.set_hud_parameter(&"hud_fpm_marker", marker_deg)
 	_push_shape()
 
 
@@ -152,12 +156,12 @@ static func _layer_frame(dir: Vector3) -> Basis:
 	return Basis(-c, up, (-c).cross(up)).transposed()
 
 
-## Both markers as coverage for the fpm layer (R stripes, G halo, B the rest × its fade),
-## off the layer's back seam: prograde at -X, retrograde at +X.
+## Both markers' bars and reticles as coverage for the fpm layer (R stripes, G halo, B the
+## reticle × its fade), off the layer's back seam: prograde at -X, retrograde at +X.
 func _draw_markers(w: HudWidget) -> void:
 	var strokes: Array = []  # [canvas points, coverage colour]
-	_marker_strokes(w.patch(Vector3.LEFT, Vector3.UP), true, strokes)
-	_marker_strokes(w.patch(Vector3.RIGHT, Vector3.UP), false, strokes)
+	_marker_strokes(w.patch(Vector3.LEFT, Vector3.UP), strokes)
+	_marker_strokes(w.patch(Vector3.RIGHT, Vector3.UP), strokes)
 	if hud.halo_color.a > 0.0:
 		for s: Array in strokes:
 			w.draw_polyline(s[0], Color(0, 1, 0), 2.0 + hud.halo_width, true)
@@ -165,21 +169,8 @@ func _draw_markers(w: HudWidget) -> void:
 		w.draw_polyline(s[0], s[1], 2.0, true)
 
 
-func _marker_strokes(p: Patch, prograde: bool, out: Array) -> void:
+func _marker_strokes(p: Patch, out: Array) -> void:
 	var grow := _drawn.x
-	var mark := Color(0, 0, 1)
-	var r := marker_deg
-	if prograde:
-		var ring := PackedVector2Array()
-		for k in 21:
-			var a := TAU * k / 20.0
-			ring.append(Vector2(cos(a), sin(a)) * r)
-		out.append([_points(p, ring), mark])
-	else:
-		var k := r * 0.75
-		out.append([_points(p, _line(Vector2(-k, -k), Vector2(k, k))), mark])
-		out.append([_points(p, _line(Vector2(-k, k), Vector2(k, -k))), mark])
-
 	_reticle(p, grow, out)
 
 	var span := _drawn.y - bar_from_deg

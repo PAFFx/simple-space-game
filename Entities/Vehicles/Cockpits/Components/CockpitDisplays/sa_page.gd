@@ -14,6 +14,11 @@ const RANGES := [500.0, 1000.0, 2000.0, 5000.0, 10000.0, 20000.0, 50000.0, 10000
 var _range := 5000.0
 
 
+func _init() -> void:
+	# The compass rose turns with the suit: fast enough to follow a turn smoothly.
+	refresh_hz = 30.0
+
+
 func draw_page() -> void:
 	var hud_basis := fc.get_attitude_basis()
 	var body_pos := vehicle.get_global_transform_interpolated().origin
