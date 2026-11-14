@@ -65,7 +65,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Fraction of torque authority the FCS may request.
 @export_range(0.0, 1.0) var torque_fraction: float = 0.85
 ## Torque authority auto-rotation (and attitude hold) may use.
-@export_range(0.0, 1.0) var auto_rotate_torque_fraction: float = 0.4
+@export_range(0.0, 1.0) var auto_rotate_torque_fraction: float = 0.85
 ## Allocator torque priority while auto-rotating/holding. Low = never spill force to
 ## rotate faster (big turning moments otherwise borrow the off-centre mains).
 @export var auto_rotate_torque_priority: float = 0.5

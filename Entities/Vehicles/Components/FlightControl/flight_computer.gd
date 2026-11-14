@@ -282,6 +282,8 @@ func _build_state(delta: float) -> void:
 		s.thruster_planes.append_array(t.get_limit_planes_in(body))
 		s.thruster_max.append(t.get_available_thrust() if has_propellant else 0.0)
 	s.compute_authority()
+	if _capability_map != null:
+		s.max_torque = _capability_map.clean_torque.min(s.max_torque_ideal)
 	if ambac != null and ambac.enabled:
 		s.ambac_torque = ambac.get_capacity()
 	# The cockpit must line up with the hull opening while the hatch is unsealed.

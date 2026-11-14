@@ -40,6 +40,10 @@ extends ThrustAllocator
 ## never removes.
 @export_range(0.0, 1.0) var warm_start_decay: float = 0.85
 
+## Weight each axis's torque error by its inertia (heaviest / axis, up to the limit).
+@export var inertia_weighting: bool = true
+@export var max_inertia_weight: float = 1.5
+
 var _u := PackedVector3Array()
 
 
@@ -62,11 +66,19 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 
 	var wf2 := 1.0 / (total * total)
 	var tp := wrench.torque_priority if wrench.torque_priority >= 0.0 else torque_priority
-	var wt2 := wf2 * tp * tp / (reference_arm * reference_arm)
+	# Torque errors count by the turning they cause: an axis with little inertia (yaw on
+	# a tall suit) spins up from an error the heavy axes wouldn't notice.
+	var wt2 := Vector3.ONE * (wf2 * tp * tp / (reference_arm * reference_arm))
+	var inertia := Vector3(state.inertia_local.x.x, state.inertia_local.y.y, state.inertia_local.z.z)
+	var heaviest := maxf(inertia.x, maxf(inertia.y, inertia.z))
+	if inertia_weighting and heaviest > 0.0:
+		for k in 3:
+			wt2[k] *= minf(heaviest / maxf(inertia[k], 1e-6), max_inertia_weight) ** 2
+	var wt2_max := maxf(wt2.x, maxf(wt2.y, wt2.z))
 	var lam := fuel_weight * wf2
 	var lipschitz := 2.0 * lam * t_max * t_max
 	for i in n:
-		lipschitz += 2.0 * t[i] * t[i] * (wf2 + wt2 * r[i].length_squared())
+		lipschitz += 2.0 * t[i] * t[i] * (wf2 + wt2_max * r[i].length_squared())
 	var step := 1.0 / lipschitz
 
 	var u := _u
@@ -90,7 +102,7 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 ## FISTA on u (in place) toward a target force/torque, with a propellant price per
 ## newton of thrust.
 func _solve(state: FlightState, u: PackedVector3Array, force_target: Vector3, torque_target: Vector3,
-		count: int, step: float, wf2: float, wt2: float, lam: float, price: float) -> void:
+		count: int, step: float, wf2: float, wt2: Vector3, lam: float, price: float) -> void:
 	var n := u.size()
 	var r := state.thruster_positions
 	var t := state.thruster_max
@@ -104,7 +116,7 @@ func _solve(state: FlightState, u: PackedVector3Array, force_target: Vector3, to
 			force += f
 			torque += r[i].cross(f)
 		var g_force := (force - force_target) * (2.0 * wf2)
-		var g_torque := (torque - torque_target) * (2.0 * wt2)
+		var g_torque := (torque - torque_target) * wt2 * 2.0
 
 		var next_momentum := (1.0 + sqrt(1.0 + 4.0 * momentum * momentum)) * 0.5
 		var beta := (momentum - 1.0) / next_momentum

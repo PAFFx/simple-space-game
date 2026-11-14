@@ -233,6 +233,15 @@ single tick. Verified on boosted dodge zigzags: cockpit motion in the world ≤ 
   (`ControlLaw.scale_to_box`), not clamped per axis, which used to turn a yaw stop into roll.
   Full brake + 1 s yaw: body 49° → 22° off target, back in hand 2.2 s → 0.6 s after release.
   Measure with `Tools/Flight/run_fbw_probe.sh`.
+- **Clean torque authority.** The geometric torque limit (`max_torque_ideal`) counts thrust that
+  only turns the suit by also shoving it: on the ν, roll is clean up to 42% of it, yaw 24%, pitch
+  33%, and asking for more spilled up to 3.5 g. The capability map now measures the clean torque
+  per axis through the allocator (`ForceCapabilityMap.clean_torque`) and the FBW plans turns,
+  stops and swings with that (`FlightState.max_torque`), so `auto_rotate_torque_fraction` is up
+  from 0.4 to 0.85. The allocator also weights torque errors by inertia (`inertia_weighting`,
+  up to `max_inertia_weight` 1.5; more starves its convergence), since a small error spins the
+  light yaw axis. Cruise + 1 s roll: 3.4 g → 0.5 g sideways, body 27° → 12° off target.
+  `Tools/Flight/torque_probe.gd` prints the authority.
 - **Committed attitude.** The solver remembers which side it turned to and charges `commit_weight` for
   turning back through to the other side until the demand swings `commit_release_deg` (45°) away.
   Its shortfall term is the share of the demand left unmet (0..1), so a full-boost demand can't
@@ -512,8 +521,8 @@ limit is raised (`physics/jolt_physics_3d/limits/max_linear_velocity`).
 
 ## Known limitations
 
-- `FlightState.max_torque` is a per-thruster best case, not a net-force-free guarantee. That's why
-  the FBW only requests `torque_fraction` of it.
+- `FlightState.max_torque` is the clean torque per axis with no force demand; turning on two axes
+  at once, or while pushing hard, can still ask for more than the thrusters give together.
 - No minimum impulse bit / thruster deadband modelling yet.
 - The reference frame's velocity is a finite difference on its position (low-passed), so frames
   moved in `_process` add a little noise.

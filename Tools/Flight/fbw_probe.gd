@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## FBW response probe (RX-93, scripted input):
-##   godot-double --headless --path . -s Tools/Flight/fbw_probe.gd -- <scenario> [series]
+##   godot-double --headless --path . -s Tools/Flight/fbw_probe.gd -- <scenario> [series] [law_property=value ...]
 ## Tools/Flight/run_fbw_probe.sh runs every scenario.
 
 class Scripted extends PilotInputSource:
@@ -43,14 +43,21 @@ class Scripted extends PilotInputSource:
 					c.translation = Vector3(1 if t < 2.0 else -1, 0, 0)
 					c.boost = true
 					c.boost_full = scenario == "reversal_full"
-			"brake_yaw", "brake_full_yaw", "brake_full_pitch", "brake_full_only":
+			"full_fwd_roll", "boost_fwd_roll", "cruise_fwd_roll":
+				if on:
+					c.translation = Vector3(0, 0, -1)
+					c.boost = scenario != "cruise_fwd_roll"
+					c.boost_full = scenario == "full_fwd_roll"
+				if t >= 2.5 and t < 3.5: c.rotation = Vector3(0, 0, 1)
+			"brake_yaw", "brake_roll", "brake_full_yaw", "brake_full_pitch", "brake_full_roll", "brake_full_only":
 				if on and t < 3.5:
 					c.translation = Vector3(0, 0, -1); c.boost = true; c.boost_full = true
 				if t >= 3.5:
 					c.brake = true
-					c.brake_full = scenario != "brake_yaw"
+					c.brake_full = scenario.begins_with("brake_full")
 				if t >= 4.0 and t < 5.0 and scenario != "brake_full_only":
-					c.rotation = Vector3(1, 0, 0) if scenario == "brake_full_pitch" else Vector3(0, 1, 0)
+					c.rotation = Vector3(1, 0, 0) if scenario == "brake_full_pitch" \
+							else (Vector3(0, 0, 1) if scenario.ends_with("roll") else Vector3(0, 1, 0))
 		return c
 
 var fc: FlightComputer
@@ -76,6 +83,10 @@ var a_hist: Array = []
 var brake_dev := 0.0
 var brake_ferr := 0.0
 var stop_t := -1.0
+var overrides := PackedStringArray()
+var applied := false
+var turn_dev := 0.0
+var turn_settle := 3.5
 
 func _initialize() -> void:
 	process_frame.connect(_start, CONNECT_ONE_SHOT)
@@ -87,7 +98,8 @@ func _start() -> void:
 	fc = suit.get_node("FlightComputer")
 	inp = Scripted.new()
 	inp.scenario = args[0]
-	series = args.size() > 1
+	series = "series" in args
+	overrides = args
 	if args[0].begins_with("brake"): duration = 12.0
 	fc.add_child(inp)
 	fc.input_source = inp
@@ -97,6 +109,11 @@ func _start() -> void:
 
 func _tick() -> void:
 	if fc.body == null: return
+	if not applied:
+		applied = true
+		for o in overrides:
+			if "=" in o:  # control law property override, e.g. rate_gain=9
+				fc.control_law.set(o.get_slice("=", 0), float(o.get_slice("=", 1)))
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	inp.t += dt
 	var t := inp.t
@@ -124,6 +141,8 @@ func _tick() -> void:
 			a_hist.append([t, along])
 			max_perp_g = maxf(max_perp_g, perp)
 			if t > 1.0: max_fpm = maxf(max_fpm, fpm)
+	if t >= 2.5: turn_dev = maxf(turn_dev, (law._deviation(body_q) as Vector3).length() * (180.0 / PI))
+	if t >= 3.5 and (law._deviation(body_q) as Vector3).length() > deg_to_rad(15.0): turn_settle = t
 	max_rate = maxf(max_rate, w)
 	max_lag = maxf(max_lag, lag)
 	if inp.scenario.begins_with("brake"):
@@ -183,6 +202,8 @@ func _report() -> void:
 					if r90 < 0.0 and e[1] >= 0.9 * a_final: r90 = e[0] - 2.0
 			s += "  reversal t50=%.2fs t90=%.2fs" % [r50, r90]
 	s += "  max ω=%.0f°/s max lag=%.1f°" % [max_rate, max_lag]
+	if inp.scenario.ends_with("_yaw") or inp.scenario.ends_with("_pitch") or inp.scenario.ends_with("_roll"):
+		s += "  turn: max dev %.1f°, dev>15° until +%.2fs after release" % [turn_dev, turn_settle - 3.5]
 	if inp.scenario.begins_with("brake"):
 		s = "%-16s brake: max dev %.1f°, dev>15° until +%.2fs after release, max force err %.1f°, stopped (<5 m/s) %.2fs after braking, |v| end %.1f" % [
 			inp.scenario, brake_dev, maxf(settle_t - 5.0, 0.0), brake_ferr, stop_t - 3.5 if stop_t > 0.0 else -1.0, body.linear_velocity.length()]

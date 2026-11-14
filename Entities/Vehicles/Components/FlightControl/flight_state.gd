@@ -31,7 +31,11 @@ var thruster_max := PackedFloat32Array()         ## Available thrust, N (0 = una
 ## Rough authority estimates derived from the geometry above.
 var max_force_pos := Vector3.ZERO  ## Max force along +x/+y/+z (positive numbers)
 var max_force_neg := Vector3.ZERO  ## Max force along -x/-y/-z (positive numbers)
-var max_torque := Vector3.ZERO     ## Max torque per axis (symmetric, conservative)
+## Max torque per axis: the clean authority measured through the allocator once the
+## capability map exists, else the geometric best case below.
+var max_torque := Vector3.ZERO
+## Geometric best case per axis (every thruster aimed for torque alone; it spills force).
+var max_torque_ideal := Vector3.ZERO
 ## Extra torque the limbs (AMBAC) can add right now, per axis. Transient: it fades as
 ## the limbs run out of travel.
 var ambac_torque := Vector3.ZERO
@@ -88,6 +92,7 @@ func compute_authority() -> void:
 				torque_neg[k] += t * arm * _best_alignment(d, -l, cone)
 	for k in 3:
 		max_torque[k] = minf(torque_pos[k], torque_neg[k])
+	max_torque_ideal = max_torque
 
 
 static func _best_alignment(axis: Vector3, target: Vector3, cone: float) -> float:

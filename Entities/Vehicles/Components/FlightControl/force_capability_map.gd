@@ -20,6 +20,9 @@ const FLOOR := 0.02
 
 var dirs := PackedVector3Array()
 var values := PackedFloat32Array()
+## Clean torque per body axis, N·m: what the thrusters can turn with before they start
+## borrowing off-centre thrust, which shoves the suit sideways. Measured like the force.
+var clean_torque := Vector3.ZERO
 
 
 const COUNT := 48
@@ -76,6 +79,7 @@ func step(count: int) -> bool:
 		values.append(lo)
 	_next = end
 	if _next >= COUNT:
+		clean_torque = _measure_torque(_state, _allocator)
 		_state = null
 		_allocator = null
 		return true
@@ -101,6 +105,42 @@ func lookup(dir: Vector3) -> float:
 		inv_sum += w / maxf(values[i], floor_value)
 		weight += w
 	return weight / inv_sum if inv_sum > 0.0 else 0.0
+
+
+## Largest torque about each axis (the weaker of its two directions) the allocator
+## delivers with little force or off-axis torque on the side.
+static func _measure_torque(state: FlightState, allocator: ThrustAllocator) -> Vector3:
+	var out := Vector3.ZERO
+	var arm := 4.0
+	if allocator is ConeProjectedAllocator:
+		arm = (allocator as ConeProjectedAllocator).reference_arm
+	for k in 3:
+		var clean := INF
+		for sign: float in [1.0, -1.0]:
+			var axis := Vector3.ZERO
+			axis[k] = sign
+			var probe := _probe(allocator)
+			var lo := 0.0
+			var hi := state.max_torque_ideal[k]
+			for _s in STEPS:
+				var mid := (lo + hi) * 0.5
+				var u := probe.allocate(state, Wrench.new(Vector3.ZERO, axis * mid))
+				u = probe.allocate(state, Wrench.new(Vector3.ZERO, axis * mid))
+				var force := Vector3.ZERO
+				var torque := Vector3.ZERO
+				for i in u.size():
+					var f := u[i] * state.thruster_max[i]
+					force += f
+					torque += state.thruster_positions[i].cross(f)
+				var along := torque.dot(axis)
+				if along >= mid * (1.0 - TOLERANCE) and (torque - axis * along).length() <= mid * TOLERANCE \
+						and force.length() * arm <= mid * TOLERANCE:
+					lo = mid
+				else:
+					hi = mid
+			clean = minf(clean, lo)
+		out[k] = clean
+	return out
 
 
 ## A copy of the allocator for probing: warm-started across the bisection steps (their
