@@ -30,8 +30,8 @@ extends KeyboardPilotInput
 
 @export_group("Buttons")
 @export var full_boost_button: int = 4   ## Right stick, hold
-@export var brake_button: int = 21       ## Left stick, hold
-@export var full_brake_button: int = 20  ## Left stick, hold
+@export var brake_button: int = 21       ## Left stick, hold; double-tap and hold = hard brake
+@export var coupled_button: int = 20     ## Left stick, toggles
 @export var roll_button: int = 4         ## Left stick, hold: the yaw control rolls
 @export var precision_button: int = 3    ## Left stick, toggles
 
@@ -58,6 +58,10 @@ var _history := {}                 ## device * 16 + axis → last raw samples
 var _stick_translation := Vector3.ZERO
 var _stick_rotation := Vector3.ZERO
 var _precision_held := false
+var _coupled_held := false
+var _brake_held := false
+var _brake_pressed_at := -INF      ## Time of the brake button's last press, s
+var _brake_hard := false           ## Held since a double tap
 
 
 func _ready() -> void:
@@ -104,8 +108,18 @@ func poll_command() -> PilotCommand:
 	cmd.translation = (cmd.translation + _stick_translation).clamp(-Vector3.ONE, Vector3.ONE)
 	cmd.rotation = (cmd.rotation + _stick_rotation).clamp(-Vector3.ONE, Vector3.ONE)
 	cmd.boost_full = cmd.boost_full or _button(_right, full_boost_button)
-	cmd.brake_full = cmd.brake_full or _button(_left, full_brake_button)
-	cmd.brake = cmd.brake or cmd.brake_full or _button(_left, brake_button)
+	var brake_held := _button(_left, brake_button)
+	if brake_held and not _brake_held:
+		var now := Time.get_ticks_msec() / 1000.0
+		_brake_hard = now - _brake_pressed_at <= double_tap_time
+		_brake_pressed_at = now
+	_brake_hard = _brake_hard and brake_held
+	_brake_held = brake_held
+	cmd.brake_full = cmd.brake_full or _brake_hard
+	cmd.brake = cmd.brake or cmd.brake_full or brake_held
+	var coupled_held := _button(_left, coupled_button)
+	cmd.toggle_coupled = coupled_held and not _coupled_held
+	_coupled_held = coupled_held
 	var precision_held := _button(_left, precision_button)
 	cmd.toggle_precision = precision_held and not _precision_held
 	_precision_held = precision_held

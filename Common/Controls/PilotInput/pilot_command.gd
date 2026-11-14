@@ -31,3 +31,4 @@ var brake_full := false
 var toggle_rotation_mode := false
 var toggle_precision := false
 var toggle_horizon_lock := false
+var toggle_coupled := false

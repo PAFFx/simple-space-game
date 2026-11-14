@@ -124,6 +124,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var precision_speed: float = 20.0
 @export var precision_rate_multiplier: float = 0.5
 @export var precision: bool = false
+## Coupled: the brake is always on, so the suit stops on the axes the stick isn't
+## holding instead of coasting. A hard brake still has to be asked for.
+@export var coupled: bool = false
 
 @export_group("Horizon lock")
 @export var horizon_lock: bool = true
@@ -239,6 +242,8 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_manual_roll = false
 	if command.toggle_precision:
 		precision = not precision
+	if command.toggle_coupled:
+		coupled = not coupled
 	if command.toggle_rotation_mode:
 		rotation_mode = ((rotation_mode + 1) % RotationMode.size()) as RotationMode
 		_pilot = body_q * _offset.inverse()
@@ -256,7 +261,8 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	_last_boost = command.boost
 	_last_boost_full = command.boost_full
 	command.brake = command.brake or command.brake_full
-	_last_brake = command.brake
+	_last_brake = command.brake   # the HUD's brake cue shows the pilot's own braking
+	command.brake = command.brake or coupled
 	_last_brake_full = command.brake_full
 	_stick = _horizon_stick(command)
 	_update_locks(state, command)
@@ -297,6 +303,8 @@ func get_mode_labels() -> PackedStringArray:
 		labels.append("ROT RATE")
 	if not horizon_lock:
 		labels.append("HORIZON FREE")
+	if coupled:
+		labels.append("COUPLED")
 	if _last_boost_full:
 		labels.append("BOOST FULL")
 	elif _last_boost:

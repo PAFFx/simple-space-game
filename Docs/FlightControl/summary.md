@@ -118,6 +118,7 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
 |------|-------|-----------|-------|---------------|
 | Normal | — | `cruise_accel_g` 0.8 G | no limit | ≤ `cruise_max_offset_deg` 20° |
 | Precision | C (toggle) | `precision_accel_g` 0.15 G | `precision_speed` 20 m/s | off; turn rates × 0.5 |
+| Coupled | Left stick button 20 (toggle) | as the mode above | as the mode above | as the mode above; the brake is always on, so released axes stop instead of coasting (HUD: COUPLED) |
 | Boost | Shift | 4 G | no limit | ≤ `boost_max_offset_deg` 30° |
 | Full boost | Shift double-tap + hold | 4 G | no limit | solver's `max_offset_deg` 60° |
 
@@ -477,7 +478,8 @@ names don't). With either stick missing it is plain keyboard input.
 | Up / down | Both sticks' twist (axis 2), their average, clockwise = up |
 | Pitch | Twist difference (right clockwise, left counter-clockwise = nose up) |
 | Full boost (hold) | Right button 4 |
-| Brake / hard brake (hold) | Left button 21 / 20 |
+| Brake (hold) / hard brake (double-tap, hold) | Left button 21 |
+| Coupled on / off | Left button 20 |
 | Precision on / off | Left button 3 |
 | Look around (cockpit), orbit (external view) | Left mini-stick (axes 3, 4) |
 | Recentre the look / orbit | Left button 19, tap |
