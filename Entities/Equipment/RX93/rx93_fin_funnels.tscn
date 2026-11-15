@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" path="res://Entities/Equipment/Components/ms_equipment.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://Entities/Equipment/RX93/Arts/nu_fin_funnels.glb" id="2_model"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_outline.gd" id="3_outline"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/hud_silhouette.gd" id="4_sil"]
 
 [node name="FinFunnels" type="Node3D"]
 script = ExtResource("1_script")
@@ -9,3 +11,13 @@ equipment_name = "FIN FUNNELS"
 mass = 6000.0
 
 [node name="Model" parent="." instance=ExtResource("2_model")]
+
+[node name="SensorOutline" type="Node3D" parent="."]
+script = ExtResource("3_outline")
+per_mesh = true
+
+[node name="HudSilhouette" type="Node3D" parent="."]
+script = ExtResource("4_sil")
+from_meshes = true
+draw_outline = false
+label = "FIN FUNNELS"

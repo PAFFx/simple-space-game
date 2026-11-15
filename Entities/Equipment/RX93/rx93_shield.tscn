@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://Entities/Equipment/Shield/shield.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://Entities/Equipment/RX93/Arts/nu_shield.glb" id="2_model"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/hud_silhouette.gd" id="3_sil"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_outline.gd" id="4_outline"]
 
 [node name="Shield" type="Node3D"]
 script = ExtResource("1_script")
@@ -13,7 +14,12 @@ active_pose = &"shield_guard"
 
 [node name="Model" parent="." instance=ExtResource("2_model")]
 
+[node name="SensorOutline" type="Node3D" parent="."]
+script = ExtResource("4_outline")
+sensor_layer = 512
+
 [node name="HudSilhouette" type="Node3D" parent="."]
 script = ExtResource("3_sil")
 from_meshes = true
+draw_outline = false
 label = "SHIELD"

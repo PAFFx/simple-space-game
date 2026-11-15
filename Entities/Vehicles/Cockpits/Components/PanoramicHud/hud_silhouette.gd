@@ -15,6 +15,9 @@ const GROUP := &"hud_silhouettes"
 ## Corners turning less than this are dropped from a built outline, deg.
 @export var min_corner_deg: float = 4.0
 @export var closed: bool = true
+## Off = only the label is drawn (the outline itself comes from a SensorOutline, in the
+## sensor image); the outline points then just place the label.
+@export var draw_outline: bool = true
 @export var label: String = ""
 
 

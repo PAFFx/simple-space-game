@@ -37,10 +37,11 @@ func draw_widget() -> void:
 			canvas.append(hud.world_dir_to_canvas(pts[-1] - origin))
 		elif not canvas.is_empty():
 			canvas.append(canvas[0])
-		seam_safe_polyline(canvas, rim_color, rim_width)
+		if sil.draw_outline:
+			seam_safe_polyline(canvas, rim_color, rim_width)
 		# Brackets: the stretch around each corner (an open outline's two ends have none).
 		for i in pts.size():
-			if not sil.closed and (i == 0 or i == pts.size() - 1):
+			if not sil.draw_outline or (not sil.closed and (i == 0 or i == pts.size() - 1)):
 				continue
 			var at := i * subdivisions
 			var run := PackedVector2Array()
