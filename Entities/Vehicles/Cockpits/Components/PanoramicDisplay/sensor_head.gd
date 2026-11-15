@@ -108,7 +108,8 @@ func _create_camera() -> void:
 	_camera.near = 0.5
 	# Placed every frame from interpolated transforms; never interpolate it again.
 	_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
-	_camera.far = 2000.0
+	# Far enough to see a beam fight: targets and bolts out to a few kilometres.
+	_camera.far = 20000.0
 	_viewport.add_child(_camera)
 
 

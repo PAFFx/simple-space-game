@@ -221,6 +221,15 @@ const POSE_SHIELD := {
 	"forearm.L": [[Vector3.RIGHT, 65.0], [Vector3.UP, -80.0]],
 	"hand.L": [],
 }
+# Left arm raised forward: the shield's tip, where its missiles launch from, points ahead.
+const POSE_SHIELD_FIRE := {
+	"upper_arm.L": [[Vector3.RIGHT, 80.0], [Vector3.BACK, -6.0]],
+	"forearm.L": [[Vector3.RIGHT, 10.0]],
+	"hand.L": [],
+}
+# The twin head vulcans: between the muzzles, and each muzzle's offset to the side.
+const VULCAN_POSITION := Vector3(0.0, 20.33, -1.15)
+const VULCAN_SPACING := 0.57
 const IDLE_BONES := ["upper_arm.R", "upper_arm.L", "forearm.R", "forearm.L", "hand.R", "hand.L",
 		"thigh.R", "thigh.L", "shin.R", "shin.L", "spine", "head"]
 const IDLE_LENGTH := 8.0
@@ -297,6 +306,7 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 	_build_limb_followers(root)
 	_build_loadout(root)
 	_build_animation(root, library)
+	_build_fire_control(root)
 
 	var cam := Camera3D.new()
 	cam.name = "ExternalCamera"
@@ -564,12 +574,44 @@ func _build_animation(root: Node3D, library: AnimationLibrary) -> void:
 	_add(root, root, animator)
 	animator.animation_player = player
 	var layers: Array[MsPoseLayer] = []
-	for p in [[&"rifle_ready", POSE_RIFLE], [&"shield_guard", POSE_SHIELD]]:
+	for p in [[&"rifle_ready", POSE_RIFLE], [&"shield_guard", POSE_SHIELD], [&"shield_fire", POSE_SHIELD_FIRE]]:
 		var layer := MsPoseLayer.new()
 		layer.pose = p[0]
 		layer.bones = PackedStringArray((p[1] as Dictionary).keys())
 		layers.append(layer)
 	animator.layers = layers
+
+
+## Fire control, with the head vulcans (the rifle's and shield's weapons are in their
+## equipment scenes). After the loadout and AMBAC, so its aim goes on top of theirs.
+func _build_fire_control(root: Node3D) -> void:
+	var fcs := FireControl.new()
+	fcs.name = "FireControl"
+	_add(root, root, fcs)
+	var vulcan := MsWeapon.new()
+	vulcan.name = "Vulcan"
+	_add(root, fcs, vulcan)
+	vulcan.weapon_id = &"vulcan"
+	vulcan.display_name = "60mm VULCAN"
+	vulcan.hud_name = "VULCAN"
+	vulcan.projectile = load("res://Entities/Projectiles/Specs/vulcan_60mm.tres")
+	vulcan.max_ammo = 1200
+	vulcan.cycle_time = 0.03
+	vulcan.dispersion_deg = 0.22
+	vulcan.always_on = true
+	vulcan.ready_time = 0.3
+	vulcan.mount_bone = &"head"
+	vulcan.mount_position = VULCAN_POSITION
+	vulcan.aim_bone = &"head"
+	vulcan.az_limits = Vector2(-55.0, 55.0)
+	vulcan.el_limits = Vector2(-25.0, 40.0)
+	vulcan.slew_rate_deg = 200.0
+	vulcan.on_target_deg = 0.6
+	for side in [["MuzzleR", 1.0], ["MuzzleL", -1.0]]:
+		var muzzle := Marker3D.new()
+		muzzle.name = side[0]
+		_add(root, vulcan, muzzle)
+		muzzle.position = Vector3(VULCAN_SPACING * side[1], 0.0, 0.0)
 
 
 # --- Animations ---
@@ -579,6 +621,7 @@ func _build_animations() -> AnimationLibrary:
 	lib.add_animation(&"idle", _idle())
 	lib.add_animation(&"rifle_ready", _pose(POSE_RIFLE))
 	lib.add_animation(&"shield_guard", _pose(POSE_SHIELD))
+	lib.add_animation(&"shield_fire", _pose(POSE_SHIELD_FIRE))
 	return lib
 
 

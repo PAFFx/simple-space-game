@@ -66,6 +66,9 @@ func _run(shots: PackedStringArray) -> void:
 	if "outline" in shots:
 		await _frames(10)
 		var loadout := vehicle.find_component(MsLoadout) as MsLoadout
+		var fcs := vehicle.find_component(FireControl)
+		if fcs != null:
+			fcs.set_physics_process(false)   # it would lower the shield again
 		for eq in loadout.equipment:
 			if eq is MsShield:
 				eq.set_active(true)   # shield to guard

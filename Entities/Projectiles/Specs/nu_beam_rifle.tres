@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ProjectileSpec" format=3]
+
+[ext_resource type="Script" path="res://Entities/Projectiles/projectile_spec.gd" id="1_spec"]
+
+[resource]
+script = ExtResource("1_spec")
+speed = 4000.0
+lifetime = 2.5
+damage = 1000.0
+color = Color(1, 0.13, 0.1, 1)
+width = 0.55
+bolt_length = 80.0
+trail_time = 0.6
+intensity = 10.0
+glow = 1.0
+flash_size = 4.5
+impact_size = 20.0

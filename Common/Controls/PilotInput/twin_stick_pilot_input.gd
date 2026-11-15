@@ -14,6 +14,13 @@ extends KeyboardPilotInput
 ## Stick travel is the throttle (PilotCommand.analog_thrust), so there is no boost
 ## button, only full boost. The stick demand adds onto the keyboard's; with a stick
 ## missing this is plain keyboard input.
+##
+## Weapons (both sticks number their buttons alike). Right: trigger first detent opens the
+## vulcans, second fires them (the first stays pressed under the second); weapon release
+## fires the selected weapon; the 5-way hat selects weapons; master arm on / off; SCS
+## forward switches the sensor of interest and the mini-stick slews the HUD cursor.
+## Left: trigger first detent shows the lock candidate, second locks it; weapon release
+## holds the shield up; NAV / DGFT / BVR.
 
 @export_group("Devices")
 @export var left_stick_name: String = "EVO L"
@@ -34,6 +41,28 @@ extends KeyboardPilotInput
 @export var coupled_button: int = 20     ## Left stick, toggles
 @export var roll_button: int = 4         ## Left stick, hold: the yaw control rolls
 @export var precision_button: int = 3    ## Left stick, toggles
+
+@export_group("Weapons, right stick")
+@export var vulcan_ready_button: int = 0
+@export var vulcan_fire_button: int = 1
+@export var weapon_release_button: int = 2
+## Weapon select hat in FireControl.Hat order: forward, right, aft, left, depress.
+@export var weapon_select_buttons := PackedInt32Array([15, 16, 17, 18, 19])
+@export var master_arm_on_button: int = 24
+@export var master_arm_off_button: int = 25
+@export var soi_button: int = 10           ## SCS forward
+@export var cursor_x_axis: int = 3
+@export var cursor_y_axis: int = 4
+@export var invert_cursor_y: bool = false
+@export_range(0.0, 0.5) var cursor_deadzone: float = 0.12
+@export_range(0.0, 1.0) var cursor_expo: float = 0.5
+
+@export_group("Weapons, left stick")
+@export var lock_preview_button: int = 0
+@export var lock_commit_button: int = 1
+@export var shield_block_button: int = 2
+## Master modes in FireControl.MasterMode order: NAV, DGFT, BVR.
+@export var master_mode_buttons := PackedInt32Array([14, 10, 12])
 
 @export_group("Response")
 ## Expo softens the centre: 0 = linear, 1 = fully cubic. Full travel is always full demand.
@@ -63,6 +92,7 @@ var _coupled_held := false
 var _brake_held := false
 var _brake_pressed_at := -INF      ## Time of the brake button's last press, s
 var _brake_hard := false           ## Held since a double tap
+var _was_down := {}                ## device * 64 + button → pressed last tick
 
 
 func _ready() -> void:
@@ -124,7 +154,46 @@ func poll_command() -> PilotCommand:
 	var precision_held := _button(_left, precision_button)
 	cmd.toggle_precision = precision_held and not _precision_held
 	_precision_held = precision_held
+	_poll_stick_weapons(cmd)
 	return cmd
+
+
+## Adds the sticks' weapon controls onto the keyboard's.
+func _poll_stick_weapons(cmd: PilotCommand) -> void:
+	cmd.vulcan_fire = cmd.vulcan_fire or _button(_right, vulcan_fire_button)
+	cmd.vulcan_ready = cmd.vulcan_ready or cmd.vulcan_fire or _button(_right, vulcan_ready_button)
+	cmd.fire_main = cmd.fire_main or _button(_right, weapon_release_button)
+	cmd.lock_preview = cmd.lock_preview or _button(_left, lock_preview_button)
+	cmd.shield_block = cmd.shield_block or _button(_left, shield_block_button)
+	if _pressed(_left, lock_commit_button):
+		cmd.lock_commit = true
+	for k in weapon_select_buttons.size():
+		if _pressed(_right, weapon_select_buttons[k]):
+			cmd.weapon_select = k
+	for k in master_mode_buttons.size():
+		if _pressed(_left, master_mode_buttons[k]):
+			cmd.master_mode = k
+	if _pressed(_right, master_arm_on_button):
+		cmd.master_arm = 1
+	if _pressed(_right, master_arm_off_button):
+		cmd.master_arm = -1
+	if _pressed(_right, soi_button):
+		cmd.soi_cycle = true
+	var slew := Vector2(
+		JoyDevices.shape(_raw_axis(_right, cursor_x_axis), cursor_deadzone, cursor_expo),
+		JoyDevices.shape(_raw_axis(_right, cursor_y_axis), cursor_deadzone, cursor_expo))
+	if invert_cursor_y:
+		slew.y = -slew.y
+	cmd.cursor_slew = (cmd.cursor_slew + slew).clamp(-Vector2.ONE, Vector2.ONE)
+
+
+## True on the tick the button goes down.
+func _pressed(device: int, button: int) -> bool:
+	var down := _button(device, button)
+	var key := device * 64 + button
+	var was: bool = _was_down.get(key, false)
+	_was_down[key] = down
+	return down and not was
 
 
 ## Raw axis value. Override to script the sticks (probes).

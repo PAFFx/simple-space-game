@@ -10,6 +10,11 @@ extends PilotInputSource
 ## springs back when the mouse stops.
 ## Shift boosts; double-tap Shift (and hold) to boost with full auto-rotation. Released
 ## keys coast; Ctrl brakes the axes not being pushed on, double-tapped (and held) harder.
+##
+## Weapons: left mouse fires the selected weapon (while the mouse is captured), X the
+## vulcans, T shows the lock candidate and G locks it, B holds the shield up, 1-5 are the
+## weapon select hat, M master arm, N / J / K the master modes, Tab the sensor of interest.
+## One-shot keys are taken from unhandled input, so a debug panel can claim them first.
 
 ## Seconds for a digital axis to travel from centre to full deflection.
 @export var key_travel_time: float = 0.1
@@ -28,6 +33,12 @@ var _mouse_px := Vector2.ZERO        ## Motion since the last tick
 var _mouse_demand := Vector2.ZERO    ## Smoothed (yaw, pitch) deflection
 var _last_press := {}                ## Action → time of its last press, s
 var _double := {}                    ## Action → held since a double tap
+# One-shot weapon requests since the last tick.
+var _weapon_select := -1
+var _master_arm := 0
+var _master_mode := -1
+var _lock_commit := false
+var _soi_cycle := false
 
 
 func _ready() -> void:
@@ -37,6 +48,24 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and PilotInputActions.is_mouse_steering():
 		_mouse_px += (event as InputEventMouseMotion).relative
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_echo() or not event.is_pressed():
+		return
+	var a := PilotInputActions
+	for k in a.WEAPON_SELECT.size():
+		if event.is_action(a.WEAPON_SELECT[k]):
+			_weapon_select = k
+	for k in a.MASTER_MODE.size():
+		if event.is_action(a.MASTER_MODE[k]):
+			_master_mode = k
+	if event.is_action(a.MASTER_ARM):
+		_master_arm = 2
+	if event.is_action(a.LOCK_COMMIT):
+		_lock_commit = true
+	if event.is_action(a.SOI_CYCLE):
+		_soi_cycle = true
 
 
 func poll_command() -> PilotCommand:
@@ -67,7 +96,29 @@ func poll_command() -> PilotCommand:
 	cmd.brake = Input.is_action_pressed(a.BRAKE)
 	cmd.brake_full = _held_after_double_tap(a.BRAKE)
 	# Rotation mode, precision and horizon lock are cockpit switches (CockpitSwitchPanel).
+	_poll_weapons(cmd)
 	return cmd
+
+
+func _poll_weapons(cmd: PilotCommand) -> void:
+	var a := PilotInputActions
+	# The left button fires only while the mouse flies the view, not the click cursor.
+	cmd.fire_main = Input.is_action_pressed(a.FIRE_MAIN) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	cmd.vulcan_fire = Input.is_action_pressed(a.VULCAN)
+	cmd.vulcan_ready = cmd.vulcan_fire
+	cmd.lock_preview = Input.is_action_pressed(a.LOCK_PREVIEW)
+	cmd.shield_block = Input.is_action_pressed(a.SHIELD_BLOCK)
+	cmd.cursor_slew = Vector2(Input.get_axis(a.CURSOR_LEFT, a.CURSOR_RIGHT), Input.get_axis(a.CURSOR_DOWN, a.CURSOR_UP))
+	cmd.weapon_select = _weapon_select
+	cmd.master_arm = _master_arm
+	cmd.master_mode = _master_mode
+	cmd.lock_commit = _lock_commit
+	cmd.soi_cycle = _soi_cycle
+	_weapon_select = -1
+	_master_arm = 0
+	_master_mode = -1
+	_lock_commit = false
+	_soi_cycle = false
 
 
 ## Pitch/yaw demand from mouse motion while steering.

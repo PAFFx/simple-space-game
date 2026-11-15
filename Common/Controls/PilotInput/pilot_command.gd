@@ -32,3 +32,26 @@ var toggle_rotation_mode := false
 var toggle_precision := false
 var toggle_horizon_lock := false
 var toggle_coupled := false
+
+# --- Weapons (read by FireControl) ---
+
+## Vulcans: pods open and spun up (trigger first detent), firing (second detent).
+var vulcan_ready := false
+var vulcan_fire := false
+## Fire the selected weapon (weapon release), held.
+var fire_main := false
+## Show the lock candidate while held; lock_commit (one-shot) locks it, or unlocks.
+var lock_preview := false
+var lock_commit := false
+## Hold the shield toward where the pilot looks.
+var shield_block := false
+## One-shot: weapon select hat direction (FireControl.Hat), -1 = none.
+var weapon_select := -1
+## One-shot: 1 = master arm on, -1 = off, 2 = toggle, 0 = none.
+var master_arm := 0
+## One-shot: master mode to enter (FireControl.MasterMode), -1 = none.
+var master_mode := -1
+## One-shot: switch the sensor of interest (HUD cursor / pilot's view).
+var soi_cycle := false
+## HUD cursor slew, each in [-1, 1]: x = right, y = up.
+var cursor_slew := Vector2.ZERO

@@ -4,6 +4,8 @@
 [ext_resource type="PackedScene" path="res://Entities/Equipment/RX93/Arts/nu_shield.glb" id="2_model"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/hud_silhouette.gd" id="3_sil"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_outline.gd" id="4_outline"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/FireControl/ms_weapon.gd" id="5_weapon"]
+[ext_resource type="Resource" path="res://Entities/Projectiles/Specs/shield_missile.tres" id="6_missile"]
 
 [node name="Shield" type="Node3D"]
 script = ExtResource("1_script")
@@ -23,3 +25,45 @@ script = ExtResource("3_sil")
 from_meshes = true
 draw_outline = false
 label = "SHIELD"
+
+[node name="Guard" type="Node3D" parent="."]
+script = ExtResource("5_weapon")
+weapon_id = &"shield_guard"
+display_name = "SHIELD"
+ready_time = 0.45
+pose = &"shield_guard"
+aim_bone = &"upper_arm.L"
+az_limits = Vector2(-110, 35)
+el_limits = Vector2(-50, 60)
+slew_rate_deg = 140.0
+
+[node name="MuzzleFace" type="Marker3D" parent="Guard"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -6.8, 13.5, 0.2)
+
+[node name="Missiles" type="Node3D" parent="."]
+script = ExtResource("5_weapon")
+weapon_id = &"shield_missile"
+display_name = "SHIELD MISSILE"
+hud_name = "MISSILE"
+projectile = ExtResource("6_missile")
+max_ammo = 4
+cycle_time = 0.6
+ready_time = 0.8
+pose = &"shield_fire"
+aim_bone = &"upper_arm.L"
+az_limits = Vector2(-60, 25)
+el_limits = Vector2(-40, 45)
+slew_rate_deg = 70.0
+on_target_deg = 1.0
+
+[node name="Muzzle1" type="Marker3D" parent="Missiles"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, -5.45, 7.8, -0.5)
+
+[node name="Muzzle2" type="Marker3D" parent="Missiles"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, -5.45, 7.8, 0.5)
+
+[node name="Muzzle3" type="Marker3D" parent="Missiles"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, -5.0, 7.8, -0.5)
+
+[node name="Muzzle4" type="Marker3D" parent="Missiles"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, -5.0, 7.8, 0.5)

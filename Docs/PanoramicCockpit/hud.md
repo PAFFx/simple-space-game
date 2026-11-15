@@ -36,6 +36,10 @@ PanoramicHud (Node)
     ├── FlightData      left column: G MS / G PLT / ROT / AMBAC over boxed SPD and Mach (dim);
                         non-default modes just inside the right ladder column; cautions
     ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
+    ├── Weapons         mode / ARM / selected weapon and rounds; the selected weapon's envelope
+                        (body-fixed outline, bold corners), gun cross, lead diamond with SHOOT /
+                        OUT, vulcan ring, designation cursor, lock brackets, HIT / BLOCK
+                        (see Docs/Weapons/summary.md)
     └── Contacts        a triangle pointing down around each node in group `hud_contacts`: three
                         see-through bars short of its corners (a faint fill in a fine border), or
                         a bracket at each corner of a square when it's too big for the triangle; hostile adds an inner triangle's corners and

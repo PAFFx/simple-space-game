@@ -5,6 +5,9 @@ extends VehicleBase
 ## Node3D) so the whole suit — cockpit, sensor head, thrusters — is simulated.
 ## Expects children: Model (GLB), CockpitMount, SensorHeadMount.
 
+## A shot landed on the suit: `direction` is the way it was flying.
+signal hit_taken(damage: float, position: Vector3, direction: Vector3)
+
 ## Model meshes the pilot sees from inside through the open hatch (cavity + flaps).
 @export var first_person_parts: Array[StringName] = [&"Chest", &"HatchUpper", &"HatchLower"]
 
@@ -27,3 +30,9 @@ func get_sensor_head_mount() -> Marker3D:
 
 func get_body() -> RigidBody3D:
 	return self as Node as RigidBody3D
+
+
+## Called by ProjectileManager when a shot lands on the suit. No damage model yet: the
+## fire control decides whether the shield took it and the HUD shows the hit.
+func apply_hit(damage: float, position: Vector3, direction: Vector3, _source: Node) -> void:
+	hit_taken.emit(damage, position, direction)

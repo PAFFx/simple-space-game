@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" path="res://Entities/Equipment/BeamRifle/beam_rifle.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://Entities/Equipment/RX93/Arts/nu_beam_rifle.glb" id="2_model"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/FireControl/ms_weapon.gd" id="3_weapon"]
+[ext_resource type="Resource" path="res://Entities/Projectiles/Specs/nu_beam_rifle.tres" id="4_beam"]
 
 [node name="BeamRifle" type="Node3D"]
 script = ExtResource("1_script")
@@ -12,5 +14,21 @@ active_pose = &"rifle_ready"
 
 [node name="Model" parent="." instance=ExtResource("2_model")]
 
-[node name="Muzzle" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.05, 5.6, -5.9)
+[node name="Weapon" type="Node3D" parent="."]
+script = ExtResource("3_weapon")
+weapon_id = &"beam_rifle"
+display_name = "BEAM RIFLE"
+hud_name = "RIFLE"
+projectile = ExtResource("4_beam")
+max_ammo = 12
+cycle_time = 1.4
+ready_time = 0.8
+pose = &"rifle_ready"
+aim_bone = &"upper_arm.R"
+torso_share = 0.2
+az_limits = Vector2(-35, 75)
+el_limits = Vector2(-50, 55)
+slew_rate_deg = 80.0
+
+[node name="Muzzle" type="Marker3D" parent="Weapon"]
+transform = Transform3D(0.957149, -0.130315, -0.258618, 0.289595, 0.430708, 0.854766, 0.000000, -0.893033, 0.449990, 7.185, 5.75, -6.4)

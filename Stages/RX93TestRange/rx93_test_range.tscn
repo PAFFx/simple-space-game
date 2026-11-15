@@ -6,6 +6,8 @@
 [ext_resource type="Script" uid="uid://cis1d3vwhccia" path="res://Entities/Environment/Space/DebrisField/debris_field.gd" id="4_debris"]
 [ext_resource type="PackedScene" path="res://Entities/Environment/Space/NavBuoy/nav_buoy.tscn" id="5_buoy"]
 
+[ext_resource type="Script" path="res://Stages/Components/RangeControl/range_control.gd" id="6_range"]
+
 [sub_resource type="PanoramaSkyMaterial" id="Sky_material"]
 panorama = ExtResource("1_hdri")
 
@@ -80,3 +82,6 @@ beacon_color = Color(0.3, 1, 0.4, 1)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 67.6, -1.8, -622)
 label = "Buoy C"
 beacon_color = Color(0.3, 0.6, 1, 1)
+
+[node name="RangeControl" type="CanvasLayer" parent="."]
+script = ExtResource("6_range")
