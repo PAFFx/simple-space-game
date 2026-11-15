@@ -34,8 +34,8 @@ extends Node3D
 
 @export_group("G response")
 ## Lean at very high G, deg (approached smoothly; half of it is reached near `g_reference`).
-@export var max_lean_deg: float = 5.0
-@export var g_reference: float = 4.0
+@export var max_lean_deg: float = 12.0
+@export var g_reference: float = 3.0
 ## Leaning back into the seat is mostly blocked by it.
 @export_range(0.0, 1.0) var backward_share: float = 0.35
 ## Natural frequency of the body's sway, rad/s (critically damped).
