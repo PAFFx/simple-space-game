@@ -4,7 +4,7 @@
 [ext_resource type="PackedScene" path="res://Entities/Vehicles/MobileSuits/RX93/Arts/mobile_suit_nu.glb" id="2_u34n5"]
 [ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn" id="3_c5oyy"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.gd" id="4_pdjua"]
-[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat_nu.tscn" id="5_v1sub"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2/cockpit_linear_seat_v2.tscn" id="5_v1sub"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat.gd" id="6_lwb5x"]
 [ext_resource type="PackedScene" path="res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn" id="7_ps7h1"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.gd" id="8_ccrrx"]
@@ -32,6 +32,7 @@
 [ext_resource type="Script" path="res://Entities/Equipment/Components/ms_equipment.gd" id="31_tdn4s"]
 [ext_resource type="PackedScene" path="res://Entities/Equipment/RX93/rx93_beam_saber.tscn" id="32_heo1q"]
 [ext_resource type="AnimationLibrary" path="res://Entities/Vehicles/MobileSuits/RX93/Animations/rx93_animations.tres" id="33_f2dd6"]
+[ext_resource type="PackedScene" path="res://Entities/Equipment/RX93/rx93_fin_funnels.tscn" id="40_funnels"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/PoseAnimator/ms_pose_animator.gd" id="34_n8dqg"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/PoseAnimator/ms_pose_layer.gd" id="35_p5c2s"]
 [ext_resource type="Script" path="res://Common/Controls/OrbitCamera/orbit_camera.gd" id="36_ebf3u"]
@@ -1157,6 +1158,9 @@ mount_bone = &"backpack"
 script = ExtResource("31_tdn4s")
 equipment_name = "BEAM SABER"
 mass = 300.0
+mount_bone = &"backpack"
+
+[node name="FinFunnels" type="Node3D" parent="Loadout" instance=ExtResource("40_funnels")]
 mount_bone = &"backpack"
 
 [node name="PoseAnimations" type="AnimationPlayer" parent="." unique_id=707661372]

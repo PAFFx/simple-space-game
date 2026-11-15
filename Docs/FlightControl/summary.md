@@ -538,8 +538,8 @@ in the Output panel, add the bindings, then enable `joystick_enabled`.
 
 Built from a downloaded model (`Tools/Blender/build_mobile_suit_nu.py`, `Tools/Godot/build_rx93_scene.gd`),
 with MSP-02's bone names and components. Weapons are separate equipment (rifle on `hand.R`, shield
-on `forearm.L`, hyper bazooka and beam saber on `backpack`; the fin funnels are built but left off
-the loadout for now). Thrusters sit on the model's yellow thruster ports (found by sampling its
+on `forearm.L`, hyper bazooka, beam saber and fin funnels on `backpack`; the funnels add their 6 t, which
+the flight tuning predates: it is due a re-tune). Thrusters sit on the model's yellow thruster ports (found by sampling its
 texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |

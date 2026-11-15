@@ -13,6 +13,9 @@ extends Node
 
 ## Maximum pitch angle in degrees (applied symmetrically up and down).
 @export var pitch_limit: float = 85.0
+## How far the view turns either way from its rest direction, deg (a pilot's neck and
+## shoulders). 0 = all the way round.
+@export var yaw_limit: float = 0.0
 
 ## Capture the mouse automatically when this node enters the scene tree.
 ## Disable if you want to manage mouse capture yourself.
@@ -54,7 +57,7 @@ func _input(event: InputEvent) -> void:
 	if target == null:
 		return
 	_recentering = false
-	_yaw   -= event.relative.x * sensitivity
+	_yaw = _limit_yaw(_yaw - event.relative.x * sensitivity)
 	_pitch  = clamp(_pitch - event.relative.y * sensitivity, -pitch_limit, pitch_limit)
 	_apply(target)
 
@@ -91,9 +94,13 @@ func _stick_look(target: Node3D, delta: float) -> void:
 		_recentering = false
 	if stick.pan == Vector2.ZERO or _recentering:
 		return
-	_yaw -= stick.pan.x * delta
+	_yaw = _limit_yaw(_yaw - stick.pan.x * delta)
 	_pitch = clampf(_pitch + stick.pan.y * delta, -pitch_limit, pitch_limit)
 	_apply(target)
+
+
+func _limit_yaw(yaw: float) -> float:
+	return yaw if yaw_limit <= 0.0 else clampf(yaw, _rest_yaw - yaw_limit, _rest_yaw + yaw_limit)
 
 
 ## The camera to steer, or null (e.g. while an external view is current).

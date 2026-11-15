@@ -60,9 +60,11 @@ simple-space-game/
 │       │   │   │       └── panoramic_screen.gdshader  Reprojection + HUD composite + aperture
 │       │   │   ├── PanoramicHud/  Equirectangular HUD canvas + HudWidget instruments + HudSilhouette
 │       │   │   ├── SeatGimbal/    CockpitGimbal: keeps the cockpit on the pilot frame
-│       │   │   └── ControlsAnimator/  Grips/pedals follow the PilotCommand
+│       │   │   ├── ControlsAnimator/  Grips/pedals follow the PilotCommand
+│       │   │   └── SeatedPilot/   Character in the seat: pose, IK onto the controls, G lean
 │       │   │
 │       │   ├── CockpitLinearSeat/ Late-UC linear seat cockpit (extends CockpitBase)
+│       │   ├── CockpitLinearSeatV2/  RX-93 cockpit: contoured seat, jump seat, seated pilot (CockpitLinearSeat script)
 │       │   └── CockpitRX0/        RX-0 specific cockpit interior
 │       │       ├── cockpit_rx_0.gd    extends CockpitBase
 │       │       ├── cockpit_rx_0.tscn
@@ -266,4 +268,5 @@ types. Any cockpit that extends `CockpitBase` and has a `PanoramicDisplayMount` 
 | `Docs/PanoramicCockpit/hud.md` | HUD canvas mapping, writing widgets, hatch aperture timeline |
 | `Docs/FlightControl/summary.md` | Input → FBW → allocator → thruster pipeline, swapping stages, controls, HOTAS |
 | `Docs/MobileSuit/prototype.md` | Prototype suit scene tree, rig, render layers, regenerating models |
+| `Docs/MobileSuit/linear_seat_v2_cockpit.md` | RX-93 linear seat v2 cockpit, seated pilot (IK, G lean), sensor outlines |
 | `Docs/Performance/frame_budget.md` | Frame time by phase, subtree and GPU pass (dated snapshot), measuring pitfalls |

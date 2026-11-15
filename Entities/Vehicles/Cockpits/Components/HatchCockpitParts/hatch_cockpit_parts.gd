@@ -23,6 +23,9 @@ extends Node
 @export var seat_turn_deg: float = -40.0
 @export var seat_window := Vector2(0.0, 0.25)
 @export var inner_door_window := Vector2(0.35, 0.6)
+## Nodes outside the model that turn with the seat (the camera mount, the pilot, a switch
+## panel on a turning console).
+@export var seat_riders: Array[Node3D] = []
 
 var guard_open := false
 
@@ -32,6 +35,7 @@ var _guard: Node3D
 var _seat: Node3D
 var _doors: Array[Node3D] = []
 var _rest := {}
+var _rider_rest := {}   # rider → its transform in the seat's frame
 var _handle_angle := 0.0
 var _guard_angle := 0.0
 
@@ -81,12 +85,26 @@ func _process(delta: float) -> void:
 	if _seat != null:
 		var t := _progress(seat_window)
 		_seat.transform = _rest[_seat] * Transform3D(Basis(Vector3.UP, deg_to_rad(seat_turn_deg) * t), Vector3.ZERO)
+		_carry_riders()
 	var d := _progress(inner_door_window)
 	for door in _doors:
 		var rest: Transform3D = _rest[door]
 		var side := signf(rest.origin.x) if absf(rest.origin.x) > 1e-4 else 1.0
 		# Each half slides outward by its own width (built half the opening wide).
 		door.transform = rest.translated(Vector3(side * absf(rest.origin.x) * 2.05 * d, 0, 0))
+
+
+## Riders keep their place in the seat's frame (taken on the first frame, once every
+## rider has placed itself). Riders and the model share a parent frame.
+func _carry_riders() -> void:
+	var seat_xf := _seat.get_parent_node_3d().transform * _seat.transform
+	for rider in seat_riders:
+		if rider == null:
+			continue
+		if not _rider_rest.has(rider):
+			_rider_rest[rider] = seat_xf.affine_inverse() * rider.transform
+		else:
+			rider.transform = seat_xf * _rider_rest[rider]
 
 
 func _progress(window: Vector2) -> float:

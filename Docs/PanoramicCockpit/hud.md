@@ -211,8 +211,9 @@ ends, grab handles, light strips) runs 37° down from the cockpit sphere to it; 
 (0, 16.6, −0.2), where a fit test keeps the sphere inside the hull. The corridor and door are
 `first_person_parts`, so the pilot sees them once the hatch is unsealed. The cockpit is drawn for
 outside cameras only while unsealed (sealed, the gimballed capsule's frame could poke through the
-hull). Its variant (`cockpit_linear_seat_nu.tscn`, model built with `--aperture -37.3,20.5,25.3`)
-has the shell opening and screen aperture on the corridor.
+hull). Its cockpit (`CockpitLinearSeatV2/cockpit_linear_seat_v2.tscn`, model built with
+`--aperture -37.3,20.5,25.3`, see `Docs/MobileSuit/linear_seat_v2_cockpit.md`) has the shell opening and
+screen aperture on the corridor.
 
 ## Cockpit switches
 
@@ -226,7 +227,7 @@ state it controls.
 `build_mobile_suit_nu.py`, bone `hatch`, hinged on its bottom edge, swings out 100°). The sphere
 can't sit lower than y 17.2 without poking out under the chest, so a white tunnel runs from the
 shell down to the door, 40.7° below straight ahead; the ν's cockpit variant
-(`cockpit_linear_seat_nu.tscn`, model built with `--aperture -40.7,12.5,11.5`) has its shell
+(model built with `--aperture -40.7,12.5,11.5`) has its shell
 opening and screen aperture there. A fit test (shell points inside the hull) finds the whole
 sphere inside the chest at its current place.
 

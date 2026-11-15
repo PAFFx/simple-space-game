@@ -14,6 +14,10 @@ blender -b -P Tools/Blender/build_mobile_suit_msp02.py -- \
 blender -b -P Tools/Blender/build_beam_rifle.py -- Entities/Equipment/BeamRifle/Arts/beam_rifle.glb
 blender -b -P Tools/Blender/build_shield.py -- Entities/Equipment/Shield/Arts/shield.glb
 
+# RX-93 cockpit (linear seat v2); the aperture is the ν's hatch corridor.
+blender -b -P Tools/Blender/build_cockpit_linear_seat_v2.py -- \
+    Entities/Vehicles/Cockpits/CockpitLinearSeatV2/Arts/cockpit_linear_seat_v2.glb --aperture -37.3,20.5,25.3
+
 # After rebuilding the MSP-02 GLB, regenerate its scene + animations:
 godot-mono --headless --path . -s Tools/Godot/build_msp02_scene.gd
 
@@ -28,6 +32,9 @@ godot-mono --headless --path . -s Tools/Godot/build_rx93_scene.gd
   Check its licence before sharing the project. The build script welds it back into 174 parts and
   assigns them to bones/weapons by index (`GROUPS`), so a different source file needs a new table.
 
+- `cockpit_shell.py`: the capsule shell and inner door shared by both cockpit scripts.
+- `fix_character_weights.py`: plain Python, patches stray skin weights in a GLB in place (already
+  applied to the Amate model's boots).
 - `mesh_kit.py`: shared helpers (tapered boxes, cylinders, quads, materials, armature, GLB export).
 - Blender space: Z up, model front = +Y, right = +X. The glTF exporter converts this to Godot's
   Y-up / front = -Z.

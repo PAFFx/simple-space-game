@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://drr6hhiac8rmo"
-path="res://.godot/imported/cockpit_linear_seat_nu.glb-f53a20bdcc9628e05600bd6a7fb187e3.scn"
+uid="uid://roemsmnr21ik"
+path="res://.godot/imported/cockpit_linear_seat_v2.glb-3613e7ac0fb8609cfd1082950c969915.scn"
 
 [deps]
 
-source_file="res://Entities/Vehicles/Cockpits/CockpitLinearSeat/Arts/cockpit_linear_seat_nu.glb"
-dest_files=["res://.godot/imported/cockpit_linear_seat_nu.glb-f53a20bdcc9628e05600bd6a7fb187e3.scn"]
+source_file="res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2/Arts/cockpit_linear_seat_v2.glb"
+dest_files=["res://.godot/imported/cockpit_linear_seat_v2.glb-3613e7ac0fb8609cfd1082950c969915.scn"]
 
 [params]
 

@@ -29,7 +29,7 @@ const SENSOR_SCENE := \
 		"res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn"
 # The ν's own cockpit variant: its hatch opening faces down the tunnel to the red chest door
 # (the door is 40° below the sphere's centre, which can't move lower and stay in the chest).
-const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat_nu.tscn"
+const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2/cockpit_linear_seat_v2.tscn"
 const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn"
 
 # name, bone, position, exhaust direction, thrust kN, gimbal: [cone, fore/aft, sideways] deg,
@@ -390,7 +390,8 @@ func _build_flight_computer(root: Node3D) -> void:
 	var alloc := ConeProjectedAllocator.new()
 	alloc.iterations = 60
 	fc.set("allocator", alloc)
-	# Official empty weight 27.9 t; equipment ~9.9 t; propellant fills the rest of the
+	# Official empty weight 27.9 t; equipment ~15.9 t with the fin funnels (the flight tuning
+	# predates their 6 t); propellant fills the rest of the
 	# official 63.0 t max weight (every spare volume, like a fighter).
 	fc.set("dry_mass", 27900.0)
 	fc.set("propellant_capacity", 25200.0)
@@ -543,7 +544,8 @@ func _build_loadout(root: Node3D) -> void:
 	_add(root, root, loadout)
 	loadout.skeleton = root.get_node(SKELETON)
 	for e in [["rx93_beam_rifle", &"hand.R", &"arm_r"], ["rx93_shield", &"forearm.L", &"arm_l"],
-			["rx93_hyper_bazooka", &"backpack", &""], ["rx93_beam_saber", &"backpack", &""]]:
+			["rx93_hyper_bazooka", &"backpack", &""], ["rx93_beam_saber", &"backpack", &""],
+			["rx93_fin_funnels", &"backpack", &""]]:
 		var eq: MsEquipment = load(EQUIPMENT + e[0] + ".tscn").instantiate()
 		_add(root, loadout, eq)
 		eq.mount_bone = e[1]

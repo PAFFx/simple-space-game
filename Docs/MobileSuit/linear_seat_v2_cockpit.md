@@ -1,0 +1,139 @@
+# RX-93 Cockpit (Linear Seat v2), Seated Pilot and Sensor Outlines
+
+## Cockpit (`Cockpits/CockpitLinearSeatV2`)
+
+The ν's cockpit: a contoured seat on the linear-seat boom with a fold-down jump seat directly
+behind it for a passenger, built by `Tools/Blender/build_cockpit_linear_seat_v2.py` (after sketches
+of the seat, front and back, and of the ball controller). It reuses the `CockpitLinearSeat` script
+and every cockpit component; the model keeps the node names they look for.
+
+```
+CockpitLinearSeatV2 (CockpitLinearSeat script)
+├── Model                    cockpit_linear_seat_v2.glb
+│   ├── Shell, InnerDoorL/R, SeatBase, SeatBoom      fixed
+│   └── SeatSwing            everything that turns for the hatch:
+│       ├── Seat, SeatCollar, ArmrestL/R, Footrest, DisplayArms
+│       ├── JumpSeat, JumpSeatCushion                passenger seat behind the pilot's
+│       ├── GripL / GripR    ball controller units (origin = pivot under the base)
+│       │   └── BallL / BallR    the ball (origin = its centre) → HandL / HandR
+│       ├── PedalL / PedalR  (origin = heel hinge) → FootL / FootR
+│       ├── BezelCentre/Left/Right, ScreenCentre/Left/Right
+│       ├── HatchLeverBase, HatchHandle, HatchGuard    right armrest deck
+│       └── SwitchPanelMount, SwitchPanelPlate         left armrest deck
+├── PanoramicDisplayMount/PanoramicScreen, CameraMount/PlayerCamera3D, CockpitLight, PanoramicHud
+├── ControlsAnimator         scheme = TWIN, pedal_travel_deg 26, pedal_stroke 0.075
+├── Pilot (SeatedPilot)/AmateYuzuriha
+├── SwitchPanel, CockpitGimbal, CockpitDisplays, CockpitClickMode
+└── HatchCockpitParts        seat_turn_deg = −60, seat_riders = CameraMount, Pilot, SwitchPanel
+```
+
+- **A normal adult seat, set for the pilot.** The cushion is 0.50 m wide and 0.40 m deep, the back
+  0.60 m to the shoulders, reclined 12°. The pilot model is small (about 1.40 m to the top of her
+  hair, hip to eye 0.52 m, shoulder to wrist 0.37 m; an adult is 1.62–1.75 m and about 0.63 m), so
+  she sits in it with room to spare. What is fitted to her is where the seat stands and how its
+  adjustable parts are set: the cushion height puts her eye at the sphere's centre, the headrest
+  rides low on its slide, the pedal carriages sit at the near end of their rail. Her joints are
+  the `PILOT` constants at the top of the build script.
+- **Shaped like a seat.** The cushion, back, headrest and the jump seat are curved shells
+  (`Part.surface`): the back is hollowed across with a lumbar swell and shoulder wings, the cushion
+  has raised sides and a waterfall front, the headrest wraps the head.
+- **Jump seat** (yellow), directly behind the pilot's seat: a backrest frame of two tube loops
+  joined by rungs, leaning back, with a back pad, and a slim bucket cushion hinged at its foot.
+  The cushion is its own node (`JumpSeatCushion`, origin on the hinge) and is built folded up;
+  turning it −78° about x folds it down for a passenger.
+- **Pilot connectors** on the upper back (two plugs, two ports, the latch block), for a normal
+  suit's backpack; harness reels and stowed yellow straps on the bolsters.
+- **Armrest decks.** One level each side: the forearm lies along the inner strip with the
+  controller at its front, the side console is the deck's outer part (switch panel left, hatch
+  lever right).
+- **Ball controllers.** The hand lies over the ball, fingers in the grooved slot round the front,
+  thumb on the inner cheek with its three buttons. The ball stands on a base block whose lever
+  arm runs back along the deck; the ball turns in the block's cradle.
+- **Whole seat unit turns for the hatch.** The monitors, pedals and jump seat hang off the seat,
+  so all of `SeatSwing` turns 60° (the first linear seat left its left armrest behind and turned
+  40°). Nodes outside the model that belong to the seat ride along:
+  `HatchCockpitParts.seat_riders` keeps each one's place in the seat's frame, so the pilot's eye,
+  her body and the switch panel turn with it.
+- **Hatch control**, after a fighter's canopy handle: a striped lever lying forward in a quadrant
+  on the right deck, under a red-sided guard. Click the guard to flip it forward, then pull the
+  lever up and back to open, push it down to close. Same `HatchGuard` / `HatchHandle` contract as
+  the linear seat.
+
+### Controls animation (`CockpitControlsAnimator`, scheme TWIN)
+
+The `PilotCommand` is un-mixed back into stick travel the way `TwinStickPilotInput` mixes it, so
+the keyboard moves the controls too:
+
+| Control | Shows |
+|---------|-------|
+| Both balls tipped fore / aft together | forward / back |
+| Balls tipped fore / aft against each other | yaw (and roll): right ball forward = left |
+| Both balls tipped sideways | strafe |
+| Both balls tipped tops back | pitch up (adds to the fore / aft tilt) |
+| Right pedal / left pedal | up / down thrust: the pressed one tips 26° and slides 6 cm forward on its rail, the other stays put |
+
+Only the balls move (`BallL/R`, turning in their cradles about their centres); the units and
+their lever arms stay put on the decks.
+
+## Seated pilot (`Cockpits/Components/SeatedPilot`)
+
+`SeatedPilot` (the `Pilot` node, which is the seat frame) seats the character scene under it and
+adds a `SeatedPilotPose` modifier to its skeleton. Every frame, from the rest pose:
+
+1. the spine leans with `SeatedPilot.lean` and turns with the look (below), the head takes
+   the rest of the look;
+2. two-bone IK puts the ankles on `FootL/R` and the wrists on `HandL/R`, markers in the cockpit
+   model that are children of the pedals and grips, so the limbs follow the animated controls;
+3. feet and hands are turned onto the markers' frames, and the fingers curl round the ball.
+
+Everything is solved in skeleton space from rest directions, so bone axes don't matter. The
+Amate model's quirks are the script's defaults: its arm and leg bones are named one joint off,
+it has no hand bone (the five finger roots turn together), and its skeleton is Z-up.
+
+- **Looking round** (`PilotCamera`, `lean_enabled`): the eye rides on a body instead of turning
+  on the spot. The head turns on the neck (the eye is 9 cm ahead of and 10 cm above the pivot;
+  in pitch the eyes turn alone for the first 25° and the head tips by 60% of the rest, so the
+  eye doesn't dip into the chest);
+  the torso takes 30% of the yaw as a twist (up to 45°); from 40° to 125° to the side the pilot
+  leans up to 30° that way (and 6° forward), enough to look past the headrest and over the seat
+  back; looking down past 45° she leans forward, up to 18° at the 75° limit, so the eye comes out over
+  her lap and sees the pedals and controls instead of clipping into her chest (starting the lean
+  earlier was disorienting, a smaller lean let the eye clip). `PilotCamera.torso` is that turn; the pose applies
+  it along the spine and gives the head what is left of the look, so the body matches the view
+  and the hidden head never leaves a neck stump in front of the eye. The look is limited to
+  ±150° of yaw and ±75° of pitch (`MouseLookController.yaw_limit`, `pitch_limit`).
+- **G lean:** the suit's acceleration in the seat frame pushes the body the other way, through
+  `max_lean_deg · tanh(g / g_reference)` (5° and 4 g) and a critically damped spring, so even the
+  suit's big G only tips her a few degrees; leaning back into the seat takes `backward_share`. The eye leans with her
+  (`PilotCamera.body_sway`), so her body never passes through it.
+- **Layers:** the body is on `PILOT` (the pilot's eye sees her arms and legs); the head meshes
+  are hidden from the eye and, like the cockpit, everything shows to outside cameras only while
+  the hatch is unsealed. The beanie is hidden in the seat (it would sit in the headrest).
+- **Boot weights:** the model's boots carried weight on the root bone `hips_01`, so seated, the
+  soles stayed behind and the boots stretched. `Tools/Blender/fix_character_weights.py` moved
+  that weight onto each vertex's strongest other bone, in place in the GLB.
+
+## Sensor outlines (`PanoramicDisplay/sensor_outline.gd`)
+
+The sensor never draws the suit, so its equipment is shown on the screen as outlines. A
+`SensorOutline` under an equipment scene draws the real meshes into the sensor image, rim only:
+
+1. the body, fully transparent, writes a stencil value;
+2. the same mesh pushed out along its normals by a few pixels (in clip space, so the width is
+   constant on screen) is drawn where that value isn't: a dark halo, then the rim.
+
+The outline is the model's true silhouette from the sensor head at any angle and distance, and it
+moves with the image because it is part of it. Units are drawn one after another, each with its
+own stencil value, so overlapping units keep whole outlines: the fin funnels use `per_mesh` (six
+outlines), the shield one. The shell mesh is the source mesh with normals averaged per position,
+which keeps hard edges closed when pushed out. Cost: three small draw calls per unit in the
+sensor viewport. Outline meshes sit on `SENSOR_WEAPONS` / `SENSOR_SHIELDS`, which only the sensor
+camera draws.
+
+`HudSilhouette` still places the label (`draw_outline = false`); other suits' shields keep its
+drawn outline.
+
+## Checking changes
+
+`Tools/Godot/cockpit_snapshot.gd` renders the cockpit, pilot, outlines and the suit from fixed
+views with scripted input and saves PNGs (see its header).
