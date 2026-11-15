@@ -51,9 +51,9 @@ omni_range = 2.4
 [node name="ControlsAnimator" type="Node" parent="." node_paths=PackedStringArray("left_grip", "right_grip", "left_ball", "right_ball", "left_pedal", "right_pedal")]
 script = ExtResource("6_anim")
 scheme = 1
-left_grip = NodePath("../Model/SeatSwing/GripL")
+left_grip = NodePath("../Model/GripL")
 right_grip = NodePath("../Model/SeatSwing/GripR")
-left_ball = NodePath("../Model/SeatSwing/GripL/BallL")
+left_ball = NodePath("../Model/GripL/BallL")
 right_ball = NodePath("../Model/SeatSwing/GripR/BallR")
 left_pedal = NodePath("../Model/SeatSwing/PedalL")
 right_pedal = NodePath("../Model/SeatSwing/PedalR")
@@ -84,8 +84,8 @@ script = ExtResource("12_panel")
 [node name="HatchCockpitParts" type="Node" parent="." node_paths=PackedStringArray("model_root", "seat_riders")]
 script = ExtResource("11_hatchparts")
 model_root = NodePath("../Model")
-seat_turn_deg = -60.0
-seat_riders = [NodePath("../CameraMount"), NodePath("../Pilot"), NodePath("../SwitchPanel")]
+seat_turn_deg = -40.0
+seat_riders = [NodePath("../CameraMount"), NodePath("../Pilot")]
 
 [node name="CockpitClickMode" type="Node" parent="."]
 script = ExtResource("13_click")

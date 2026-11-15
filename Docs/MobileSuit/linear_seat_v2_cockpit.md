@@ -11,19 +11,20 @@ and every cockpit component; the model keeps the node names they look for.
 CockpitLinearSeatV2 (CockpitLinearSeat script)
 ├── Model                    cockpit_linear_seat_v2.glb
 │   ├── Shell, InnerDoorL/R, SeatBase, SeatBoom      fixed
-│   └── SeatSwing            everything that turns for the hatch:
-│       ├── Seat, SeatCollar, ArmrestL/R, Footrest, DisplayArms
-│       ├── GripL / GripR    ball controller units (origin = pivot under the base)
-│       │   └── BallL / BallR    the ball (origin = its centre) → HandL / HandR
+│   ├── ArmrestL, GripL/BallL → HandL, SwitchPanelMount, SwitchPanelPlate   fixed: left deck
+│   ├── BezelLeft, ScreenLeft, DisplayArmL           fixed: left monitor
+│   └── SeatSwing            what turns for the hatch:
+│       ├── Seat, SeatCollar, ArmrestR, Footrest, DisplayArmR
+│       ├── GripR            ball controller unit (base, cradle, lever arm)
+│       │   └── BallR        the ball (origin = its centre) → HandR
 │       ├── PedalL / PedalR  (origin = heel hinge) → FootL / FootR
-│       ├── BezelCentre/Left/Right, ScreenCentre/Left/Right
-│       ├── HatchLeverBase, HatchHandle, HatchGuard    right armrest deck
-│       └── SwitchPanelMount, SwitchPanelPlate         left armrest deck
+│       ├── BezelCentre/Right, ScreenCentre/Right
+│       └── HatchLeverBase, HatchHandle, HatchGuard    right armrest deck
 ├── PanoramicDisplayMount/PanoramicScreen, CameraMount/PlayerCamera3D, CockpitLight, PanoramicHud
 ├── ControlsAnimator         scheme = TWIN, pedal_travel_deg 26, pedal_stroke 0.075
 ├── Pilot (SeatedPilot)/AmateYuzuriha
 ├── SwitchPanel, CockpitGimbal, CockpitDisplays, CockpitClickMode
-└── HatchCockpitParts        seat_turn_deg = −60, seat_riders = CameraMount, Pilot, SwitchPanel
+└── HatchCockpitParts        seat_turn_deg = −40, seat_riders = CameraMount, Pilot
 ```
 
 - **A normal adult seat, set for the pilot.** The cushion is 0.50 m wide and 0.40 m deep, the back
@@ -44,11 +45,15 @@ CockpitLinearSeatV2 (CockpitLinearSeat script)
 - **Ball controllers.** The hand lies over the ball, fingers in the grooved slot round the front,
   thumb on the inner cheek with its three buttons. The ball stands on a base block whose lever
   arm runs back along the deck; the ball turns in the block's cradle.
-- **Whole seat unit turns for the hatch.** The monitors and pedals hang off the seat,
-  so all of `SeatSwing` turns 60° (the first linear seat left its left armrest behind and turned
-  40°). Nodes outside the model that belong to the seat ride along:
-  `HatchCockpitParts.seat_riders` keeps each one's place in the seat's frame, so the pilot's eye,
-  her body and the switch panel turn with it.
+- **The seat turns aside for the hatch,** as the first linear seat did: the seat, the pedals,
+  the right armrest deck and the centre and right monitors turn 40° to the right, while the left
+  deck (controller, switch panel) and the left monitor stay where they are, which leaves the
+  pilot's way out clear. The swivel is at the seat's rear left, like a door's hinge, so the
+  seat's left side hardly moves and clears the fixed deck; the main panel parts from the left
+  one at a latch. Nodes outside the model that belong to the seat ride along
+  (`HatchCockpitParts.seat_riders`): the pilot's eye and her body. Her left hand lets go of the
+  left controller as the sequence starts and rests on her lap (`SeatedPilot.let_go`: any hand
+  whose control is not under `SeatSwing`).
 - **Hatch control**, after a fighter's canopy handle: a striped lever lying forward in a quadrant
   on the right deck, under a red-sided guard. Click the guard to flip it forward, then pull the
   lever up and back to open, push it down to close. Same `HatchGuard` / `HatchHandle` contract as

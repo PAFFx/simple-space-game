@@ -25,6 +25,13 @@ extends Node3D
 ## Mesh names hidden from the pilot's own eye (it sits inside the head).
 @export var head_meshes: PackedStringArray = ["eyebrows", "eyelashes", "eyes", "face", "hair", "scalp"]
 
+@export_group("Hatch")
+## A hand whose control stays behind when the seat turns for the hatch comes to rest
+## here instead (in this node's frame, x for the right side), by this point of the
+## hatch's timeline.
+@export var lap_hand_position := Vector3(0.1, -0.44, -0.27)
+@export var let_go_by: float = 0.06
+
 @export_group("G response")
 ## Lean at very high G, deg (approached smoothly; half of it is reached near `g_reference`).
 @export var max_lean_deg: float = 5.0
@@ -39,6 +46,9 @@ var lean := Vector2.ZERO
 var look := Basis.IDENTITY
 ## The torso's turn for that look (PilotCamera.torso), in this node's frame.
 var torso := Basis.IDENTITY
+## 0 seated at the controls → 1 once the hatch sequence has begun: the pilot lets go of
+## any control that doesn't turn with the seat.
+var let_go := 0.0
 ## The character scene's root (its +Y is the character's up).
 var character: Node3D
 
@@ -82,6 +92,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	var outside := _hatch != null and _hatch.is_unsealed()
+	let_go = smoothstep(0.0, let_go_by, _hatch.amount) if _hatch != null else 0.0
 	if outside != _outside_visible:
 		_outside_visible = outside
 		_apply_layers()

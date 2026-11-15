@@ -12,7 +12,10 @@ so that her eye is at the centre and she reaches the controls. The pilot model i
 Everything except the Shell and the SeatBoom root stays inside the screen radius (1.25 m).
 
 Node names are the contract with the Godot components (same as the linear seat):
-  SeatSwing            everything that turns to clear the hatch (the whole seat unit)
+  SeatSwing            what turns to clear the hatch: the seat, pedals, the right armrest
+                       deck (controller, hatch lever) and the centre and right monitors.
+                       The left deck (controller, switch panel) and the left monitor
+                       stay put, leaving the pilot's way out clear
   GripL / GripR        ball controller units (base, cradle, lever arm)
   BallL / BallR        the balls (children of the units), origin at their centre: the
                        part Godot turns
@@ -52,7 +55,12 @@ BACK_ORIGIN = Vector((0.0, PAN_BACK, SEAT_TOP))   # crease between the cushion a
 BACK_HEIGHT = 0.6
 # Headrest slide: the pad's span up the back and how far it stands out of the back's plane.
 HEAD_LOW, HEAD_HIGH, HEAD_PROUD = 0.5, 0.82, 0.05
-SEAT_PIVOT = (0.0, 0.08, -0.72)
+# The seat turns on a swivel at its rear left, like a door on its hinge: its left side
+# hardly moves, so it clears the left armrest deck, which stays put.
+SEAT_PIVOT = (-0.16, -0.02, -0.72)
+# Parts that stay put when the seat turns (the left armrest deck with its controller and
+# switch panel, the left monitor and its arm); the build functions add them here.
+FIXED = []
 
 # Armrest decks: one level each side, x from the inner edge out, y back to front.
 DECK_TOP = -0.405
@@ -382,7 +390,7 @@ def build_seat(m):
     px, py, pz = SEAT_PIVOT
     base.cylinder((px, py, pz - 0.035), 0.125, 0.05, "dark", segments=28)
     base.cylinder((px, py, pz - 0.068), 0.15, 0.022, "frame", segments=28)
-    base.rbox((0, py - 0.02, pz - 0.115), (0.22, 0.32, 0.075), "frame", r=0.014)
+    base.rbox((px * 0.5, py - 0.02, pz - 0.115), (0.22 + abs(px), 0.32, 0.075), "frame", r=0.014)
     base.to_object()
     boom = Part("SeatBoom", m)
     boom.rbox((0, -0.68, pz - 0.12), (0.15, 1.24, 0.085), "frame", r=0.012)
@@ -392,7 +400,7 @@ def build_seat(m):
     boom.to_object()
     collar = Part("SeatCollar", m)
     collar.cylinder((px, py, pz + 0.002), 0.11, 0.03, "frame", segments=28)
-    collar.rbox((0, mid_y, top - 0.108), (0.3, 0.3, 0.025), "dark", r=0.008)
+    collar.rbox((px * 0.5, (py + mid_y) * 0.5, top - 0.108), (0.3 + abs(px), 0.3 + abs(mid_y - py), 0.025), "dark", r=0.008)
     parts.append(collar.to_object())
     return parts
 
@@ -482,14 +490,23 @@ def build_arms(m):
         arm.rbox((x1 * s - 0.004 * s, (y0 + y1) * 0.5, DECK_TOP - 0.02), (0.006, y1 - y0 - 0.06, 0.012), "strip", r=0.002)
         for i in range(4):                                 # hazard ticks along the front edge
             arm.rbox(((x0 + 0.1 + 0.035 * i) * s, y1 - 0.006, DECK_TOP - 0.022), (0.02, 0.004, 0.03), "yellow", r=0.001)
-        # Carried by a beam from the back frame and a post from the seat bucket.
-        arm.bar((x0 * s + 0.03 * s, y0 + 0.03, DECK_TOP - 0.05), (0.262 * s, -0.085, DECK_TOP - 0.05), (0.04, 0.04), "frame")
-        arm.rod((0.262 * s, -0.11, DECK_TOP - 0.05), (0.262 * s, -0.06, DECK_TOP - 0.05), 0.026, "dark", 16)
-        arm.bar(((x0 + 0.045) * s, 0.16, DECK_TOP - 0.06), ((PAN_HALF + 0.012) * s, 0.16, SEAT_TOP - 0.03), (0.03, 0.05), "frame")
-        parts.append(arm.to_object())
+        if s > 0:
+            # Right: carried by a beam from the back frame and a post from the seat bucket.
+            arm.bar((x0 + 0.03, y0 + 0.03, DECK_TOP - 0.05), (0.262, -0.085, DECK_TOP - 0.05), (0.04, 0.04), "frame")
+            arm.rod((0.262, -0.11, DECK_TOP - 0.05), (0.262, -0.06, DECK_TOP - 0.05), 0.026, "dark", 16)
+            arm.bar((x0 + 0.045, 0.16, DECK_TOP - 0.06), (PAN_HALF + 0.012, 0.16, SEAT_TOP - 0.03), (0.03, 0.05), "frame")
+        else:
+            # Left: on its own post from the fixed base, out under the seat and up.
+            px, py, pz = SEAT_PIVOT
+            foot = Vector((-(x0 + 0.15), 0.07, pz - 0.1))
+            arm.bar((px - 0.05, py + 0.02, pz - 0.105), foot, (0.05, 0.04), "frame")
+            arm.bar(foot, (foot.x, foot.y + 0.02, DECK_TOP - 0.05), (0.05, 0.045), "frame")
+            arm.rod(foot - Vector((0, 0.03, 0)), foot + Vector((0, 0.03, 0)), 0.03, "dark", 16)
+        side_parts = parts if s > 0 else FIXED
+        side_parts.append(arm.to_object())
 
         grip, ball = build_ball(side, s, m)
-        parts.append(grip)
+        side_parts.append(grip)
         # Wrist target, riding on the ball: behind it and a little above its centre, the
         # hand rising over the ball's back and top in line with the forearm (so the wrist
         # is straight at rest), turned a little inward; the fingers curl down into the
@@ -510,11 +527,11 @@ def face_matrix(s):
 def build_console_fittings(m):
     parts = []
     mount = empty("SwitchPanelMount", face_matrix(-1.0))
-    parts.append(mount)
+    FIXED.append(mount)
     plate = Part("SwitchPanelPlate", m)
     plate.frame = face_matrix(-1.0)
     plate.rbox((0, 0, -0.002), (0.152, 0.104, 0.006), "grip", r=0.002)
-    parts.append(plate.to_object())
+    FIXED.append(plate.to_object())
 
     # Hatch control on the right deck, after a fighter's canopy handle: a striped lever
     # lying forward in a guarded quadrant. Lift the guard (it flips forward), then pull the
@@ -640,29 +657,35 @@ def build_monitors(m):
     hw, hh = MAIN_SIZE[0] * 0.5, MAIN_SIZE[1] * 0.5
     parts += monitor("Centre", m, MAIN_CENTRE, right, normal, up, MAIN_SIZE)
     phi = math.radians(SUB_TURN_DEG)
-    arms = Part("DisplayArms", m)
     for side, s in (("L", -1.0), ("R", 1.0)):
+        side_parts = parts if s > 0 else FIXED
+        arm = Part(f"DisplayArm{side}", m)
         outward = right * (s * math.cos(phi)) + normal * math.sin(phi)
         sub_normal = normal * math.cos(phi) - right * (s * math.sin(phi))
         sub_right = outward if s > 0 else -outward
         hinge = MAIN_CENTRE + right * (s * (hw + BEZEL)) - up * (hh - SUB_SIZE[1] * 0.5 - BEZEL)
         centre = hinge + outward * (SUB_SIZE[0] * 0.5 + 2 * BEZEL)
-        parts += monitor("Left" if s < 0 else "Right", m, centre, sub_right, sub_normal, up, SUB_SIZE)
-        for k in (-1.0, 1.0):                   # hinge barrels joining the wing to the main panel
+        side_parts += monitor("Left" if s < 0 else "Right", m, centre, sub_right, sub_normal, up, SUB_SIZE)
+        # Barrels where the wing meets the main panel: a hinge on the right, a latch on
+        # the left, where the main panel parts from the wing when the seat turns.
+        for k in (-1.0, 1.0):
             p = hinge + outward * BEZEL * 0.6 - normal * 0.012
-            arms.rod(p + up * (k * SUB_SIZE[1] * 0.36 - 0.014), p + up * (k * SUB_SIZE[1] * 0.36 + 0.014), 0.009, "tube", 12)
-        # Articulated arm: from under the deck's front, down to an elbow, up to a yoke on
-        # the main panel's back. It runs outside the knees and under the screens.
+            arm.rod(p + up * (k * SUB_SIZE[1] * 0.36 - 0.014), p + up * (k * SUB_SIZE[1] * 0.36 + 0.014), 0.009, "tube", 12)
+        # Articulated arm from under the deck's front, down to an elbow and up: the right
+        # one to a yoke on the main panel's back (it carries the main and right panels),
+        # the left one to the left panel's own back. Both run outside the knees.
         root = Vector(((DECK_X[0] + 0.03) * s, DECK_Y[1] - 0.05, DECK_TOP - 0.07))
         elbow = Vector(((DECK_X[0] + 0.02) * s, MAIN_CENTRE.y - 0.1, SEAT_TOP + 0.0))
-        yoke = MAIN_CENTRE + right * (s * hw * 0.7) - up * (hh * 0.55) - normal * 0.045
-        arms.bar(root, elbow, (0.028, 0.036), "frame")
-        arms.bar(elbow, yoke, (0.026, 0.032), "frame")
+        if s > 0:
+            yoke = MAIN_CENTRE + right * (hw * 0.7) - up * (hh * 0.55) - normal * 0.045
+            arm.rod(yoke - right * (hw * 1.4), yoke, 0.012, "tube", 12)      # across the main panel's back
+        else:
+            yoke = centre - up * (SUB_SIZE[1] * 0.3) - sub_normal * 0.045
+        arm.bar(root, elbow, (0.028, 0.036), "frame")
+        arm.bar(elbow, yoke, (0.026, 0.032), "frame")
         for p, r in ((root, 0.026), (elbow, 0.028), (yoke, 0.021)):
-            arms.rod(p - right * 0.024, p + right * 0.024, r, "dark", 16)
-    y0 = MAIN_CENTRE - up * (hh * 0.55) - normal * 0.045
-    arms.rod(y0 - right * (hw * 0.7), y0 + right * (hw * 0.7), 0.012, "tube", 12)
-    parts.append(arms.to_object())
+            arm.rod(p - right * 0.024, p + right * 0.024, r, "dark", 16)
+        side_parts.append(arm.to_object())
     return parts
 
 

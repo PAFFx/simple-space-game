@@ -30,6 +30,8 @@ extends SkeletonModifier3D
 @export var thumb_curl_deg: float = 18.0
 @export var hand_targets: Array[StringName] = [&"HandL", &"HandR"]
 @export var foot_targets: Array[StringName] = [&"FootL", &"FootR"]
+## The cockpit model's node that turns for the hatch (the seated pilot turns with it).
+@export var seat_swing_name: StringName = &"SeatSwing"
 ## Where the elbows and knees point, in the seat frame (x mirrored for the left side).
 @export var elbow_pole := Vector3(0.9, -1.0, 0.5)
 @export var knee_pole := Vector3(0.12, 1.0, -0.5)
@@ -40,6 +42,7 @@ extends SkeletonModifier3D
 var pilot: SeatedPilot
 
 var _hands: Array[Node3D] = [null, null]
+var _hand_stays: Array[bool] = [false, false]
 var _feet: Array[Node3D] = [null, null]
 var _rest_global := {}   # bone index → rest pose in skeleton space
 var _ready_done := false
@@ -56,6 +59,13 @@ func find_targets(model: Node) -> void:
 	for i in 2:
 		_hands[i] = model.find_child(hand_targets[i], true, false) as Node3D
 		_feet[i] = model.find_child(foot_targets[i], true, false) as Node3D
+		# A control outside the part that turns for the hatch stays behind.
+		var node: Node = _hands[i]
+		_hand_stays[i] = node != null
+		while node != null and node != model:
+			if node.name == seat_swing_name:
+				_hand_stays[i] = false
+			node = node.get_parent()
 
 
 func _setup(sk: Skeleton3D) -> void:
@@ -119,6 +129,12 @@ func _process_modification() -> void:
 		var hand := _hands[side]
 		if hand != null and _arms[side].size() == 3:
 			var xf := to_skel * hand.get_global_transform_interpolated()
+			if _hand_stays[side] and pilot.let_go > 0.0:
+				# This control stays behind when the seat turns: the hand goes to the lap.
+				var lap := to_skel * pilot.get_global_transform_interpolated() \
+						* Transform3D(Basis.IDENTITY, pilot.lap_hand_position * mirror)
+				xf = Transform3D(xf.basis.orthonormalized().slerp(lap.basis.orthonormalized(), pilot.let_go),
+						xf.origin.lerp(lap.origin, pilot.let_go))
 			_two_bone_ik(sk, _arms[side], xf.origin, seat * (elbow_pole * mirror))
 			_pose_hand(sk, side, xf.basis.orthonormalized())
 
