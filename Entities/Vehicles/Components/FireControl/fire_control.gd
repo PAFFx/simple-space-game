@@ -56,6 +56,10 @@ const CONTACT_GROUP := &"hud_contacts"
 ## Weapon that holds the shield up (not a gun; aimed where the pilot looks).
 @export var guard_weapon: StringName = &"shield_guard"
 @export var torso_bone: StringName = &"spine"
+## AMBAC group of the waist. Held while an arm weapon is up: a balancing waist swing makes
+## the aimed arm swing back to stay on target, which needs countering again (the thrusters
+## kept pulsing while just holding a lock). The legs balance instead.
+@export var torso_group: StringName = &"torso"
 @export var master_arm: bool = false
 @export var mode := MasterMode.NAV
 @export var soi := Soi.HUD_CURSOR
@@ -89,6 +93,8 @@ var loadout: MsLoadout
 var _body: RigidBody3D
 var _rids: Array[RID] = []
 var _aimed: Array[MsWeapon] = []
+var _ambac: AmbacController
+var _torso_held := false
 var _target_velocity := Vector3.ZERO
 var _target_last := Vector3.ZERO
 var _target_tracked := false
@@ -105,6 +111,7 @@ func _ready() -> void:
 	if _body != null:
 		_rids = [_body.get_rid()]
 	flight_computer = vehicle.find_component(FlightComputer) as FlightComputer
+	_ambac = vehicle.find_component(AmbacController) as AmbacController
 	loadout = vehicle.find_component(MsLoadout) as MsLoadout
 	if loadout != null:
 		loadout.listen_for_input = false   # equipment is raised by weapon selection instead
@@ -283,6 +290,23 @@ func _physics_process(delta: float) -> void:
 	_apply_poses(guard)
 	for weapon: MsWeapon in weapons.values():
 		weapon.update(delta, self)
+	_hold_torso()
+
+
+func _hold_torso() -> void:
+	if _ambac == null or torso_group == &"":
+		return
+	var held := false
+	for weapon in _aimed:
+		if not weapon.always_on and weapon.aim_weight > 0.0:
+			held = true
+	if held == _torso_held:
+		return
+	_torso_held = held
+	if held:
+		_ambac.lock_group(torso_group)
+	else:
+		_ambac.unlock_group(torso_group)
 
 
 func _apply_mode() -> void:

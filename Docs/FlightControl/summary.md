@@ -413,16 +413,33 @@ a limb jumping to full slew speed in one tick hands the body its whole momentum 
 | | Max attitude change | Max rate | Avg thrust |
 |---|---|---|---|
 | Old (limbs pushed nothing, `off`) | 0° | 0°/s | 0 |
-| FCS off (`free`) | 18° (3° left at the end) | 47°/s | 0 |
-| Attitude hold only (`hold`) | 8.2° | 52°/s | 0.112 |
-| AMBAC + thrusters countering (`counter`) | 1.6–2.5° | 22°/s | 0.094 |
+| FCS off (`free`) | 18° (3° left at the end) | 38°/s | 0 |
+| Attitude hold only (`hold`) | 1.0° | 10°/s | 0.035 |
+| AMBAC + thrusters countering (`counter`) | 0.5° | 6°/s | 0.034 |
 
-Runs vary by a few tenths of a degree (frame timing). The rate peaks are the shield guard
-following the look at 140°/s and both arms stowing at once.
+Before the momentum smoothing and the waist hold (below): hold 8.2° / 52°/s, counter
+1.6–2.5° / 22°/s. The rate peaks are the shield guard following the look at 140°/s and both
+arms stowing at once.
 
 With the FCS off, body + limb angular momentum stays within ~0.1% through every motion, and
 the body stops turning when the limb stops (a limb turns the suit by an angle; it can't leave
 it spinning).
+
+**Holding still on a lock.** Two things kept the thrusters pulsing (every tick, the suit
+jittering ~0.5°/s) while just holding a lock at rest:
+- *Measurement noise.* Poses advance on two clocks (animation per frame, aim and AMBAC per
+  tick), so a tick sees 0, 1 or 2 frames of motion; differencing that twice (pose → velocity →
+  momentum change) turned a frame-timing wobble into 0.2–0.5 MN·m of fake torque. The momentum
+  is now low-passed (`momentum_smoothing` 0.06 s) before it's differenced: the impulse of a
+  motion is the same, only spread over a few ticks. AMBAC's own measured share goes through
+  the same filter before it's taken off, or its arm swings read as a disturbance for a moment.
+- *Waist balancing under an aimed arm.* AMBAC's waist twist swings the chest, the aimed arm
+  swings back to stay on target, and that reads as a new disturbance to counter. While an arm
+  weapon is up the fire control holds AMBAC's `torso` group (`FireControl.torso_group`); the
+  legs balance instead. Routing the whole counter to AMBAC made this loop unstable (~3.6°/s).
+
+`Tools/Flight/aim_jitter_probe.gd -- [counter|hold|off] [fps=N]` holds a lock at rest for 4 s:
+body rate 0.52 → 0.004 °/s rms, thrust 2% → 0%, no thruster above park throttle.
 
 Typical swing: hips up to 26° in a return to rest, 18° in a pitch; waist 7–8°; knees 5–7°; arms
 5–9°; side hips ≤ 3°. Yaw uses mostly the waist twist.

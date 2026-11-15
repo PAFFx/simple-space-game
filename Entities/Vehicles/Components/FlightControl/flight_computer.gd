@@ -62,6 +62,7 @@ var ambac_torque := Vector3.ZERO
 var limb_torque := Vector3.ZERO
 var limb_disturbance := Vector3.ZERO
 var _ambac_measured := Vector3.ZERO
+var _ambac_measured_smoothed := Vector3.ZERO
 var acceleration_g: float = 0.0
 
 var _prev_velocity := Vector3.ZERO
@@ -152,6 +153,8 @@ func _physics_process(delta: float) -> void:
 		last_wrench = control_law.compute(state, command)
 		var thrust_wrench := last_wrench
 		var torque := last_wrench.torque
+		# Countering goes through the normal split, not all to AMBAC: a waist swing makes the
+		# aimed arm swing back in the chest, which reads as a new disturbance (loop gain ~1).
 		if counter_limb_reaction:
 			torque -= limb_disturbance
 		if ambac != null and ambac.enabled:
@@ -199,7 +202,12 @@ func _apply_limb_reaction(delta: float) -> void:
 		return
 	limb_torque = limb_reaction.take_torque(delta)
 	body.apply_torque(state.to_global(limb_torque))
-	var unplanned := limb_torque - _ambac_measured   # AMBAC's measured share, last tick
+	# AMBAC's own share of it (last tick's plan), through the same low-pass the measured
+	# momentum goes through, or its own arm swing would read as a disturbance for a moment.
+	var km := 1.0 if limb_reaction.momentum_smoothing <= 0.0 \
+			else 1.0 - exp(-delta / limb_reaction.momentum_smoothing)
+	_ambac_measured_smoothed = _ambac_measured_smoothed.lerp(_ambac_measured, km)
+	var unplanned := limb_torque - _ambac_measured_smoothed
 	var k := 1.0 if limb_disturbance_smoothing <= 0.0 else 1.0 - exp(-delta / limb_disturbance_smoothing)
 	limb_disturbance = limb_disturbance.lerp(unplanned, k)
 

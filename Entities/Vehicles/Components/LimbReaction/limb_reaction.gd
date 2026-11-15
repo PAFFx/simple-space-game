@@ -23,8 +23,14 @@ extends Node
 ## Time after start (or re-enabling) before motion counts: the first frames snap the
 ## limbs from the bind pose into the animation, which isn't a real motion.
 @export var warmup_time: float = 0.3
+## Low-pass on the measured momentum, s. Velocities come from poses that advance on two
+## clocks (animation per frame, aim and AMBAC per tick), so a tick sees 0, 1 or 2 frames of
+## motion; differencing that raw gave torque noise far above the real reaction (thrusters
+## pulsing while just holding a lock). Smoothing keeps the total impulse, only spreads it.
+@export var momentum_smoothing: float = 0.06
 
-var last_momentum := Vector3.ZERO   ## Tracked limbs' angular momentum, body frame (N·m·s)
+var last_momentum := Vector3.ZERO   ## Tracked limbs' angular momentum (smoothed), body frame (N·m·s)
+var _raw_momentum := Vector3.ZERO
 
 var _body: RigidBody3D
 var _fire_control: FireControl
@@ -65,12 +71,26 @@ func _ready() -> void:
 ## Reaction torque on the body for this physics tick (body frame): minus the change in
 ## the limbs' angular momentum since the last call, over `delta`.
 func take_torque(delta: float) -> Vector3:
+	if not enabled or delta <= 0.0:
+		return Vector3.ZERO
 	_ticks += 1
-	if not enabled or not _fresh or delta <= 0.0:
-		return Vector3.ZERO   # no new pose: the limbs' momentum is unchanged
+	if _fresh:
+		_measure(_ticks * delta)
+		_ticks = 0
+	# No new pose: the limbs keep the momentum last measured.
+	if _stage < 2:
+		return Vector3.ZERO
+	var k := 1.0 if momentum_smoothing <= 0.0 else 1.0 - exp(-delta / momentum_smoothing)
+	var smoothed := last_momentum.lerp(_raw_momentum, k)
+	var torque := -(smoothed - last_momentum) / delta if _warmup > warmup_time else Vector3.ZERO
+	last_momentum = smoothed
+	return torque
+
+
+## Angular momentum of the tracked limbs from the newest pose against the one used last,
+## `dt` apart.
+func _measure(dt: float) -> void:
 	_fresh = false
-	var dt := _ticks * delta
-	_ticks = 0
 	var momentum := Vector3.ZERO
 	if _stage > 0:
 		for i in _bones.size():
@@ -82,16 +102,13 @@ func take_torque(delta: float) -> Vector3:
 		momentum = _snap_ref_rot * momentum
 		# Torso twist: azimuth + is to the right, a negative turn about up.
 		momentum += Vector3.UP * (-(_snap_twist - _used_twist) / dt * torso_twist_inertia)
-	var torque := Vector3.ZERO
-	if _stage > 1 and _warmup > warmup_time:
-		torque = -(momentum - last_momentum) / delta
-	if _stage > 0:
-		last_momentum = momentum
+		_raw_momentum = momentum
+		if _stage == 1:
+			last_momentum = momentum
 	_used_pos = _snap_pos.duplicate()
 	_used_rot = _snap_rot.duplicate()
 	_used_twist = _snap_twist
 	_stage = mini(_stage + 1, 2)
-	return torque
 
 
 func tracks_bone(bone: StringName) -> bool:
@@ -193,6 +210,7 @@ func sample(_skeleton: Skeleton3D, dt: float) -> void:
 		_fresh = false
 		_ticks = 0
 		last_momentum = Vector3.ZERO
+		_raw_momentum = Vector3.ZERO
 		return
 	_warmup += dt
 	var bs := _body_from_skeleton()
