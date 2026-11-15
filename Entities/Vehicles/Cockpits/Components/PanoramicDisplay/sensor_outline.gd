@@ -28,8 +28,14 @@ extends Node3D
 @export var crease_deg: float = 38.0
 @export var crease_px: float = 1.4
 @export_range(0.0, 1.0) var crease_alpha: float = 0.55
-## Sensor sub-layer the outline is drawn on (Layers.SENSOR_WEAPONS / SENSOR_SHIELDS).
+## Sensor sub-layer the outline is drawn on (Layers.SENSOR_WEAPONS / SENSOR_SHIELDS /
+## SENSOR_COMBAT).
 @export_flags_3d_render var sensor_layer: int = 1 << 8
+## Outline only the meshes with these names (empty = every mesh under the parent).
+@export var only_meshes: Array[StringName] = []
+## Leave showing the layer to FireControl (SENSOR_COMBAT: only in a weapons mode) instead
+## of turning it on once built.
+@export var shown_by_fire_control: bool = false
 
 const _SHADER := """shader_type spatial;
 render_mode unshaded, cull_disabled, %s, shadows_disabled, fog_disabled;
@@ -95,6 +101,8 @@ func _ready() -> void:
 
 func _build() -> void:
 	var meshes := get_parent().find_children("*", "MeshInstance3D", true, false)
+	if not only_meshes.is_empty():
+		meshes = meshes.filter(func(m: Node) -> bool: return m.name in only_meshes)
 	if meshes.is_empty():
 		push_warning("SensorOutline: no meshes under " + String(get_parent().name))
 		return
@@ -107,7 +115,7 @@ func _build() -> void:
 		_add_outline(mesh, unit)
 	var vehicle := VehicleBase.find_vehicle(self)
 	var sensor := vehicle.get_sensor_head() if vehicle != null else null
-	if sensor != null:
+	if sensor != null and not shown_by_fire_control:
 		sensor.set_group_visible(sensor_layer, true)
 
 
@@ -128,7 +136,8 @@ func _add_outline(source: MeshInstance3D, unit: int) -> void:
 		["depth_test_disabled, depth_draw_never", "read, compare_not_equal", halo_color, width_px + halo_px],
 		["depth_test_disabled, depth_draw_never", "read, compare_not_equal", color, width_px],
 	]
-	if crease_deg > 0.0:
+	# Creases carry their other end unskinned: only for rigid meshes.
+	if crease_deg > 0.0 and source.skin == null:
 		var creases := _crease_mesh(source.mesh, crease_deg)
 		if creases != null:
 			var crease_shader := Shader.new()
@@ -161,6 +170,10 @@ func _add_instance(source: MeshInstance3D, instance_name: String, mesh: Mesh, ma
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.extra_cull_margin = 1.0
 	source.add_child(mi)
+	if source.skin != null:
+		# Deforms with the same skeleton as its source (the suit's arms).
+		mi.skin = source.skin
+		mi.skeleton = mi.get_path_to(source.get_node(source.skeleton))
 
 
 ## The mesh's surfaces as one, its normals averaged over every vertex sharing a place, so
@@ -168,8 +181,18 @@ func _add_instance(source: MeshInstance3D, instance_name: String, mesh: Mesh, ma
 static func _smooth_shell(mesh: Mesh) -> ArrayMesh:
 	var verts := PackedVector3Array()
 	var indices := PackedInt32Array()
+	# Skinned: keep the bone weights so the shell deforms with the mesh.
+	var bones := PackedInt32Array()
+	var weights := PackedFloat32Array()
+	var skinned := mesh.get_surface_count() > 0
+	var flags := 0
 	for s in mesh.get_surface_count():
 		var arrays := mesh.surface_get_arrays(s)
+		skinned = skinned and arrays[Mesh.ARRAY_BONES] != null and arrays[Mesh.ARRAY_WEIGHTS] != null
+		if skinned:
+			bones.append_array(arrays[Mesh.ARRAY_BONES])
+			weights.append_array(arrays[Mesh.ARRAY_WEIGHTS])
+			flags = (mesh as ArrayMesh).surface_get_format(s) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if mesh is ArrayMesh else 0
 		var surface_verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var base := verts.size()
 		verts.append_array(surface_verts)
@@ -200,8 +223,11 @@ static func _smooth_shell(mesh: Mesh) -> ArrayMesh:
 	arrays[Mesh.ARRAY_VERTEX] = verts
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_INDEX] = indices
+	if skinned:
+		arrays[Mesh.ARRAY_BONES] = bones
+		arrays[Mesh.ARRAY_WEIGHTS] = weights
 	var shell := ArrayMesh.new()
-	shell.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	shell.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, flags)
 	return shell
 
 

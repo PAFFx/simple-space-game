@@ -48,7 +48,7 @@ func _run() -> void:
 	fc.input_source = _input
 	_fcs = vehicle.find_component(FireControl) as FireControl
 	print("weapons: ", _fcs.weapons.keys())
-	_check("weapons found", _fcs.weapons.size() == 4)
+	_check("weapons found", _fcs.weapons.size() == 5)
 
 	# NAV: nothing selected; the hat drops into DGFT with the rifle.
 	_check("starts NAV / SAFE", _fcs.mode == FireControl.MasterMode.NAV and not _fcs.master_arm and _fcs.selected == null)
@@ -57,7 +57,10 @@ func _run() -> void:
 	_check("hat forward → DGFT + rifle", _fcs.mode == FireControl.MasterMode.DGFT and _id() == &"beam_rifle")
 	_input.cmd.weapon_select = FireControl.Hat.FORWARD
 	await _ticks(2)
-	_check("forward again → missile", _id() == &"shield_missile")
+	_check("forward again → linear", _id() == &"beam_linear")
+	_input.cmd.weapon_select = FireControl.Hat.LEFT
+	await _ticks(2)
+	_check("left → missile", _id() == &"shield_missile")
 	_input.cmd.weapon_select = FireControl.Hat.AFT
 	await _ticks(2)
 	_check("aft (nothing fitted) keeps selection", _id() == &"shield_missile")
@@ -90,11 +93,25 @@ func _run() -> void:
 	_input.cmd.fire_main = true
 	await _ticks(5)
 	_check("SAFE holds fire", rifle.ammo == rifle.max_ammo)
-	_input.cmd.master_arm = 1
-	await _ticks(3)
 	_input.cmd.fire_main = false
-	_check("armed shot leaves", rifle.ammo == rifle.max_ammo - 1)
-	var hp := drone.hit_points
+	_input.cmd.master_arm = 1
+	await _ticks(2)
+	# Spool: let go early and nothing leaves; hold through it and one shot leaves, however
+	# long it is held after.
+	var spool_ticks := ceili(rifle.projectile.spool_time * Engine.physics_ticks_per_second)
+	_input.cmd.fire_main = true
+	await _ticks(spool_ticks / 2)
+	_check("spooling shows", rifle.is_spooling())
+	_input.cmd.fire_main = false
+	await _ticks(2)
+	_check("let go early: no shot, spool drops", rifle.ammo == rifle.max_ammo and not rifle.is_spooling())
+	_input.cmd.fire_main = true
+	await _ticks(spool_ticks + 2)
+	_check("held through the spool: shot leaves", rifle.ammo == rifle.max_ammo - 1)
+	var hp := drone.hit_points if is_instance_valid(drone) else 0.0
+	await _ticks(ceili(rifle.cycle_time * Engine.physics_ticks_per_second) + spool_ticks + 10)
+	_check("held on: no second shot", rifle.ammo == rifle.max_ammo - 1)
+	_input.cmd.fire_main = false
 	await _ticks(40)
 	_check("beam kills the static drone", not is_instance_valid(drone) or drone.hit_points < hp)
 	_check("lock drops with the target", _fcs.locked == null)
@@ -108,10 +125,44 @@ func _run() -> void:
 	print("drift: aim %s lead %s on_target %s tof %.3f" % [rifle.aim, rifle.lead_angles, rifle.on_target, rifle.time_of_flight])
 	hp = drone.hit_points
 	_input.cmd.fire_main = true
-	await _ticks(3)
+	await _ticks(spool_ticks + 2)
 	_input.cmd.fire_main = false
 	await _ticks(60)
 	_check("lead shot hits a crossing target", drone.hit_points < hp)
+
+	# Linear: forward again keeps the arm up, costs 3 of the shared E-pack, follows the
+	# barrel while it pours out and hits the crossing target.
+	_input.cmd.weapon_select = FireControl.Hat.FORWARD
+	await _ticks(2)
+	var linear := _fcs.get_weapon(&"beam_linear")
+	_check("linear selected, still ready", _fcs.selected == linear and linear.state == MsWeapon.State.READY)
+	# The pulse's cooldown holds the linear too (one barrel).
+	await _ticks(100)
+	var before := linear.ammo
+	_check("shares the E-pack", before == rifle.ammo)
+	hp = drone.hit_points
+	var lin_spool := ceili(linear.projectile.spool_time * Engine.physics_ticks_per_second)
+	_input.cmd.fire_main = true
+	await _ticks(lin_spool + 2)
+	_input.cmd.fire_main = false
+	_check("linear costs 3", rifle.ammo == before - 3)
+	var manager := ProjectileManager.find(_fcs)
+	var beam: ProjectileManager.Shot = null
+	for shot in manager._shots:
+		if shot.spec.kind == ProjectileSpec.Kind.LINEAR:
+			beam = shot
+	await _ticks(10)
+	_check("linear still on the barrel, front advancing", beam != null and beam.emitting and beam.reach > 30.0)
+	if beam != null:
+		var barrel := linear.get_aim_direction(_fcs)
+		print("linear: reach %.0f length %.0f, off the barrel %.3f°" % [beam.reach, beam.length, rad_to_deg(beam.thrust_dir.angle_to(barrel))])
+		_check("linear lies along the barrel", rad_to_deg(beam.thrust_dir.angle_to(barrel)) < 0.5)
+	await _ticks(90)
+	print("linear: damage %.0f" % (hp - drone.hit_points))
+	_check("linear hits a crossing target", drone.hit_points < hp)
+	_input.cmd.weapon_select = FireControl.Hat.FORWARD
+	await _ticks(2)
+	_check("forward again → pulse", _fcs.selected == rifle)
 
 	# Vulcans: head envelope, burst.
 	var vulcan := _fcs.get_vulcan()
@@ -138,7 +189,7 @@ func _run() -> void:
 	drone = _spawn(TargetDrone.Behaviour.STATIC, 700.0, Vector2(-10, 0))
 	drone.hit_points = 5000.0
 	_fcs.lock(drone)
-	_input.cmd.weapon_select = FireControl.Hat.FORWARD
+	_input.cmd.weapon_select = FireControl.Hat.LEFT
 	await _ticks(2)
 	var missile := _fcs.get_weapon(&"shield_missile")
 	_check("missile selected", _fcs.selected == missile)

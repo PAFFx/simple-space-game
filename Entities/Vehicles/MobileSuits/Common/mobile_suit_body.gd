@@ -10,6 +10,9 @@ signal hit_taken(damage: float, position: Vector3, direction: Vector3)
 
 ## Model meshes the pilot sees from inside through the open hatch (cavity + flaps).
 @export var first_person_parts: Array[StringName] = [&"Chest", &"HatchUpper", &"HatchLower"]
+## Model meshes the sensor head never sees, even with the body shown on the panoramic
+## screen in a weapons mode: the head it sits in would wall it in.
+@export var sensor_hidden_parts: Array[StringName] = [&"Head"]
 
 
 func _ready() -> void:
@@ -17,6 +20,8 @@ func _ready() -> void:
 		var layers := Layers.VEHICLE_EXT
 		if mesh.name in first_person_parts:
 			layers |= Layers.VEHICLE_FP
+		if not mesh.name in sensor_hidden_parts:
+			layers |= Layers.SENSOR_BODY_PARTS
 		(mesh as MeshInstance3D).layers = layers
 
 

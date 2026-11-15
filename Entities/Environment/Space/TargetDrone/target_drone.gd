@@ -41,6 +41,10 @@ var _anchor := Vector3.ZERO
 var _base_velocity := Vector3.ZERO
 var _material: StandardMaterial3D
 var _flash := 0.0
+## Seconds spooling the next shot (TURRET), -1 = not spooling.
+var _spool := -1.0
+## Where the shot leaves: on the hull, facing the quarry.
+var _muzzle: Marker3D
 
 
 func _ready() -> void:
@@ -51,6 +55,9 @@ func _ready() -> void:
 	set_meta(&"hud_radius", radius)
 	set_meta(&"hud_hostile", true)
 	_build()
+	_muzzle = Marker3D.new()
+	_muzzle.name = "Muzzle"
+	add_child(_muzzle)
 	_anchor = global_position
 	_base_velocity = velocity
 	if behaviour == Behaviour.TURRET and shot == null:
@@ -104,28 +111,51 @@ func _jink(delta: float, accel_g: float) -> void:
 
 
 func _shoot(delta: float) -> void:
-	_fire_due -= delta
-	if _fire_due > 0.0 or quarry == null or not is_instance_valid(quarry) or shot == null:
+	var manager := ProjectileManager.of(self)
+	if quarry == null or not is_instance_valid(quarry) or shot == null:
+		_spool = -1.0
+		manager.set_charge(self, _muzzle, shot, 0.0)
 		return
-	_fire_due = randf_range(fire_interval.x, fire_interval.y)
+	var dir := _aim()
+	if _spool < 0.0:
+		_fire_due -= delta
+		if _fire_due > 0.0 or dir == Vector3.ZERO:
+			return
+		_fire_due = randf_range(fire_interval.x, fire_interval.y)
+		_spool = 0.0
+	# The muzzle glows on the side facing the quarry while it spools: the dodge cue.
+	if dir != Vector3.ZERO:
+		_muzzle.global_position = global_position + dir * (radius + 1.0)
+	_spool += delta
+	var level := _spool / maxf(shot.spool_time, 0.01)
+	if level < 1.0:
+		manager.set_charge(self, _muzzle, shot, level)
+		return
+	_spool = -1.0
+	manager.set_charge(self, _muzzle, shot, 0.0)
+	if dir == Vector3.ZERO:
+		return
+	var muzzle := global_position + dir * (radius + 1.0)
+	manager.spawn(shot, muzzle, velocity + dir * shot.speed, dir, [get_rid()], self)
+	manager.muzzle_flash(shot, muzzle, velocity, _muzzle)
+
+
+## Lead direction on the quarry (with the aim error), or zero if out of reach.
+func _aim() -> Vector3:
 	var quarry_velocity := (quarry as RigidBody3D).linear_velocity if quarry is RigidBody3D else Vector3.ZERO
 	var quarry_centre := quarry.global_position
 	if quarry is RigidBody3D:
 		quarry_centre = quarry.global_transform * (quarry as RigidBody3D).center_of_mass
 	var rel_pos := quarry_centre - global_position
 	if rel_pos.length() > fire_range:
-		return
+		return Vector3.ZERO
 	var rel_vel := quarry_velocity - velocity
 	var t := SpatialMath.intercept_time(rel_pos, rel_vel, shot.speed)
 	if t <= 0.0 or t > shot.lifetime:
-		return
+		return Vector3.ZERO
 	var dir := (rel_pos + rel_vel * t).normalized()
 	var error := deg_to_rad(aim_error_deg)
-	dir = (dir + Vector3(randfn(0.0, error), randfn(0.0, error), randfn(0.0, error))).normalized()
-	var manager := ProjectileManager.of(self)
-	var muzzle := global_position + dir * (radius + 1.0)
-	manager.spawn(shot, muzzle, velocity + dir * shot.speed, dir, [get_rid()], self)
-	manager.muzzle_flash(shot, muzzle, velocity)
+	return (dir + Vector3(randfn(0.0, error), randfn(0.0, error), randfn(0.0, error))).normalized()
 
 
 func _build() -> void:

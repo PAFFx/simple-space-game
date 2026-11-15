@@ -40,15 +40,15 @@ const CONTACT_GROUP := &"hud_contacts"
 
 ## Weapon ids on each hat direction (Hat order), first press then second.
 @export var hat_layout: Array[Array] = [
-	[&"beam_rifle", &"shield_missile"],
+	[&"beam_rifle", &"beam_linear"],
 	[&"fin_funnel"],
 	[&"bazooka_back", &"bazooka_hand"],
-	[],
+	[&"shield_missile"],
 	[&"beam_saber"],
 ]
 ## Names for the weapon ring, including weapons that aren't fitted yet.
 @export var weapon_labels := {
-	&"beam_rifle": "RIFLE", &"shield_missile": "MISSILE", &"fin_funnel": "FUNNEL",
+	&"beam_rifle": "PULSE", &"beam_linear": "LINEAR", &"shield_missile": "MISSILE", &"fin_funnel": "FUNNEL",
 	&"bazooka_back": "BZK-B", &"bazooka_hand": "BZK-H", &"beam_saber": "SABER",
 }
 ## Selected on entering DGFT.
@@ -60,6 +60,9 @@ const CONTACT_GROUP := &"hud_contacts"
 ## the aimed arm swing back to stay on target, which needs countering again (the thrusters
 ## kept pulsing while just holding a lock). The legs balance instead.
 @export var torso_group: StringName = &"torso"
+## Show the suit's own body and weapons on the panoramic screen in a weapons mode (for
+## close combat later). Off: the arms and the gun are outlines (SENSOR_COMBAT) instead.
+@export var show_body_in_weapons_mode: bool = false
 @export var master_arm: bool = false
 @export var mode := MasterMode.NAV
 @export var soi := Soi.HUD_CURSOR
@@ -227,6 +230,10 @@ func set_mode(value: MasterMode) -> void:
 func select(weapon: MsWeapon) -> void:
 	if weapon == selected:
 		return
+	# Another mode of the same gun (pulse ↔ linear): it is already up.
+	if selected != null and weapon != null and weapon.equipment != null \
+			and weapon.equipment == selected.equipment and weapon.pose == selected.pose:
+		weapon.take_over(selected)
 	selected = weapon
 	selection_changed.emit(weapon)
 
@@ -310,10 +317,21 @@ func _hold_torso() -> void:
 
 
 func _apply_mode() -> void:
+	_show_body_on_screen()
 	if mode == MasterMode.NAV:
 		select(null)
 	elif mode == MasterMode.DGFT:
 		select(get_weapon(dgft_weapon))
+
+
+## In a weapons mode the panoramic screen outlines the arms and the gun, so a shot is seen
+## leaving the rifle (or shows the whole body, show_body_in_weapons_mode); in NAV the view
+## is clear. Shield and funnels are outlines throughout.
+func _show_body_on_screen() -> void:
+	var sensor := vehicle.get_sensor_head() if vehicle.get_sensor_head_mount() != null else null
+	if sensor != null:
+		sensor.set_group_visible(Layers.SENSOR_BODY_PARTS, is_weapons_mode() and show_body_in_weapons_mode)
+		sensor.set_group_visible(Layers.SENSOR_COMBAT, is_weapons_mode() and not show_body_in_weapons_mode)
 
 
 ## Each equipment takes the pose of the weapon that wants it; the guard comes first.
@@ -344,6 +362,7 @@ func _press_hat(direction: int) -> void:
 		# Selecting a weapon is asking for a fight, except in BVR.
 		if mode == MasterMode.NAV:
 			mode = MasterMode.DGFT
+			_show_body_on_screen()
 		select(pick)
 	hat_pressed.emit(direction)
 

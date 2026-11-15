@@ -4,14 +4,15 @@
 
 [resource]
 script = ExtResource("1_spec")
-speed = 4000.0
+speed = 3000.0
+spool_time = 0.3
 lifetime = 2.5
 damage = 1000.0
 color = Color(1, 0.13, 0.1, 1)
-width = 0.55
-bolt_length = 80.0
-trail_time = 0.6
+width = 1.2
+bolt_length = 45.0
+trail_time = 0.035
 intensity = 10.0
 glow = 1.0
-flash_size = 4.5
+flash_size = 6.0
 impact_size = 20.0

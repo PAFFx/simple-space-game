@@ -12,9 +12,10 @@ const HUD_3D := 1 << 6
 # Assign these to MeshInstance3D nodes IN ADDITION to VEHICLE_EXT so they
 # remain visible to the third-person camera while being individually
 # toggleable on the sensor camera via SensorHead.set_group_visible().
-const SENSOR_BODY_PARTS := 1 << 7  # Mech structural body
+const SENSOR_BODY_PARTS := 1 << 7  # The suit's own body and carried weapons (shown in DGFT / BVR)
 const SENSOR_WEAPONS    := 1 << 8  # Weapons (beam rifles, missile pods, etc.)
 const SENSOR_SHIELDS    := 1 << 9  # Shields and armour panels
+const SENSOR_COMBAT     := 1 << 10 # Outlines of the arms and the gun, shown in DGFT / BVR
 
 const DEBUG := 1 << 19
 

@@ -5,15 +5,32 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
 
 ## 1. Weaponry
 
-- [ ] Beam FX isn't what it should be: rework the look.
-- [ ] Beam speed is definitely too fast: slow it down.
-- [ ] Vulcan RPM should go up by a lot.
-- [ ] Shield missile explosion radius is very small; it can't be used to force a manoeuvre.
-- [ ] Destruction FX should be much better.
-- [ ] Beams need a spool-up / charge time that can be seen from afar: that is the dodge cue.
-      The charge can be held, so the beam fires when the weapon release is let go, not on the press.
-- [ ] A launched projectile like the beam shouldn't lag behind the barrel that fired it: for a
+- [x] Beam FX isn't what it should be: rework the look.
+      Done: the rifle fires two beam types (weapon hat forward = PULSE, forward again =
+      LINEAR; the shield missiles moved to hat left). PULSE (ours and the turret's) is a short,
+      fat, boiling burst of energy with a few short streaks, no long wake; LINEAR is a long
+      beam, white core in a thick ragged red sheath.
+- [x] Beam speed is definitely too fast: slow it down. Done: pulse 4000 → 3000 m/s,
+      linear 3200 m/s.
+- [x] Vulcan RPM / ammo. Done: 640 rpm per gun (two guns firing in turn, 1280 rpm), 600
+      rounds in all (was 2000 rpm, 1200 rounds).
+- [x] Shield missile explosion radius is very small; it can't be used to force a manoeuvre.
+      Done: blast 45 → 90 m, proximity fuse 14 → 25 m; the light sphere grows to the blast.
+- [x] Destruction FX should be much better. Done: explosions are spheres of light (a big
+      white-hot ball, smaller balls bubbling out around it, cooling and fading).
+- [x] Beams need a spool-up time that can be seen from afar: that is the dodge cue.
+      Done: every beam (ours and the turret's) glows on the barrel while it spools: pulse
+      0.3 s, linear 0.9 s, turret 0.5 s. The trigger has to be held through the spool; letting
+      go early drops the shot. One shot per pull: press again for the next. Longer cooldown
+      after a shot (pulse 2 s, linear 5 s, shared: one barrel). E-pack 12 → 32, shared:
+      pulse uses 1, linear 3.
+- [x] A launched projectile like the beam shouldn't lag behind the barrel that fired it: for a
       long beam type it should follow the barrel for a bit while it dissipates.
+      Done: LINEAR is a straight beam from the barrel for 1.2 s that swings with it like a
+      laser, its front still advancing at 3200 m/s (reach 3.8 km); the lead accounts for the
+      front's head start. Let go, it stays where it was and breaks up over 0.45 s.
+      Charge and muzzle glows ride the muzzle where it is drawn (physics-interpolated), so
+      they no longer stutter behind a moving gun; the charge is a boiling knot with arcs.
 
 ## 2. Physics
 
@@ -51,8 +68,12 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
 - [ ] SOI symbology on both the panoramic screen and the MFD isn't what it should be.
 - [ ] TMS and HMCS cursor UI are bad.
 - [ ] Locked target and enemy symbology need improvement.
-- [ ] In DGFT / BVR the MS body and weapons should actually be visible through the panoramic
+- [x] In DGFT / BVR the MS body and weapons should actually be visible through the panoramic
       screen; the shield and funnels stay outlines only.
+      Done: in DGFT / BVR the rifle and the arms show as outlines (`Layers.SENSOR_COMBAT`,
+      skinned outlines for the arms); the body is hidden (the whole body blocked too much
+      while manoeuvring). The full body is still on `SENSOR_BODY_PARTS`, kept for close combat
+      (`FireControl.show_body_in_weapons_mode`).
 - [ ] Remove the HIT / BLOCK cue from the HUD: it belongs in a debug menu, not the real UI.
 - [ ] Mode, weapon and armed status on the panoramic screen need improvement.
 - [ ] Targeting envelope UI needs improvement.
@@ -81,3 +102,13 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
 - [ ] Remove the switches and the hatch panel next to the armrest. The switches aren't needed
       and the hatch panel can move elsewhere (ideas TBD). There should only be an armrest, not a
       panel that blocks the view.
+
+## 6. Graphics
+
+- [x] Anti-aliasing: things far away (enemies included) are hard to see. Done: MSAA 4×
+      (`rendering/anti_aliasing/quality/msaa_3d`), also on the sensor head's viewport, which
+      is what draws the outside world onto the panoramic screen.
+- [x] MFD pages unreadable: the page is drawn far larger than it shows, with no mipmaps.
+      Done: the screens area-filter it (`mfd_screen.gdshader`, 4×4 samples per pixel).
+- [ ] Far suits may still be sub-pixel at long range even with MSAA: if so, look at a
+      minimum on-screen size or a contact glint for far hostiles.

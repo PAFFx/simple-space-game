@@ -4,8 +4,10 @@ extends Resource
 ## What a weapon fires: how the shot flies, what it does on a hit and how it looks.
 ## Nothing is hit-scan. A beam is a bolt of dense Minovsky particles flying at `speed`,
 ## fast but dodgeable from far enough; it leaves a glowing wake that fades after it.
+## A LINEAR beam keeps pouring out of the barrel for `emit_time`: a long column whose
+## tail stays on the muzzle and bends with it, dissipating after the barrel lets go.
 
-enum Kind { BEAM, BULLET, MISSILE }
+enum Kind { BEAM, BULLET, MISSILE, LINEAR }
 
 @export var kind := Kind.BEAM
 ## Speed off the muzzle, m/s, on top of the shooter's own velocity.
@@ -20,6 +22,11 @@ enum Kind { BEAM, BULLET, MISSILE }
 ## blast_radius (full damage at the centre, none at the edge). 0 = contact only.
 @export var fuse_radius: float = 0.0
 @export var blast_radius: float = 0.0
+## Seconds the barrel glows before the shot leaves: the dodge cue, seen from afar.
+## The trigger has to be held through it (0 = fires on the press).
+@export var spool_time: float = 0.0
+## LINEAR: seconds the beam keeps leaving the barrel.
+@export var emit_time: float = 0.0
 
 @export_group("Look")
 @export var color := Color(1.0, 0.16, 0.12)

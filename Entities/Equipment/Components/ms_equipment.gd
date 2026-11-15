@@ -30,7 +30,10 @@ var active: bool = false
 
 func _ready() -> void:
 	active = start_active
-	_set_layers(self, Layers.VEHICLE_EXT)
+	# Drawn on the panoramic screen with the body in a weapons mode, unless it is shown
+	# there as an outline only (shield, funnels: the real thing would block the view).
+	var outlined := find_children("*", "", true, false).any(func(n: Node) -> bool: return n is SensorOutline)
+	_set_layers(self, Layers.VEHICLE_EXT | (0 if outlined else Layers.SENSOR_BODY_PARTS))
 
 
 func set_active(value: bool) -> void:

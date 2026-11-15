@@ -3,7 +3,7 @@ extends SceneTree
 ## Generates the RX-93 ν Gundam vehicle scene and its animation library from the
 ## tables below. Run after rebuilding the GLBs (Tools/Blender/build_mobile_suit_nu.py):
 ##
-##   godot-mono --headless --path . -s Tools/Godot/build_rx93_scene.gd
+##   godot-double --headless --path . -s Tools/Godot/build_rx93_scene.gd
 ##
 ## Same components as MSP-02 (same bone names). Thrusters sit on the nozzles the
 ## model actually has; see THRUSTERS.
@@ -302,6 +302,16 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 		shape.shape = box
 		shape.position = c[1] - Vector3(0, BELLY_DROP, 0) if c[0] in ["Pelvis", "LegR", "LegL", "FootR", "FootL"] else c[1]
 		_add(root, root, shape)
+
+	# The arms as outlines on the panoramic screen in DGFT / BVR (FireControl shows the
+	# layer), so the rifle's arm is seen without the body blocking the view.
+	var arms := SensorOutline.new()
+	arms.name = "ArmOutline"
+	arms.sensor_layer = Layers.SENSOR_COMBAT
+	arms.shown_by_fire_control = true
+	arms.per_mesh = true
+	arms.only_meshes = [&"UpperArmL", &"UpperArmR", &"ForearmL", &"ForearmR", &"HandL", &"HandR"] as Array[StringName]
+	_add(root, root, arms)
 
 	var sensor_mount := _marker(root, "SensorHeadMount", Vector3(0, 20.0, -1.4))
 	_add(root, sensor_mount, load(SENSOR_SCENE).instantiate())
@@ -632,8 +642,8 @@ func _build_fire_control(root: Node3D) -> void:
 	vulcan.display_name = "60mm VULCAN"
 	vulcan.hud_name = "VULCAN"
 	vulcan.projectile = load("res://Entities/Projectiles/Specs/vulcan_60mm.tres")
-	vulcan.max_ammo = 1200
-	vulcan.cycle_time = 0.03
+	vulcan.max_ammo = 600
+	vulcan.cycle_time = 60.0 / 1280.0   # 640 rpm per gun, two guns firing in turn
 	vulcan.dispersion_deg = 0.22
 	vulcan.always_on = true
 	vulcan.ready_time = 0.3

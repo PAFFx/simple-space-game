@@ -95,6 +95,10 @@ func _create_viewport() -> void:
 	_viewport.own_world_3d = false
 	_viewport.disable_3d = false
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# The outside world is drawn here, not in the window: give it the project's
+	# anti-aliasing so far suits and thin beams don't break up into crawling pixels.
+	_viewport.msaa_3d = ProjectSettings.get_setting("rendering/anti_aliasing/quality/msaa_3d", Viewport.MSAA_4X)
+	_viewport.screen_space_aa = ProjectSettings.get_setting("rendering/anti_aliasing/quality/screen_space_aa", Viewport.SCREEN_SPACE_AA_DISABLED)
 	add_child(_viewport)
 
 

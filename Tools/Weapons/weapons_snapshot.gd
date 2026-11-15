@@ -31,11 +31,15 @@ var _fp: PilotCamera
 var _ext: Camera3D
 
 
+## A weapon whose aim is swept while a sequence is saved (linear beam bending).
+var _sweep: MsWeapon
+
+
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_out = args[0]
-	var shots := PackedStringArray(["hud", "beam", "external", "impact", "ring", "vulcan", "missile", "block", "turret"])
+	var shots := PackedStringArray(["hud", "beam", "external", "linear", "explode", "impact", "ring", "vulcan", "missile", "block", "turret"])
 	if args.size() > 1:
 		shots = args[1].split(",")
 	DirAccess.make_dir_recursive_absolute(_out)
@@ -119,6 +123,48 @@ func _run(shots: PackedStringArray) -> void:
 		await _frames(90)
 		_fp.make_current()
 
+	if "linear" in shots:
+		_input.cmd.weapon_select = FireControl.Hat.FORWARD
+		await _frames(10)
+		var linear := _fcs.selected
+		await _fire_sequence("linear_fp", 6, 2)
+		# Side-on from far away, the barrel sweeping while it pours out: the column bends
+		# with it and stays on the muzzle.
+		_ext.make_current()
+		_ext_view(Vector3(700, 120, -500), Vector3(60, 40, -500))
+		_ext.fov = 70.0
+		_sweep = linear
+		await _fire_sequence("linear_ext_sweep", 10, 3)
+		_sweep = null
+		linear.aim_override = null
+		_ext_view(Vector3(26, 22, 30), Vector3(4, 16, -10))
+		_ext.fov = 45.0
+		await _fire_sequence("linear_ext_close", 6, 2)
+		_fp.make_current()
+		_input.cmd.weapon_select = FireControl.Hat.FORWARD
+		await _frames(30)
+
+	if "explode" in shots:
+		var victim := _spawn(TargetDrone.Behaviour.STATIC, 600.0, Vector2(-20, 0), 1.0)
+		await _frames(5)
+		_ext.make_current()
+		var to_suit := (_suit.global_position - victim.global_position).normalized()
+		_ext.global_transform = Transform3D(Basis.IDENTITY, victim.global_position + to_suit * 160.0 + Vector3.UP * 40.0) \
+				.looking_at(victim.global_position, Vector3.UP)
+		ProjectileManager.of(victim).explode(victim.global_position, victim.velocity, victim.radius * 3.0)
+		victim.queue_free()
+		for i in 8:
+			await _frames(5)
+			await _shot("explode_drone_%d" % i)
+		# A missile-sized one (90 m), from 400 m.
+		var at := _suit.global_position + _suit.global_basis * Vector3(0, 0, -900)
+		_ext.global_transform = Transform3D(Basis.IDENTITY, at + Vector3(0, 60, 400)).looking_at(at, Vector3.UP)
+		ProjectileManager.of(_suit).explode(at, _suit.linear_velocity, 90.0, Color(1, 0.72, 0.45))
+		for i in 8:
+			await _frames(6)
+			await _shot("explode_blast_%d" % i)
+		_fp.make_current()
+
 	if "impact" in shots:
 		# From beside the target, looking back along the shot.
 		_ext.make_current()
@@ -167,11 +213,7 @@ func _run(shots: PackedStringArray) -> void:
 		await _frames(60)
 
 	if "missile" in shots:
-		if _fcs.selected == null or _fcs.selected.weapon_id != &"shield_missile":
-			_input.cmd.weapon_select = FireControl.Hat.FORWARD
-			await _frames(4)
-			if _fcs.selected.weapon_id != &"shield_missile":
-				_input.cmd.weapon_select = FireControl.Hat.FORWARD
+		_input.cmd.weapon_select = FireControl.Hat.LEFT
 		await _frames(120)
 		await _shot("missile_hud")
 		_ext.make_current()
@@ -231,14 +273,38 @@ func _run(shots: PackedStringArray) -> void:
 
 
 ## Fires the selected weapon once and saves the next `count` frames, `every` frames apart.
+## A beam is held through its spool (saving the charge half-way and nearly done).
 func _fire_sequence(tag: String, count: int, every := 1) -> void:
+	var w := _fcs.selected
+	for i in 600:
+		if w == null or w.can_fire():
+			break
+		await physics_frame
+	var before := w.ammo if w != null else 0
 	_input.cmd.fire_main = true
-	await physics_frame
-	await physics_frame
+	if w != null and w.projectile != null and w.projectile.spool_time > 0.0:
+		var saved := 0
+		for i in 600:
+			if w.ammo != before:
+				break
+			await physics_frame
+			if saved == 0 and w.get_spool_fraction() > 0.5:
+				saved = 1
+				await RenderingServer.frame_post_draw
+				root.get_texture().get_image().save_png("%s/%s_spool_a.png" % [_out, tag])
+			elif saved == 1 and w.get_spool_fraction() > 0.9:
+				saved = 2
+				await RenderingServer.frame_post_draw
+				root.get_texture().get_image().save_png("%s/%s_spool_b.png" % [_out, tag])
+	else:
+		await physics_frame
+		await physics_frame
 	_input.cmd.fire_main = false
 	for i in count:
 		for k in every:
 			await process_frame
+			if _sweep != null:
+				_sweep.aim_override = _sweep.aim + Vector2(-1.2, 0.5)
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("%s/%s_%02d.png" % [_out, tag, i])
 
