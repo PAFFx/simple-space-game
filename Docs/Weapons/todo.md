@@ -12,7 +12,7 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
       beam, white core in a thick ragged red sheath.
 - [x] Beam speed is definitely too fast: slow it down. Done: pulse 4000 → 3000 m/s,
       linear 3200 m/s.
-- [x] Vulcan RPM / ammo. Done: 640 rpm per gun (two guns firing in turn, 1280 rpm), 600
+- [x] Vulcan RPM / ammo. Done: 640 rpm per gun (two guns firing in turn, 1280 rpm), 300
       rounds in all (was 2000 rpm, 1200 rounds).
 - [x] Shield missile explosion radius is very small; it can't be used to force a manoeuvre.
       Done: blast 45 → 90 m, proximity fuse 14 → 25 m; the light sphere grows to the blast.
@@ -26,11 +26,20 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
       pulse uses 1, linear 3.
 - [x] A launched projectile like the beam shouldn't lag behind the barrel that fired it: for a
       long beam type it should follow the barrel for a bit while it dissipates.
-      Done: LINEAR is a straight beam from the barrel for 1.2 s that swings with it like a
-      laser, its front still advancing at 3200 m/s (reach 3.8 km); the lead accounts for the
-      front's head start. Let go, it stays where it was and breaks up over 0.45 s.
+      Done: LINEAR is a straight beam from the barrel for 0.6 s that swings with it like a
+      laser, its front still advancing at 3200 m/s (reach 1.9 km); the lead accounts for the
+      front's head start. Let go, it stays where it was and breaks up over 0.45 s. When the
+      lock drops (target destroyed) the barrel holds its aim for 0.8 s, and for as long as a
+      linear beam is still coming out, instead of swinging back to the boresight.
       Charge and muzzle glows ride the muzzle where it is drawn (physics-interpolated), so
       they no longer stutter behind a moving gun; the charge is a boiling knot with arcs.
+- [ ] LINEAR needs another pass on its mechanic and numbers. As it stands it is a straight
+      beam for 0.6 s whose front travels at 3200 m/s, so its reach is only 1.9 km (pulse:
+      7.5 km), and the shorter firing time cut its range in half. Decide how it should work
+      (longer emission, faster front, a detached slug flying on after release, ...) and
+      retune speed, emission, damage and cooldown with it.
+- [ ] Beam speeds in general (pulse 3000 m/s, linear 3200 m/s, turret 900 m/s) need tuning
+      against suit manoeuvrability: see the Physics item about other MS' beams.
 
 ## 2. Physics
 
@@ -102,6 +111,17 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
 - [ ] Remove the switches and the hatch panel next to the armrest. The switches aren't needed
       and the hatch panel can move elsewhere (ideas TBD). There should only be an armrest, not a
       panel that blocks the view.
+
+- [x] Beams should feel scarier up close. Tried on the panoramic screen (white-out,
+      exposure dip, after-image streak) and removed: it read as weird. Instead the beams light
+      the cockpit harder (CockpitBeamGlow). Sound is out of scope for now.
+- [x] The suit's own overlay (arm / rifle outlines now, the body for close combat later)
+      resolves in from blue blocks that halve in size until sharp, and breaks up the same way,
+      on a mode change or when what it shows changes. Done: SensorHead draws it with a second
+      camera on its own transparent image (`set_overlay`); the panoramic screen pixelates it
+      by `overlay_reveal` (in 0.5 s, out 0.3 s). The whole silhouette pixelates, not just
+      the rim: the outlines mark their body with a faint fill (`SensorOutline.fill_alpha`),
+      counted while resolving and dropped once in.
 
 ## 6. Graphics
 

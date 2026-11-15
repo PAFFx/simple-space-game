@@ -33,6 +33,10 @@ extends Node3D
 @export_flags_3d_render var sensor_layer: int = 1 << 8
 ## Outline only the meshes with these names (empty = every mesh under the parent).
 @export var only_meshes: Array[StringName] = []
+## Alpha the body itself is drawn with (0 = invisible). A faint value marks the whole
+## silhouette for the suit's own overlay, which pixelates all of it in and out
+## (panoramic_screen.gdshader drops anything this faint once it is in).
+@export_range(0.0, 0.1) var fill_alpha: float = 0.0
 ## Leave showing the layer to FireControl (SENSOR_COMBAT: only in a weapons mode) instead
 ## of turning it on once built.
 @export var shown_by_fire_control: bool = false
@@ -132,7 +136,7 @@ func _add_outline(source: MeshInstance3D, unit: int) -> void:
 	# transparent (stencil and depth only), then the halo and the rim outside it.
 	var steps := [
 		# (Stencil is written behind nearer units too, or the rim would fill in there.)
-		["depth_draw_always", "write, write_depth_fail, compare_always", Color(color, 0.0), 0.0],
+		["depth_draw_always", "write, write_depth_fail, compare_always", Color(color, fill_alpha), 0.0],
 		["depth_test_disabled, depth_draw_never", "read, compare_not_equal", halo_color, width_px + halo_px],
 		["depth_test_disabled, depth_draw_never", "read, compare_not_equal", color, width_px],
 	]

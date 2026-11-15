@@ -6,10 +6,10 @@
 script = ExtResource("1_spec")
 kind = 3
 speed = 3200.0
-lifetime = 1.2
+lifetime = 0.6
 damage = 3000.0
 spool_time = 0.9
-emit_time = 1.2
+emit_time = 0.6
 color = Color(1, 0.13, 0.1, 1)
 width = 0.6
 bolt_length = 120.0

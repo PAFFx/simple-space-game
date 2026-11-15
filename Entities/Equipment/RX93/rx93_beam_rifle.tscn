@@ -20,6 +20,7 @@ active_pose = &"rifle_ready"
 script = ExtResource("6_outline")
 sensor_layer = 1024
 shown_by_fire_control = true
+fill_alpha = 0.04
 
 [node name="Weapon" type="Node3D" parent="."]
 script = ExtResource("3_weapon")

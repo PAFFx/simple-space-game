@@ -309,6 +309,7 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 	arms.name = "ArmOutline"
 	arms.sensor_layer = Layers.SENSOR_COMBAT
 	arms.shown_by_fire_control = true
+	arms.fill_alpha = 0.04
 	arms.per_mesh = true
 	arms.only_meshes = [&"UpperArmL", &"UpperArmR", &"ForearmL", &"ForearmR", &"HandL", &"HandR"] as Array[StringName]
 	_add(root, root, arms)
@@ -642,7 +643,7 @@ func _build_fire_control(root: Node3D) -> void:
 	vulcan.display_name = "60mm VULCAN"
 	vulcan.hud_name = "VULCAN"
 	vulcan.projectile = load("res://Entities/Projectiles/Specs/vulcan_60mm.tres")
-	vulcan.max_ammo = 600
+	vulcan.max_ammo = 300
 	vulcan.cycle_time = 60.0 / 1280.0   # 640 rpm per gun, two guns firing in turn
 	vulcan.dispersion_deg = 0.22
 	vulcan.always_on = true

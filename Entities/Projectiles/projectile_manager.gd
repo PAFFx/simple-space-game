@@ -314,7 +314,7 @@ func sample_glow(at: Vector3) -> Array:
 			var along := clampf((at - shot.position).dot(shot.thrust_dir), 0.0, shot.length)
 			var nearest := shot.position + shot.thrust_dir * along
 			var d := nearest.distance_to(at)
-			var k := spec.glow * (1.0 - _linear_fade(shot)) / (1.0 + (d / 45.0) * (d / 45.0))
+			var k := spec.glow * (1.0 - _linear_fade(shot)) / (1.0 + (d / 70.0) * (d / 70.0))
 			sum += Vector3(spec.color.r, spec.color.g, spec.color.b) * k
 			dir += (nearest - at).normalized() * k
 			continue
@@ -329,7 +329,7 @@ func sample_glow(at: Vector3) -> Array:
 		if not shot.dead and along < spec.bolt_length:
 			strength += 1.5
 		var d := nearest.distance_to(at)
-		var k := spec.glow * strength / (1.0 + (d / 45.0) * (d / 45.0))
+		var k := spec.glow * strength / (1.0 + (d / 70.0) * (d / 70.0))
 		sum += Vector3(spec.color.r, spec.color.g, spec.color.b) * k
 		dir += (nearest - at).normalized() * k
 	for charge: Charge in _charges.values():

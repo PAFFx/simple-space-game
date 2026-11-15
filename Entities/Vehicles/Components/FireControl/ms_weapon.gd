@@ -65,6 +65,9 @@ enum State { STOWED, READYING, READY, STOWING }
 @export var slew_accel_deg: float = 600.0
 ## How close the barrel must be to the lead direction to call the shot good, deg.
 @export var on_target_deg: float = 0.35
+## The lock lost (target destroyed, unlocked): keep pointing where it was this long before
+## going back to the boresight, s. A linear beam still coming out holds it until it ends.
+@export var lock_loss_hold: float = 0.8
 
 var state := State.STOWED
 var ammo: int:
@@ -107,6 +110,8 @@ var _awaiting_release := false
 var _stream_muzzle: Node3D
 var _stream_fcs: FireControl
 var _stream: ProjectileManager.Shot
+var _held_aim := Vector2.ZERO
+var _hold_left := 0.0
 
 
 func _ready() -> void:
@@ -216,10 +221,16 @@ func update(delta: float, fcs: FireControl) -> void:
 
 	_solve(fcs)
 	var desired := boresight
+	var streaming := _stream != null and _stream.emitting
 	if aim_override != null:
 		desired = clamp_to_envelope(aim_override)
 	elif solution_valid:
 		desired = clamp_to_envelope(lead_angles)
+		_held_aim = desired
+		_hold_left = lock_loss_hold
+	elif _hold_left > 0.0 or streaming:
+		desired = _held_aim
+		_hold_left = maxf(_hold_left - delta, 0.0)
 	_slew(desired, delta)
 	on_target = solution_valid and target_in_envelope and aim.distance_to(lead_angles) <= _tolerance(fcs)
 	var twist := clampf(aim.x * torso_share, -torso_limit_deg, torso_limit_deg) * readiness

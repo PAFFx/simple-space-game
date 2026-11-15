@@ -330,8 +330,11 @@ func _apply_mode() -> void:
 func _show_body_on_screen() -> void:
 	var sensor := vehicle.get_sensor_head() if vehicle.get_sensor_head_mount() != null else null
 	if sensor != null:
-		sensor.set_group_visible(Layers.SENSOR_BODY_PARTS, is_weapons_mode() and show_body_in_weapons_mode)
-		sensor.set_group_visible(Layers.SENSOR_COMBAT, is_weapons_mode() and not show_body_in_weapons_mode)
+		var layers := 0
+		if is_weapons_mode():
+			layers = Layers.SENSOR_BODY_PARTS if show_body_in_weapons_mode else Layers.SENSOR_COMBAT
+		# Resolves in (and breaks up) as blue blocks: see SensorHead.set_overlay.
+		sensor.set_overlay(layers)
 
 
 ## Each equipment takes the pose of the weapon that wants it; the guard comes first.

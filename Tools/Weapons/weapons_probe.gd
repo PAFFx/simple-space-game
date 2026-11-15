@@ -135,6 +135,9 @@ func _run() -> void:
 	_input.cmd.weapon_select = FireControl.Hat.FORWARD
 	await _ticks(2)
 	var linear := _fcs.get_weapon(&"beam_linear")
+	# Inside the linear's reach (speed × emit time).
+	drone.global_position = _fcs.get_view_origin() + _suit.global_basis.orthonormalized() \
+			* SpatialMath.angles_to_direction(Vector2(10, 0)) * 1200.0
 	_check("linear selected, still ready", _fcs.selected == linear and linear.state == MsWeapon.State.READY)
 	# The pulse's cooldown holds the linear too (one barrel).
 	await _ticks(100)
@@ -160,13 +163,32 @@ func _run() -> void:
 	await _ticks(90)
 	print("linear: damage %.0f" % (hp - drone.hit_points))
 	_check("linear hits a crossing target", drone.hit_points < hp)
+	# A kill mid-beam: the barrel holds where it was instead of swinging back at once.
+	drone.queue_free()
+	await _ticks(2)
+	drone = _spawn(TargetDrone.Behaviour.STATIC, 600.0, Vector2(25, 8))
+	drone.hit_points = 1.0
+	_fcs.lock(drone)
+	await _ticks(ceili(linear.cycle_time * Engine.physics_ticks_per_second) + 60)
+	_input.cmd.fire_main = true
+	await _ticks(lin_spool + 2)
+	_input.cmd.fire_main = false
+	await _ticks(20)
+	var aim_at_kill := linear.aim
+	_check("linear kills, lock drops", _fcs.locked == null)
+	await _ticks(20)
+	print("linear after the kill: aim %s → %s" % [aim_at_kill, linear.aim])
+	_check("aim holds after the kill", linear.aim.distance_to(aim_at_kill) < 0.5)
+	await _ticks(90)
+	_check("then back to the boresight", linear.aim.distance_to(linear.boresight) < 1.0)
 	_input.cmd.weapon_select = FireControl.Hat.FORWARD
 	await _ticks(2)
 	_check("forward again → pulse", _fcs.selected == rifle)
 
 	# Vulcans: head envelope, burst.
 	var vulcan := _fcs.get_vulcan()
-	drone.queue_free()
+	if is_instance_valid(drone):
+		drone.queue_free()
 	await _ticks(2)
 	drone = _spawn(TargetDrone.Behaviour.STATIC, 400.0, Vector2(-15, 5))
 	drone.hit_points = 5000.0

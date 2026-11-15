@@ -6,13 +6,13 @@ extends Node3D
 ## where most of the glow comes from (ProjectileManager.sample_glow).
 
 ## Light energy per unit of glow, and its ceiling.
-@export var gain: float = 1.5
-@export var max_energy: float = 7.0
-@export var light_range: float = 3.2
+@export var gain: float = 3.5
+@export var max_energy: float = 16.0
+@export var light_range: float = 4.5
 ## How far from here the light sits toward the glow, m.
 @export var offset: float = 0.9
 ## The glow comes up at once and dies away over this long, s.
-@export var decay: float = 0.12
+@export var decay: float = 0.3
 
 var _light: OmniLight3D
 var _energy := 0.0

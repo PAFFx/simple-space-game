@@ -104,8 +104,8 @@ source)` on the collider or its nearest ancestor that has it. Missiles burst wit
 | Spec | Speed | Life | Range | Damage |
 |---|---|---|---|---|
 | `nu_beam_rifle` (pulse) | 3000 m/s | 2.5 s | 7.5 km | 1000 |
-| `nu_beam_linear` | 3200 m/s, emits 1.2 s | 1.2 s | 3.8 km | 3000 once per target |
-| `vulcan_60mm` | 1100 m/s | 1.6 s | 1.8 km | 14 (2 × 640 rpm, 600 rounds) |
+| `nu_beam_linear` | 3200 m/s, emits 0.6 s | 0.6 s | 1.9 km | 3000 once per target |
+| `vulcan_60mm` | 1100 m/s | 1.6 s | 1.8 km | 14 (2 × 640 rpm, 300 rounds) |
 | `shield_missile` | 120 m/s + 450 m/s² for 1.6 s | 6 s | ~3.9 km | 450, blast 90 m |
 | `drone_shot` | 900 m/s | 5 s | 4.5 km | 100 |
 
@@ -123,7 +123,7 @@ flash, not a white screen. Colour comes from the spec (ν Gundam: red).
 length and time), white core in a coloured halo, a few thin streaks dying within
 `trail_time` behind it. No long wake.
 
-**Linear beam** (`linear_beam.gdshader`): while it emits (`emit_time`, 1.2 s) it is a straight
+**Linear beam** (`linear_beam.gdshader`): while it emits (`emit_time`, 0.6 s) it is a straight
 beam from the barrel along the barrel, swinging with it like a laser; its front still travels
 at `speed`, so it reaches only `speed × age`. Each tick one ray from the muzzle along it: what
 lies in it is hit (once per target), the beam ends there and splashes. The aim leads by what
@@ -138,6 +138,14 @@ end and muzzle flashes ride the muzzle's drawn (physics-interpolated) position
 **Explosions** are spheres of light (`ProjectileManager.explode` / `ball`, `flash.gdshader`
 with `flash_ball`): a white-hot ball of the given radius (a missile's: its blast radius),
 smaller balls bubbling out one after another, cooling to the colour and fading.
+
+**Own overlay** (`SensorHead.set_overlay`): FireControl shows the arm and rifle outlines
+(`SENSOR_COMBAT`) in DGFT / BVR. A second sensor camera draws them on a transparent image;
+the panoramic screen composites it, pixelated in blue blocks while `overlay_reveal` runs
+0 → 1 (resolving in) or back (breaking up). A change of layers breaks up first.
+
+**Lock loss.** A weapon whose lock drops holds its aim for `lock_loss_hold` (0.8 s), and for as
+long as its linear beam is still coming out, before going back to the boresight.
 
 **Cockpit glow.** `ProjectileManager.sample_glow(position)` sums nearby shots and flashes by
 `spec.glow` and distance; `CockpitBeamGlow` drives one light (cockpit + pilot layers only) in

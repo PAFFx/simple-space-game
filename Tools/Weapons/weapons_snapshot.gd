@@ -250,6 +250,24 @@ func _run(shots: PackedStringArray) -> void:
 		_look(0, 0)
 		await _frames(40)
 
+	if "overlay" in shots:
+		# The arm / rifle outlines resolving in on entering DGFT, and breaking up in NAV.
+		_input.cmd.master_mode = FireControl.MasterMode.NAV
+		await _frames(60)
+		_input.cmd.master_mode = FireControl.MasterMode.DGFT
+		for i in 8:
+			await _frames(4)
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png("%s/overlay_in_%02d.png" % [_out, i])
+		await _frames(30)
+		_input.cmd.master_mode = FireControl.MasterMode.NAV
+		for i in 5:
+			await _frames(4)
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png("%s/overlay_out_%02d.png" % [_out, i])
+		_input.cmd.master_mode = FireControl.MasterMode.DGFT
+		await _frames(60)
+
 	if "turret" in shots:
 		if is_instance_valid(drone):
 			drone.queue_free()
