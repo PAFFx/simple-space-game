@@ -497,7 +497,7 @@ on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around to
 - **Shaping:** each raw axis goes through a median of `spike_filter_ticks` (3) samples (the left
   stick's X spikes to 0.07 for a tick or two at rest), then deadzone and expo
   (`rotation_expo` 0.4, `translation_expo` 0.3), then `smoothing` (0.04 s). The fore/aft mix is
-  shaped after mixing, with its own `yaw_deadzone` (0.1), so pushing both sticks unevenly
+  shaped after mixing, with its own `yaw_deadzone` (0.05, on the half difference), so pushing both sticks unevenly
   doesn't yaw.
 - **Look:** the mini-stick pans the pilot camera at up to `stick_rate` 110°/s (expo 0.6), easing
   in and out over `stick_smoothing` 0.12 s; the view stays where it is left
@@ -505,7 +505,8 @@ on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around to
 
 Mixing means one stick alone gives half the translation and half the turn on that pair of
 axes; a full turn takes opposed sticks. The fore/aft and twist mixes are shaped after mixing,
-with `yaw_deadzone` (0.1) and `pitch_deadzone` (0.12) on the differences.
+with `yaw_deadzone` (0.05) and `pitch_deadzone` (0.06) on the half differences (one stick alone
+needs 10% / 12% travel).
 
 ### Generic HOTAS / joystick
 

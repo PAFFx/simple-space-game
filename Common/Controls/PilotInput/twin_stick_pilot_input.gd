@@ -42,9 +42,10 @@ extends KeyboardPilotInput
 @export_range(0.0, 0.5) var deadzone: float = 0.08
 ## Twist springs centre less precisely than the gimbal.
 @export_range(0.0, 0.5) var twist_deadzone: float = 0.1
-## On the differences, so moving both sticks unevenly doesn't turn the suit.
-@export_range(0.0, 0.5) var yaw_deadzone: float = 0.1
-@export_range(0.0, 0.5) var pitch_deadzone: float = 0.12
+## On the differences, so moving both sticks unevenly doesn't turn the suit. They're
+## on the half difference: one stick alone needs twice this travel.
+@export_range(0.0, 0.5) var yaw_deadzone: float = 0.05
+@export_range(0.0, 0.5) var pitch_deadzone: float = 0.06
 ## Gain on the fore/aft difference while it rolls: at 2 one stick alone gives full roll.
 @export_range(1.0, 4.0) var roll_sensitivity: float = 2.0
 ## Smoothing of the shaped demand, s. 0 = off.
