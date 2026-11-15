@@ -64,7 +64,7 @@ simple-space-game/
 │       │   │   └── SeatedPilot/   Character in the seat: pose, IK onto the controls, G lean
 │       │   │
 │       │   ├── CockpitLinearSeat/ Late-UC linear seat cockpit (extends CockpitBase)
-│       │   ├── CockpitLinearSeatV2/  RX-93 cockpit: contoured seat, jump seat, seated pilot (CockpitLinearSeat script)
+│       │   ├── CockpitLinearSeatV2/  RX-93 cockpit: contoured seat, seated pilot (CockpitLinearSeat script)
 │       │   └── CockpitRX0/        RX-0 specific cockpit interior
 │       │       ├── cockpit_rx_0.gd    extends CockpitBase
 │       │       ├── cockpit_rx_0.tscn

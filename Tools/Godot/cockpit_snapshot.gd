@@ -185,7 +185,7 @@ func _views(tag: String) -> void:
 		return
 	_debug_cam.make_current()
 	for view in [["front", Vector3(0.75, 0.15, -1.0)], ["side", Vector3(1.15, -0.2, -0.1)],
-			["back", Vector3(-0.7, 0.35, 0.95)], ["jump", Vector3(0.75, 0.05, 0.75)], ["top", Vector3(0.05, 1.1, -0.35)],
+			["back", Vector3(-0.7, 0.35, 0.95)], ["top", Vector3(0.05, 1.1, -0.35)],
 			["hand", Vector3(0.42, -0.12, -0.52)], ["hand_top", Vector3(0.2, 0.05, -0.2)],
 			["hand_in", Vector3(0.02, -0.33, -0.4)], ["hand_out", Vector3(0.62, -0.33, -0.3)], ["feet", Vector3(0.5, -0.75, -0.85)],
 			["feet_side", Vector3(0.75, -0.8, -0.42)]]:

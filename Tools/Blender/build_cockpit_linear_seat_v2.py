@@ -1,5 +1,5 @@
 """Builds the RX-93's cockpit (linear seat v2) as a GLB: a contoured adult-size seat on the
-linear-seat boom with a fold-down jump seat behind it, ball controllers on the
+linear-seat boom, ball controllers on the
 armrest decks, a three-panel monitor array and sliding foot pedals.
 
 Run:  blender -b -P Tools/Blender/build_cockpit_linear_seat_v2.py -- <output.glb> [--aperture EL,HALF_AZ,HALF_EL]
@@ -20,8 +20,6 @@ Node names are the contract with the Godot components (same as the linear seat):
   ScreenCentre/Left/Right, HatchHandle, HatchGuard, SwitchPanelMount, InnerDoorL/R
   HandL/R, FootL/R     empties: where the pilot's wrists and ankles go (children of the
                        grips and pedals, so they follow them)
-  JumpSeat, JumpSeatCushion  the passenger's seat behind the pilot's: frame with back
-                       pad, and the cushion (origin on its hinge, built folded up)
 """
 
 import math
@@ -86,8 +84,6 @@ def materials():
         "pad": mk.make_material("CP_SeatPad", (0.10, 0.105, 0.118), roughness=0.85),
         "grip": mk.make_material("CP_Grip", (0.035, 0.035, 0.038), roughness=0.65),
         "yellow": mk.make_material("CP_AccentYellow", (0.90, 0.64, 0.05), roughness=0.55),
-        "jump": mk.make_material("CP_JumpSeatYellow", (0.86, 0.60, 0.05), roughness=0.85),
-        "jump_dark": mk.make_material("CP_JumpSeatOchre", (0.62, 0.42, 0.04), roughness=0.88),
         "red": mk.make_material("CP_AccentRed", (0.75, 0.08, 0.08), roughness=0.4),
         "strip": mk.make_material("CP_LightStrip", (0.1, 0.3, 0.5), emission=(0.3, 0.75, 1.0), strength=3.0),
         "screen": mk.make_material("CP_Screen", (0.01, 0.03, 0.05), emission=(0.04, 0.18, 0.32), strength=1.0),
@@ -401,74 +397,6 @@ def build_seat(m):
     return parts
 
 
-JUMP_FOLD_DEG = 78.0      # the jump seat's cushion as built: folded up against its frame
-
-
-def build_jump_seat(m):
-    """The fold-down jump seat directly behind the pilot's seat, for a passenger (after
-    the sketch): a backrest frame of two tube loops joined by rungs, leaning back, a
-    yellow back pad on it, and a slim yellow bucket cushion hinged at its foot, stowed
-    folded up (JumpSeatCushion, origin on the hinge: turn it −JUMP_FOLD_DEG about x to
-    seat someone). Hung off the pilot seat's frame, so it turns with it."""
-    js = Part("JumpSeat", m)
-    top = SEAT_TOP - 0.03
-    half, high = 0.225, 0.64               # frame half width, height above the cushion
-    y0 = -0.6                              # the frame's foot
-    lean = 0.13                            # how far its top leans back
-
-    def at(x, z):                          # a point on the frame's plane (z above `top`)
-        return Vector((x, y0 - lean * z / high, top + z))
-
-    def loop(inset):
-        lo, hi, w, r = -0.1 + inset, high - inset, half - inset, 0.075
-        return [at(-w, lo), at(-w, hi - r), at(-w + r, hi), at(w - r, hi), at(w, hi - r), at(w, lo), at(0, lo)]
-
-    js.tube(loop(0.0), 0.014, "tube", closed=True)
-    js.tube(loop(0.06), 0.011, "tube", closed=True)
-    # Rungs between the two loops, slanted like a truss.
-    for i in range(6):
-        z = 0.0 + 0.095 * i
-        for s in (1.0, -1.0):
-            js.rod(at(half * s, z), at((half - 0.06) * s, z + 0.05), 0.007, "tube", 8)
-    for i in range(4):
-        x = -0.12 + 0.08 * i
-        js.rod(at(x, high), at(x + 0.03, high - 0.06), 0.007, "tube", 8)
-        js.rod(at(x, -0.1), at(x + 0.03, -0.04), 0.007, "tube", 8)
-    for s in (1.0, -1.0):
-        # Floor loop forward to the pilot seat's bucket, and a strut up to its back rail.
-        js.tube([at(half * s, -0.1), (half * s, y0 + 0.16, top - 0.1), (0.21 * s, -0.12, top - 0.075)], 0.013, "tube")
-        js.rod(at(half * s, 0.42), (0.262 * s, -0.2, top + 0.44), 0.011, "tube")
-        js.rod(at(half * s, 0.0), (half * s, y0 + 0.05, top - 0.03), 0.012, "dark", 12)    # hinge lugs
-    js.rod((-half, y0 + 0.16, top - 0.1), (half, y0 + 0.16, top - 0.1), 0.011, "tube")
-
-    def pad(u, v):                         # back pad, hollowed, a channel down its middle
-        z = 0.2 + v * 0.36
-        return at(u * 0.15, z) + Vector((0, 0.03 + 0.03 * abs(u) ** 2.4 - 0.008 * bump(u, 0.0, 0.22), 0))
-
-    trim = lambda u, v: "jump" if abs(u) > 0.16 else "jump_dark"  # noqa: E731
-    js.surface(pad, 14, 12, 0.028, Vector((0, -1, 0)), trim)
-    parts = [js.to_object()]
-
-    # Cushion, built flat (hinge along x through the origin, front toward +y), then
-    # folded up: a slim bucket with raised sides and a channel down the middle.
-    seat = Part("JumpSeatCushion", m)
-
-    def cushion(u, v):
-        return Vector((u * 0.18, 0.03 + v * 0.36,
-                       0.03 + 0.045 * abs(u) ** 2.6 - 0.008 * bump(u, 0.0, 0.2) - 0.05 * max(0.0, v - 0.82) ** 2 / 0.0324))
-
-    seat.surface(cushion, 14, 12, 0.032, Vector((0, 0, -1)), trim)
-    seat.rbox((0, 0.2, -0.008), (0.3, 0.3, 0.014), "jump_dark", r=0.005)
-    seat.rod((-0.2, 0, 0), (0.2, 0, 0), 0.013, "tube", 12)
-    for s in (1.0, -1.0):
-        seat.bar((0.165 * s, 0.0, 0.0), (0.165 * s, 0.34, -0.004), (0.014, 0.02), "tube")
-    seat.rbox((0, 0.385, 0.0), (0.12, 0.016, 0.03), "dark", r=0.005)      # pull tab on the front edge
-    obj = seat.to_object(local=True)
-    obj.matrix_world = Matrix.Translation((0, y0 + 0.05, top - 0.03)) @ Matrix.Rotation(math.radians(JUMP_FOLD_DEG), 4, "X")
-    parts.append(obj)
-    return parts
-
-
 # ── armrest decks, controllers ───────────────────────────────────────────────
 
 def build_ball(side, s, m):
@@ -747,7 +675,7 @@ def main():
     mk.reset_scene()
     m = materials()
     build_shell(m, APERTURE)
-    swing = (build_seat(m) + build_jump_seat(m) + build_arms(m) + build_console_fittings(m)
+    swing = (build_seat(m) + build_arms(m) + build_console_fittings(m)
              + build_pedals(m) + build_monitors(m))
     pivot = empty("SeatSwing", Matrix.Translation(SEAT_PIVOT))
     for obj in swing:

@@ -2,9 +2,9 @@
 
 ## Cockpit (`Cockpits/CockpitLinearSeatV2`)
 
-The ν's cockpit: a contoured seat on the linear-seat boom with a fold-down jump seat directly
-behind it for a passenger, built by `Tools/Blender/build_cockpit_linear_seat_v2.py` (after sketches
-of the seat, front and back, and of the ball controller). It reuses the `CockpitLinearSeat` script
+The ν's cockpit: a contoured seat on the linear-seat boom, built by
+`Tools/Blender/build_cockpit_linear_seat_v2.py` (after sketches of the seat, front and back, and
+of the ball controller; the sketch's jump seat behind it is left out for now). It reuses the `CockpitLinearSeat` script
 and every cockpit component; the model keeps the node names they look for.
 
 ```
@@ -13,7 +13,6 @@ CockpitLinearSeatV2 (CockpitLinearSeat script)
 │   ├── Shell, InnerDoorL/R, SeatBase, SeatBoom      fixed
 │   └── SeatSwing            everything that turns for the hatch:
 │       ├── Seat, SeatCollar, ArmrestL/R, Footrest, DisplayArms
-│       ├── JumpSeat, JumpSeatCushion                passenger seat behind the pilot's
 │       ├── GripL / GripR    ball controller units (origin = pivot under the base)
 │       │   └── BallL / BallR    the ball (origin = its centre) → HandL / HandR
 │       ├── PedalL / PedalR  (origin = heel hinge) → FootL / FootR
@@ -34,13 +33,9 @@ CockpitLinearSeatV2 (CockpitLinearSeat script)
   adjustable parts are set: the cushion height puts her eye at the sphere's centre, the headrest
   rides low on its slide, the pedal carriages sit at the near end of their rail. Her joints are
   the `PILOT` constants at the top of the build script.
-- **Shaped like a seat.** The cushion, back, headrest and the jump seat are curved shells
+- **Shaped like a seat.** The cushion, back and headrest are curved shells
   (`Part.surface`): the back is hollowed across with a lumbar swell and shoulder wings, the cushion
   has raised sides and a waterfall front, the headrest wraps the head.
-- **Jump seat** (yellow), directly behind the pilot's seat: a backrest frame of two tube loops
-  joined by rungs, leaning back, with a back pad, and a slim bucket cushion hinged at its foot.
-  The cushion is its own node (`JumpSeatCushion`, origin on the hinge) and is built folded up;
-  turning it −78° about x folds it down for a passenger.
 - **Pilot connectors** on the upper back (two plugs, two ports, the latch block), for a normal
   suit's backpack; harness reels and stowed yellow straps on the bolsters.
 - **Armrest decks.** One level each side: the forearm lies along the inner strip with the
@@ -49,7 +44,7 @@ CockpitLinearSeatV2 (CockpitLinearSeat script)
 - **Ball controllers.** The hand lies over the ball, fingers in the grooved slot round the front,
   thumb on the inner cheek with its three buttons. The ball stands on a base block whose lever
   arm runs back along the deck; the ball turns in the block's cradle.
-- **Whole seat unit turns for the hatch.** The monitors, pedals and jump seat hang off the seat,
+- **Whole seat unit turns for the hatch.** The monitors and pedals hang off the seat,
   so all of `SeatSwing` turns 60° (the first linear seat left its left armrest behind and turned
   40°). Nodes outside the model that belong to the seat ride along:
   `HatchCockpitParts.seat_riders` keeps each one's place in the seat's frame, so the pilot's eye,
