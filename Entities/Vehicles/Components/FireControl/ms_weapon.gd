@@ -51,6 +51,9 @@ enum State { STOWED, READYING, READY, STOWING }
 ## Where it points with no target locked.
 @export var boresight := Vector2.ZERO
 @export var slew_rate_deg: float = 90.0
+## How fast the slew speeds up and slows down, deg/s² (0 = instant). A limb jumping to
+## full speed would kick the suit with its whole momentum in one tick (LimbReaction).
+@export var slew_accel_deg: float = 600.0
 ## How close the barrel must be to the lead direction to call the shot good, deg.
 @export var on_target_deg: float = 0.35
 
@@ -67,6 +70,7 @@ var readiness := 0.0
 ## How much the model follows the aim, 0..1 (WeaponAimModifier).
 var aim_weight := 0.0
 var aim := Vector2.ZERO
+var aim_rate := Vector2.ZERO   ## deg/s
 var torso_yaw := 0.0
 ## Fire solution on the locked target.
 var solution_valid := false
@@ -159,7 +163,7 @@ func update(delta: float, fcs: FireControl) -> void:
 		desired = clamp_to_envelope(aim_override)
 	elif solution_valid:
 		desired = clamp_to_envelope(lead_angles)
-	aim = aim.move_toward(desired, slew_rate_deg * delta)
+	_slew(desired, delta)
 	on_target = solution_valid and target_in_envelope and aim.distance_to(lead_angles) <= _tolerance(fcs)
 	var twist := clampf(aim.x * torso_share, -torso_limit_deg, torso_limit_deg) * readiness
 	torso_yaw = move_toward(torso_yaw, twist, 40.0 * delta)
@@ -172,6 +176,26 @@ func update(delta: float, fcs: FireControl) -> void:
 
 	while triggered and can_fire():
 		_fire(fcs)
+
+
+## Moves the aim toward `desired` at up to slew_rate_deg, accelerating and braking at
+## slew_accel_deg so it arrives without overshoot.
+func _slew(desired: Vector2, delta: float) -> void:
+	if slew_accel_deg <= 0.0:
+		aim = aim.move_toward(desired, slew_rate_deg * delta)
+		aim_rate = Vector2.ZERO
+		return
+	var to := desired - aim
+	var dist := to.length()
+	if dist < 0.01 and aim_rate.length() < slew_accel_deg * delta:
+		aim = desired
+		aim_rate = Vector2.ZERO
+		return
+	var speed := minf(slew_rate_deg, sqrt(2.0 * slew_accel_deg * dist))
+	var want := to / maxf(dist, 1e-6) * speed
+	aim_rate = aim_rate.move_toward(want, slew_accel_deg * delta)
+	var step := aim_rate * delta
+	aim = desired if step.length() >= dist and to.dot(step) > 0.0 else aim + step
 
 
 func can_fire() -> bool:

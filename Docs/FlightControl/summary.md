@@ -6,9 +6,11 @@ Every physics tick the `FlightComputer` runs one pass:
 
 ```
 PilotInputSource ──PilotCommand──▶ ControlLaw ──Wrench──▶ AmbacController ──τ_ambac──▶ apply_torque
- (keyboard/HOTAS/AI)  intent        (FBW logic,   F, τ     (limb balancing)
+ (keyboard/HOTAS/AI)  intent        (FBW logic,   F, τ − d  (limb balancing)
                                     pilot frame,      │
-                                    AttitudeOffsetSolver)  └── F, τ − τ_ambac ──▶ ThrustAllocator ──u[i]──▶ Thruster × N ──▶ RigidBody3D
+                                    AttitudeOffsetSolver)  └── F, τ − d − τ_ambac ──▶ ThrustAllocator ──u[i]──▶ Thruster × N ──▶ RigidBody3D
+
+LimbReaction (measured arm / head / pod motion) ──τ_limbs──▶ apply_torque;  d = τ_limbs − AMBAC's own share of it
 ```
 
 | Stage | Base class | Implementations | How to swap |
@@ -18,6 +20,7 @@ PilotInputSource ──PilotCommand──▶ ControlLaw ──Wrench──▶ Am
 | Allocator | `ThrustAllocator` (Resource) | `ConeProjectedAllocator`, `GreedyAllocator` | Inspector dropdown on `FlightComputer.allocator`, or `set_allocator()` |
 | Auto-rotation | `AttitudeOffsetSolver` (Resource) | `ThrustVectoringAttitudeSolver` | `RateCommandControlLaw.attitude_solver` (empty = body stays aligned) |
 | Limb balancing | `AmbacController` (Node) | — | Add/remove the node; `FlightComputer.ambac` (auto-discovered) |
+| Limb reaction | `LimbReaction` (Node) | — | Add/remove the node; `FlightComputer.limb_reaction` (auto-discovered) |
 | Actuator | `Thruster` (Node3D scene) | — | Add/remove/move `thruster.tscn` instances anywhere under the body |
 
 Control laws and allocators are duplicated by the `FlightComputer`, so vehicles sharing a `.tres`
@@ -51,6 +54,11 @@ Entities/Vehicles/Components/Ambac/
   ambac_joint.gd            One limb DOF: bone, axis, inertia, limits, priority, group
   ambac_controller.gd       Weighted allocation + centering spring, returns achieved torque
   ambac_modifier.gd         SkeletonModifier3D: applies the limb offsets after animation
+
+Entities/Vehicles/Components/LimbReaction/
+  limb_segment.gd           One tracked mass: bone + kg (centre and size from the part's mesh)
+  limb_reaction.gd          Angular momentum of the tracked limbs → reaction torque on the body
+  limb_reaction_modifier.gd Last skeleton modifier: hands it the final pose
 ```
 
 ---
@@ -380,6 +388,42 @@ boosted dive):
 | Return to rest: within 2° / settled | 0.87 / 1.48 s | 0.90 / 1.15 s | 0.88 / 2.58 s |
 | Propellant: pitch / return | 29 / 99 kg | 31 / 100 kg | 43 / 141 kg |
 
+### Limb reaction (`LimbReaction`)
+
+AMBAC's own joints push the body through its joint model. Everything else that moves mass
+relative to the chest is measured: the arms (rifle / shield pose blends, weapon aim, and
+AMBAC's arm joints), the shoulder armor, the head (vulcans) and the backpack pods, plus the
+rifle (2.6 t) and shield (3.8 t) they carry, and the fire control's torso twist. The last
+skeleton modifier snapshots the final pose; each physics tick the angular momentum of those
+segments (solid boxes from each part's mesh, relative to the chest, about the suit's COM)
+is compared with the previous tick's, and the body gets minus the change. Velocities use
+the physics ticks between two poses (aim and AMBAC advance per tick, frames don't line up
+with ticks). A short `warmup_time` skips the snap from the bind pose at start.
+
+Countering: whatever AMBAC didn't plan itself (`limb_disturbance`, a tick late, low-passed
+0.03 s) is taken off the FBW torque before the AMBAC / thruster split, so the free legs
+swing against an arm and the thrusters take the rest (`counter_limb_reaction`). AMBAC's arm
+joints get their inertia from the same mass model (`LimbReaction.joint_inertia`), so the plan
+and the measured reaction agree. Weapon aim now accelerates (`MsWeapon.slew_accel_deg`, 600°/s²):
+a limb jumping to full slew speed in one tick hands the body its whole momentum at once.
+
+ν, `Tools/Flight/limb_reaction_probe.gd` (DGFT rifle raise, aim sweeps to 60° right and
+30° left / 30° up, shield guard, stow):
+
+| | Max attitude change | Max rate | Avg thrust |
+|---|---|---|---|
+| Old (limbs pushed nothing, `off`) | 0° | 0°/s | 0 |
+| FCS off (`free`) | 18° (3° left at the end) | 47°/s | 0 |
+| Attitude hold only (`hold`) | 8.2° | 52°/s | 0.112 |
+| AMBAC + thrusters countering (`counter`) | 1.6–2.5° | 22°/s | 0.094 |
+
+Runs vary by a few tenths of a degree (frame timing). The rate peaks are the shield guard
+following the look at 140°/s and both arms stowing at once.
+
+With the FCS off, body + limb angular momentum stays within ~0.1% through every motion, and
+the body stops turning when the limb stops (a limb turns the suit by an angle; it can't leave
+it spinning).
+
 Typical swing: hips up to 26° in a return to rest, 18° in a pitch; waist 7–8°; knees 5–7°; arms
 5–9°; side hips ≤ 3°. Yaw uses mostly the waist twist.
 
@@ -545,14 +589,14 @@ texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
-| 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward); pod swings at 90°/s |
-| 2 × 400 kN | soles | down | 3D, 20° cone |
+| 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | pod 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward), swings at 90°/s; each nozzle also swings ±20° sideways in its pod (3D) |
+| 2 × 400 kN | soles | down | 3D, 30° cone |
 | 2 × 400 kN (the model's own nozzles, in their calf plates) | behind each calf | down, a little back | 2D with the plate, 0…40° back only (never into the leg) |
-| 4 × 250 kN | shoulder armor, 2 per side | up-and-out / out-and-down | top: 2D from 10° below rest to 45° up (nearly straight up); outer: 2D fore/aft ±25° |
+| 4 × 480 kN | shoulder armor, 2 per side (same nozzle) | up-and-out / out-and-down | top: 2D from 10° below rest to 45° up (nearly straight up); outer: 2D fore/aft ±25° |
 | 2 × 660 kN (with the mains, nearest the generator) | chest vents | forward (brakes) | 2D up/down ±20° |
-| 6 × 80 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
-| 2 × 120 kN | rear skirts | back | fixed |
-| 6 × 70 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
+| 6 × 240 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
+| 2 × 240 kN | rear skirts | back | fixed |
+| 6 × 220 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
 
 No added nozzle meshes on the ν (`Thruster.show_nozzle` off): small ports show only a plume from
 the armor, and the main and calf nozzles are the model's own, moved by `ThrusterGuards`:
@@ -574,8 +618,26 @@ These bones are visual: the thrusters stay on the backpack/shin bones. Idle nozz
 throttle, `Thruster.park_throttle`) park at their rest aim, so the calf units close. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
 (sideways) tighten the cone per axis; 0 on one = 2D vectoring, `gimbal_limit_deg` 0 = fixed.
 
-Clean force capability (level, limbs at rest): up 7.1 G, forward 4.3 G, sideways 2.4 G, back
-1.8 G, down 1.4 G; pitch torque 15 MN·m. Limbs don't aim the fixed/2D thrusters yet.
+Ratings follow the port sizes: the backpack mains stay by far the biggest, the shoulder top
+and outer ports share one nozzle size, the shin and rear skirt slots are about as large as a
+calf nozzle, and the side skirt ports are the smallest. Ports under 300 kN
+(`MAIN_RATING_KN`) spool and slew like verniers.
+
+Clean force capability at full weight (69 t, level, limbs at rest; `Tools/Flight/capability_probe.gd`):
+
+| | up | down | forward | back | sideways |
+|---|---|---|---|---|---|
+| Before the Nov 2026 side-thrust pass | 7.2 G | 0.8 G | 3.9 G | 2.9 G | 2.3 G |
+| Now | 9.1 G | 1.6 G | 6.7 G | 3.9 G | 3.8 G |
+
+Clean torque 19 / 9 / 20 MN·m (pitch / yaw / roll), about twice what it was. Sideways gains
+come from the bigger shoulder, skirt and shin ports, the sole's wider cone and the mains'
+sideways swing; the stronger shoulder tops (down) are what let the mains push sideways
+cleanly, cancelling their upward part. Boosted strafe: 3.3 → 6.1 G, 1.4 → 2.3 m in the
+first 0.5 s, 8 → 14 m in 1 s; boosted right → left reversal 2.7 → 5.3 m in its first second.
+A full-boost strafe still rolls the suit ~60° and needs about a second to roll back over
+when reversed (the swing is throttled by the body's tracking lag, not by thrust).
+Limbs don't aim the fixed/2D thrusters yet.
 
 **Mass and thrust (ν).** Official weights: 27.9 t empty, 63.0 t max (with ~9.9 t of equipment and
 25.2 t of propellant). Thrust stays anime-strong (`THRUST_SCALE` keeps the tuned thrust-to-weight;

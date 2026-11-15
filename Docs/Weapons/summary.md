@@ -62,8 +62,9 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 
 ## Aiming
 
-`MsWeapon.aim` is azimuth / elevation in the body frame. With a lock it slews (`slew_rate_deg`)
-toward the lead direction, clamped to `az_limits` / `el_limits`; without one it sits on
+`MsWeapon.aim` is azimuth / elevation in the body frame. With a lock it slews (`slew_rate_deg`,
+speeding up and braking at `slew_accel_deg` 600°/s², so the limb's reaction on the suit stays
+finite: see LimbReaction in `Docs/FlightControl/summary.md`) toward the lead direction, clamped to `az_limits` / `el_limits`; without one it sits on
 `boresight`. Shots leave along `aim`, so the barrel's lag is real: the HUD shows the gun cross
 (where the barrel is) and the lead diamond (where it must be); SHOOT when they meet.
 

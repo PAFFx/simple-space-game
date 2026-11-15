@@ -49,7 +49,7 @@ const CONE_3D := [30.0, 90.0, 90.0]
 # suit pitches nose-down and drives with the mains to move forward fast.
 const MAIN_EXHAUST := Vector3(0.0, -0.731, 0.682)
 const MAIN_MODEL_EXHAUST := Vector3(0.0, -0.67, 0.74)
-const MAIN_CONE := [35.0, 35.0, 0.0]
+const MAIN_CONE := [35.0, 35.0, 20.0]
 # Slot-shaped ports (flat plume along the slot): direction × length in the body frame, and
 # the slot's width as the nozzle scale (the round plume's diameter is 0.76 × scale).
 const SLOTS := {
@@ -72,12 +72,12 @@ const SWING_2D := {
 	CalfR = [Vector3.BACK, 0.0, 40.0], CalfL = [Vector3.BACK, 0.0, 40.0],
 	ShUpR = [Vector3.UP, -10.0, 45.0], ShUpL = [Vector3.UP, -10.0, 45.0],
 }
-const SOLE_3D := [20.0, 90.0, 90.0]
+const SOLE_3D := [30.0, 90.0, 90.0]
 const FORE_AFT := [25.0, 25.0, 0.0]      # 2D: swings fore/aft (about the port's sideways axis)
 const UP_DOWN := [20.0, 20.0, 0.0]       # 2D, for forward-facing ports
 const SIDE_SIDE := [20.0, 0.0, 20.0]     # 2D: swings left/right only
 const FIXED := [0.0, 0.0, 0.0]
-const MAIN_RATING_KN := 200.0
+const MAIN_RATING_KN := 300.0
 # Nozzle light on each main (lights the backpack and legs while boosting).
 const MAIN_GLOW_LIGHT := 1.5
 const THRUST_SCALE := 63.0 / 59.5
@@ -96,31 +96,31 @@ const THRUSTERS := [
 	["CalfR", "shin.R", Vector3(3.22, 5.8, 1.53), CALF_MODEL_EXHAUST_R, 400.0, FORE_AFT, 3.0, 0.80, false],
 	["CalfL", "shin.L", Vector3(-3.2, 5.8, 1.53), CALF_MODEL_EXHAUST_R * Vector3(-1, 1, 1), 400.0, FORE_AFT, 3.0, 0.80, false],
 	# Shoulder armor, two each: up-and-out (pushes the suit down) and out-and-down.
-	["ShUpR", "shoulder.R", Vector3(4.79, 19.7, 0.45), Vector3(0.74, 0.67, 0.01), 250.0, FORE_AFT, 2.0, 0.50, false],
-	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 440.0, FORE_AFT, 2.0, 0.50, false],
-	["ShUpL", "shoulder.L", Vector3(-4.77, 19.7, 0.45), Vector3(-0.74, 0.67, 0.01), 250.0, FORE_AFT, 2.0, 0.50, false],
-	["ShOutL", "shoulder.L", Vector3(-4.93, 18.97, 0.44), Vector3(-0.95, -0.3, 0.01), 440.0, FORE_AFT, 2.0, 0.50, false],
+	["ShUpR", "shoulder.R", Vector3(4.79, 19.7, 0.45), Vector3(0.74, 0.67, 0.01), 480.0, FORE_AFT, 2.0, 0.50, false],
+	["ShOutR", "shoulder.R", Vector3(4.95, 18.97, 0.44), Vector3(0.95, -0.3, 0.01), 480.0, FORE_AFT, 2.0, 0.50, false],
+	["ShUpL", "shoulder.L", Vector3(-4.77, 19.7, 0.45), Vector3(-0.74, 0.67, 0.01), 480.0, FORE_AFT, 2.0, 0.50, false],
+	["ShOutL", "shoulder.L", Vector3(-4.93, 18.97, 0.44), Vector3(-0.95, -0.3, 0.01), 480.0, FORE_AFT, 2.0, 0.50, false],
 	# Chest vents, firing forward (push back / brake). With the backpack mains, the nearest
 	# to the generator and the biggest-looking ports: nearly as strong as a main.
 	["ChestR", "chest", Vector3(1.31, 17.26, -2.15), Vector3(0.39, -0.24, -0.89), 660.0, UP_DOWN, 6.5, 0.74, false],
 	["ChestL", "chest", Vector3(-1.29, 17.26, -2.15), Vector3(-0.39, -0.24, -0.89), 660.0, UP_DOWN, 6.5, 0.74, false],
 	# Front of each shin, below the knee: centre, outer, inner; left/right swing only.
-	["ShinCR", "shin.R", Vector3(3.29, 6.96, -1.57), Vector3(0.24, -0.52, -0.82), 80.0, SIDE_SIDE, 0.8, 0.30, false],
-	["ShinOR", "shin.R", Vector3(4.36, 5.83, -0.13), Vector3(0.84, -0.15, -0.53), 80.0, SIDE_SIDE, 0.8, 0.30, false],
-	["ShinIR", "shin.R", Vector3(2.58, 5.39, -0.37), Vector3(-0.52, -0.49, -0.7), 80.0, SIDE_SIDE, 0.8, 0.30, false],
-	["ShinCL", "shin.L", Vector3(-3.28, 6.96, -1.57), Vector3(-0.24, -0.52, -0.82), 80.0, SIDE_SIDE, 0.8, 0.30, false],
-	["ShinOL", "shin.L", Vector3(-4.34, 5.83, -0.13), Vector3(-0.84, -0.15, -0.53), 80.0, SIDE_SIDE, 0.8, 0.30, false],
-	["ShinIL", "shin.L", Vector3(-2.56, 5.39, -0.37), Vector3(0.52, -0.49, -0.7), 80.0, SIDE_SIDE, 0.8, 0.30, false],
+	["ShinCR", "shin.R", Vector3(3.29, 6.96, -1.57), Vector3(0.24, -0.52, -0.82), 240.0, SIDE_SIDE, 0.8, 0.30, false],
+	["ShinOR", "shin.R", Vector3(4.36, 5.83, -0.13), Vector3(0.84, -0.15, -0.53), 240.0, SIDE_SIDE, 0.8, 0.30, false],
+	["ShinIR", "shin.R", Vector3(2.58, 5.39, -0.37), Vector3(-0.52, -0.49, -0.7), 240.0, SIDE_SIDE, 0.8, 0.30, false],
+	["ShinCL", "shin.L", Vector3(-3.28, 6.96, -1.57), Vector3(-0.24, -0.52, -0.82), 240.0, SIDE_SIDE, 0.8, 0.30, false],
+	["ShinOL", "shin.L", Vector3(-4.34, 5.83, -0.13), Vector3(-0.84, -0.15, -0.53), 240.0, SIDE_SIDE, 0.8, 0.30, false],
+	["ShinIL", "shin.L", Vector3(-2.56, 5.39, -0.37), Vector3(0.52, -0.49, -0.7), 240.0, SIDE_SIDE, 0.8, 0.30, false],
 	# Rear skirts, one each, back and slightly out.
-	["SkRearR", "skirt_rear.R", Vector3(1.78, 12.55, 2.45), Vector3(0.39, 0.13, 0.91), 120.0, FIXED, 1.1, 0.32, false],
-	["SkRearL", "skirt_rear.L", Vector3(-1.76, 12.55, 2.45), Vector3(-0.39, 0.12, 0.91), 120.0, FIXED, 1.1, 0.32, false],
+	["SkRearR", "skirt_rear.R", Vector3(1.78, 12.55, 2.45), Vector3(0.39, 0.13, 0.91), 240.0, FIXED, 1.1, 0.32, false],
+	["SkRearL", "skirt_rear.L", Vector3(-1.76, 12.55, 2.45), Vector3(-0.39, 0.12, 0.91), 240.0, FIXED, 1.1, 0.32, false],
 	# Side skirts, three small each: forward-out, back-out, out.
-	["SkSideFR", "skirt_side.R", Vector3(2.11, 15.13, -0.81), Vector3(0.54, 0.25, -0.81), 120.0, FIXED, 0.7, 0.35, false],
-	["SkSideBR", "skirt_side.R", Vector3(2.11, 15.13, 0.48), Vector3(0.54, 0.25, 0.81), 120.0, FIXED, 0.7, 0.35, false],
-	["SkSideOR", "skirt_side.R", Vector3(2.61, 14.71, -0.16), Vector3(1, 0.01, 0), 120.0, FIXED, 0.7, 0.35, false],
-	["SkSideFL", "skirt_side.L", Vector3(-2.09, 15.13, -0.81), Vector3(-0.54, 0.25, -0.81), 120.0, FIXED, 0.7, 0.35, false],
-	["SkSideBL", "skirt_side.L", Vector3(-2.09, 15.13, 0.48), Vector3(-0.54, 0.25, 0.81), 120.0, FIXED, 0.7, 0.35, false],
-	["SkSideOL", "skirt_side.L", Vector3(-2.59, 14.71, -0.16), Vector3(-1, 0.01, 0), 120.0, FIXED, 0.7, 0.35, false],
+	["SkSideFR", "skirt_side.R", Vector3(2.11, 15.13, -0.81), Vector3(0.54, 0.25, -0.81), 220.0, FIXED, 0.7, 0.35, false],
+	["SkSideBR", "skirt_side.R", Vector3(2.11, 15.13, 0.48), Vector3(0.54, 0.25, 0.81), 220.0, FIXED, 0.7, 0.35, false],
+	["SkSideOR", "skirt_side.R", Vector3(2.61, 14.71, -0.16), Vector3(1, 0.01, 0), 220.0, FIXED, 0.7, 0.35, false],
+	["SkSideFL", "skirt_side.L", Vector3(-2.09, 15.13, -0.81), Vector3(-0.54, 0.25, -0.81), 220.0, FIXED, 0.7, 0.35, false],
+	["SkSideBL", "skirt_side.L", Vector3(-2.09, 15.13, 0.48), Vector3(-0.54, 0.25, 0.81), 220.0, FIXED, 0.7, 0.35, false],
+	["SkSideOL", "skirt_side.L", Vector3(-2.59, 14.71, -0.16), Vector3(-1, 0.01, 0), 220.0, FIXED, 0.7, 0.35, false],
 ]
 
 # name, center, size
@@ -166,6 +166,16 @@ const AMBAC := [
 	["foot.L", Vector3.RIGHT, &"leg_l", 6.0e3, -40.0, 30.0, 0.5],
 	["spine", Vector3.UP, &"torso", 1.2e5, -12.0, 12.0, 0.8],
 	["spine", Vector3.RIGHT, &"torso", 1.5e5, -10.0, 6.0, 0.5],
+]
+
+# Limbs whose reaction torque is measured from the final pose (LimbReaction): bone, kg.
+# Everything that moves relative to the chest: arms (pose blends, weapon aim, AMBAC),
+# shoulder armour, head (vulcans), the backpack pods (main nozzle vectoring). The rifle
+# and shield add their own mass on the hand / forearm they ride.
+const LIMB_SEGMENTS := [
+	["shoulder.R", 1000.0], ["upper_arm.R", 1100.0], ["forearm.R", 1100.0], ["hand.R", 350.0],
+	["shoulder.L", 1000.0], ["upper_arm.L", 1100.0], ["forearm.L", 1100.0], ["hand.L", 350.0],
+	["head", 700.0], ["main_pod.R", 1200.0], ["main_pod.L", 1200.0],
 ]
 
 # Stances (StanceController): name, push direction (body frame), cone deg, joints as
@@ -301,6 +311,7 @@ func _build_scene(library: AnimationLibrary) -> RigidBody3D:
 	_build_hatch(root)
 	_build_flight_computer(root)
 	_build_ambac(root)
+	_build_limb_reaction(root)
 	_build_thruster_guards(root)
 	_build_stances(root)
 	_build_limb_followers(root)
@@ -544,6 +555,20 @@ func _build_ambac(root: Node3D) -> void:
 			j.max_accel_deg = 600.0
 		joints.append(j)
 	ambac.joints = joints
+
+
+func _build_limb_reaction(root: Node3D) -> void:
+	var node := LimbReaction.new()
+	node.name = "LimbReaction"
+	_add(root, root, node)
+	node.skeleton = root.get_node(SKELETON)
+	var list: Array[LimbSegment] = []
+	for s in LIMB_SEGMENTS:
+		var seg := LimbSegment.new()
+		seg.bone_name = s[0]
+		seg.mass = s[1]
+		list.append(seg)
+	node.segments = list
 
 
 ## Weapons are exported where they sit on the suit, so they mount with an identity

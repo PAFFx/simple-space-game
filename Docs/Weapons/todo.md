@@ -17,13 +17,16 @@ fix bit by bit. Nothing here is started.
 
 ## 2. Physics
 
-- [ ] Bump up the ν's side thrusters: it's very slow sideways, and an MS should be a highly
+- [x] Bump up the ν's side thrusters: it's very slow sideways, and an MS should be a highly
       manoeuvrable machine. Allow a 3D vector on the main backpack thrusters (the backpack's own
       vectoring stays 2D, but the thrusters can move in 3D). Currently the only reliable dodge is
       forward or upward.
-- [ ] The arm movement for the shield and rifle doesn't go into AMBAC / Newton's third law: no
+- [x] The arm movement for the shield and rifle doesn't go into AMBAC / Newton's third law: no
       thruster fires and no other limb balances it. The MS should have gone into a spin by now
       with these motions.
+- [ ] A full-boost strafe rolls the ν ~60° and takes about a second to roll back over when the
+      strafe is reversed (it first keeps going the old way for ~0.5 s). The roll-over is throttled
+      by the FBW's tracking-lag guard, not by thrust: look at faster swings for reversals.
 - [ ] Other MS' beams should definitely be faster than the turret's here, so MS manoeuvrability
       needs to be better: probably have to resort to increasing thruster output.
 

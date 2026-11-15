@@ -40,6 +40,9 @@ var target_rates := PackedFloat32Array()
 var target_accels := PackedFloat32Array()
 var _locked := {}                    ## Group → true: hard-locked (no balancing)
 var last_torque := Vector3.ZERO      ## Achieved body torque, body frame
+## Part of last_torque from measured joints: LimbReaction applies their real reaction.
+var last_measured_torque := Vector3.ZERO
+var _measured := PackedByteArray()
 var _loadout: MsLoadout
 var _axes_body: Array[Vector3] = []
 
@@ -50,6 +53,7 @@ func _ready() -> void:
 	targets.resize(joints.size())
 	target_rates.resize(joints.size())
 	target_accels.resize(joints.size())
+	_measured.resize(joints.size())
 	var vehicle := VehicleBase.find_vehicle(self)
 	if vehicle != null:
 		_loadout = vehicle.find_component(MsLoadout) as MsLoadout
@@ -93,6 +97,14 @@ func find_joint(bone: StringName, axis: Vector3) -> int:
 		if joints[i].bone_name == bone and joints[i].axis.normalized().dot(axis.normalized()) > 0.99:
 			return i
 	return -1
+
+
+## Joint i's limb is tracked by LimbReaction, which applies its real reaction torque;
+## AMBAC plans with `inertia` (from the same mass model) but doesn't apply it itself.
+func set_measured(i: int, inertia: float) -> void:
+	_measured[i] = 1
+	if inertia > 0.0:
+		joints[i].inertia = inertia
 
 
 ## Pose target for joint i: angle (rad) plus its rate and acceleration, fed forward so
@@ -155,6 +167,7 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 
 	var w0 := centering_frequency
 	var total := Vector3.ZERO
+	var measured := Vector3.ZERO
 	for i in n:
 		var j := joints[i]
 		var lo := deg_to_rad(minf(j.min_angle_deg, 0.0))
@@ -179,8 +192,12 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 		var actual_alpha := (new_rate - rates[i]) / delta
 		rates[i] = new_rate
 		angles[i] = new_angle
-		total += -_axes_body[i] * j.inertia * actual_alpha
+		var reaction := -_axes_body[i] * j.inertia * actual_alpha
+		total += reaction
+		if _measured[i]:
+			measured += reaction
 	last_torque = total
+	last_measured_torque = measured
 	return total
 
 
