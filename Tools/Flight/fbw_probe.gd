@@ -137,6 +137,18 @@ func _tick() -> void:
 			if "=" in o:  # control law property override, e.g. rate_gain=9
 				var key := o.get_slice("=", 0)
 				var value := float(o.get_slice("=", 1))
+				# A vector component: solver.axis_limit_deg.z=40
+				var comp := key.get_slice(".", key.get_slice_count(".") - 1)
+				if comp in ["x", "y", "z"] and key.get_slice_count(".") >= 3:
+					var target: Object = fc.control_law
+					var path := key.trim_suffix("." + comp)
+					if path.begins_with("solver."):
+						target = (fc.control_law as RateCommandControlLaw).attitude_solver
+						path = path.trim_prefix("solver.")
+					var vec: Vector3 = target.get(path)
+					vec["xyz".find(comp)] = value
+					target.set(path, vec)
+					continue
 				if key.begins_with("fc."):
 					fc.set(key.trim_prefix("fc."), value)
 				elif key.begins_with("solver."):

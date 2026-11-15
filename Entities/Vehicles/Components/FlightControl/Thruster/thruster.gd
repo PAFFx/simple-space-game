@@ -27,6 +27,9 @@ extends Node3D
 ## acts and the plume starts) then swings around it with the gimbal. Zero = gimbal in place.
 @export var swing_pivot := Vector3.ZERO
 @export var gimbal_rate_deg: float = 120.0        ## Max gimbal slew, deg/s
+## Sideways slew (about local Y) when it differs from the fore/aft one, deg/s; 0 = same.
+## E.g. a nozzle that swings sideways on its own inside a pod that pivots fore/aft.
+@export var gimbal_yaw_rate_deg: float = 0.0
 @export var spool_up_time: float = 0.25           ## Throttle time constant rising, s
 @export var spool_down_time: float = 0.12         ## Throttle time constant falling, s
 ## Below this the thruster cuts off. Keep small: coarse cut-offs break the
@@ -208,11 +211,7 @@ func set_command(throttle_cmd: float, direction: Vector3, frame: Node3D) -> void
 ## Where the nozzle will point after this tick's slew toward the commanded aim, in
 ## `frame`'s axes.
 func predict_direction_in(frame: Node3D, delta: float) -> Vector3:
-	var d := _dir
-	var angle := _dir.angle_to(_cmd_dir)
-	if angle > 1e-5:
-		d = _dir.slerp(_cmd_dir, minf(1.0, deg_to_rad(gimbal_rate_deg) * delta / angle)).normalized()
-	return (frame.global_basis.inverse() * (global_basis * d)).normalized()
+	return (frame.global_basis.inverse() * (global_basis * _slewed(delta))).normalized()
 
 
 ## Throttle range reachable this tick: x = lowest, y = highest.
@@ -246,10 +245,7 @@ func step(delta: float, body: RigidBody3D, has_propellant: bool) -> void:
 	if target < min_throttle and throttle < min_throttle:
 		throttle = 0.0
 
-	var angle := _dir.angle_to(_cmd_dir)
-	if angle > 1e-5:
-		var max_step := deg_to_rad(gimbal_rate_deg) * delta
-		_dir = _dir.slerp(_cmd_dir, minf(1.0, max_step / angle)).normalized()
+	_dir = _slewed(delta)
 	_gimbal.basis = Basis.looking_at(_dir, _pick_up(_dir))
 	if swing_pivot != Vector3.ZERO:
 		_gimbal.position = swing_pivot + Quaternion(Vector3.FORWARD, _dir) * -swing_pivot
@@ -259,6 +255,21 @@ func step(delta: float, body: RigidBody3D, has_propellant: bool) -> void:
 		var force := -_gimbal.global_basis.z.normalized() * thrust
 		body.apply_force(force, _gimbal.global_position - body.global_position)
 	_update_visuals()
+
+
+## Nozzle aim after slewing toward the command for `delta` (local axes).
+func _slewed(delta: float) -> Vector3:
+	var angle := _dir.angle_to(_cmd_dir)
+	if angle <= 1e-5:
+		return _dir
+	if gimbal_yaw_rate_deg <= 0.0 or _dir.z > -0.05 or _cmd_dir.z > -0.05:
+		return _dir.slerp(_cmd_dir, minf(1.0, deg_to_rad(gimbal_rate_deg) * delta / angle)).normalized()
+	# Fore/aft (about X) and sideways (about Y) swing separately, each at its own rate.
+	var pitch := atan2(_dir.y, -_dir.z)
+	var yaw := atan2(_dir.x, -_dir.z)
+	pitch = move_toward(pitch, atan2(_cmd_dir.y, -_cmd_dir.z), deg_to_rad(gimbal_rate_deg) * delta)
+	yaw = move_toward(yaw, atan2(_cmd_dir.x, -_cmd_dir.z), deg_to_rad(gimbal_yaw_rate_deg) * delta)
+	return Vector3(tan(yaw), tan(pitch), -1.0).normalized()
 
 
 func _clamp_to_cone(local_dir: Vector3) -> Vector3:

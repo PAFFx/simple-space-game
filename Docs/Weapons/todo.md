@@ -24,9 +24,11 @@ fix bit by bit. Nothing here is started.
 - [x] The arm movement for the shield and rifle doesn't go into AMBAC / Newton's third law: no
       thruster fires and no other limb balances it. The MS should have gone into a spin by now
       with these motions.
-- [ ] A full-boost strafe rolls the ν ~60° and takes about a second to roll back over when the
+- [x] A full-boost strafe rolls the ν ~60° and takes about a second to roll back over when the
       strafe is reversed (it first keeps going the old way for ~0.5 s). The roll-over is throttled
       by the FBW's tracking-lag guard, not by thrust: look at faster swings for reversals.
+- [ ] The mains' nozzles swing ±50° sideways but their meshes belong to the pod (fore/aft only):
+      give each nozzle its own bone so the sideways swing shows, not just the plume.
 - [ ] Other MS' beams should definitely be faster than the turret's here, so MS manoeuvrability
       needs to be better: probably have to resort to increasing thruster output.
 
