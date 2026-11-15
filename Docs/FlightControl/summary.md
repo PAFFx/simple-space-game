@@ -589,7 +589,7 @@ texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
-| 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | pod 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward), swings at 90°/s; each nozzle also swings ±50° sideways on its own, at 240°/s (`Thruster.gimbal_yaw_rate_deg`) |
+| 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | pod 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward), swings at 90°/s; each nozzle also swings up to 10° sideways on its own, at 240°/s (`Thruster.gimbal_yaw_rate_deg`), outward only (`gimbal_yaw_bias_deg`; the hyper bazooka sits between the pods): the cups nearly fill their channel in the pod (0.88 m in 0.90 m) |
 | 2 × 400 kN | soles | down | 3D, 30° cone |
 | 2 × 400 kN (the model's own nozzles, in their calf plates) | behind each calf | down, a little back | 2D with the plate, 0…40° back only (never into the leg) |
 | 4 × 480 kN | shoulder armor, 2 per side (same nozzle) | up-and-out / out-and-down | top: 2D from 10° below rest to 45° up (nearly straight up); outer: 2D fore/aft ±25° |
@@ -617,7 +617,7 @@ the armor, and the main and calf nozzles are the model's own, moved by `Thruster
 These bones are visual: the thrusters stay on the backpack/shin bones. Idle nozzles (under 1%
 throttle, `Thruster.park_throttle`) park at their rest aim, so the calf units close. Thruster swing limits: `gimbal_pitch_limit_deg` (fore/aft) and `gimbal_yaw_limit_deg`
 (sideways) tighten the cone per axis; 0 on one = 2D vectoring, `gimbal_limit_deg` 0 = fixed.
-`gimbal_yaw_rate_deg` gives the sideways swing its own slew rate. The mains' nozzle meshes are
+`gimbal_yaw_rate_deg` gives the sideways swing its own slew rate, `gimbal_yaw_bias_deg` a one-sided range. The mains' nozzle meshes are
 part of their pod, which only pivots fore/aft: their sideways swing shows in the plume only
 (per-nozzle bones would fix that).
 
@@ -631,25 +631,25 @@ Clean force capability at full weight (69 t, level, limbs at rest; `Tools/Flight
 | | up | down | forward | back | sideways |
 |---|---|---|---|---|---|
 | Before the Nov 2026 side-thrust pass | 7.2 G | 0.8 G | 3.9 G | 2.9 G | 2.3 G |
-| Now | 9.3 G | 1.6 G | 6.8 G | 3.9 G | 4.6–4.9 G |
+| Now | 9.0 G | 1.6 G | 6.6 G | 3.9 G | 3.5–3.7 G |
 
-Clean torque 19 / 12 / 20 MN·m (pitch / yaw / roll), about twice what it was. Sideways gains
-come from the bigger shoulder, skirt and shin ports, the sole's wider cone and the mains'
-sideways swing; the stronger shoulder tops (down) are what let the mains push sideways
+Clean torque 19 / 8 / 20 MN·m (pitch / yaw / roll), about twice what it was. Sideways gains
+come from the bigger shoulder, skirt and shin ports and the sole's wider cone; the stronger shoulder tops (down) are what let the mains push sideways
 cleanly, cancelling their upward part. Boosted strafe: 3.3 → 6.1 G, 1.4 → 2.3 m in the
-first 0.5 s, 8 → 20 m in 1 s.
+first 0.5 s, 8 → 14 m in 1 s.
 
 **Reversals.** A full-boost strafe used to roll the suit 60°; reversed, it kept going the old
 way for half a second and covered 1 m in its first second, because the suit had to roll all
 the way back over before the mains could help. Faster rolling didn't help: feeding the
 swing's acceleration forward or raising its torque priority made the turn quicker but took
 the thrust from the push (shorter moves, up to 0.8 G spilled). What did: the mains' nozzles
-swing ±50° sideways on their own at 240°/s (the pod still pivots fore/aft at 90°/s), so they
-push sideways without a roll and swap sides fast, and the solver rolls at most 30° into a
-strafe (`axis_limit_deg` z; pitch keeps 60° for dashes). Full-boost reversal: −0.7 → +0.5 m
-in the first 0.5 s, 1.0 → 7.6 m in 1 s; boosted reversal 5.4 → 7.9 m. The price is peak
-full-boost strafe acceleration (8.7 → 6.8 G), though it still covers more ground in its
-first second (13.9 → 18.3 m).
+swing sideways on their own at 240°/s (the pod still pivots fore/aft at 90°/s), so they swap
+sides fast, and the solver rolls at most 30° into a strafe (`axis_limit_deg` z; pitch keeps
+60° for dashes). The swing is only 10°, outward, all the model allows: ±50° gave nearly the
+same reversal (the speed matters, not the range), only stronger straight strafes, and in a
+strafe only one pod's nozzles push the useful way anyway. Full-boost reversal: −0.7 → +0.7 m
+in the first 0.5 s, 1.0 → 7.1 m in 1 s; boosted reversal 5.4 → 7.1 m. The price is peak
+full-boost strafe acceleration (8.7 → 5.5 G; 13.9 → 13.0 m in 1 s).
 Limbs don't aim the fixed/2D thrusters yet.
 
 **Mass and thrust (ν).** Official weights: 27.9 t empty, 63.0 t max (with ~9.9 t of equipment and

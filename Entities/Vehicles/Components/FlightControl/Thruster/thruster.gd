@@ -22,6 +22,9 @@ extends Node3D
 ## Same for the sideways swing (about local Y). 0 = the nozzle only swings fore/aft
 ## (one-plane, "2D" vectoring); gimbal_limit_deg 0 = fixed nozzle.
 @export_range(0.0, 90.0) var gimbal_yaw_limit_deg: float = 90.0
+## Centre of the sideways range, deg (bias ± yaw limit), e.g. a nozzle that can only swing
+## outward because something sits on its inner side.
+@export_range(-60.0, 60.0) var gimbal_yaw_bias_deg: float = 0.0
 ## For a nozzle in a pod that swings about a hinge away from the nozzle (e.g. a backpack
 ## pod hanging from the top): that hinge, local to this node. The nozzle (where the force
 ## acts and the plume starts) then swings around it with the gimbal. Zero = gimbal in place.
@@ -171,10 +174,11 @@ func _limit_planes() -> Array[Vector3]:
 		var lo := deg_to_rad(gimbal_pitch_bias_deg - gimbal_pitch_limit_deg)
 		out[0] = Vector3(0.0, cos(hi), sin(hi))
 		out[1] = Vector3(0.0, -cos(lo), -sin(lo))
-	if gimbal_yaw_limit_deg < gimbal_limit_deg:
-		var h := deg_to_rad(gimbal_yaw_limit_deg)
-		out[2] = Vector3(cos(h), 0.0, sin(h))
-		out[3] = Vector3(-cos(h), 0.0, sin(h))
+	if gimbal_yaw_limit_deg < gimbal_limit_deg or gimbal_yaw_bias_deg != 0.0:
+		var hi := deg_to_rad(gimbal_yaw_bias_deg + gimbal_yaw_limit_deg)
+		var lo := deg_to_rad(gimbal_yaw_bias_deg - gimbal_yaw_limit_deg)
+		out[2] = Vector3(cos(hi), 0.0, sin(hi))
+		out[3] = Vector3(-cos(lo), 0.0, -sin(lo))
 	return out
 
 

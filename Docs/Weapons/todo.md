@@ -27,7 +27,7 @@ fix bit by bit. Nothing here is started.
 - [x] A full-boost strafe rolls the ν ~60° and takes about a second to roll back over when the
       strafe is reversed (it first keeps going the old way for ~0.5 s). The roll-over is throttled
       by the FBW's tracking-lag guard, not by thrust: look at faster swings for reversals.
-- [ ] The mains' nozzles swing ±50° sideways but their meshes belong to the pod (fore/aft only):
+- [ ] The mains' nozzles swing up to 10° sideways (outward) but their meshes belong to the pod (fore/aft only):
       give each nozzle its own bone so the sideways swing shows, not just the plume.
 - [ ] Other MS' beams should definitely be faster than the turret's here, so MS manoeuvrability
       needs to be better: probably have to resort to increasing thruster output.

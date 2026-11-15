@@ -46,12 +46,13 @@ const CONE_3D := [30.0, 90.0, 90.0]
 # only (2D) about its middle (ThrusterGuards), and the nozzles swing around that pivot
 # (Thruster.swing_pivot): 8° to 78° back (±35° around 43° back; the modelled pods point 48°
 # back). Nearly straight down for a climb; kept short of horizontal so the suit pitches
-# nose-down and drives with the mains to move forward fast. Each nozzle also swings ±50°
-# sideways on its own (fast: no pod moves), so the mains push sideways without the suit
-# rolling, and swap sides quickly for a reversed strafe.
+# nose-down and drives with the mains to move forward fast. Each nozzle also swings up to
+# 10° sideways on its own (fast: no pod moves), outward only: the hyper bazooka sits
+# between the pods. The cups nearly fill their channel in the pod (0.88 m in 0.90 m), so
+# not more. The right pod's exhaust swinging right pushes the suit left, and vice versa.
 const MAIN_EXHAUST := Vector3(0.0, -0.731, 0.682)
 const MAIN_MODEL_EXHAUST := Vector3(0.0, -0.67, 0.74)
-const MAIN_CONE := [50.0, 35.0, 50.0]
+const MAIN_CONE := [35.0, 35.0, 5.0]
 # Slot-shaped ports (flat plume along the slot): direction × length in the body frame, and
 # the slot's width as the nozzle scale (the round plume's diameter is 0.76 × scale).
 const SLOTS := {
@@ -384,6 +385,10 @@ func _build_thrusters(root: Node3D) -> void:
 		if t[0].begins_with("Main"):
 			node.set("gimbal_rate_deg", 90.0)  # a whole pod swings fore/aft
 			node.set("gimbal_yaw_rate_deg", 240.0)  # the nozzle alone swings sideways
+			# Outward only (MAIN_CONE's 5° each side of a 5° bias): local +X is the body's
+			# +X, and +yaw tips the thrust that way, i.e. the exhaust inward.
+			var right := (t[2] as Vector3).x > 0.0
+			node.set("gimbal_yaw_bias_deg", -5.0 if right else 5.0)
 		elif t[0].begins_with("Calf"):
 			node.set("gimbal_rate_deg", 120.0)
 		if SLOTS.has(t[0]):
@@ -411,8 +416,8 @@ func _build_flight_computer(root: Node3D) -> void:
 	var law := RateCommandControlLaw.new()
 	law.attitude_solver = ThrustVectoringAttitudeSolver.new()
 	# Roll at most 30° into a strafe: rolling further adds a little top acceleration but
-	# a reversal then has to roll all the way back over first (full boost: 2.6 m in its
-	# first second at 60°, 7.6 m at 30°). Pitch keeps 60° for dashes and climbs.
+	# a reversal then has to roll all the way back over first (full boost: 4.5 m in its
+	# first second at 45°, 7.5 m at 30°). Pitch keeps 60° for dashes and climbs.
 	law.attitude_solver.axis_limit_deg = Vector3(60.0, 3.0, 30.0)
 	fc.set("control_law", law)
 	var alloc := ConeProjectedAllocator.new()
