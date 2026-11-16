@@ -13,7 +13,7 @@ PanoramicHud (Node)
     ├── Attitude        pitch ladder (two unnumbered tick columns ±30° off the heading, with
                         a pointer carrying the current pitch, and a highlight running up the
                         ticks while climbing, down while descending); small attitude indicator at
-                        the zenith inside a numbered course ring at 28° elevation (translucent), with the
+                        the zenith inside a numbered course ring at 45° elevation (translucent), with the
                         HDG box on its pointer (horizon ring off, reserved)
     ├── SuitAttitude    suit vs cockpit: the suit's horizontal plane as one double-rail line
                         all the way round, open ahead between two arrowhead badges (a plate in

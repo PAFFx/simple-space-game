@@ -337,18 +337,9 @@ func get_mode_labels() -> PackedStringArray:
 		labels.append("HORIZON FREE")
 	if coupled:
 		labels.append("COUPLED")
-	if _break_left > 0.0:
-		labels.append("BREAK")
-	elif _last_boost_full:
-		labels.append("BOOST FULL")
-	elif _last_boost:
-		labels.append("BOOST")
-	elif precision:
+	# Boost, brake and break show on the thrust cue and the flight path marker instead.
+	if precision and not (_last_boost or _break_left > 0.0):
 		labels.append("PRECISION")
-	if _last_brake_full:
-		labels.append("BRAKE HARD")
-	elif _last_brake:
-		labels.append("BRAKE")
 	return labels
 
 
