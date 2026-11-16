@@ -55,12 +55,31 @@ on the shooter's. Separate from the weapons pass (`Docs/Weapons/todo.md`).
         in 0.5 s, 11.7 m in 1 s, and a full-boost reversal fell to 2.1 m in 1 s.
       Every variant moved 2.1–2.6 m in the first 0.5 s. Rotation costs time a dodge doesn't
       have; sideways at close range needs direct sideways thrust and a faster onset:
-      - [ ] "Break" input: full clean thrust in the commanded direction at once, no velocity-
-            loop ramp, no attitude change (today 2.4 m in 0.5 s where 3.7 G alone gives 4.5).
+      - [x] "Break": the moment full boost engages with the stick deflected (a tap is a
+            break alone, held it carries on as full boost), 0.7 s of full thrust along the
+            stick with the attitude held, force before torque, up to 40% beyond the rest-
+            pose capability map (more spun the body: 110°/s on an up break), then a 0.4 s
+            cooldown. Dodge stances for sideways breaks: the far leg kicks out 45° (its
+            nozzles then push along), the near leg tucks in, the waist leans into the move
+            (new side-bend joint, own AMBAC group so an aimed weapon doesn't lock it). In
+            0.5 s / 1 s from still: sideways 2.5 → 2.8 / 14.3 → 15.0 m, diagonal (up and
+            sideways) 4.8 / 23.7 m, up 6.8 / 35.5 m. From a forward boost (pitched −17°)
+            sideways is ~20% weaker; out of a −50° full-boost dive the body swings at up to
+            72°/s (judge in flight). Turret dodge test, same conditions with and without the
+            break (randomised reaction, 16 shots): diagonal at 500 m 16 → 8 hits, sideways
+            and up about unchanged (up was already 2–3 of 16). Without the funnels (63 t)
+            ~12% more distance; sideways at 500 m 14 → 5 hits.
+            Sideways inside 500 m is still unreliable: 3.7 G of clean sideways thrust isn't
+            enough in that window. Break up or diagonally there.
       - [ ] Main pods swinging sideways (a second pod axis, ±30–45°), measured first in the
             capability probe, then a model / bone change.
       - [ ] Optional: a 60° roll cap for a sustained full-boost sideways sprint (7.4 G), not
             for dodging.
+
+- [ ] Physics cost: one RX-93 is ~8 ms of physics per tick (mostly the thrust allocator),
+      half a 60 Hz frame. Fixed today: the capability map was rebuilt on every limb swing
+      that moved the centre of mass 0.1 m (72 ms per tick in a fight, `Tools/Profiling/
+      tick_cost_probe.gd`); now only when the rest-pose centre moves (propellant, jettison).
 
 ## 2. Sensors (DGFT)
 

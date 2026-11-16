@@ -6,10 +6,11 @@ extends SceneTree
 ##
 ##   godot-double --headless --path . --fixed-fps 60 -s Tools/Weapons/dodge_probe.gd -- \
 ##       [speed=1500] [shots=10] [ranges=500,1000,2000] [policies=none,up,side]
-##       [aim=track,truth] [reaction=0.25] [hold=0.8] [spool=0.5]
+##       [aim=track,truth] [reaction=0.25] [jitter=0.15] [hold=0.8] [spool=0.5] [no_funnels] [break_time=0.7] [no_break]
 ##
 ## policies: none (sits still), up (the mains' axis, ~9 G), side (left or right at random,
-## ~3.6 G), any (up / down / left / right at random). aim: the turret leads from its own
+## ~3.6 G), diag (up and left or right, 45°), any (up / down / left / right at random).
+## Full boost engaging starts a break (RateCommandControlLaw), so every dodge is one. aim: the turret leads from its own
 ## sensor track of the suit (TargetDrone.use_track) or from the suit's true state.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
@@ -31,6 +32,13 @@ var _reaction := 0.25
 var _hold := 0.8
 var _spool := 0.5
 var _hits := 0
+var _no_funnels := false
+var _break_time := -1.0
+## The pilot's reaction varies shot to shot: reaction − jitter·0.5 … reaction + jitter.
+## A fixed reaction made every dodge identical, which a shooter leading the acceleration
+## could hit every time at one particular range.
+var _jitter := 0.15
+var _no_break := false
 
 
 func _initialize() -> void:
@@ -46,6 +54,10 @@ func _initialize() -> void:
 			"reaction": _reaction = float(value)
 			"hold": _hold = float(value)
 			"spool": _spool = float(value)
+			"no_funnels": _no_funnels = true
+			"break_time": _break_time = float(value)
+			"jitter": _jitter = float(value)
+			"no_break": _no_break = true
 	_run.call_deferred()
 
 
@@ -55,6 +67,10 @@ func _run() -> void:
 	for node in stage.find_children("*", "", true, false):
 		if "capture_on_ready" in node:
 			node.set("capture_on_ready", false)
+	if _no_funnels:
+		# Launched without them: gone before the loadout, payload and mass model are built.
+		for node in stage.find_children("FinFunnels", "", true, false):
+			node.free()
 	root.add_child(stage)
 	current_scene = stage
 	await _ticks(10)
@@ -66,10 +82,15 @@ func _run() -> void:
 	fc.add_child(_input)
 	fc.input_source = _input
 	_fcs = vehicle.find_component(FireControl) as FireControl
+	if _break_time >= 0.0:
+		(fc.control_law as RateCommandControlLaw).break_time = _break_time
+	if _no_break:
+		(fc.control_law as RateCommandControlLaw).break_on_full_boost = false
 	_suit.connect(&"hit_taken", func(_d: float, _p: Vector3, _dir: Vector3) -> void: _hits += 1)
 	await _ticks(60)
-	print("turret beam %.0f m/s, spool %.2f s, %d shots per case; pilot reacts %.2f s after the glow, boosts %.2f s" % [
-			_speed, _spool, _shots, _reaction, _hold])
+	print("turret beam %.0f m/s, spool %.2f s, %d shots per case; pilot reacts %.2f s after the glow, boosts %.2f s; suit %.1f t%s; break %.2f s" % [
+			_speed, _spool, _shots, _reaction, _hold, _suit.mass / 1000.0, " (no funnels)" if _no_funnels else "",
+			(fc.control_law as RateCommandControlLaw).break_time if not _no_break else 0.0])
 	for aim in _aims:
 		for policy in _policies:
 			var line := "aim %-5s dodge %-4s |" % [aim, policy]
@@ -117,7 +138,7 @@ func _case(track: bool, policy: String, r: float) -> Array:
 		time_left -= 1.0 / Engine.physics_ticks_per_second
 		var cue := drone.is_spooling()
 		if cue and not spooling and policy != "none":
-			dodge_in = _reaction
+			dodge_in = _reaction + randf_range(-0.5 * _jitter, _jitter)
 		if spooling and not cue:
 			# Fired: judge it once it has had time to arrive, then put the suit back.
 			settle = r / _speed + 0.4
@@ -159,6 +180,8 @@ func _dodge_direction(policy: String, drone: TargetDrone) -> Vector3:
 	match policy:
 		"side":
 			want = Vector3.RIGHT if randf() < 0.5 else Vector3.LEFT
+		"diag":
+			want = (Vector3.UP + (Vector3.RIGHT if randf() < 0.5 else Vector3.LEFT)).normalized()
 		"any":
 			want = [Vector3.UP, Vector3.DOWN, Vector3.LEFT, Vector3.RIGHT][randi() % 4]
 	return (want - los * want.dot(los)).normalized()

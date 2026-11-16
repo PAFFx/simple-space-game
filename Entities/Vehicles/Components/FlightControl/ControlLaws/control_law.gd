@@ -25,6 +25,11 @@ func get_brake_level() -> int:
 	return 0
 
 
+## Override: direction of a break (dodge) in progress, pilot frame; zero when none.
+func get_break_direction() -> Vector3:
+	return Vector3.ZERO
+
+
 ## Body orientation relative to the pilot frame (body = pilot · offset). The
 ## cockpit counter-rotates by this. Identity for laws without auto-rotation.
 func get_pilot_offset() -> Quaternion:

@@ -47,7 +47,10 @@ extends Node
 ## AMBAC's measured joint inertias are refreshed when the propellant fill changes by this.
 @export var joint_refresh_fill: float = 0.02
 ## The flight computer's force capability map (torque arms about the centre of mass) is
-## rebuilt when the centre has moved this far since it was built, m.
+## rebuilt when the centre of mass *at rest* (limbs in their rest pose) has moved this far
+## since it was built, m: propellant burnt, equipment dropped. Limb swings move the centre
+## back and forth for a moment; rebuilding for those (~48 allocator probes each) cost
+## ~85% of the suit's physics time in a fight.
 @export var map_rebuild_distance: float = 0.1
 
 var last_momentum := Vector3.ZERO   ## Tracked limbs' angular momentum (smoothed), body frame (N·m·s)
@@ -192,6 +195,11 @@ func _update_mass_properties() -> void:
 	if absf(_fill - _fill_joints) > joint_refresh_fill:
 		_fill_joints = _fill
 		_mark_ambac_joints()
+		if _flight != null and _applied:
+			var rest := _rest_com(total)
+			if (rest - _map_com).length() > map_rebuild_distance:
+				_flight.rebuild_capability_map_async()
+				_map_com = rest
 
 	var diag := Vector3(cols[0].x, cols[1].y, cols[2].z)
 	var old_diag := _body.inertia
@@ -216,11 +224,21 @@ func _update_mass_properties() -> void:
 		if not _applied:
 			# The first map was built a tick ago, around the scene's placeholder centre.
 			_flight.invalidate_capability_map()
-			_map_com = com
-		elif (com - _map_com).length() > map_rebuild_distance:
-			_flight.rebuild_capability_map_async()
-			_map_com = com
+			_map_com = _rest_com(total)
 	_applied = true
+
+
+## Centre of mass with every part in its rest pose (body frame), for `total` kg in all.
+func _rest_com(total: float) -> Vector3:
+	var bs := _body_from_skeleton()
+	var moment := Vector3.ZERO
+	var parts := 0.0
+	for i in _bones.size():
+		var m := _part_mass(i)
+		moment += bs * (skeleton.get_bone_global_rest(_bones[i]) * _com[i]) * m
+		parts += m
+	var residual := maxf(total - parts, 0.0)
+	return (moment + _residual_at * residual) / maxf(parts + residual, 1.0)
 
 
 static func _add_point(cols: Array[Vector3], d: Vector3, m: float) -> void:
