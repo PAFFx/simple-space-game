@@ -39,6 +39,29 @@ on the shooter's. Separate from the weapons pass (`Docs/Weapons/todo.md`).
 - [x] `Docs/FlightControl/summary.md`'s RX-93 thruster table showed the design ratings, not
       the scene's thrusts (× 63.0 / 59.5). Done, with the capability re-measured.
 
+- [ ] Reliable lateral dodges (2026-11-16). Up dodges everything on the cue (~9 G); sideways
+      (3.6 G) fails inside ~500 m: a dodge has the rest of the enemy spool plus the flight
+      time (0.45 s at 300 m, 0.58 s at 500 m) to clear ~8 m, so it needs ~8 G within ~0.15 s.
+      Tried and reverted, AMBAC leg stances for full-boost strafes:
+      - A leg swing rolls the body only ~a quarter of the swing (each leg is ~13% of the roll
+        inertia): 45° / 15° on the two hips rolled the free body 7.8°, 60° on both ~15°.
+        Pointing the mains sideways needs 45–90° of roll, so the thrusters must do most of it.
+      - Far leg out 45° aims its sole / calf / shin nozzles sideways: clean sideways 3.7 → 5.0 G
+        (60°: 5.2, 90°: 5.25), but its swing rolls the body against the FBW's strafe roll:
+        half acceleration took 0.58 s (was 0.18), 12.6 m in 1 s (was 14.8).
+      - Near leg out rolls the right way: onset 0.15 s, roll 71°/s (was ~50), but tops out at
+        4.9 G under the 30° roll cap. With the cap at 60–90° a full-boost strafe holds 7.4 G
+        (was 5.8: the mains really push sideways), yet the roll takes most of a second: 2.4 m
+        in 0.5 s, 11.7 m in 1 s, and a full-boost reversal fell to 2.1 m in 1 s.
+      Every variant moved 2.1–2.6 m in the first 0.5 s. Rotation costs time a dodge doesn't
+      have; sideways at close range needs direct sideways thrust and a faster onset:
+      - [ ] "Break" input: full clean thrust in the commanded direction at once, no velocity-
+            loop ramp, no attitude change (today 2.4 m in 0.5 s where 3.7 G alone gives 4.5).
+      - [ ] Main pods swinging sideways (a second pod axis, ±30–45°), measured first in the
+            capability probe, then a model / bone change.
+      - [ ] Optional: a 60° roll cap for a sustained full-boost sideways sprint (7.4 G), not
+            for dodging.
+
 ## 2. Sensors (DGFT)
 
 Pilot locks, the sensors and fire control do the rest. Laser rangefinder on in DGFT only.
