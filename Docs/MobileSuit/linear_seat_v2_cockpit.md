@@ -67,8 +67,9 @@ the keyboard moves the controls too:
 | Control | Shows |
 |---------|-------|
 | Both balls tipped fore / aft together | forward / back |
-| Balls tipped fore / aft against each other | yaw (and roll): right ball forward = left |
+| Balls tipped fore / aft against each other | yaw: right ball forward = left |
 | Both balls tipped sideways | strafe |
+| Balls tipped sideways against each other | roll: right ball right = roll right |
 | Both balls tipped tops back | pitch up (adds to the fore / aft tilt) |
 | Right pedal / left pedal | up / down thrust: the pressed one tips 26° and slides 6 cm forward on its rail, the other stays put |
 
