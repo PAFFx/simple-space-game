@@ -75,7 +75,7 @@ extends KeyboardPilotInput
 ## on the half difference: one stick alone needs twice this travel.
 @export_range(0.0, 0.5) var yaw_deadzone: float = 0.05
 @export_range(0.0, 0.5) var pitch_deadzone: float = 0.06
-@export_range(0.0, 0.5) var roll_deadzone: float = 0.05
+@export_range(0.0, 0.5) var roll_deadzone: float = 0.12
 ## Smoothing of the shaped demand, s. 0 = off.
 @export var smoothing: float = 0.04
 ## Median over this many ticks of each raw axis, against sensor spikes. 1 = off.
