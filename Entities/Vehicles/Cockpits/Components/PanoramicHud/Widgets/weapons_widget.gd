@@ -155,7 +155,8 @@ func _draw_solution(weapon: MsWeapon) -> void:
 		return
 	if not weapon.solution_valid:
 		var at := patch(hud.world_to_display(_fcs.get_target_position() - hud.get_view_origin()), Vector3.UP)
-		patch_text(at, Vector2(0.0, -4.2), "NO SOLUTION", hud.caution_color, HORIZONTAL_ALIGNMENT_CENTER, 13)
+		var why := _fcs.get_track_label()
+		patch_text(at, Vector2(0.0, -4.2), why if why != "" else "NO SOLUTION", hud.caution_color, HORIZONTAL_ALIGNMENT_CENTER, 13)
 		return
 	var lead_world := weapon.lead_point - hud.get_view_origin()
 	var lead := patch(hud.world_to_display(lead_world), Vector3.UP)
