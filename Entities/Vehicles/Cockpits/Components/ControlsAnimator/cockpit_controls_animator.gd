@@ -4,8 +4,8 @@ extends Node
 ## Moves the cockpit grips and pedals to match the pilot's current command.
 ##   SPLIT  Right grip: pitch / roll.  Left grip: translation (twist = up/down).  Pedals: yaw.
 ##   TWIN   Both controls flown tank style, as TwinStickPilotInput mixes them: fore/aft
-##          together = forward / back, against each other = yaw, right sideways =
-##          strafe, left sideways = roll, tops back = nose up. With balls (the model's ball controllers) only
+##          together = forward / back, against each other = yaw (or roll), sideways =
+##          strafe, tops back = nose up. With balls (the model's ball controllers) only
 ##          the balls turn, in their cradles; without, the grips tilt and twist against
 ##          each other for pitch.
 ##          Pedals: right = up, left = down; the pressed one tips and slides forward.
@@ -64,18 +64,17 @@ func _physics_process(delta: float) -> void:
 		_pose(right_pedal, Vector3(-maxf(-cmd.rotation.y, 0.0) * p, 0.0, 0.0), w)
 		return
 	var forward := -cmd.translation.z
-	var turn := cmd.rotation.y                                       # + = left: right stick forward
-	var roll := cmd.rotation.z * g                                    # left ball, + = tipped left
+	var turn := clampf(cmd.rotation.y + cmd.rotation.z, -1.0, 1.0)   # + = left: right stick forward
 	var twist := cmd.rotation.x * deg_to_rad(twist_travel_deg)        # + = nose up
 	var side := -cmd.translation.x * g
 	var left_tilt := -clampf(forward - turn, -1.0, 1.0) * g
 	var right_tilt := -clampf(forward + turn, -1.0, 1.0) * g
 	if left_ball != null and right_ball != null:
 		# Only the balls move, in their cradles; the units stay put on the armrests.
-		_pose(left_ball, Vector3(left_tilt + twist, 0.0, roll), w)
+		_pose(left_ball, Vector3(left_tilt + twist, 0.0, side), w)
 		_pose(right_ball, Vector3(right_tilt + twist, 0.0, side), w)
 	else:
-		_pose(left_grip, Vector3(left_tilt, twist, roll), w)
+		_pose(left_grip, Vector3(left_tilt, twist, side), w)
 		_pose(right_grip, Vector3(right_tilt, -twist, side), w)
 	_pose(right_pedal, Vector3(-maxf(cmd.translation.y, 0.0) * p, 0.0, 0.0), w)
 	_pose(left_pedal, Vector3(-maxf(-cmd.translation.y, 0.0) * p, 0.0, 0.0), w)
