@@ -22,8 +22,15 @@ instance uniform float flash_heat = 0.0;
 // viewer's own suit is a flash, not a white screen.
 instance uniform float flash_max_angle = 0.22;
 uniform float min_angle = 0.0016;
+// Never smaller on screen than this (rad): a charge stays readable at any range, the way a
+// camera blooms a bright point into a halo. Its body keeps its real size inside it.
+instance uniform float flash_min_angle = 0.0;
+// Camera glare on a charge: a halo and a cross of streaks, 0..1.
+instance uniform float flash_glare = 0.0;
 
 varying float v_near;
+// Real size / drawn size (≤ 1): how much the floor above enlarged the sprite.
+varying float v_shrink;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -41,6 +48,9 @@ void vertex() {
 	vec3 centre = MODELVIEW_MATRIX[3].xyz;
 	float dist = length(centre);
 	float size = max(min(flash_size, flash_max_angle * dist), min_angle * dist);
+	float natural = size;
+	size = max(size, flash_min_angle * dist);
+	v_shrink = natural / size;
 	v_near = smoothstep(1.0, 14.0, dist);
 	VERTEX = centre + vec3(VERTEX.xy * size, 0.0);
 	NORMAL = vec3(0.0, 0.0, 1.0);
@@ -63,6 +73,12 @@ void fragment() {
 		col = hot * disc * (1.0 + limb * 0.6) + flash_color * halo * 0.9;
 		edge = 1.0 - smoothstep(0.9, 1.0, r);
 	} else if (flash_charge > 0.5) {
+		// The knot keeps its real size (at least a quarter of the sprite); halo and glare
+		// fill the rest.
+		vec2 q = p;
+		float shrink = max(v_shrink, 0.25);
+		p = q / shrink;
+		r = length(p);
 		float a = atan(p.y, p.x);
 		float t = TIME * 26.0 + flash_seed * 40.0;
 		// A ragged outline that boils, so it never settles into a disc.
@@ -88,6 +104,18 @@ void fragment() {
 		col = flash_color * (body * 1.3 + hot * 0.8) * flick
 				+ mix(flash_color, vec3(1.0), 0.65) * arcs * (0.6 + flash_core)
 				+ vec3(1.0) * core;
+		// Glare in the sprite's own frame: a soft halo and a cross that stretches as the
+		// charge nears the shot.
+		// Only once the floor has enlarged it (seen from afar): a charge right by the viewer
+		// (its own barrel) stays a clean knot.
+		float rq = length(q);
+		float reach = 1.5 + 4.0 * flash_core;
+		float streak = exp(-abs(q.y) * 22.0) * exp(-abs(q.x) * (6.0 / reach))
+				+ exp(-abs(q.x) * 22.0) * exp(-abs(q.y) * (6.0 / reach));
+		float halo = exp(-rq * rq * 4.0) * 0.6;
+		float far = 1.0 - smoothstep(0.35, 0.9, v_shrink);
+		col += mix(flash_color, vec3(1.0), 0.45) * (streak * 1.6 + halo) * flash_glare * far * flick;
+		edge = 1.0 - smoothstep(0.85, 1.0, rq);
 	} else {
 		float glow = exp(-r * r * 5.0);
 		float core = exp(-r * r * 45.0) * flash_core * 3.0;

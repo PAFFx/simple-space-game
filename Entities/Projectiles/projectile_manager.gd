@@ -86,6 +86,11 @@ class Flash:
 
 signal shot_hit(spec: ProjectileSpec, position: Vector3, collider: Node)
 
+## A charge never looks smaller than this (rad, full charge; 40% of it as it starts), and
+## its camera glare at full charge (0..1): the dodge cue has to read from the receiving end.
+@export var charge_min_angle: float = 0.022
+@export var charge_glare: float = 1.0
+
 var _shots: Array[Shot] = []
 var _flashes: Array[Flash] = []
 var _charges := {}   # owner → Charge
@@ -565,6 +570,10 @@ func _place_charges() -> void:
 		charge.sprite.set_instance_shader_parameter(&"flash_size", lerpf(spec.width * 2.0, spec.flash_size * 0.55, k) * flicker)
 		charge.sprite.set_instance_shader_parameter(&"flash_intensity", spec.intensity * (0.3 + 0.7 * k))
 		charge.sprite.set_instance_shader_parameter(&"flash_core", charge.level)
+		# Readable from the receiving end at any range: a floor on its apparent size and a
+		# camera glare that build with the charge.
+		charge.sprite.set_instance_shader_parameter(&"flash_min_angle", charge_min_angle * (0.4 + 0.6 * k))
+		charge.sprite.set_instance_shader_parameter(&"flash_glare", charge_glare * k)
 
 
 ## Draws a LINEAR shot: straight from the barrel (where it is drawn) along the barrel's
@@ -736,6 +745,10 @@ func _take(pool: Array[MeshInstance3D], mesh: Mesh, _kind: StringName) -> MeshIn
 
 func _release(node: MeshInstance3D, pool: Array[MeshInstance3D]) -> void:
 	node.visible = false
+	if pool == _sprite_pool:
+		# Only charges set these; a pooled sprite reused as a flash must not keep them.
+		node.set_instance_shader_parameter(&"flash_min_angle", 0.0)
+		node.set_instance_shader_parameter(&"flash_glare", 0.0)
 	pool.append(node)
 
 

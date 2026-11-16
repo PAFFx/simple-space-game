@@ -5,6 +5,28 @@ almost undodgeable inside 1 km against a perfect fire control, and more thrust c
 that (see `sensors.md`). The fix is realistic physics on our side and realistic sensors
 on the shooter's. Separate from the weapons pass (`Docs/Weapons/todo.md`).
 
+## Needs review in game
+
+Committed while the user was remote (2026-11-16) and checked only with probes and renders.
+Fly each and tick it off, or note what to change.
+
+- [ ] **Turret charge glare** (`flash.gdshader`, `ProjectileManager.charge_min_angle` 0.022 rad,
+      `charge_glare` 1.0): a far charge never looks smaller than ~2.5° and gets a halo and a
+      cross that stretch as it nears the shot; our own rifle's charge keeps its plain look.
+      Check it reads from the receiving end at 0.7–3 km, and whether it should keep the
+      shot's colour (it is mostly white now). Render: `weapons_snapshot.gd glow`.
+- [ ] **HUD track state**: ACQUIRING / COAST where NO SOLUTION was (part of the combat HUD
+      redesign).
+- [ ] **Break feel** (tap full boost with the stick pushed): the far-leg kick and waist lean
+      on sideways breaks, the committed 0.7 s push, the 0.4 s cooldown, releasing and tapping
+      again during a held full boost. Render: `Tools/Flight/dodge_snapshot.gd`.
+- [ ] **Break out of a steep full-boost dive** (−50° pitch): the body swings at up to 72°/s.
+- [ ] **Yaw**: turns are back to 70–90° in a second under boost, but stops take 0.42–0.48 s
+      after release (was ~0.3): more overshoot when letting go.
+- [ ] **Forward boost pitching** with the mass model's lower centre of mass (see Physics).
+- [ ] **Heavier handling overall** from the mass model: yaw inertia about twice the old value,
+      pitch and roll lighter, the suit getting nimbler as the tanks drain.
+
 ## 1. Physics
 
 - [x] Every part of the model has a mass, and the propellant sits in tanks around the body.

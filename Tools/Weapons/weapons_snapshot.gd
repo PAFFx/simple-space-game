@@ -6,7 +6,7 @@ extends SceneTree
 ##   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off state=floating rectangle=1280x720+0+0
 ##   godot-double --path . --resolution 1280x720 -s Tools/Weapons/weapons_snapshot.gd -- <out_dir> [shots]
 ##
-## shots: comma list of hud,beam,external,impact,ring,vulcan,missile,block,turret,offaxis
+## shots: comma list of hud,beam,external,impact,ring,vulcan,missile,block,turret,glow,offaxis
 ## (default all). offaxis also prints AIM lines: lead, gun and target agreement and miss.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
@@ -40,7 +40,7 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_out = args[0]
-	var shots := PackedStringArray(["hud", "beam", "external", "linear", "explode", "impact", "ring", "vulcan", "missile", "block", "turret", "offaxis"])
+	var shots := PackedStringArray(["hud", "beam", "external", "linear", "explode", "impact", "ring", "vulcan", "missile", "block", "turret", "glow", "offaxis"])
 	if args.size() > 1:
 		shots = args[1].split(",")
 	DirAccess.make_dir_recursive_absolute(_out)
@@ -289,6 +289,38 @@ func _run(shots: PackedStringArray) -> void:
 			await _frames(7)
 			await _shot("turret_block_%02d" % i)
 		_input.cmd.shield_block = false
+
+	if "glow" in shots:
+		# The turret's charge as the pilot sees it (normal field of view), at three ranges,
+		# with the old look (no size floor, no glare) and the new one.
+		if is_instance_valid(drone):
+			drone.queue_free()
+		var manager := ProjectileManager.of(_suit)
+		var floor_angle := manager.charge_min_angle
+		var glare := manager.charge_glare
+		for r in [700.0, 1500.0, 3000.0]:
+			for look in ["old", "new"]:
+				manager.charge_min_angle = 0.0 if look == "old" else floor_angle
+				manager.charge_glare = 0.0 if look == "old" else glare
+				await _frames(3)
+				var turret := _spawn(TargetDrone.Behaviour.TURRET, r, Vector2(6, 3), 100000.0)
+				turret.jink_accel_g = 0.0
+				turret.fire_range = r * 2.0
+				turret.fire_interval = Vector2(0.3, 0.3)
+				_look(6, 3)
+				for k in 600:
+					if turret.is_spooling():
+						break
+					await physics_frame
+				# _shot waits 3 ticks itself: half-way, then ~85% of the 0.5 s spool.
+				await _frames(9)
+				await _shot("glow_%04d_%s_half" % [int(r), look])
+				await _frames(7)
+				await _shot("glow_%04d_%s_late" % [int(r), look])
+				turret.queue_free()
+		manager.charge_min_angle = floor_angle
+		manager.charge_glare = glare
+		_look(0, 0)
 
 	if "offaxis" in shots:
 		# Lock straight ahead, then yaw and strafe away: the lead, the gun cross and where a
