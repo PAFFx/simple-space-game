@@ -110,6 +110,27 @@ func _run() -> void:
 	_fcs.cursor = Vector2(20, 10)
 	await _ticks(1)
 	_check("hovering previews without a button", _fcs.candidate == drone)
+	# Behind a wall: out of sight, so it can't be designated.
+	var wall := StaticBody3D.new()
+	var wall_shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(200, 200, 20)
+	wall_shape.shape = box
+	wall.add_child(wall_shape)
+	_suit.get_parent().add_child(wall)
+	var los_dir := _suit.global_basis.orthonormalized() * SpatialMath.angles_to_direction(Vector2(-60, -20))
+	wall.global_transform = Transform3D(Basis.looking_at(los_dir), _fcs.get_view_origin() + los_dir * 500.0)
+	var hidden := _spawn(TargetDrone.Behaviour.STATIC, 1200.0, Vector2(-60, -20))
+	var saved_cursor := _fcs.cursor
+	_fcs.cursor = SpatialMath.direction_to_angles(_fcs._display_basis().inverse() * los_dir)
+	await _ticks(10)
+	_check("contact behind a wall is hidden and not designated", not _fcs.can_see(hidden) and _fcs.candidate != hidden)
+	wall.queue_free()
+	await _ticks(10)
+	_check("back in sight once the wall is gone", _fcs.can_see(hidden) and _fcs.candidate == hidden)
+	hidden.queue_free()
+	_fcs.cursor = saved_cursor
+	await _ticks(2)
 	_input.cmd.lock_commit = true
 	await _ticks(2)
 	var rifle := _fcs.get_weapon(&"beam_rifle")
