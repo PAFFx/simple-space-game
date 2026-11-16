@@ -124,6 +124,59 @@ func _run(shots: PackedStringArray) -> void:
 		mover.queue_free()
 		await _frames(30)
 
+	if "zoom" in shots:
+		_fcs.lock(drone)
+		var head := _vehicle.get_sensor_head()
+		var zvp: SubViewport = head.get_zoom_viewport()
+		RenderingServer.viewport_set_measure_render_time(zvp.get_viewport_rid(), true)
+		RenderingServer.viewport_set_measure_render_time(get_root().get_viewport_rid(), true)
+		await _frames(30)
+		var base_gpu := RenderingServer.viewport_get_measured_render_time_gpu(get_root().get_viewport_rid())
+		_look(14, 6, 40.0)
+		_input.cmd.zoom = true
+		await _frames(4)
+		await _shot("zoom_opening")
+		await _frames(30)
+		await _shot("zoom_x4")
+		var gpu := 0.0
+		for i in 10:
+			await _frames(1)
+			gpu += RenderingServer.viewport_get_measured_render_time_gpu(zvp.get_viewport_rid())
+		print("ZOOM viewport gpu %.2f ms/frame (main viewport before %.2f ms)" % [gpu / 10.0, base_gpu])
+		_input.cmd.zoom = true
+		await _frames(3)
+		await _shot("zoom_x8_resolving")
+		await _frames(30)
+		await _shot("zoom_x8")
+		_input.cmd.zoom = true
+		await _frames(30)
+		await _shot("zoom_x16")
+		_look(14, 6, 75.0)
+		await _shot("zoom_x16_wide")
+		_input.cmd.unlock = true
+		await _frames(20)
+		print("ZOOM closed by unlock, still locked: %s, reveal %.2f" % [_fcs.locked == drone, head.zoom_reveal])
+		_look(0, 0)
+		# In clear sky.
+		var far := _spawn(TargetDrone.Behaviour.STATIC, 1500.0, Vector2(50, 24), 100000.0)
+		await _frames(2)
+		_fcs.lock(far)
+		await _frames(40)
+		_look(50, 24, 40.0)
+		_input.cmd.zoom = true
+		await _frames(30)
+		await _shot("zoom_sky_x4")
+		_input.cmd.zoom = true
+		await _frames(30)
+		await _shot("zoom_sky_x8")
+		_input.cmd.zoom = true
+		await _frames(30)
+		await _shot("zoom_sky_x16")
+		_fcs.lock(drone)
+		far.queue_free()
+		_look(0, 0)
+		await _frames(20)
+
 	if "soi" in shots:
 		_fcs.lock(null)
 		await _frames(2)

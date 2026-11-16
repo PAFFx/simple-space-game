@@ -148,6 +148,13 @@ func _push_shader_uniforms() -> void:
 	_material.set_shader_parameter("display_basis",    get_display_basis())
 	_material.set_shader_parameter("overlay_viewport", sensor_head.get_overlay_texture())
 	_material.set_shader_parameter("overlay_reveal",   sensor_head.overlay_reveal)
+	_material.set_shader_parameter("zoom_reveal",      sensor_head.zoom_reveal)
+	if sensor_head.zoom_reveal > 0.0:
+		var to_local := get_display_basis().inverse()
+		var zb := sensor_head.zoom_basis
+		_material.set_shader_parameter("zoom_viewport", sensor_head.get_zoom_texture())
+		_material.set_shader_parameter("zoom_frame", Basis(to_local * zb.x, to_local * zb.y, to_local * -zb.z))
+		_material.set_shader_parameter("zoom_half_tan", sensor_head.get_zoom_half_tan())
 
 
 ## World orientation of the panoramic frame: screen-local direction d shows world direction

@@ -38,8 +38,23 @@ extends Node3D
 @export var overlay_in_time: float = 0.5
 @export var overlay_out_time: float = 0.3
 
+@export_group("Zoom window")
+## The zoom window's half size on the screen, deg (4:3, like its image), and its image.
+@export var zoom_half_deg: float = 7.0
+@export var zoom_size := Vector2i(640, 480)
+## Seconds it takes to resolve in from blocks (opening, or a new level), and to go.
+@export var zoom_in_time: float = 0.35
+@export var zoom_out_time: float = 0.15
+
 ## 0 = overlay gone, 1 = fully resolved (PanoramicScreen composites with it).
 var overlay_reveal := 0.0
+## Zoom window: 0 = closed, 1 = fully resolved.
+var zoom_reveal := 0.0
+## Where the zoom window looks, world direction from the head, and its frame (right, up).
+var zoom_direction := Vector3.FORWARD
+var zoom_basis := Basis.IDENTITY
+## The magnification shown (kept while the window breaks up).
+var zoom_magnification := 0.0
 
 var _viewport: SubViewport
 var _camera: Camera3D
@@ -49,6 +64,12 @@ var _overlay_viewport: SubViewport
 var _overlay_camera: Camera3D
 var _overlay_layers := 0
 var _overlay_target := 0
+
+# The zoom window: a narrow camera on the same head, rendering only while it is open.
+var _zoom_viewport: SubViewport
+var _zoom_camera: Camera3D
+var _zoom_wanted := 0.0
+var _zoom_point := Vector3.ZERO
 
 var _dbg_last_vfov: float = 0.0
 var _dbg_last_hfov: float = 0.0
@@ -60,6 +81,7 @@ func _ready() -> void:
 	_create_viewport()
 	_create_camera()
 	_create_overlay()
+	_create_zoom()
 
 
 func _process(_delta: float) -> void:
@@ -71,6 +93,7 @@ func _process(_delta: float) -> void:
 	else:
 		_update_camera(viewer)
 	_update_overlay(_delta)
+	_update_zoom(_delta)
 
 
 ## Shows these layers (Layers.SENSOR_COMBAT, SENSOR_BODY_PARTS; 0 = none) as the suit's own
@@ -81,6 +104,31 @@ func set_overlay(layers: int) -> void:
 
 func get_overlay_texture() -> ViewportTexture:
 	return _overlay_viewport.get_texture()
+
+
+## Opens the zoom window on `world_point` at `magnification` (0 = close it). A new
+## magnification resolves in again from blocks.
+func set_zoom(world_point: Vector3, magnification: float) -> void:
+	if magnification > 0.0 and zoom_magnification > 0.0 and magnification != zoom_magnification:
+		zoom_reveal = minf(zoom_reveal, 0.25)
+	_zoom_wanted = magnification
+	if magnification > 0.0:
+		_zoom_point = world_point
+		zoom_magnification = magnification
+
+
+func get_zoom_texture() -> ViewportTexture:
+	return _zoom_viewport.get_texture()
+
+
+## tan of the window's half size across and up.
+func get_zoom_half_tan() -> Vector2:
+	var t := tan(deg_to_rad(zoom_half_deg))
+	return Vector2(t, t * float(zoom_size.y) / float(zoom_size.x))
+
+
+func get_zoom_viewport() -> SubViewport:
+	return _zoom_viewport
 
 
 ## The camera the screen is rendered for: whatever camera is currently showing
@@ -165,6 +213,51 @@ func _create_overlay() -> void:
 	var env := world_env.duplicate() as Environment if world_env != null else Environment.new()
 	env.background_mode = Environment.BG_CLEAR_COLOR
 	_overlay_camera.environment = env
+
+
+func _create_zoom() -> void:
+	_zoom_viewport = SubViewport.new()
+	_zoom_viewport.name = "ZoomViewport"
+	_zoom_viewport.size = zoom_size
+	_zoom_viewport.own_world_3d = false
+	_zoom_viewport.msaa_3d = _viewport.msaa_3d
+	_zoom_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child(_zoom_viewport)
+	_zoom_camera = Camera3D.new()
+	_zoom_camera.name = "ZoomCamera"
+	_zoom_camera.near = _camera.near
+	_zoom_camera.far = _camera.far
+	_zoom_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	_zoom_camera.projection = Camera3D.PROJECTION_FRUSTUM
+	_zoom_viewport.add_child(_zoom_camera)
+
+
+func _update_zoom(delta: float) -> void:
+	if _zoom_wanted > 0.0:
+		zoom_reveal = move_toward(zoom_reveal, 1.0, delta / maxf(zoom_in_time, 0.01))
+	else:
+		zoom_reveal = move_toward(zoom_reveal, 0.0, delta / maxf(zoom_out_time, 0.01))
+		if zoom_reveal <= 0.0:
+			zoom_magnification = 0.0
+	var drawing := zoom_reveal > 0.0 and _viewport.render_target_update_mode != SubViewport.UPDATE_DISABLED
+	_zoom_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if drawing else SubViewport.UPDATE_DISABLED
+	if not drawing:
+		return
+	var origin := get_global_transform_interpolated().origin
+	var to := _zoom_point - origin
+	if to.length_squared() > 1.0:
+		zoom_direction = to.normalized()
+	# The window stands upright on the screen: its up is the display's.
+	var up := panoramic_screen.get_display_basis().y if panoramic_screen != null else Vector3.UP
+	if absf(zoom_direction.dot(up.normalized())) > 0.99:
+		up = panoramic_screen.get_display_basis().z if panoramic_screen != null else Vector3.BACK
+	zoom_basis = Basis.looking_at(zoom_direction, up)
+	_zoom_camera.transform = Transform3D(zoom_basis, origin)
+	_zoom_camera.cull_mask = _camera.cull_mask
+	# A frustum, not a fov: past ×10 the view is narrower than a Camera3D fov may be (1°).
+	_zoom_camera.size = 2.0 * _zoom_camera.near * get_zoom_half_tan().y / maxf(zoom_magnification, 1.0)
+	if _zoom_viewport.size != zoom_size:
+		_zoom_viewport.size = zoom_size
 
 
 func _update_overlay(delta: float) -> void:

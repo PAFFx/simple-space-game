@@ -98,7 +98,7 @@ const CONTACT_GROUP := &"hud_contacts"
 ## (not the suit itself) isn't shown and can't be designated.
 @export var line_of_sight_hz: float = 10.0
 ## Zoom window levels (magnification), cycled by the zoom control.
-@export var zoom_levels := PackedFloat32Array([2.0, 4.0, 8.0])
+@export var zoom_levels := PackedFloat32Array([4.0, 8.0, 16.0])
 
 var weapons := {}                     ## id → MsWeapon
 var selected: MsWeapon

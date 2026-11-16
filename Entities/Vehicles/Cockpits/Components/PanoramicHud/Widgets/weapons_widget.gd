@@ -20,6 +20,9 @@ extends HudWidget
 ##                 the smaller, the surer. Dim while the weapon isn't ready
 ##   gun cross     with no lock: where the barrel points (where an unaimed shot goes)
 ##   vulcan ring   the head guns' aim, while they are spun up
+##   zoom window   (FireControl.get_zoom) the sensor head's zoom camera on the locked target
+##                 in a framed inset over it, with its level. Only while the head's gimbal
+##                 can reach the target (SensorSuite head limits); else GIMBAL under it
 
 @export var status_azimuth_deg: float = 20.0
 @export var status_elevation_deg: float = -5.5
@@ -89,6 +92,7 @@ func draw_widget() -> void:
 				_draw_gun_circle(weapon)
 	if locked:
 		_draw_tail()
+	_update_zoom(locked)
 
 
 # --- Status block ---
@@ -278,6 +282,45 @@ func _draw_gun_circle(weapon: MsWeapon) -> void:
 	if cue != "":
 		patch_text(at, Vector2(0.0, -radius - 1.6), cue, hud.caution_color if weapon.masked else PanoramicHud.dimmed(c),
 				HORIZONTAL_ALIGNMENT_CENTER, 12)
+
+
+func _update_zoom(locked: bool) -> void:
+	var head := hud.sensor_head
+	if head == null:
+		return
+	var mag := _fcs.get_zoom() if locked else 0.0
+	var target := _fcs.get_shown_target_position() if locked else Vector3.ZERO
+	if mag > 0.0 and not _head_reaches(target):
+		mag = 0.0
+		var at := patch(hud.world_to_display(target - hud.get_view_origin()).normalized(), Vector3.UP)
+		patch_text(at, Vector2(0.0, -_target_half() * 1.6 - 1.6), "GIMBAL", hud.caution_color, HORIZONTAL_ALIGNMENT_CENTER, 12)
+	head.set_zoom(target, mag)
+	if head.zoom_reveal <= 0.0:
+		return
+	# The frame: a faint rim, bold corners, the level on a tab over the top left.
+	var c := hud.primary_color
+	c.a *= head.zoom_reveal
+	var half := Vector2(rad_to_deg(atan(head.get_zoom_half_tan().x)), rad_to_deg(atan(head.get_zoom_half_tan().y)))
+	var at := patch(hud.world_to_display(head.zoom_direction).normalized(), Vector3.UP)
+	var rim := Color(c, c.a * 0.35)
+	for e in [[Vector2(-1, -1), Vector2(1, -1)], [Vector2(1, -1), Vector2(1, 1)], [Vector2(1, 1), Vector2(-1, 1)], [Vector2(-1, 1), Vector2(-1, -1)]]:
+		patch_line(at, e[0] * half, e[1] * half, rim, 1.0, 8)
+	var leg := minf(half.x, half.y) * 0.25
+	for sx in [-1.0, 1.0]:
+		for sy in [-1.0, 1.0]:
+			var corner := Vector2(half.x * sx, half.y * sy)
+			patch_line(at, corner, corner - Vector2(leg * sx, 0.0), c, 2.2, 2)
+			patch_line(at, corner, corner - Vector2(0.0, leg * sy), c, 2.2, 2)
+	patch_text(at, Vector2(-half.x + 0.3, half.y + 0.9), "×%d" % roundi(head.zoom_magnification), c, HORIZONTAL_ALIGNMENT_LEFT, 14)
+
+
+## Whether the sensor head's gimbal (the main camera) can turn to `world_point`.
+func _head_reaches(world_point: Vector3) -> bool:
+	var sensors := _fcs.sensors
+	if sensors == null:
+		return true
+	var a := SpatialMath.direction_to_angles(_body.inverse() * (world_point - hud.get_view_origin()))
+	return absf(a.x) <= sensors.head_az_limit_deg and a.y >= sensors.head_el_limits_deg.x and a.y <= sensors.head_el_limits_deg.y
 
 
 func _draw_gun_cross(weapon: MsWeapon) -> void:

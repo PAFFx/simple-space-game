@@ -58,6 +58,29 @@ uniform float overlay_block_px = 32.0;
 #include "res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Shader/hud_layers.gdshaderinc"
 
 
+// The zoom window: a magnified view (sensor head's zoom camera) in a rectangle on the
+// screen, columns of zoom_frame = its right, up and centre in the display's local frame,
+// half size as tangents. While zoom_reveal goes 0 → 1 it resolves in from blocks.
+uniform sampler2D zoom_viewport : source_color, hint_default_black, filter_linear;
+uniform float zoom_reveal = 0.0;
+uniform mat3 zoom_frame = mat3(1.0);
+uniform vec2 zoom_half_tan = vec2(0.12, 0.09);
+uniform float zoom_block_px = 32.0;
+// The HUD inside the window is faded to this, so the magnified target reads (its frame
+// sits on the edge, just outside the fade).
+uniform float zoom_hud_alpha = 0.35;
+
+
+// 1 inside the zoom window (a little short of its edge), else 0.
+float zoom_inside(vec3 local_dir) {
+	float depth = dot(local_dir, zoom_frame[2]);
+	if (zoom_reveal <= 0.0 || depth <= 0.0) {
+		return 0.0;
+	}
+	vec2 q = vec2(dot(local_dir, zoom_frame[0]), dot(local_dir, zoom_frame[1])) / depth / zoom_half_tan;
+	return step(max(abs(q.x), abs(q.y)), 0.96);
+}
+
 // Outlines mark their body with a faint fill (SensorOutline.fill_alpha): it counts while
 // resolving, so the whole shape pixelates, and is dropped once in.
 const float OVERLAY_FILL = 0.06;
@@ -109,6 +132,41 @@ vec3 composite_overlay(vec3 color, vec2 uv) {
 	float settle = smoothstep(0.55, 1.0, e);
 	float alpha = mix(clamp(cover * 1.6, 0.0, 0.85), clamp(drawn, 0.0, 1.0), settle) * shown;
 	return mix(color, mix(blue, rgb, settle), alpha);
+}
+
+
+vec3 composite_zoom(vec3 color, vec3 local_dir) {
+	if (zoom_reveal <= 0.0) {
+		return color;
+	}
+	float depth = dot(local_dir, zoom_frame[2]);
+	if (depth <= 0.0) {
+		return color;
+	}
+	vec2 q = vec2(dot(local_dir, zoom_frame[0]), dot(local_dir, zoom_frame[1])) / depth / zoom_half_tan;
+	if (abs(q.x) >= 1.0 || abs(q.y) >= 1.0) {
+		return color;
+	}
+	vec2 uv = vec2(q.x * 0.5 + 0.5, 0.5 - q.y * 0.5);
+	vec3 seen = texture(zoom_viewport, uv).rgb * screen_brightness;
+	if (zoom_reveal >= 1.0) {
+		return seen;
+	}
+	// Resolving: blocks halving in size, popping in at random, blue until they settle.
+	float e = zoom_reveal;
+	vec2 size = vec2(textureSize(zoom_viewport, 0));
+	float block = exp2(floor(mix(log2(zoom_block_px), 0.0, e * e * (3.0 - 2.0 * e)) + 0.5));
+	vec2 px = uv * size;
+	vec2 cell = floor(px / block);
+	vec3 rgb = texture(zoom_viewport, (cell + 0.5) * block / size).rgb * screen_brightness;
+	float h = fract(sin(dot(cell + vec2(block * 13.1, block * 7.7), vec2(12.9898, 78.233))) * 43758.5453);
+	float shown = step(h, e * 1.5);
+	vec2 f = fract(px / block);
+	float edge = block > 2.0 ? step(min(min(f.x, f.y), min(1.0 - f.x, 1.0 - f.y)) * block, 1.0) : 0.0;
+	float lum = dot(rgb, vec3(0.3, 0.5, 0.2));
+	vec3 blue = overlay_tint * (0.35 + lum * 1.2) * (1.0 + edge * 0.8);
+	float settle = smoothstep(0.55, 1.0, e);
+	return mix(color, mix(blue, rgb, settle), shown);
 }
 
 
@@ -179,12 +237,16 @@ void fragment() {
 			}
 		}
 
+		color = composite_zoom(color, local_dir);
+		vec3 under_hud = color;
+
 		// --- Step 7: Composite the HUD on top of the sensor image ---
 		// Fixed layers first (drawn once, turned into place), then the per-frame canvas.
 		color = hud_layers(color, local_dir, hud_brightness);
 		vec2 hud_uv = vec2(fract(UV2.x + 0.5), 1.0 - UV2.y);
 		vec4 hud = texture(hud_texture, hud_uv);
 		color = mix(color, hud.rgb * hud_brightness, hud.a);
+		color = mix(color, mix(under_hud, color, zoom_hud_alpha), zoom_inside(local_dir) * zoom_reveal);
 	}
 
 	ALBEDO   = color;
