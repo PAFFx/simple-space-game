@@ -18,7 +18,7 @@ func _start() -> void:
 
 func _tick() -> void:
 	frames += 1
-	if frames < 5: return
+	if frames < 30: return
 	var st := fc.state
 	var g := st.mass * 9.80665
 	var dirs := {up = Vector3.UP, down = Vector3.DOWN, forward = Vector3.FORWARD, back = Vector3.BACK,

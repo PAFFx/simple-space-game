@@ -30,9 +30,8 @@ on the shooter's. Separate from the weapons pass (`Docs/Weapons/todo.md`).
 - [ ] Off-diagonal inertia isn't applied: Godot takes principal moments along the body axes
       only. The products of inertia are ~5–10% of the diagonal (`mass_model_probe.gd report`).
       Either accept it or rotate the body's inertia frame.
-- [ ] `Docs/FlightControl/summary.md`'s RX-93 thruster table predates the thrust re-rating
-      (the scene is ÷0.85 of it: mains 1059 kN, chest 699, shoulders 508, soles and calves
-      424, shins and rear skirts 254, side skirts 233).
+- [x] `Docs/FlightControl/summary.md`'s RX-93 thruster table showed the design ratings, not
+      the scene's thrusts (× 63.0 / 59.5). Done, with the capability re-measured.
 
 ## 2. Sensors (DGFT)
 

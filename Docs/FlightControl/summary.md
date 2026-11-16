@@ -600,20 +600,20 @@ in the Output panel, add the bindings, then enable `joystick_enabled`.
 
 Built from a downloaded model (`Tools/Blender/build_mobile_suit_nu.py`, `Tools/Godot/build_rx93_scene.gd`),
 with MSP-02's bone names and components. Weapons are separate equipment (rifle on `hand.R`, shield
-on `forearm.L`, hyper bazooka, beam saber and fin funnels on `backpack`; the funnels add their 6 t, which
-the flight tuning predates: it is due a re-tune). Thrusters sit on the model's yellow thruster ports (found by sampling its
+on `forearm.L`, hyper bazooka, beam saber and fin funnels on `backpack`, 15.9 t in all). Mass, centre
+of mass and inertia come from the mass model (`Docs/PhysicsAndSensors/mass_model.md`). Thrusters sit on the model's yellow thruster ports (found by sampling its
 texture), and most can't aim far, so limbs have to move to point them:
 
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
-| 4 × 1 MN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | pod 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward), swings at 90°/s; each nozzle also swings up to 10° sideways on its own, at 240°/s (`Thruster.gimbal_yaw_rate_deg`), outward only (`gimbal_yaw_bias_deg`; the hyper bazooka sits between the pods): the cups nearly fill their channel in the pod (0.88 m in 0.90 m) |
-| 2 × 400 kN | soles | down | 3D, 30° cone |
-| 2 × 400 kN (the model's own nozzles, in their calf plates) | behind each calf | down, a little back | 2D with the plate, 0…40° back only (never into the leg) |
-| 4 × 480 kN | shoulder armor, 2 per side (same nozzle) | up-and-out / out-and-down | top: 2D from 10° below rest to 45° up (nearly straight up); outer: 2D fore/aft ±25° |
-| 2 × 660 kN (with the mains, nearest the generator) | chest vents | forward (brakes) | 2D up/down ±20° |
-| 6 × 240 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
-| 2 × 240 kN | rear skirts | back | fixed |
-| 6 × 220 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
+| 4 × 1059 kN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | pod 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward), swings at 90°/s; each nozzle also swings up to 10° sideways on its own, at 240°/s (`Thruster.gimbal_yaw_rate_deg`), outward only (`gimbal_yaw_bias_deg`; the hyper bazooka sits between the pods): the cups nearly fill their channel in the pod (0.88 m in 0.90 m) |
+| 2 × 424 kN | soles | down | 3D, 30° cone |
+| 2 × 424 kN (the model's own nozzles, in their calf plates) | behind each calf | down, a little back | 2D with the plate, 0…40° back only (never into the leg) |
+| 4 × 508 kN | shoulder armor, 2 per side (same nozzle) | up-and-out / out-and-down | top: 2D from 10° below rest to 45° up (nearly straight up); outer: 2D fore/aft ±25° |
+| 2 × 699 kN (with the mains, nearest the generator) | chest vents | forward (brakes) | 2D up/down ±20° |
+| 6 × 254 kN | front of each shin, below the knee (centre, outer, inner) | forward-down | 2D left/right ±20° |
+| 2 × 254 kN | rear skirts | back | fixed |
+| 6 × 233 kN | side skirts, 3 each | forward-out, back-out, out | fixed |
 
 No added nozzle meshes on the ν (`Thruster.show_nozzle` off): small ports show only a plume from
 the armor, and the main and calf nozzles are the model's own, moved by `ThrusterGuards`:
@@ -638,7 +638,10 @@ throttle, `Thruster.park_throttle`) park at their rest aim, so the calf units cl
 part of their pod, which only pivots fore/aft: their sideways swing shows in the plume only
 (per-nozzle bones would fix that).
 
-Ratings follow the port sizes: the backpack mains stay by far the biggest, the shoulder top
+Thrusts in the table are what the scene has: the design ratings in `THRUSTERS` (1000, 400,
+480, 660, 240, 220 kN) × `THRUST_SCALE` (63.0 / 59.5, which keeps the thrust-to-weight the
+suit was tuned with at 59.5 t on the official 63.0 t max weight). 12.8 MN in all, 18.9 G at
+69 t if every nozzle pushed the same way. Ratings follow the port sizes: the backpack mains stay by far the biggest, the shoulder top
 and outer ports share one nozzle size, the shin and rear skirt slots are about as large as a
 calf nozzle, and the side skirt ports are the smallest. Ports under 300 kN
 (`MAIN_RATING_KN`) spool and slew like verniers.
@@ -648,9 +651,10 @@ Clean force capability at full weight (69 t, level, limbs at rest; `Tools/Flight
 | | up | down | forward | back | sideways |
 |---|---|---|---|---|---|
 | Before the Nov 2026 side-thrust pass | 7.2 G | 0.8 G | 3.9 G | 2.9 G | 2.3 G |
-| Now | 9.0 G | 1.6 G | 6.6 G | 3.9 G | 3.5–3.7 G |
+| After the side-thrust pass | 9.0 G | 1.6 G | 6.6 G | 3.9 G | 3.5–3.7 G |
+| With the mass model (centre of mass 1.2 m lower, 0.6 m left) | 9.0 G | 1.6 G | 6.1 G | 4.3 G | 3.6–3.7 G |
 
-Clean torque 19 / 8 / 20 MN·m (pitch / yaw / roll), about twice what it was. Sideways gains
+Clean torque 19 / 8 / 20 MN·m (pitch / yaw / roll), about twice what it was before the side-thrust pass. Sideways gains
 come from the bigger shoulder, skirt and shin ports and the sole's wider cone; the stronger shoulder tops (down) are what let the mains push sideways
 cleanly, cancelling their upward part. Boosted strafe: 3.3 → 6.1 G, 1.4 → 2.3 m in the
 first 0.5 s, 8 → 14 m in 1 s.
