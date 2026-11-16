@@ -96,20 +96,18 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
       wrist 30% ≤ 25°; shield missiles collarbone 25% ≤ 12°. The rifle is held low with a bent
       elbow that straightens toward the edges; its envelope widened to az −55…+90, el −60…+65
       (the HUD outline follows `az_limits` / `el_limits`).
-- [ ] Shield is bad: it clips through the body. The design where it follows the pilot's look is
+- [x] Shield is bad: it clips through the body. The design where it follows the pilot's look is
       also bad: it should just be posed. Increase the shoulder joint's range, and let the shield
       itself rotate around its attachment point, so it can protect more than the abdomen.
-      In progress (to check in game): one dug-in pose (waist turns the left side 30° forward,
-      shield upright on its swivel in front, legs free for AMBAC); the shield is solid (shots
-      stop on it, own weapons hold fire into it: MASKED); the rifle's envelope shrinks while
-      it is up; the head loses the target behind it and a body camera tracks.
+      Done: one dug-in pose (the waist turns the left side 30° forward, the shield stands
+      upright on its swivel in front; the hips stay, turning them kicked the hull 17°; legs
+      free for AMBAC). The shield is solid (shots stop on it, own weapons hold fire into it:
+      MASKED); the rifle's envelope shrinks while it is up; the head loses the target behind
+      it and a body camera tracks.
 - [x] Look at the shoulder armour blocking the way (it can definitely be moved).
       Done: it followed AMBAC angles only, so the pose and the aim never moved it. Now it follows
       the arm's final pose (`LimbFollower.from_pose`): all of its fore/aft swing, half its
       sideways one.
-- [ ] Mid / late UC MS have magnetic coating: joint movement (rifle aiming, shield, etc.) can
-      be a lot faster. Note: limbs now push the suit (LimbReaction), so faster joints kick it
-      harder; `MsWeapon.slew_accel_deg` sets how hard.
 
 ## 5. Model
 
