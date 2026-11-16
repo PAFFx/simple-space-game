@@ -155,6 +155,20 @@ func _measure(dt: float) -> void:
 	_stage = mini(_stage + 1, 2)
 
 
+func _on_equipment_fitted(eq: MsEquipment, on: bool) -> void:
+	set_part_mass(eq.name, eq.mass if on else 0.0)
+
+
+## Sets a part's dry mass (e.g. equipment taken off: 0). The AMBAC joints are re-measured
+## and the capability map rebuilt if the resting centre moved, on the next update.
+func set_part_mass(part: StringName, kg: float) -> void:
+	var i := _names.find(part)
+	if i < 0:
+		return
+	_mass[i] = kg
+	_fill_joints = -1.0
+
+
 func _part_mass(i: int) -> float:
 	return _mass[i] + _tank[i] * _fill
 
@@ -304,6 +318,8 @@ func _setup() -> void:
 	# Equipment carried by a tracked bone moves with it.
 	var loadout := VehicleBase.find_vehicle(self).find_component(MsLoadout) as MsLoadout
 	if loadout != null:
+		if not loadout.equipment_fitted.is_connected(_on_equipment_fitted):
+			loadout.equipment_fitted.connect(_on_equipment_fitted)
 		for eq in loadout.equipment:
 			var idx := skeleton.find_bone(eq.mount_bone)
 			if idx < 0 or not _bones.has(idx):

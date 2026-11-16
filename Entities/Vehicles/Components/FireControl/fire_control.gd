@@ -101,6 +101,7 @@ var loadout: MsLoadout
 var _body: RigidBody3D
 var _rids: Array[RID] = []
 var _aimed: Array[MsWeapon] = []
+var _stowed := {}                     ## MsEquipment taken off → its weapons
 var _ambac: AmbacController
 var _torso_held := false
 var _target_velocity := Vector3.ZERO
@@ -144,12 +145,41 @@ func _setup() -> void:
 		weapons[weapon.weapon_id] = weapon
 		if weapon.aim_bone != &"":
 			_aimed.append(weapon)
+	if loadout != null:
+		loadout.equipment_fitted.connect(_on_equipment_fitted)
 	if skeleton != null and not _aimed.is_empty():
 		var modifier := WeaponAimModifier.new()
 		modifier.name = "WeaponAimModifier"
 		modifier.fire_control = self
 		skeleton.add_child(modifier)
 	_apply_mode()
+
+
+## Equipment taken off (test range): its weapons leave the fire control until it is back.
+func _on_equipment_fitted(eq: MsEquipment, on: bool) -> void:
+	if on:
+		for weapon: MsWeapon in _stowed.get(eq, []):
+			weapons[weapon.weapon_id] = weapon
+			if weapon.aim_bone != &"":
+				_aimed.append(weapon)
+		_stowed.erase(eq)
+		if selected == null and mode == MasterMode.DGFT:
+			select(get_weapon(dgft_weapon))
+		return
+	var gone: Array[MsWeapon] = []
+	for weapon: MsWeapon in weapons.values():
+		if weapon.equipment == eq:
+			gone.append(weapon)
+	for weapon in gone:
+		weapon.wanted = false
+		weapon.triggered = false
+		weapon.readiness = 0.0
+		weapon.update(0.0, self)
+		weapons.erase(weapon.weapon_id)
+		_aimed.erase(weapon)
+		if weapon == selected:
+			select(null)
+	_stowed[eq] = gone
 
 
 func is_weapons_mode() -> bool:

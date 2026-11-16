@@ -6,6 +6,8 @@ extends Node3D
 ## Other components query it: occupied AMBAC groups, active poses.
 
 signal equipment_changed(equipment: MsEquipment)
+## An item was put on or taken off the suit (set_equipped).
+signal equipment_fitted(equipment: MsEquipment, equipped: bool)
 
 @export var skeleton: Skeleton3D
 ## Toggle equipment from PilotInputActions (e.g. 1 = rifle, 2 = shield).
@@ -40,8 +42,26 @@ func _process(_delta: float) -> void:
 func get_total_mass() -> float:
 	var total := 0.0
 	for eq in equipment:
-		total += eq.mass
+		if eq.equipped:
+			total += eq.mass
 	return total
+
+
+## Puts `eq` on the suit or takes it off (test range): hidden, its mass off the suit and
+## its weapons out of the fire control while it is off.
+func set_equipped(eq: MsEquipment, on: bool) -> void:
+	if eq.equipped == on or not equipment.has(eq):
+		return
+	if not on:
+		eq.set_active(false)
+	eq.equipped = on
+	eq.visible = on
+	eq.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+	var vehicle := VehicleBase.find_vehicle(self)
+	var fc := vehicle.find_component(FlightComputer) as FlightComputer if vehicle else null
+	if fc != null:
+		fc.add_payload_mass(eq.mass if on else -eq.mass)
+	equipment_fitted.emit(eq, on)
 
 
 ## True while active equipment occupies this AMBAC group.

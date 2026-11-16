@@ -4,12 +4,26 @@ extends CanvasLayer
 ## Test range control (F4): spawn and clear practice targets and rearm the suit. While
 ## its panel is open the number keys pick an entry instead of a weapon.
 ##
-##   1 static · 2 drifting · 3 jinking · 4 turret (shoots back) · 5 clear all · 6 rearm
+##   1 static · 2 drifting · 3 jinking · 4 hard jinking · 5 evasive (dodges your shots)
+##   6 ace (hard jinking and dodging) · 7 turret · 8 hunter turret · 9 clear all · 0 rearm
 ##   - / + nearer / farther
 
 const TOGGLE := &"debug_toggle_range_control"
+## Panels in this group close each other: they share the number keys.
+const PANEL_GROUP := &"debug_key_panels"
 const RANGES := [300.0, 600.0, 1000.0, 1500.0, 2500.0, 4000.0, 6000.0]
-const ENTRIES := ["STATIC TARGET", "DRIFTING TARGET", "JINKING TARGET", "TURRET (SHOOTS BACK)", "CLEAR ALL", "REARM"]
+## [menu name, HUD label, behaviour, jink G, jink interval, dodge G (0 = none), dodge reaction s,
+##  sensor-aimed (turrets)]
+const PRESETS := [
+	["STATIC", "TGT", TargetDrone.Behaviour.STATIC, 0.0, Vector2(0.8, 2.2), 0.0, 0.0, false],
+	["DRIFTING", "DRIFT", TargetDrone.Behaviour.DRIFT, 0.0, Vector2(0.8, 2.2), 0.0, 0.0, false],
+	["JINKING (3 G)", "JINK", TargetDrone.Behaviour.JINK, 3.0, Vector2(0.8, 2.2), 0.0, 0.0, false],
+	["HARD JINKING (8 G, quick)", "HJINK", TargetDrone.Behaviour.JINK, 8.0, Vector2(0.3, 0.9), 0.0, 0.0, false],
+	["EVASIVE (dodges on your spool)", "EVADE", TargetDrone.Behaviour.JINK, 3.0, Vector2(0.8, 2.2), 7.0, 0.25, false],
+	["ACE (hard jinks + dodges)", "ACE", TargetDrone.Behaviour.JINK, 8.0, Vector2(0.3, 0.9), 9.0, 0.15, false],
+	["TURRET (shoots back)", "TURRET", TargetDrone.Behaviour.TURRET, 3.0, Vector2(0.8, 2.2), 0.0, 0.0, false],
+	["HUNTER (sensor-aimed, dodges)", "HUNTER", TargetDrone.Behaviour.TURRET, 8.0, Vector2(0.5, 1.4), 7.0, 0.25, true],
+]
 
 ## Vehicle the targets are placed in front of. Default: the first one in the scene.
 @export var vehicle: VehicleBase
@@ -30,6 +44,7 @@ func _ready() -> void:
 		var ev := InputEventKey.new()
 		ev.physical_keycode = KEY_F4
 		InputMap.action_add_event(TOGGLE, ev)
+	add_to_group(PANEL_GROUP)
 	_build_ui()
 	_panel.visible = false
 
@@ -37,6 +52,8 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed(TOGGLE):
 		_panel.visible = not _panel.visible
+		if _panel.visible:
+			get_tree().call_group(PANEL_GROUP, &"close_panel", self)
 		_refresh()
 		get_viewport().set_input_as_handled()
 		return
@@ -44,8 +61,10 @@ func _input(event: InputEvent) -> void:
 	if key == null or not key.pressed or key.echo or not _panel.visible:
 		return
 	var code := key.physical_keycode
-	if code >= KEY_1 and code <= KEY_6:
+	if code >= KEY_1 and code <= KEY_9:
 		_run(code - KEY_1)
+	elif code == KEY_0:
+		_run(PRESETS.size() + 1)
 	elif code == KEY_MINUS or code == KEY_KP_SUBTRACT:
 		_range_index = maxi(_range_index - 1, 0)
 	elif code == KEY_EQUAL or code == KEY_KP_ADD:
@@ -58,6 +77,11 @@ func _input(event: InputEvent) -> void:
 
 func get_range() -> float:
 	return RANGES[_range_index]
+
+
+func close_panel(opener: Node) -> void:
+	if opener != self:
+		_panel.visible = false
 
 
 ## Spawns a target `distance` ahead of the suit, keeping station with it.
@@ -100,14 +124,36 @@ func rearm() -> void:
 		fcs.rearm()
 
 
+## Spawns one of PRESETS.
+func spawn_preset(index: int, distance: float) -> TargetDrone:
+	var p: Array = PRESETS[index]
+	var drone := spawn(p[2], distance)
+	if drone == null:
+		return null
+	drone.label = "%s %d" % [p[1], _count]
+	drone.set_meta(&"hud_label", drone.label)
+	if p[3] > 0.0:
+		drone.jink_accel_g = p[3]
+	drone.jink_interval = p[4]
+	drone.leash = maxf(drone.leash, distance * 0.4)
+	if p[5] > 0.0:
+		var suit := _vehicle()
+		drone.threat = suit.find_component(FireControl) as FireControl if suit != null else null
+		drone.dodge_accel_g = p[5]
+		drone.dodge_reaction = p[6]
+	if p[7]:
+		drone.use_track = true
+		drone.fire_interval = Vector2(1.0, 2.0)
+	return drone
+
+
 func _run(entry: int) -> void:
-	match entry:
-		0, 1, 2, 3:
-			spawn(entry as TargetDrone.Behaviour, get_range())
-		4:
-			clear()
-		5:
-			rearm()
+	if entry < PRESETS.size():
+		spawn_preset(entry, get_range())
+	elif entry == PRESETS.size():
+		clear()
+	else:
+		rearm()
 
 
 func _vehicle() -> VehicleBase:
@@ -140,8 +186,10 @@ func _build_ui() -> void:
 
 func _refresh() -> void:
 	var lines := PackedStringArray(["RANGE CONTROL  (F4 closes)", ""])
-	for i in ENTRIES.size():
-		lines.append("%d  %s" % [i + 1, ENTRIES[i]])
+	for i in PRESETS.size():
+		lines.append("%d  %s" % [i + 1, PRESETS[i][0]])
+	lines.append("%d  CLEAR ALL" % (PRESETS.size() + 1))
+	lines.append("0  REARM")
 	lines.append("")
 	lines.append("- / +  spawn range  %s" % ("%.1f km" % (get_range() / 1000.0) if get_range() >= 1000.0 else "%d m" % get_range()))
 	var alive := 0

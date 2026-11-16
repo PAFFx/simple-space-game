@@ -26,6 +26,8 @@ signal active_changed(is_active: bool)
 @export var start_active: bool = false
 
 var active: bool = false
+## False while stowed off the suit (MsLoadout.set_equipped): hidden, massless, unusable.
+var equipped: bool = true
 
 
 func _ready() -> void:
@@ -37,6 +39,7 @@ func _ready() -> void:
 
 
 func set_active(value: bool) -> void:
+	value = value and equipped
 	if value == active:
 		return
 	active = value
