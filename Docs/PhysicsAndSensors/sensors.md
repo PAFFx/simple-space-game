@@ -1,7 +1,9 @@
 # Sensors and targeting (DGFT first)
 
-Design for replacing the fire control's perfect knowledge of the target with what the suit's
-sensors can actually measure. Status: design, nothing built yet (see `todo.md`).
+Replacing the fire control's perfect knowledge of the target with what the suit's sensors
+can actually measure. Built (first pass): `Entities/Vehicles/Components/Sensors/`
+(`SensorSuite`, `SensorTrack`), read by `FireControl` and `MsWeapon`. What's left is in
+`todo.md`.
 
 ## Why
 
@@ -135,3 +137,49 @@ should use the same track filter, so the player can dodge them the way they'd do
 Extend `Tools/Weapons/weapons_probe.gd` with a jinking drone (acceleration and direction-
 change interval set per run) and measure hit rate across range, jink acceleration and `L`,
 until the table above shows up in practice.
+
+## As built (first pass)
+
+- `SensorSuite` (on the RX-93, stepped by `FireControl` each tick between reading the lock and
+  the weapons solving) holds the sensors and the track on the locked target. Without one, a
+  suit keeps the old perfect knowledge.
+- **Main camera**: a gimbal in the body frame (azimuth ±100°, elevation −40…+50°, 220°/s,
+  1500°/s²) pointed at the track's prediction, or at the pilot's designation before there is
+  one. Narrow field ±1°, σ 20 µrad; wide field ±30°, σ 0.3 mrad; 60 Hz, 40 ms latency; a ray
+  from the eye must reach the target. The model's head doesn't turn with it yet.
+- **Laser rangefinder**: DGFT, target in the narrow field, within 15 km: a pulse every 0.1 s,
+  σ 0.5 m, sent with that tick's angles. Between pulses the range is the best of stereo (σ =
+  R²·σθ / 0.4 m) and known size (10%). Aging a pulse with the track's velocity fed the track's
+  errors back into it and broke tracks; the filter blends the sources by their errors instead.
+- **Body cameras**: six (chest, backpack, shoulders, front and rear skirts), each a
+  hemisphere, σ 1 mrad, 30 Hz, 60 ms, with their own line of sight.
+- **Visible centroid**: wanders 4% of the target's radius (τ 0.3 s) about its centre. The wander
+  is in each measurement's covariance; without it honest measurements failed the gate.
+- **Track** (`SensorTrack`): 9-state Singer filter (τm 0.8 s, σm 30 m/s²), gate d² 16, three
+  rejections in a row restart it, firm after 4 hits, coast after 0.25 s without one, lost
+  after 1.2 s (the lock drops).
+- **Fire control**: target position, velocity and acceleration come from the track; no
+  solution until it is firm; the lead includes ½·a·t². The HUD says ACQUIRING or COAST
+  where it said NO SOLUTION.
+
+### Hit rate against a jinking drone (`Tools/Weapons/track_probe.gd`)
+
+PULSE at 1500 m/s, the suit holding still, 12 shots per cell, each fired at SHOOT (firm
+solution, barrel on the lead); the drone (7 m radius) changes to a random acceleration of
+0.5–1 × the jink G every 0.8–2.2 s. Hits out of 12 (±~2 from sampling alone):
+
+| | 300 m | 500 m | 700 m | 1 km | 1.5 km | 2 km |
+|---|---|---|---|---|---|---|
+| Sensor track, 3 G | 7 | 7 | 10 | 8 | 9 | 6 |
+| Perfect track, 3 G | 7 | 6 | 8 | 7 | 6 | 10 |
+| Sensor track, 6 G | 7 | 8 | 8 | 5 | 7 | 6 |
+| Perfect track, 6 G | 7 | 9 | 9 | 8 | 9 | 6 |
+
+The sensor track is as good as perfect knowledge here (no track breaks; its acceleration
+estimate even makes up for its delay). The drone holds each thrust for 0.8–2.2 s, which the
+filter learns in ~0.2 s: against a target that jinks on a timer, the sensors give the
+defender little. What decides a hit is timing: the 0.3 s spool (visible to the target),
+the flight time, the arm's slew, and whether the thrust changes while the shot is out.
+So the defender's lever is to change thrust when the enemy's barrel lights up, not
+to keep thrusting hard. Close in (300 m) the arm's slew loses about as many shots as the
+jink does.

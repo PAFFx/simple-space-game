@@ -23,6 +23,11 @@ extends Node
 ## A weapon points at the lead on the locked target if that is inside its envelope, else
 ## as near as the envelope allows; with no lock it sits on its boresight. The suit never
 ## turns itself: bringing a target into the envelope is flying.
+##
+## With a SensorSuite on the vehicle the lock starts a sensor track, and everything here
+## works from the track's estimate (position, velocity, acceleration), never the target
+## itself: no solution until the track is firm, and the lock drops when the track is lost.
+## Without one, the target's own state is used (a perfect track).
 
 enum MasterMode { NAV, DGFT, BVR }
 enum Soi { HUD_CURSOR, HMCS }
@@ -101,6 +106,9 @@ var _torso_held := false
 var _target_velocity := Vector3.ZERO
 var _target_last := Vector3.ZERO
 var _target_tracked := false
+var sensors: SensorSuite
+var _target_position := Vector3.ZERO
+var _target_acceleration := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -116,6 +124,7 @@ func _ready() -> void:
 	flight_computer = vehicle.find_component(FlightComputer) as FlightComputer
 	_ambac = vehicle.find_component(AmbacController) as AmbacController
 	loadout = vehicle.find_component(MsLoadout) as MsLoadout
+	sensors = vehicle.find_component(SensorSuite) as SensorSuite
 	if loadout != null:
 		loadout.listen_for_input = false   # equipment is raised by weapon selection instead
 	if vehicle.has_signal(&"hit_taken"):
@@ -163,12 +172,51 @@ func get_own_velocity() -> Vector3:
 	return _body.linear_velocity if _body != null else Vector3.ZERO
 
 
+## Where the fire control believes the locked target is (the track's estimate).
 func get_target_position() -> Vector3:
-	return locked.global_position if locked != null else Vector3.ZERO
+	if locked == null:
+		return Vector3.ZERO
+	return _target_position if _has_track() else locked.global_position
 
 
 func get_target_velocity() -> Vector3:
 	return _target_velocity
+
+
+func get_target_acceleration() -> Vector3:
+	return _target_acceleration
+
+
+## Whether the target is known well enough to shoot at.
+func has_target_solution() -> bool:
+	if locked == null:
+		return false
+	return sensors.track.has_solution() if _has_track() else true
+
+
+## Covariance (m²) of where the target will be `ahead` s from now (zero without sensors).
+func get_target_covariance_ahead(ahead: float) -> Basis:
+	if not _has_track():
+		return Basis(Vector3.ZERO, Vector3.ZERO, Vector3.ZERO)
+	return sensors.track.get_position_covariance_ahead(sensors.get_time(), ahead)
+
+
+## "" with a firm track (or none needed), else what the track is doing.
+func get_track_label() -> String:
+	if locked == null or not _has_track():
+		return ""
+	match sensors.track.state:
+		SensorTrack.State.TENTATIVE:
+			return "ACQUIRING"
+		SensorTrack.State.COAST:
+			return "COAST"
+		SensorTrack.State.LOST:
+			return "LOST"
+	return ""
+
+
+func _has_track() -> bool:
+	return sensors != null and sensors.enabled and sensors.track != null and sensors.track.is_started()
 
 
 func get_target_radius() -> float:
@@ -249,6 +297,9 @@ func lock(target: Node3D) -> void:
 		target.tree_exiting.connect(_on_target_gone)
 	_target_tracked = false
 	_target_velocity = Vector3.ZERO
+	_target_acceleration = Vector3.ZERO
+	if sensors != null:
+		sensors.set_target(target)
 	locked_changed.emit(target)
 
 
@@ -256,6 +307,8 @@ func _on_target_gone() -> void:
 	locked = null
 	candidate = null
 	_target_tracked = false
+	if sensors != null:
+		sensors.set_target(null)
 	locked_changed.emit(null)
 
 
@@ -278,6 +331,10 @@ func _physics_process(delta: float) -> void:
 	cursor = (cursor + cmd.cursor_slew * cursor_rate_deg * delta).clamp(-cursor_limits_deg, cursor_limits_deg)
 
 	_update_lock(cmd)
+	if sensors != null:
+		sensors.step(delta)
+		if locked != null and sensors.track != null and sensors.track.state == SensorTrack.State.LOST:
+			lock(null)
 	_track_target(delta)
 
 	blocking = cmd.shield_block
@@ -399,10 +456,18 @@ func _find_candidate() -> Node3D:
 	return best
 
 
-## The locked target's velocity: its own if it reports one, else from its motion.
+## The locked target's state: the sensor track's estimate, or without sensors its own
+## velocity if it reports one, else from its motion.
 func _track_target(delta: float) -> void:
 	if locked == null:
 		return
+	if _has_track():
+		var est := sensors.track.get_estimate(sensors.get_time())
+		_target_position = est[0]
+		_target_velocity = est[1]
+		_target_acceleration = est[2]
+		return
+	_target_acceleration = Vector3.ZERO
 	if locked is RigidBody3D:
 		_target_velocity = (locked as RigidBody3D).linear_velocity
 	elif locked.has_method(&"get_velocity"):

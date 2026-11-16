@@ -293,11 +293,14 @@ func get_aim_direction(fcs: FireControl) -> Vector3:
 func _solve(fcs: FireControl) -> void:
 	solution_valid = false
 	target_in_envelope = false
-	if projectile == null or fcs.locked == null:
+	if projectile == null or fcs.locked == null or not fcs.has_target_solution():
 		return
 	var muzzle := get_muzzle_position()
 	var rel_pos := fcs.get_target_position() - muzzle
 	var rel_vel := fcs.get_target_velocity() - fcs.get_own_velocity()
+	# The track's acceleration: a target holding a burn is led along its curve. The shot
+	# keeps the suit's velocity at launch, not its acceleration.
+	var acc := fcs.get_target_acceleration()
 	target_range = rel_pos.length()
 	var t := target_range / maxf(projectile.speed, 1.0)
 	if _stream != null and _stream.emitting:
@@ -306,16 +309,17 @@ func _solve(fcs: FireControl) -> void:
 		t = _lead_with_head_start(rel_pos, rel_vel, projectile.speed, _stream.reach)
 		if t < 0.0:
 			return
+		t = maxf(_lead_with_head_start(rel_pos + acc * (0.5 * t * t), rel_vel, projectile.speed, _stream.reach), 0.0)
 	else:
 		# A rocket speeds up on the way: solve with its average speed, a few rounds.
 		for i in 4:
 			var speed := projectile.distance_at(maxf(t, 0.01)) / maxf(t, 0.01)
-			t = SpatialMath.intercept_time(rel_pos, rel_vel, speed)
+			t = SpatialMath.intercept_time(rel_pos + acc * (0.5 * t * t), rel_vel, speed)
 			if t <= 0.0:
 				return
 	if t > projectile.lifetime:
 		return
-	var aim_vec := rel_pos + rel_vel * t
+	var aim_vec := rel_pos + rel_vel * t + acc * (0.5 * t * t)
 	time_of_flight = t
 	lead_point = muzzle + aim_vec
 	lead_angles = SpatialMath.direction_to_angles(fcs.get_body_basis().inverse() * aim_vec)

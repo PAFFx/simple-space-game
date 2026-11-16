@@ -670,6 +670,11 @@ func _build_fire_control(root: Node3D) -> void:
 	var fcs := FireControl.new()
 	fcs.name = "FireControl"
 	_add(root, root, fcs)
+	# Targeting sensors: the lock is tracked from the head camera and the laser, not read
+	# off the target (Docs/PhysicsAndSensors/sensors.md).
+	var sensors := SensorSuite.new()
+	sensors.name = "SensorSuite"
+	_add(root, root, sensors)
 	var vulcan := MsWeapon.new()
 	vulcan.name = "Vulcan"
 	_add(root, fcs, vulcan)

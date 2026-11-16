@@ -42,22 +42,30 @@ on the shooter's. Separate from the weapons pass (`Docs/Weapons/todo.md`).
 ## 2. Sensors (DGFT)
 
 Pilot locks, the sensors and fire control do the rest. Laser rangefinder on in DGFT only.
+First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As built").
 
-- [ ] `SensorTrack`: Singer-model Kalman filter (position, velocity, acceleration), timed
+- [x] `SensorTrack`: Singer-model Kalman filter (position, velocity, acceleration), timed
       measurements with latency, gating, tentative / firm / coast / lost.
-- [ ] Main camera on the head: narrow (telescope) and wide fields, the neck's limits and
-      slew rate as its gimbal, line-of-sight check, visible-centroid wander.
-- [ ] Laser rangefinder boresighted to the main camera, DGFT only, needs a narrow-field
-      track. Laser warning on the target side.
-- [ ] Body cameras (chest, shoulders, skirts, backpack, legs): wide, fixed, lower grade;
-      fallback track and reacquire when the head can't look.
-- [ ] Stereo range from the twin eyes as the silent close-range source.
-- [ ] Fire control and weapons read the track, not the target body; lead with the estimated
-      acceleration; lock needs a firm track and drops after ~1 s of coast.
-- [ ] HUD: impact-uncertainty circle on the pipper; track state (firm / coast) on the lock
-      symbol; laser warning.
-- [ ] Practice turret and drones use the same track filter.
-- [ ] Probe: hit rate against a jinking drone across range, jink and reaction-chain delay.
+- [x] Main camera: narrow (telescope) and wide fields on a gimbal with neck-like limits and
+      slew, line-of-sight check, visible-centroid wander.
+- [ ] The model's head should turn with the main camera's gimbal (it only follows the vulcans).
+- [x] Laser rangefinder boresighted to the main camera, DGFT only, needs a narrow-field track.
+- [ ] Laser warning on the target side (the suite already knows when it is lasing).
+- [x] Body cameras: six hemispheres, coarse, own line of sight; fallback track.
+- [x] Stereo range from the twin eyes, and known-size range as a last resort.
+- [x] Fire control and weapons read the track; lead with the estimated acceleration; no
+      solution until firm; the lock drops when the track is lost.
+- [x] HUD: ACQUIRING / COAST where it said NO SOLUTION.
+- [ ] HUD: impact-uncertainty circle on the pipper (`FireControl.get_target_covariance_ahead`).
+- [ ] Practice turret and drones use the same track filter (they still aim with truth).
+- [x] Probe: hit rate against a jinking drone, sensor vs perfect track (`track_probe.gd`).
+- [ ] A drone that dodges like a pilot: changes thrust when the shooter's barrel lights up
+      (spool cue), so the probe measures the dodge the design is about, not a timer.
+- [ ] Shoot-cue report: "the SHOOT cue sits far off the real target after locking and moving
+      off". Not reproduced (`weapons_snapshot.gd offaxis`: lead, gun and shot agree while
+      turning and strafing). The lead does move off the target as the suit's own speed grows
+      (3.4° at 190 m/s, 900 m), because the beam keeps the suit's velocity. Need the exact
+      situation (speed, range, weapon, target moving?) from a flight.
 
 ## 3. Later (BVR)
 
