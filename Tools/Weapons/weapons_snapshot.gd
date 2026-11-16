@@ -6,7 +6,8 @@ extends SceneTree
 ##   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off state=floating rectangle=1280x720+0+0
 ##   godot-double --path . --resolution 1280x720 -s Tools/Weapons/weapons_snapshot.gd -- <out_dir> [shots]
 ##
-## shots: comma list of hud,beam,external,impact,ring,vulcan,missile,block,turret (default all).
+## shots: comma list of hud,beam,external,impact,ring,vulcan,missile,block,turret,offaxis
+## (default all). offaxis also prints AIM lines: lead, gun and target agreement and miss.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 
@@ -39,7 +40,7 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_out = args[0]
-	var shots := PackedStringArray(["hud", "beam", "external", "linear", "explode", "impact", "ring", "vulcan", "missile", "block", "turret"])
+	var shots := PackedStringArray(["hud", "beam", "external", "linear", "explode", "impact", "ring", "vulcan", "missile", "block", "turret", "offaxis"])
 	if args.size() > 1:
 		shots = args[1].split(",")
 	DirAccess.make_dir_recursive_absolute(_out)
@@ -287,7 +288,71 @@ func _run(shots: PackedStringArray) -> void:
 		for i in 4:
 			await _frames(7)
 			await _shot("turret_block_%02d" % i)
+		_input.cmd.shield_block = false
+
+	if "offaxis" in shots:
+		# Lock straight ahead, then yaw and strafe away: the lead, the gun cross and where a
+		# shot actually goes must still agree.
+		if is_instance_valid(drone):
+			drone.queue_free()
+		await _frames(3)
+		# Clear of the station, which is a contact too.
+		drone = _spawn(TargetDrone.Behaviour.STATIC, 900.0, Vector2(-25, 12), 100000.0)
+		_fcs.cursor = Vector2(-25, 12)
+		_input.cmd.lock_preview = true
+		await _frames(8)
+		_input.cmd.lock_commit = true
+		await _frames(3)
+		_input.cmd.lock_preview = false
+		await _frames(60)
+		_report_aim("locked", drone)
+		await _shot("offaxis_locked")
+		for i in 25:
+			_input.cmd.rotation = Vector3(0, 1, 0)
+			_input.cmd.translation = Vector3(1, 0, 0)
+			_input.cmd.boost = true
+			await physics_frame
+		for i in 60:
+			_input.cmd.translation = Vector3(1, 0, 0)
+			_input.cmd.boost = true
+			await physics_frame
+			if i % 20 == 0:
+				_report_aim("turned+%d" % i, drone)
+		var to := _suit.global_basis.orthonormalized().inverse() * (drone.global_position - _fcs.get_view_origin())
+		var angles := SpatialMath.direction_to_angles(to.normalized())
+		_look(angles.x, angles.y, 40.0)
+		await _shot("offaxis_turned")
+		await _fire_sequence("offaxis_fire", 6)
+		_report_aim("after", drone)
+		_look(0, 0)
 	quit()
+
+
+## Lead, gun and target directions from the sensor head, and where a shot fired now would
+## pass the target (straight-line flight, the drone at its current velocity).
+func _report_aim(tag: String, drone: TargetDrone) -> void:
+	var w := _fcs.selected
+	if w == null:
+		print("AIM %s: no weapon" % tag)
+		return
+	var eye := _fcs.get_view_origin()
+	var body := _suit.global_basis.orthonormalized()
+	var gun := body * SpatialMath.angles_to_direction(w.aim)
+	var target := (drone.global_position - eye).normalized()
+	var lead := (w.lead_point - eye).normalized()
+	var muzzle := w.get_muzzle_position()
+	var shot_v := _fcs.get_own_velocity() + gun * w.projectile.speed
+	var rel_p := muzzle - drone.global_position
+	var rel_v := shot_v - drone.get_velocity()
+	var t := maxf(-rel_p.dot(rel_v) / rel_v.length_squared(), 0.0)
+	var miss := (rel_p + rel_v * t).length()
+	print("AIM %-10s valid %s env %s on %s | lead↔target %.2f° gun↔lead %.2f° | miss %.1f m | own v %.0f m/s, target az/el %s" % [
+		tag, w.solution_valid, w.target_in_envelope, w.on_target, rad_to_deg(lead.angle_to(target)),
+		rad_to_deg(gun.angle_to(lead)), miss, _fcs.get_own_velocity().length(),
+		SpatialMath.direction_to_angles(body.inverse() * target)])
+	print("    locked %s (drone %s) | fcs target pos−drone %.1f m | fcs target v %s, drone v %s | aim %s lead_angles %s | lead_point−drone %.1f m" % [
+		_fcs.locked, drone, (_fcs.get_target_position() - drone.global_position).length(), _fcs.get_target_velocity(),
+		drone.get_velocity(), w.aim, w.lead_angles, (w.lead_point - drone.global_position).length()])
 
 
 ## Fires the selected weapon once and saves the next `count` frames, `every` frames apart.
