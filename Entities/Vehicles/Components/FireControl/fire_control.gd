@@ -35,7 +35,9 @@ extends Node
 ## Without one, the target's own state is used (a perfect track).
 
 enum MasterMode { NAV, DGFT, BVR }
-enum Soi { HUD_CURSOR, HMCS }
+## Sensor of interest: what the cursor slew and lock act through. MFD = a cockpit display
+## page with its own cursor (soi_display), F-16 style.
+enum Soi { HUD_CURSOR, HMCS, MFD }
 enum Hat { FORWARD, RIGHT, AFT, LEFT, DEPRESS }
 
 ## A weapon was selected, or a hat press found nothing to select.
@@ -104,6 +106,11 @@ var locked: Node3D
 var candidate: Node3D
 ## HUD cursor, azimuth / elevation in the display's frame, deg.
 var cursor := Vector2.ZERO
+## The display page that is the SOI when soi is MFD (an MfdPage with has_cursor).
+var soi_display: Object
+## Time.get_ticks_msec() / 1000 when the SOI last changed (the HUD's take-over sweep).
+var soi_changed_at := -INF
+var _soi_displays: Array[Object] = []
 ## Zoom window: 0 = closed, else an index + 1 into zoom_levels.
 var zoom_level := 0
 var blocking := false
@@ -406,8 +413,7 @@ func lock(target: Node3D) -> void:
 		locked.tree_exiting.disconnect(_on_target_gone)
 	locked = target
 	if target == null:
-		zoom_level = 0
-		cursor = Vector2.ZERO
+		_reset_cursors()
 	else:
 		# Destroyed or despawned: drop the lock at once, before anything draws it.
 		target.tree_exiting.connect(_on_target_gone)
@@ -421,8 +427,7 @@ func lock(target: Node3D) -> void:
 
 func _on_target_gone() -> void:
 	locked = null
-	zoom_level = 0
-	cursor = Vector2.ZERO
+	_reset_cursors()
 	candidate = null
 	_target_tracked = false
 	if sensors != null:
@@ -444,9 +449,10 @@ func _physics_process(delta: float) -> void:
 	if cmd.weapon_select >= 0:
 		_press_hat(cmd.weapon_select)
 	if cmd.soi_cycle:
-		soi = Soi.HMCS if soi == Soi.HUD_CURSOR else Soi.HUD_CURSOR
-		cursor = Vector2.ZERO
-	if is_cursor_shown():
+		cycle_soi()
+	if is_cursor_shown() and soi == Soi.MFD:
+		soi_display.call(&"soi_slew", cmd.cursor_slew, delta)
+	elif is_cursor_shown() and soi == Soi.HUD_CURSOR:
 		cursor += cmd.cursor_slew * cursor_rate_deg * delta
 		cursor.x = wrapf(cursor.x, -180.0, 180.0)
 		cursor.y = clampf(cursor.y, -cursor_elevation_limit_deg, cursor_elevation_limit_deg)
@@ -553,6 +559,37 @@ func _press_hat(direction: int) -> void:
 	hat_pressed.emit(direction)
 
 
+## A display page with a cursor that can take the SOI (MfdPage.has_cursor).
+func register_soi_display(page: Object) -> void:
+	if not _soi_displays.has(page):
+		_soi_displays.append(page)
+
+
+## Next SOI: the HUD cursor, the HMCS, then each display page with a cursor.
+func cycle_soi() -> void:
+	var order: Array = [Soi.HUD_CURSOR, Soi.HMCS]
+	order.append_array(_soi_displays)
+	var at := order.find(soi_display if soi == Soi.MFD else soi)
+	var next: Variant = order[(at + 1) % order.size()]
+	if next is Object:
+		soi = Soi.MFD
+		soi_display = next
+	else:
+		soi = next
+		soi_display = null
+	for page in _soi_displays:
+		page.set(&"is_soi", page == soi_display)
+	cursor = Vector2.ZERO
+	soi_changed_at = Time.get_ticks_msec() / 1000.0
+
+
+func _reset_cursors() -> void:
+	zoom_level = 0
+	cursor = Vector2.ZERO
+	for page in _soi_displays:
+		page.call(&"soi_reset")
+
+
 ## The designation cursor (TMS or HMCS) shows, and designates, only while nothing is locked.
 func is_cursor_shown() -> bool:
 	return locked == null
@@ -650,8 +687,12 @@ func _lockable_contacts(origin: Vector3) -> Array[Node3D]:
 	return out
 
 
-## The contact nearest the designation, within the designation cone and lock range.
+## The contact nearest the designation, within the designation cone and lock range (or,
+## with a display page as the SOI, the one under that page's cursor).
 func _find_candidate() -> Node3D:
+	if soi == Soi.MFD and soi_display != null:
+		var picked := soi_display.call(&"soi_candidate") as Node3D
+		return picked if picked != null and _lockable_contacts(get_view_origin()).has(picked) else null
 	var origin := get_view_origin()
 	var dir := get_designation()
 	var cone := hmcs_cone_deg if soi == Soi.HMCS else cursor_cone_deg

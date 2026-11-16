@@ -8,7 +8,9 @@ extends HudWidget
 ##                 and RDY, the vulcans
 ##   cursor        while nothing is locked: the TMS cursor (three double-railed arms round
 ##                 an empty middle) or the HMCS ring (where the pilot looks), by the sensor
-##                 of interest. The HMCS ring closes while a contact is under it
+##                 of interest. The HMCS ring closes while a contact is under it. With a
+##                 display page as the SOI the TMS cursor drops to one dim rail and holds;
+##                 taking the SOI back, a ring sweeps out from the cursor once
 ##   tail          the locked target's motion across the view: a fine accent line from the
 ##                 gun circle (or the triangle) outward, toward where it will be in `tail_time`
 ##   gun circle    the shoot cue. It sits where a shot would go relative to the target (the
@@ -33,6 +35,9 @@ extends HudWidget
 @export var tms_outer_deg: float = 4.6
 @export var tms_rail_gap_deg: float = 0.36
 @export var hmcs_radius_deg: float = 4.5
+## The SOI take-over sweep: how long, s, and how far out it runs, deg.
+@export var soi_sweep_time: float = 0.45
+@export var soi_sweep_deg: float = 14.0
 
 @export_group("Target")
 ## The tail shows where the target goes in this long (relative to the suit), s.
@@ -149,16 +154,28 @@ func _boxed(pos: Vector2, value: String, color: Color) -> float:
 
 func _draw_cursor() -> void:
 	var at := patch(hud.world_to_display(_fcs.get_designation()), Vector3.UP)
-	if _fcs.soi == FireControl.Soi.HUD_CURSOR:
-		_draw_tms(at)
-	else:
+	if _fcs.soi == FireControl.Soi.HMCS:
 		_draw_hmcs(at, _fcs.candidate != null)
+	else:
+		_draw_tms(at, _fcs.soi == FireControl.Soi.HUD_CURSOR)
+	var since := Time.get_ticks_msec() / 1000.0 - _fcs.soi_changed_at
+	if _fcs.soi != FireControl.Soi.MFD and since < soi_sweep_time:
+		var u := since / soi_sweep_time
+		var c := hud.suit_accent_color
+		c.a *= (1.0 - u) * (1.0 - u)
+		patch_arc(at, Vector2.ZERO, lerpf(2.0, soi_sweep_deg, sqrt(u)), 0.0, TAU, c, 2.2, 48)
 
 
 ## Three double-railed arms (up-left, up-right, down) pointing at an empty middle, a faint
-## fill between the rails, and a small faint Y in the middle.
-func _draw_tms(at: Patch) -> void:
+## fill between the rails, and a small faint Y in the middle. Out of SOI: one dim rail.
+func _draw_tms(at: Patch, is_soi: bool) -> void:
 	var c := cursor_color
+	if not is_soi:
+		c = PanoramicHud.dimmed(c)
+		for angle in [deg_to_rad(150.0), deg_to_rad(30.0), deg_to_rad(-90.0)]:
+			var along := Vector2(cos(angle), sin(angle))
+			patch_line(at, along * tms_inner_deg, along * tms_outer_deg, c, 1.4, 2)
+		return
 	var fill := Color(c, c.a * 0.4)
 	var faint := Color(c, c.a * 0.45)
 	for angle in [deg_to_rad(150.0), deg_to_rad(30.0), deg_to_rad(-90.0)]:

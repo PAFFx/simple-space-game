@@ -124,6 +124,34 @@ func _run(shots: PackedStringArray) -> void:
 		mover.queue_free()
 		await _frames(30)
 
+	if "soi" in shots:
+		_fcs.lock(null)
+		await _frames(2)
+		_fcs.cycle_soi()
+		await _frames(2)
+		await _shot("soi_hmcs_sweep")
+		_fcs.cycle_soi()
+		var displays := _vehicle.get_cockpit().find_children("*", "CockpitDisplays", true, false)
+		var sa: SaPage = (displays[0] as CockpitDisplays).pages["ScreenCentre"] if not displays.is_empty() else null
+		print("SOI after two cycles: %d, display %s" % [_fcs.soi, _fcs.soi_display])
+		await _frames(6)
+		await _shot("soi_hud_tms_dim")
+		_look(0, -42, 34.0)
+		await _frames(6)
+		await _shot("soi_sa")
+		if sa != null and sa._drawn.has(drone):
+			sa._cursor = sa._drawn[drone] + Vector2(4, -3)
+			await _frames(6)
+			print("SA candidate is the drone: %s" % (_fcs.candidate == drone))
+			await _shot("soi_sa_on_drone")
+			_input.cmd.lock_commit = true
+			await _frames(6)
+			print("locked from the SA page: %s" % (_fcs.locked == drone))
+			await _shot("soi_sa_locked")
+		_fcs.cycle_soi()
+		_look(0, 0)
+		await _frames(3)
+
 	if "beam" in shots:
 		await _fire_sequence("beam_fp", 6)
 		await _frames(90)

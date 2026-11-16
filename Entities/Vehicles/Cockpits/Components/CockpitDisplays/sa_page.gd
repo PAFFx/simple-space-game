@@ -6,17 +6,56 @@ extends MfdPage
 ## flight computer holds level to). Contacts (group `hud_contacts`) are diamonds with
 ## range and how far above (+) or below (−) that plane they are; the suit's own velocity
 ## is a leader line. The range scale steps to fit the farthest contact.
+##
+## It has a cursor: as the sensor of interest (red border) the cursor slew moves it over
+## the map and lock takes the contact under it. Hidden while a target is locked.
 
 const RANGES := [500.0, 1000.0, 2000.0, 5000.0, 10000.0, 20000.0, 50000.0, 100000.0, 200000.0]
 
 @export var contact_group: StringName = &"hud_contacts"
+## Cursor slew at full deflection, px/s, and how near a contact it must be to pick it, px.
+@export var cursor_rate: float = 260.0
+@export var cursor_pick_px: float = 26.0
 
 var _range := 5000.0
+var _fcs: FireControl
+## Cursor, px from the plan view's centre.
+var _cursor := Vector2(0.0, -60.0)
+## Contacts' places on the page as last drawn.
+var _drawn := {}
 
 
 func _init() -> void:
 	# The compass rose turns with the suit: fast enough to follow a turn smoothly.
 	refresh_hz = 30.0
+	has_cursor = true
+
+
+func setup(p_vehicle: VehicleBase) -> void:
+	super.setup(p_vehicle)
+	_fcs = vehicle.find_component(FireControl) as FireControl if vehicle != null else null
+
+
+func soi_slew(slew: Vector2, delta: float) -> void:
+	var half := Vector2(size.x * 0.48, size.y * 0.42)
+	_cursor = (_cursor + Vector2(slew.x, -slew.y) * cursor_rate * delta).clamp(-half, half)
+
+
+func soi_candidate() -> Node3D:
+	var best: Node3D = null
+	var best_d := cursor_pick_px
+	for node: Node3D in _drawn:
+		if not is_instance_valid(node):
+			continue
+		var d: float = (_drawn[node] as Vector2).distance_to(_cursor)
+		if d < best_d:
+			best_d = d
+			best = node
+	return best
+
+
+func soi_reset() -> void:
+	_cursor = Vector2(0.0, -60.0)
 
 
 func draw_page() -> void:
@@ -69,8 +108,11 @@ func draw_page() -> void:
 		draw_line(centre, centre + lead, GOOD, 2.0, true)
 		draw_circle(centre + lead, 4.0, GOOD, true, -1.0, true)
 
+	_drawn.clear()
 	for c in contacts:
 		_contact(centre, radius, heading, c[0], c[1])
+	if is_soi and (_fcs == null or _fcs.is_cursor_shown()):
+		_draw_cursor(centre + _cursor)
 
 	_data_strip(heading, fc.state.linear_velocity.length(), contacts.size())
 
@@ -83,6 +125,7 @@ func _contact(centre: Vector2, radius: float, heading: float, node: Node3D, rel:
 	if clipped:
 		p = p.normalized() * radius
 	var at := centre + p
+	_drawn[node] = p
 	var k := 9.0
 	var color := Color(CAUTION, 0.6 if clipped else 1.0)
 	draw_polyline(PackedVector2Array([at + Vector2(0, -k), at + Vector2(k, 0), at + Vector2(0, k),
@@ -90,6 +133,15 @@ func _contact(centre: Vector2, radius: float, heading: float, node: Node3D, rel:
 	var name := String(node.get_meta("hud_label", node.name)).to_upper()
 	label(at + Vector2(14, -2), name, color, 14)
 	label(at + Vector2(14, 15), "%s  %+.0f" % [_fmt_range(dist), rel.y], Color(color, 0.75), 12)
+
+
+## The panoramic TMS cursor in small: three double-railed arms round an empty middle.
+func _draw_cursor(at: Vector2) -> void:
+	for angle in [deg_to_rad(-150.0), deg_to_rad(-30.0), deg_to_rad(90.0)]:
+		var along := Vector2(cos(angle), sin(angle))
+		var across := Vector2(-along.y, along.x) * 2.5
+		for side in [-1.0, 1.0]:
+			draw_line(at + along * 9.0 + across * side, at + along * 26.0 + across * side, TEXT, 1.6, true)
 
 
 func _ownship(at: Vector2) -> void:

@@ -14,10 +14,18 @@ const GOOD := Color(0.35, 1.0, 0.55)
 const INFO := Color(0.4, 0.82, 1.0)
 const CAUTION := Color(1.0, 0.75, 0.2)
 const WARNING := Color(1.0, 0.28, 0.22)
+## The SOI border: the panoramic HUD's lock red (PanoramicHud.hostile_color).
+const SOI := Color(0.96, 0.42, 0.4)
 
 ## Redraws per second. The page is drawn again only this often (CockpitDisplays
 ## schedules it), not every rendered frame: like a real display's own refresh rate.
 var refresh_hz: float = 20.0
+
+## The page has a cursor, so it can be the sensor of interest (FireControl.cycle_soi). Such
+## a page overrides soi_slew, soi_candidate and soi_reset.
+var has_cursor := false
+## Set by the FireControl: this page is the SOI, so it gets the border and the cursor slew.
+var is_soi := false
 
 var fc: FlightComputer
 var vehicle: VehicleBase
@@ -38,10 +46,27 @@ func _draw() -> void:
 	if fc != null:
 		draw_page()
 	_frame_corners()
+	if is_soi:
+		draw_rect(Rect2(Vector2.ONE * 3.0, size - Vector2.ONE * 6.0), SOI, false, 4.0)
 
 
 ## Override: draw the page (the field is already cleared).
 @abstract func draw_page() -> void
+
+
+## The cursor slew while this page is the SOI, each axis in [-1, 1] (x right, y up).
+func soi_slew(_slew: Vector2, _delta: float) -> void:
+	pass
+
+
+## The contact under the page's cursor, or null.
+func soi_candidate() -> Node3D:
+	return null
+
+
+## Back to its default place (after an unlock).
+func soi_reset() -> void:
+	pass
 
 
 func label(pos: Vector2, value: String, color: Color = TEXT, font_size: int = 18,
