@@ -153,11 +153,25 @@ until the table above shows up in practice.
   errors back into it and broke tracks; the filter blends the sources by their errors instead.
 - **Body cameras**: six (chest, backpack, shoulders, front and rear skirts), each a
   hemisphere, σ 1 mrad, 30 Hz, 60 ms, with their own line of sight.
-- **Visible centroid**: wanders 4% of the target's radius (τ 0.3 s) about its centre. The wander
-  is in each measurement's covariance; without it honest measurements failed the gate.
-- **Track** (`SensorTrack`): 9-state Singer filter (τm 0.8 s, σm 30 m/s²), gate d² 16, three
-  rejections in a row restart it, firm after 4 hits, coast after 0.25 s without one, lost
-  after 1.2 s (the lock drops).
+- **Visible centroid**: wanders 2% of the target's radius about its centre, smoothly (two
+  first-order stages, τ 0.8 s each). The wander is in each measurement's covariance; without
+  it honest measurements failed the gate. The first version (4%, one stage, τ 0.3 s) jumped
+  every tick: the track read it as velocity, and on a still target at 30 m the aim swung at
+  ~12°/s and the thrusters fought the arms (`Tools/Weapons/track_jitter_probe.gd`).
+- **Track** (`SensorTrack`): 9-state Singer filter (τm 0.8 s), gate d² 16, three
+  rejections in a row restart it. Adaptive process noise: σm 6 m/s² while the measurements
+  fit a steady target, opening at once to 30 m/s² (the acceleration's variance grows with
+  it, so the estimate follows from that update) when the smoothed d²/3 climbs toward 2, a
+  measurement fails the gate, or the whitened innovations lean one way (running mean,
+  weight 0.15, normalised to 1 for a steady target, full at 2.5: a steady jink shows that
+  way long before it shows as large innovations); settles back over 0.6 s.
+  Still target, still suit (`track_jitter_probe.gd`), old → new: velocity error 4.4 → 0.5
+  (30 m) / 2.4 m/s (300 m+), acceleration 13–15 → 0.8 / 5 m/s², aim rate at 30 m 200 → ~15
+  mrad/s, commanded torque 1430 → 62 kN·m (30 m), 265 → 29 (300 m). Beyond ~300 m the stereo
+  range noise still half-trips the lean test (manoeuvre ≈ 0.4); not chased further.
+  Jinking drone, hits of 72 (same day, `track_probe.gd`): 3 G old 47 / new 39, 6 G old 43 /
+  new 41. Without the lean test the 3 G case fell to 25-38. Firm after 4 hits, coast after 0.25 s
+  without one, lost after 1.2 s (the lock drops).
 - **Fire control**: target position, velocity and acceleration come from the track; no
   solution until it is firm; the lead includes ½·a·t². The HUD says ACQUIRING or COAST
   where it said NO SOLUTION.

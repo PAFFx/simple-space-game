@@ -59,8 +59,9 @@ enum RangeSource { NONE, LASER, STEREO, SIZE }
 
 @export_group("Target")
 ## Visible centroid wander: share of the target's radius, and how fast it changes, s.
-@export var centroid_wander: float = 0.04
-@export var centroid_time: float = 0.3
+## Smooth (second order): a wander that jumps every tick reads as velocity to the track.
+@export var centroid_wander: float = 0.02
+@export var centroid_time: float = 0.8
 ## Range from the identified target's apparent size: relative error.
 @export var size_range_error: float = 0.1
 
@@ -80,6 +81,7 @@ var _fcs: FireControl
 var _time := 0.0
 var _queue: Array = []          ## [deliver, capture, position, covariance]
 var _wander := Vector3.ZERO
+var _wander_drive := Vector3.ZERO   ## The wander's first stage, low-passed into _wander
 var _laser_due := 0.0
 var _body_due := 0.0
 var _rng := RandomNumberGenerator.new()
@@ -99,6 +101,7 @@ func set_target(node: Node3D) -> void:
 	track = SensorTrack.new() if node != null else null
 	_queue.clear()
 	_wander = Vector3.ZERO
+	_wander_drive = Vector3.ZERO
 	_laser_due = 0.0
 	source = Source.NONE
 	range_source = RangeSource.NONE
@@ -163,8 +166,10 @@ func _update_wander(delta: float) -> void:
 	var radius: float = target.get_meta(&"hud_radius", 10.0)
 	var sigma := radius * centroid_wander
 	var k := delta / maxf(centroid_time, 1e-3)
-	var kick := Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * sigma * sqrt(2.0 * k)
-	_wander += -_wander * k + kick
+	# Two equal first-order stages: the low pass halves the variance, so drive with √2 σ.
+	var kick := Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * sigma * sqrt(4.0 * k)
+	_wander_drive += -_wander_drive * k + kick
+	_wander += (_wander_drive - _wander) * k
 
 
 func _measure(delta: float) -> void:

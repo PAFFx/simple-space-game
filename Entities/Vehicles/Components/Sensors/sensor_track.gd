@@ -24,7 +24,19 @@ enum State { TENTATIVE, FIRM, COAST, LOST }
 const N := 9   # [px vx ax py vy ay pz vz az]
 
 var maneuver_time := 0.8         ## Singer τ, s
-var maneuver_accel := 30.0       ## Singer σ, m/s² (~3 G)
+var maneuver_accel := 30.0       ## Singer σ while it manoeuvres, m/s² (~3 G)
+## Singer σ while the measurements fit a steady target: a filter tuned for 3 G all the
+## time follows the sensors' noise, and the aim (arms, head, shield) jitters with it.
+var quiet_accel := 6.0
+## Mean normalised innovation (1 = measurements fit their stated errors) at which the
+## filter is fully in manoeuvre; it opens at once and settles back over settle_time.
+var maneuver_nis := 2.0
+var settle_time := 0.6
+## A steady jink shows as innovations leaning one way more than as large ones: their
+## running mean (weight bias_weight per update), normalised so a steady target reads 1,
+## puts it fully in manoeuvre at bias_trip.
+var bias_weight := 0.15
+var bias_trip := 2.5
 var firm_hits := 4
 var coast_after := 0.25
 var lost_after := 1.2
@@ -37,6 +49,10 @@ var hits := 0
 var last_update := -INF          ## Capture time of the last accepted measurement
 var rejected_in_a_row := 0
 var breaks := 0                  ## Times the track restarted (telemetry)
+var maneuver := 1.0              ## 0 quiet … 1 manoeuvring: scales the process noise
+
+var _nis := 1.0                  ## Smoothed d² / 3
+var _bias := Vector3.ZERO        ## Running mean of the whitened innovation (1 σ per axis)
 
 var _x := PackedFloat64Array()
 var _p := PackedFloat64Array()   ## N×N, row-major
@@ -63,12 +79,23 @@ func add_measurement(t: float, pos: Vector3, cov: Basis) -> void:
 		return
 	if t < time:
 		return   # older than the state (another sensor's slower pipeline): skip
-	_predict(t - time)
+	var dt := t - time
+	_predict(dt)
 	time = t
 	var y := pos - _position()
 	var s := _add_basis(_pos_cov(), cov)
 	var s_inv := s.inverse()
 	var d2 := y.dot(s_inv * y)
+	_nis = lerpf(_nis, minf(d2, gate) / 3.0, 0.35)
+	# Whitened first: laser and stereo updates differ a hundredfold in their errors.
+	if d2 <= gate:
+		_bias = _bias.lerp(_whiten(y, s), bias_weight)
+	var lean := _bias.length_squared() * (2.0 - bias_weight) / bias_weight / 3.0
+	var want := maxf(clampf((_nis - 1.0) / (maneuver_nis - 1.0), 0.0, 1.0),
+			clampf((lean - 1.0) / (bias_trip - 1.0), 0.0, 1.0))
+	if d2 > gate:
+		want = 1.0
+	_set_maneuver(want if want > maneuver else lerpf(maneuver, want, minf(dt / settle_time, 1.0)))
 	if d2 > gate:
 		rejected_in_a_row += 1
 		if rejected_in_a_row >= break_after:
@@ -159,6 +186,9 @@ func _start(t: float, pos: Vector3, cov: Basis) -> void:
 	hits = 1
 	rejected_in_a_row = 0
 	state = State.TENTATIVE
+	maneuver = 1.0
+	_nis = 1.0
+	_bias = Vector3.ZERO
 	_x.fill(0.0)
 	_p.fill(0.0)
 	_x[0] = pos.x
@@ -179,7 +209,8 @@ func _predict(dt: float) -> void:
 	var b := 1.0 / maneuver_time
 	var e := exp(-b * dt)
 	var f := [[1.0, dt, (b * dt - 1.0 + e) / (b * b)], [0.0, 1.0, (1.0 - e) / b], [0.0, 0.0, e]]
-	var q := 2.0 * b * maneuver_accel * maneuver_accel
+	var sigma := _accel_sigma()
+	var q := 2.0 * b * sigma * sigma
 	var t2 := dt * dt
 	var t3 := t2 * dt
 	var qm := [[t3 * t2 / 20.0, t2 * t2 / 8.0, t3 / 6.0], [t2 * t2 / 8.0, t3 / 3.0, t2 / 2.0], [t3 / 6.0, t2 / 2.0, dt]]
@@ -209,6 +240,36 @@ func _predict(dt: float) -> void:
 						sum += q * qm[i][j]
 					p_new[(ba * 3 + i) * N + bb * 3 + j] = sum
 	_p = p_new
+
+
+## L⁻¹·y for S = L·Lᵀ (Cholesky): unit variance per axis when y fits S.
+static func _whiten(y: Vector3, s: Basis) -> Vector3:
+	var a := [[s.x.x, s.y.x, s.z.x], [s.x.y, s.y.y, s.z.y], [s.x.z, s.y.z, s.z.z]]
+	var l00 := sqrt(maxf(a[0][0], 1e-12))
+	var l10: float = a[1][0] / l00
+	var l20: float = a[2][0] / l00
+	var l11 := sqrt(maxf(a[1][1] - l10 * l10, 1e-12))
+	var l21: float = (a[2][1] - l20 * l10) / l11
+	var l22 := sqrt(maxf(a[2][2] - l20 * l20 - l21 * l21, 1e-12))
+	var z0 := y.x / l00
+	var z1 := (y.y - l10 * z0) / l11
+	var z2 := (y.z - l20 * z0 - l21 * z1) / l22
+	return Vector3(z0, z1, z2)
+
+
+func _accel_sigma() -> float:
+	return lerpf(quiet_accel, maneuver_accel, maneuver)
+
+
+## A rise opens the acceleration's uncertainty at once by what the higher level allows,
+## so the estimate can follow a jink from this update, not after the noise has built up.
+func _set_maneuver(level: float) -> void:
+	var before := _accel_sigma()
+	maneuver = level
+	var grow := _accel_sigma() * _accel_sigma() - before * before
+	if grow > 0.0:
+		for a in 3:
+			_p[(a * 3 + 2) * N + a * 3 + 2] += grow
 
 
 func _position() -> Vector3:
