@@ -45,7 +45,7 @@ const CONTACT_GROUP := &"hud_contacts"
 
 ## Weapon ids on each hat direction (Hat order), first press then second.
 @export var hat_layout: Array[Array] = [
-	[&"beam_rifle", &"beam_linear"],
+	[&"beam_rifle"],
 	[&"fin_funnel"],
 	[&"bazooka_back", &"bazooka_hand"],
 	[&"shield_missile"],
@@ -53,7 +53,7 @@ const CONTACT_GROUP := &"hud_contacts"
 ]
 ## Names for the weapon ring, including weapons that aren't fitted yet.
 @export var weapon_labels := {
-	&"beam_rifle": "PULSE", &"beam_linear": "LINEAR", &"shield_missile": "MISSILE", &"fin_funnel": "FUNNEL",
+	&"beam_rifle": "PULSE", &"shield_missile": "MISSILE", &"fin_funnel": "FUNNEL",
 	&"bazooka_back": "BZK-B", &"bazooka_hand": "BZK-H", &"beam_saber": "SABER",
 }
 ## Selected on entering DGFT.
