@@ -10,7 +10,6 @@
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PilotCamera/pilot_camera.gd" id="9_cam"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/CockpitDisplays/cockpit_displays.gd" id="10_disp"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/HatchCockpitParts/hatch_cockpit_parts.gd" id="11_hatchparts"]
-[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/CockpitControls/cockpit_switch_panel.gd" id="12_panel"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/CockpitControls/cockpit_click_mode.gd" id="13_click"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/SeatedPilot/seated_pilot.gd" id="14_pilot"]
 [ext_resource type="PackedScene" path="res://Entities/Characters/AmateYuzuriha/amate_yuzuriha.tscn" id="15_character"]
@@ -83,9 +82,6 @@ hip_position = Vector3(0, -0.52, -0.09)
 recline_deg = 12.0
 
 [node name="AmateYuzuriha" parent="Pilot" instance=ExtResource("15_character")]
-
-[node name="SwitchPanel" type="Node3D" parent="."]
-script = ExtResource("12_panel")
 
 [node name="HatchCockpitParts" type="Node" parent="." node_paths=PackedStringArray("model_root", "seat_riders")]
 script = ExtResource("11_hatchparts")

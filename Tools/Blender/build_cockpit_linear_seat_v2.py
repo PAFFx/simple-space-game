@@ -12,15 +12,17 @@ so that her eye is at the centre and she reaches the controls. The pilot model i
 Everything except the Shell and the SeatBoom root stays inside the screen radius (1.25 m).
 
 Node names are the contract with the Godot components (same as the linear seat):
-  SeatSwing            what turns to clear the hatch: the seat, pedals, the right armrest
-                       deck (controller, hatch lever) and the centre and right monitors.
-                       The left deck (controller, switch panel) and the left monitor
-                       stay put, leaving the pilot's way out clear
+  SeatSwing            what turns to clear the hatch: the seat (with the hatch handles on
+                       its right side), pedals, the right armrest and the centre and right
+                       monitors. The left armrest (controller) and the left monitor stay
+                       put, leaving the pilot's way out clear
   GripL / GripR        ball controller units (base, cradle, lever arm)
   BallL / BallR        the balls (children of the units), origin at their centre: the
                        part Godot turns
   PedalL / PedalR      origin on the heel hinge (Godot slides and tilts them)
-  ScreenCentre/Left/Right, HatchHandle, HatchGuard, SwitchPanelMount, InnerDoorL/R
+  ScreenCentre/Left/Right, InnerDoorL/R
+  HatchLock            the hatch lock handle, origin on its hinge (Godot lifts it)
+  HatchOverride        the hatch override handle below it, origin on its hinge
   HandL/R, FootL/R     empties: where the pilot's wrists and ankles go (children of the
                        grips and pedals, so they follow them)
 """
@@ -58,15 +60,25 @@ HEAD_LOW, HEAD_HIGH, HEAD_PROUD = 0.5, 0.82, 0.05
 # The seat turns on a swivel at its rear left, like a door on its hinge: its left side
 # hardly moves, so it clears the left armrest deck, which stays put.
 SEAT_PIVOT = (-0.16, -0.02, -0.72)
-# Parts that stay put when the seat turns (the left armrest deck with its controller and
-# switch panel, the left monitor and its arm); the build functions add them here.
+# Parts that stay put when the seat turns (the left armrest with its controller, the left
+# monitor and its arm); the build functions add them here.
 FIXED = []
+MATERIALS = {}
 
-# Armrest decks: one level each side, x from the inner edge out, y back to front.
+# Armrests: one each side, just wide enough for the forearm and the controller (no side
+# console: it blocked the view down), x from the inner edge out, y back to front.
 DECK_TOP = -0.405
-DECK_X = (0.262, 0.52)
+DECK_X = (0.262, 0.36)
 DECK_Y = (-0.1, 0.34)
-CONSOLE_X, CONSOLE_Y = 0.425, 0.1
+# Hatch handles: two levers lying fore and aft on the seat's right side beside the cushion
+# (the side rail's outer face, x = SEAT_SIDE), forward of the armrest's post. The lock
+# above pivots at its front end, the override below at its rear; the lock's tail lies
+# over the override's front (y spans; z of their centre lines).
+SEAT_SIDE = PAN_HALF + 0.012 + 0.009
+HATCH_LOCK_Y = (0.215, 0.34)
+HATCH_OVERRIDE_Y = (0.05, 0.24)
+HATCH_LOCK_Z = SEAT_TOP + 0.035
+HATCH_OVERRIDE_Z = SEAT_TOP + 0.014
 GRIP_PIVOT = Vector((0.305, 0.275, DECK_TOP))   # right; the ball centre is BALL_UP above
 BALL_R = 0.042
 BASE_H = 0.03
@@ -95,6 +107,7 @@ def materials():
         "red": mk.make_material("CP_AccentRed", (0.75, 0.08, 0.08), roughness=0.4),
         "strip": mk.make_material("CP_LightStrip", (0.1, 0.3, 0.5), emission=(0.3, 0.75, 1.0), strength=3.0),
         "screen": mk.make_material("CP_Screen", (0.01, 0.03, 0.05), emission=(0.04, 0.18, 0.32), strength=1.0),
+        "label": mk.make_material("CP_Label", (0.86, 0.87, 0.84), roughness=0.6),
     }
 
 
@@ -136,6 +149,30 @@ class Part(mk.PartBuilder):
         self.bm.from_mesh(mesh)
         bpy.data.meshes.remove(mesh)
         return self._finish_faces([f for f in self.bm.faces if f not in before], mat, matrix)
+
+    def text(self, body, center, size, mat, rot=None, depth=0.0006, bold=0.0):
+        """Raised lettering, centred on `center`, lying in the local xy plane (reading along
+        +x, facing +z). Emit it with chamfer=0: the glyphs are smaller than a chamfer."""
+        curve = bpy.data.curves.new("label", "FONT")
+        curve.body = body
+        curve.size = size
+        curve.align_x = "CENTER"
+        curve.align_y = "CENTER"
+        curve.extrude = depth * 0.5
+        curve.resolution_u = 3
+        curve.offset = bold * size   # fattens the glyph outlines
+        obj = bpy.data.objects.new("label", curve)
+        bpy.context.scene.collection.objects.link(obj)
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated = obj.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
+        tmp = bmesh.new()
+        tmp.from_mesh(mesh)
+        evaluated.to_mesh_clear()
+        bpy.data.objects.remove(obj)
+        bpy.data.curves.remove(curve)
+        bmesh.ops.translate(tmp, vec=Vector((0, 0, depth * 0.5)), verts=tmp.verts)
+        return self._absorb(tmp, mat, self._matrix(center, rot))
 
     def rbox(self, center, size, mat, rot=None, r=0.012, seg=3):
         """Box with every edge rounded by r."""
@@ -478,8 +515,7 @@ def build_arms(m):
     parts = []
     for side, s in (("R", 1.0), ("L", -1.0)):
         arm = Part(f"Armrest{side}", m)
-        # One deck: the forearm lies along its inner strip with the controller at the
-        # front of it, the side console (switch panel / hatch lever) on the outer part.
+        # The forearm lies along it with the controller at its front.
         x0, x1 = DECK_X
         cx, w = (x0 + x1) * 0.5 * s, x1 - x0
         y0, y1 = DECK_Y
@@ -488,17 +524,18 @@ def build_arms(m):
         arm.rbox((GRIP_PIVOT.x * s, y0 + 0.14, DECK_TOP + 0.003), (0.085, 0.24, 0.014), "pad", r=0.006)     # forearm pad
         arm.rbox((GRIP_PIVOT.x * s, GRIP_PIVOT.y - 0.045, DECK_TOP + 0.001), (0.094, 0.3, 0.004), "dark", r=0.0015)  # lever track
         arm.rbox((x1 * s - 0.004 * s, (y0 + y1) * 0.5, DECK_TOP - 0.02), (0.006, y1 - y0 - 0.06, 0.012), "strip", r=0.002)
-        for i in range(4):                                 # hazard ticks along the front edge
-            arm.rbox(((x0 + 0.1 + 0.035 * i) * s, y1 - 0.006, DECK_TOP - 0.022), (0.02, 0.004, 0.03), "yellow", r=0.001)
+        for i in range(2):                                 # hazard ticks along the front edge
+            arm.rbox(((x0 + 0.03 + 0.04 * i) * s, y1 - 0.006, DECK_TOP - 0.022), (0.02, 0.004, 0.03), "yellow", r=0.001)
         if s > 0:
             # Right: carried by a beam from the back frame and a post from the seat bucket.
             arm.bar((x0 + 0.03, y0 + 0.03, DECK_TOP - 0.05), (0.262, -0.085, DECK_TOP - 0.05), (0.04, 0.04), "frame")
             arm.rod((0.262, -0.11, DECK_TOP - 0.05), (0.262, -0.06, DECK_TOP - 0.05), 0.026, "dark", 16)
-            arm.bar((x0 + 0.045, 0.16, DECK_TOP - 0.06), (PAN_HALF + 0.012, 0.16, SEAT_TOP - 0.03), (0.03, 0.05), "frame")
+            # (At the rear: the hatch handles lie along the seat side forward of it.)
+            arm.bar((x0 + 0.045, 0.02, DECK_TOP - 0.06), (PAN_HALF + 0.012, 0.02, SEAT_TOP - 0.03), (0.03, 0.05), "frame")
         else:
             # Left: on its own post from the fixed base, out under the seat and up.
             px, py, pz = SEAT_PIVOT
-            foot = Vector((-(x0 + 0.15), 0.07, pz - 0.1))
+            foot = Vector((-(x0 + 0.08), 0.07, pz - 0.1))
             arm.bar((px - 0.05, py + 0.02, pz - 0.105), foot, (0.05, 0.04), "frame")
             arm.bar(foot, (foot.x, foot.y + 0.02, DECK_TOP - 0.05), (0.05, 0.045), "frame")
             arm.rod(foot - Vector((0, 0.03, 0)), foot + Vector((0, 0.03, 0)), 0.03, "dark", 16)
@@ -519,58 +556,114 @@ def build_arms(m):
     return parts
 
 
-def face_matrix(s):
-    """Frame on a deck's outer part: x right, y forward, z out of it."""
-    return Matrix.Translation((CONSOLE_X * s, CONSOLE_Y, DECK_TOP + 0.001))
+def lever(name, m, length, width, height, toward, label, label_size, grip, tab=0.0, label_back=0.0):
+    """A handbrake-style lever lying along y on the seat side: origin on its pivot (at one
+    end, on the seat side face), body running `toward` (+1 forward, -1 back) for `length`,
+    `width` out from the seat (+x). Black, with yellow and black stripes at both ends of its
+    top face and its label on a yellow band between, all on top where the pilot sees them;
+    a rounded grip at the free end, reaching `tab` in toward the seat below it. The label
+    sits `label_back` toward the pivot from the middle."""
+    part = Part(name, m)
+    mid = toward * length * 0.5
+    top = height * 0.5
+    part.rbox((width * 0.5, mid, 0), (width, length, height), "grip", r=0.003)
+    # Warning tape along the top: yellow, with black and yellow diagonal bands down both
+    # long edges.
+    y0, y1 = sorted((toward * 0.01, toward * (length - 0.026)))
+    part.box((width * 0.5, (y0 + y1) * 0.5, top + 0.0005), (width - 0.002, y1 - y0, 0.001), "yellow")
+    for x0, x1 in ((0.001, 0.0075), (width - 0.0075, width - 0.001)):
+        hazard_border(part, x0, x1, y0, y1, top + 0.0016, period=0.010)
+    part.rod((0.0, 0.0, 0.0), (width, 0.0, 0.0), 0.009, "tube", 14)           # pivot boss
+    end = toward * (length - 0.012)
+    part.rbox((width * 0.5, end, 0.0), (width + 0.004, 0.026, height + 0.006), grip, r=0.006)
+    if tab > 0.0:
+        part.rbox((-tab * 0.5, end, -height * 0.5 + 0.004), (tab + 0.004, 0.022, 0.008), grip, r=0.003)
+    obj = part.to_object(chamfer=0.0008)
+    text = Part(name + "Text", m)
+    # Reading front to back, letter tops outboard: left to right from the seat.
+    text.text(label, (width * 0.5, mid - toward * label_back, top + 0.0012), label_size, "grip", rot=(0, 0, -90),
+              bold=0.035)
+    return obj, text.to_object(chamfer=0.0)
 
 
-def build_console_fittings(m):
-    parts = []
-    mount = empty("SwitchPanelMount", face_matrix(-1.0))
-    FIXED.append(mount)
-    plate = Part("SwitchPanelPlate", m)
-    plate.frame = face_matrix(-1.0)
-    plate.rbox((0, 0, -0.002), (0.152, 0.104, 0.006), "grip", r=0.002)
-    FIXED.append(plate.to_object())
+def _clip_y(poly, y0, y1):
+    """A 2D polygon (x, y) clipped to y0 <= y <= y1."""
+    def clip(pts, keep, at):
+        out = []
+        for i, p in enumerate(pts):
+            q = pts[(i + 1) % len(pts)]
+            if keep(p):
+                out.append(p)
+            if keep(p) != keep(q):
+                t = (at - p[1]) / (q[1] - p[1])
+                out.append((p[0] + (q[0] - p[0]) * t, at))
+        return out
+    poly = clip(poly, lambda p: p[1] >= y0, y0)
+    return clip(poly, lambda p: p[1] <= y1, y1) if poly else poly
 
-    # Hatch control on the right deck, after a fighter's canopy handle: a striped lever
-    # lying forward in a guarded quadrant. Lift the guard (it flips forward), then pull the
-    # lever up and back to unlock and open; push it down to close and lock.
-    face = face_matrix(1.0)
-    base = Part("HatchLeverBase", m)
-    base.frame = face
-    base.rbox((0, 0.0, 0.003), (0.075, 0.13, 0.008), "grip", r=0.002)
-    for k in (-1.0, 1.0):                       # quadrant cheeks either side of the lever
-        base.rbox((0.031 * k, -0.02, 0.016), (0.005, 0.06, 0.03), "frame", r=0.002)
-    for i in range(6):                          # hazard ticks along the base's edges
-        if i % 2 == 0:
-            for k in (-1.0, 1.0):
-                base.rbox((0.0345 * k, -0.055 + 0.022 * i, 0.0075), (0.006, 0.02, 0.002), "yellow", r=0.0005)
-    parts.append(base.to_object())
 
-    handle = Part("HatchHandle", m)             # origin on its pivot, lying toward +y
-    for k in (-1.0, 1.0):
-        handle.box((0.02 * k, 0.025, 0.012), (0.007, 0.056, 0.009), "frame")
-    handle.rod((-0.027, 0.0, 0.012), (0.027, 0.0, 0.012), 0.007, "dark", 14)
-    n = 6
+def hazard_border(part, x0, x1, y0, y1, z, period=0.008):
+    """Black diagonal bands (45°) across the strip x0..x1 from y0 to y1, at height z (over
+    a yellow face, the gaps are the yellow ones), cut off at both ends so the band runs
+    the whole length."""
+    w = x1 - x0
+    y = y0 - w - period
+    while y < y1:
+        poly = _clip_y([(x0, y), (x1, y + w), (x1, y + w + period * 0.5), (x0, y + period * 0.5)], y0, y1)
+        if len(poly) >= 3:
+            tmp = bmesh.new()
+            face = tmp.faces.new([tmp.verts.new((px, py, z)) for px, py in poly])
+            face.normal_update()
+            if face.normal.z < 0.0:
+                face.normal_flip()
+            part._absorb(tmp, "grip", Matrix.Identity(4))
+        y += period
+
+
+def striped_top(part, x0, x1, y0, y1, z, n):
+    """Yellow and black bands across a lever's top face (at z), from y0 to y1."""
     for i in range(n):
-        x = -0.03 + 0.06 * (i + 0.5) / n
-        handle.rod((x - 0.005, 0.05, 0.016), (x + 0.005, 0.05, 0.016), 0.0095, "yellow" if i % 2 == 0 else "grip", 14)
-    obj = handle.to_object(chamfer=0.001)
-    obj.matrix_world = face @ Matrix.Translation((0, -0.03, 0.008))
-    parts.append(obj)
+        a = y0 + (y1 - y0) * i / n
+        b = y0 + (y1 - y0) * (i + 1) / n
+        part.box(((x0 + x1) * 0.5, (a + b) * 0.5, z + 0.0005), (x1 - x0, b - a, 0.001), "yellow" if i % 2 == 0 else "grip")
 
-    guard = Part("HatchGuard", m)               # origin on its hinge at the forward edge
-    gl, gw, gh = 0.098, 0.074, 0.036
-    for i in range(5):
-        guard.box((0, -gl * (i + 0.5) / 5, gh), (gw, gl / 5, 0.004), "yellow" if i % 2 == 0 else "grip")
-    for k in (-1.0, 1.0):
-        guard.box((gw * 0.5 * k, -gl * 0.5, gh * 0.5), (0.004, gl, gh), "red")
-    guard.box((0, -gl, gh * 0.5), (gw, 0.004, gh), "red")
-    guard.rod((-gw * 0.5, 0, 0.004), (gw * 0.5, 0, 0.004), 0.004, "frame", 10)
-    gobj = guard.to_object(chamfer=0.001)
-    gobj.matrix_world = face @ Matrix.Translation((0, 0.05, 0.008))
-    parts.append(gobj)
+
+def build_hatch_handles(m):
+    """Hatch control after a fighter's seat arming handles, as two handbrake-style levers
+    on the seat's right side beside the cushion, their stripes and labels on top where the
+    pilot reads them. The override (lower, against the seat) pivots at its rear and pulls up
+    at its front; the lock (higher, just outboard of it) pivots at its front and pulls up at
+    its tail, and a tab on its grip reaches in over the override's front end, so the
+    override can't rise until the lock is up. Down, the lock reads LOCK; up, it bares a
+    small UNLOCK on top of a block under its tail. Both up: the hatch opens. Godot turns
+    them about their pivots (local x)."""
+    parts = []
+    ly0, ly1 = HATCH_LOCK_Y
+    oy0, oy1 = HATCH_OVERRIDE_Y
+    width, height = 0.026, 0.016
+    lock_x = SEAT_SIDE + width + 0.001
+    # UNLOCK: a block from the seat side out under the lock, forward of the override's
+    # front end, its top just below the lock.
+    side = Part("HatchUnlockLabel", m)
+    uy = (oy1 + ly1) * 0.5 - 0.01
+    uz = HATCH_LOCK_Z - height * 0.5 - 0.008
+    side.rbox(((SEAT_SIDE + lock_x + width) * 0.5, uy, uz), (lock_x + width - SEAT_SIDE, 0.07, 0.014), "dark", r=0.002)
+    side.rbox((lock_x + width * 0.5, uy, uz + 0.0072), (width - 0.004, 0.064, 0.001), "grip", r=0.0004)
+    side.text("UNLOCK", (lock_x + width * 0.5, uy, uz + 0.0078), 0.0085, "label", rot=(0, 0, -90), bold=0.03)
+    # The lock's pivot bracket, out from the seat side.
+    side.rbox(((SEAT_SIDE + lock_x) * 0.5, ly1, HATCH_LOCK_Z), (lock_x - SEAT_SIDE + 0.002, 0.016, 0.014), "frame", r=0.003)
+    parts.append(side.to_object(chamfer=0.0))
+
+    for name, y0, y1, x, z, toward, label, size, grip, tab in (
+            ("HatchLock", ly1, ly0, lock_x, HATCH_LOCK_Z, -1.0, "LOCK", 0.0135, "yellow", width + 0.001),
+            ("HatchOverride", oy0, oy1, SEAT_SIDE, HATCH_OVERRIDE_Z, 1.0, "HATCH OVERRIDE HANDLE", 0.0078, "grip", 0.0)):
+        # The override's label keeps clear of the lock's tab over its front end.
+        back = 0.008 if name == "HatchOverride" else 0.0
+        obj, text = lever(name, m, abs(y1 - y0), width, height, toward, label, size, grip, tab=tab, label_back=back)
+        obj.matrix_world = Matrix.Translation((x, y0, z))
+        text.matrix_world = obj.matrix_world
+        parent_keep(text, obj)
+        parts.append(obj)
     return parts
 
 
@@ -674,8 +767,10 @@ def build_monitors(m):
         # Articulated arm from under the deck's front, down to an elbow and up: the right
         # one to a yoke on the main panel's back (it carries the main and right panels),
         # the left one to the left panel's own back. Both run outside the knees.
-        root = Vector(((DECK_X[0] + 0.03) * s, DECK_Y[1] - 0.05, DECK_TOP - 0.07))
-        elbow = Vector(((DECK_X[0] + 0.02) * s, MAIN_CENTRE.y - 0.1, SEAT_TOP + 0.0))
+        # Under the armrest's outer edge and out past it, so the right one stays outboard of
+        # the hatch handles beside the cushion (from the seat they read clear of it).
+        root = Vector(((DECK_X[1] - 0.025) * s, DECK_Y[1] - 0.05, DECK_TOP - 0.07))
+        elbow = Vector((0.40 * s, MAIN_CENTRE.y - 0.1, SEAT_TOP + 0.0))
         if s > 0:
             yoke = MAIN_CENTRE + right * (hw * 0.7) - up * (hh * 0.55) - normal * 0.045
             arm.rod(yoke - right * (hw * 1.4), yoke, 0.012, "tube", 12)      # across the main panel's back
@@ -698,7 +793,8 @@ def main():
     mk.reset_scene()
     m = materials()
     build_shell(m, APERTURE)
-    swing = (build_seat(m) + build_arms(m) + build_console_fittings(m)
+    MATERIALS.update(m)
+    swing = (build_seat(m) + build_arms(m) + build_hatch_handles(m)
              + build_pedals(m) + build_monitors(m))
     pivot = empty("SeatSwing", Matrix.Translation(SEAT_PIVOT))
     for obj in swing:

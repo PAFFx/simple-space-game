@@ -11,7 +11,7 @@ and every cockpit component; the model keeps the node names they look for.
 CockpitLinearSeatV2 (CockpitLinearSeat script)
 ├── Model                    cockpit_linear_seat_v2.glb
 │   ├── Shell, InnerDoorL/R, SeatBase, SeatBoom      fixed
-│   ├── ArmrestL, GripL/BallL → HandL, SwitchPanelMount, SwitchPanelPlate   fixed: left deck
+│   ├── ArmrestL, GripL/BallL → HandL                fixed: left armrest
 │   ├── BezelLeft, ScreenLeft, DisplayArmL           fixed: left monitor
 │   └── SeatSwing            what turns for the hatch:
 │       ├── Seat, SeatCollar, ArmrestR, Footrest, DisplayArmR
@@ -19,11 +19,11 @@ CockpitLinearSeatV2 (CockpitLinearSeat script)
 │       │   └── BallR        the ball (origin = its centre) → HandR
 │       ├── PedalL / PedalR  (origin = heel hinge) → FootL / FootR
 │       ├── BezelCentre/Right, ScreenCentre/Right
-│       └── HatchLeverBase, HatchHandle, HatchGuard    right armrest deck
+│       └── HatchPlate, HatchLock, HatchOverride       beside the cushion, right
 ├── PanoramicDisplayMount/PanoramicScreen, CameraMount/PlayerCamera3D, CockpitLight, PanoramicHud
 ├── ControlsAnimator         scheme = TWIN, pedal_travel_deg 26, pedal_stroke 0.075
 ├── Pilot (SeatedPilot)/AmateYuzuriha
-├── SwitchPanel, CockpitGimbal, CockpitDisplays, CockpitClickMode
+├── CockpitGimbal, CockpitDisplays, CockpitClickMode
 └── HatchCockpitParts        seat_turn_deg = −40, seat_riders = CameraMount, Pilot
 ```
 
@@ -39,9 +39,9 @@ CockpitLinearSeatV2 (CockpitLinearSeat script)
   has raised sides and a waterfall front, the headrest wraps the head.
 - **Pilot connectors** on the upper back (two plugs, two ports, the latch block), for a normal
   suit's backpack; harness reels and stowed yellow straps on the bolsters.
-- **Armrest decks.** One level each side: the forearm lies along the inner strip with the
-  controller at its front, the side console is the deck's outer part (switch panel left, hatch
-  lever right).
+- **Armrests.** Just wide enough for the forearm, with the controller at the front. The side
+  consoles (switch panel left, hatch lever right) are gone: they blocked the view down, and
+  the flight-mode switches live on the sticks and keys.
 - **Ball controllers.** The hand lies over the ball, fingers in the grooved slot round the front,
   thumb on the inner cheek with its three buttons. The ball stands on a base block whose lever
   arm runs back along the deck; the ball turns in the block's cradle.
@@ -54,10 +54,19 @@ CockpitLinearSeatV2 (CockpitLinearSeat script)
   (`HatchCockpitParts.seat_riders`): the pilot's eye and her body. Her left hand lets go of the
   left controller as the sequence starts and rests on her lap (`SeatedPilot.let_go`: any hand
   whose control is not under `SeatSwing`).
-- **Hatch control**, after a fighter's canopy handle: a striped lever lying forward in a quadrant
-  on the right deck, under a red-sided guard. Click the guard to flip it forward, then pull the
-  lever up and back to open, push it down to close. Same `HatchGuard` / `HatchHandle` contract as
-  the linear seat.
+- **Hatch handles**, after a fighter's seat arming handles, as two handbrake-style levers lying
+  fore and aft on the seat's right side beside the cushion (forward of the armrest's post, which
+  now comes down at the rear). Their tops are warning tape (yellow, diagonal black and yellow
+  bands down both edges) with the label in the middle, where the pilot sees them from the seat,
+  so the state reads at a glance; the monitors' support arms run outboard of them. The override (HATCH OVERRIDE
+  HANDLE), against the seat with its top level with the side rail, pivots at its rear and pulls
+  up at its front. The lock, just outboard and a little higher, pivots at its front and pulls up
+  at its tail; down it reads LOCK, up it bares a small UNLOCK on top of a block under it. The
+  lock's grip has a tab over the override's front grip, so the override can't rise until the
+  lock is up. Both up opens the hatch; the override pushed down closes it; the lock goes down
+  only after the override. Click to pull (left) or push (right) (`HatchCockpitParts`:
+  `HatchLock` / `HatchOverride`; the first linear seat keeps its guarded lever). From the eye
+  their tops show past the right armrest.
 
 ### Controls animation (`CockpitControlsAnimator`, scheme TWIN)
 

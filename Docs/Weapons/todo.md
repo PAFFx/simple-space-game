@@ -113,9 +113,11 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
 
 ## 5. Model
 
-- [ ] Remove the switches and the hatch panel next to the armrest. The switches aren't needed
+- [x] Remove the switches and the hatch panel next to the armrest. The switches aren't needed
       and the hatch panel can move elsewhere (ideas TBD). There should only be an armrest, not a
       panel that blocks the view.
+      Done: armrests only; the hatch is two seat-side pull handles (lock, then override), after a
+      fighter's seat arming handle: Docs/MobileSuit/linear_seat_v2_cockpit.md.
 
 - [x] Beams should feel scarier up close. Tried on the panoramic screen (white-out,
       exposure dip, after-image streak) and removed: it read as weird. Instead the beams light
