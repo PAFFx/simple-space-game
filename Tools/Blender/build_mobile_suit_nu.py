@@ -75,8 +75,9 @@ GROUPS = {
     "shin.L": ids(59, 63),
     # Movable thruster parts (Godot's ThrusterGuards turns them with their thrusters): the
     # backpack pods around the main nozzles, and the calf plates carrying their nozzles.
-    "main_pod.R": ids(70, 75, 76, 78, 81),
-    "main_pod.L": ids(71, 74, 79, 82, 83),
+    # (Their nozzle cups are their own parts: NOZZLE_CUPS.)
+    "main_pod.R": ids(70, 78, 81),
+    "main_pod.L": ids(71, 79, 82),
     "calf_guard.R": ids(47, 51),
     "calf_guard.L": ids(58, 62),
     "foot.R": ids(2, 43, 46, 49, 50),
@@ -115,10 +116,13 @@ def bones():
         ("backpack", (c, 0.35, 2.3), (c, 0.35, 2.7), "chest"),
     ]
     right = [
+        # Collarbone: from inside the chest out to the arm joint, so the whole shoulder can
+        # shrug and reach forward (the aim uses it to bring the arm across the chest).
+        ("clavicle", (X0 - 0.154, -0.08, 2.55), (-0.45, -0.08, 2.55), "chest"),
         # The armor pivots on the arm joint but isn't the arm's parent, so it can follow the
-        # arm part way (Godot's LimbFollowers) without dragging it along.
-        ("shoulder", (-0.45, -0.08, 2.55), (-0.45, -0.08, 2.75), "chest"),
-        ("upper_arm", (-0.45, -0.08, 2.55), (-0.52, -0.1, 2.25), "chest"),
+        # arm (Godot's LimbFollowers) without dragging it along.
+        ("shoulder", (-0.45, -0.08, 2.55), (-0.45, -0.08, 2.75), "clavicle"),
+        ("upper_arm", (-0.45, -0.08, 2.55), (-0.52, -0.1, 2.25), "clavicle"),
         ("forearm", (-0.52, -0.1, 2.25), (-0.62, -0.2, 1.86), "upper_arm"),
         ("hand", (-0.62, -0.2, 1.86), (-0.67, -0.3, 1.6), "forearm"),
         ("skirt_front", (-0.1, -0.43, 2.2), (-0.1, -0.5, 1.6), "pelvis"),
@@ -138,9 +142,12 @@ def bones():
 
 # Main nozzles: (group, nozzle part, pod housing part). The nozzle is the hexagonal cup
 # with the yellow rim; CUP_RADIUS > 0 would also take housing faces around it that face
-# the same way (0: the frame stays with the backpack).
-# Not used for the ν: its pods move as a whole, so the two nozzles never cross.
-NOZZLE_CUPS = []
+# the same way (0: the frame stays with the pod). Each cup hangs from its pod (which swings
+# fore/aft) on its own bone, pivoting at its throat, so its sideways swing shows.
+NOZZLE_CUPS = [("main_nozzle_up.R", 76, None), ("main_nozzle_low.R", 75, None),
+               ("main_nozzle_up.L", 83, None), ("main_nozzle_low.L", 74, None)]
+# The cups' rest exhaust (suit space; Godot's MAIN_MODEL_EXHAUST).
+NOZZLE_EXHAUST = mathutils.Vector((0.0, -0.74, -0.67)).normalized()
 CUP_RADIUS = 0.0
 CUP_MIN_DOT = 0.2
 
@@ -157,14 +164,16 @@ BAZOOKA_OFFSET = mathutils.Vector((0.0, -1.0, 0.0))
 def move_pods(bm, groups, part):
     """Stretches the pod housings backward; moves the rings and the bazooka rigidly."""
     for group in POD_GROUPS:
-        faces = [f for f in bm.faces if groups[f.index] == group]
+        cups = {g for g, _r, _h in NOZZLE_CUPS if _pod_of(g) == group}
+        faces = [f for f in bm.faces if groups[f.index] == group or groups[f.index] in cups]
+        cup_faces = [f for f in faces if groups[f.index] in cups]
         verts = {v for f in faces for v in f.verts}
         front = max(v.co.y for v in verts)
         depth = max(front - min(v.co.y for v in verts), 1e-3)
         k = (depth + POD_STRETCH) / depth
         rings = {}
         for f in faces:
-            if part[f.index] in POD_RINGS:
+            if part[f.index] in POD_RINGS or f in cup_faces:
                 for v in f.verts:
                     rings.setdefault(part[f.index], set()).add(v)
         ring_verts = set().union(*rings.values()) if rings else set()
@@ -179,6 +188,10 @@ def move_pods(bm, groups, part):
         v.co += BAZOOKA_OFFSET
 
 
+def _pod_of(cup_group):
+    return "main_pod." + cup_group[-1]
+
+
 def print_nozzles(bm, part):
     """Nozzle ring centres in Godot body coordinates, for build_rx93_scene.gd."""
     for pid in POD_RINGS:
@@ -189,12 +202,13 @@ def print_nozzles(bm, part):
 
 # Movable bones: (group, parent bone, pivot): "top_front" = top edge toward +Y (a plate
 # hinged against the leg), "top_mid" = middle of the top (a pod hanging from the backpack),
-# "centre" = the part's centre (a nozzle on a ball joint).
+# "centre" = the part's centre (a nozzle on a ball joint), "throat" = the inner end of a
+# main nozzle cup (along NOZZLE_EXHAUST).
 POD_PIVOT = "centre"
 GUARDS = [("hatch", "chest", "bottom_front"),
           ("main_pod.R", "backpack", POD_PIVOT), ("main_pod.L", "backpack", POD_PIVOT),
           ("calf_guard.R", "shin.R", "top_front"), ("calf_guard.L", "shin.L", "top_front")] + \
-         [(g, "backpack", "centre") for g, _r, _h in NOZZLE_CUPS]
+         [(g, _pod_of(g), "throat") for g, _r, _h in NOZZLE_CUPS]
 
 
 def face_groups(bm, part):
@@ -219,7 +233,9 @@ def guard_bones(bm, groups):
     """Bones for the movable thruster parts, placed from their geometry (suit space)."""
     out = []
     for group, parent, pivot in GUARDS:
-        pts = [v.co for f in bm.faces if groups[f.index] == group for v in f.verts]
+        # A pod's pivot counts its nozzle cups (they're still part of it).
+        parts = {group} | {g for g, _r, _h in NOZZLE_CUPS if _pod_of(g) == group}
+        pts = [v.co for f in bm.faces if groups[f.index] in parts for v in f.verts]
         lo = mathutils.Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
         hi = mathutils.Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
         if pivot == "top_front":
@@ -228,12 +244,29 @@ def guard_bones(bm, groups):
             head = mathutils.Vector(((lo.x + hi.x) * 0.5, hi.y, lo.z))
         elif pivot == "top_mid":
             head = mathutils.Vector(((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5, hi.z))
+        elif pivot == "throat":
+            c = sum(pts, mathutils.Vector()) / len(pts)
+            inner = min((p - c).dot(NOZZLE_EXHAUST) for p in pts)
+            head = c + NOZZLE_EXHAUST * inner
         else:
             head = sum(pts, mathutils.Vector()) / len(pts)
         length = max(hi.z - lo.z, 0.3)
         print(f"[nu] hinge {group}: godot ({head.x:.3f}, {head.z:.3f}, {-head.y:.3f})")
         out.append((group, tuple(head), tuple(head - mathutils.Vector((0, 0, length))), parent))
     return out
+
+
+# The shield's latch on the left forearm (Godot space): the bracket between the forearm's
+# outer face and the shield (parts 129, 133). The shield spins about the outward axis
+# here, like a disc on its hub, so it can be turned to cover more than the forearm's line.
+SHIELD_MOUNT = (-5.0, 13.3, 0.05)
+SHIELD_MOUNT_AXIS = (-1.0, 0.0, 0.0)
+
+
+def shield_mount_bone():
+    head = _suit(*SHIELD_MOUNT)
+    tail = head + _suit(*SHIELD_MOUNT_AXIS) * 0.6
+    return [("shield_mount.L", tuple(head), tuple(tail), "forearm.L")]
 
 
 def load_parts(path):
@@ -580,7 +613,8 @@ def main():
         GUARDS = [(g, p, piv if g in POD_GROUPS else v) for g, p, v in GUARDS]
     move_pods(bm, groups, part)
     print_nozzles(bm, part)
-    arm = mk.build_armature("Armature", stretch_bones(bones()) + guard_bones(bm, groups))
+    arm = mk.build_armature("Armature", stretch_bones(bones()) + guard_bones(bm, groups)
+                             + shield_mount_bone())
     suit, weapons = [], {}
     for group in list(GROUPS) + ["hatch"] + [g for g, _r, _h in NOZZLE_CUPS]:
         obj = make_object(object_name(group), bm, materials, groups, group)

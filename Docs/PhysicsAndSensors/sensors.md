@@ -152,7 +152,9 @@ until the table above shows up in practice.
   R²·σθ / 0.4 m) and known size (10%). Aging a pulse with the track's velocity fed the track's
   errors back into it and broke tracks; the filter blends the sources by their errors instead.
 - **Body cameras**: six (chest, backpack, shoulders, front and rear skirts), each a
-  hemisphere, σ 1 mrad, 30 Hz, 60 ms, with their own line of sight.
+  hemisphere, σ 1 mrad, 30 Hz, 60 ms, with their own line of sight. The shoulder ones look
+  45° forward of sideways. Lines of sight ignore the suit's hull but not its shield: dug in
+  behind it, the head loses the target and the right shoulder camera holds the track.
 - **Visible centroid**: wanders 2% of the target's radius about its centre, smoothly (two
   first-order stages, τ 0.8 s each). The wander is in each measurement's covariance; without
   it honest measurements failed the gate. The first version (4%, one stage, τ 0.3 s) jumped

@@ -93,8 +93,10 @@ void fragment() {
 }
 """
 
-# Units are drawn in the order they were made (three render priorities each); the stencil
-# value only has to differ from the units drawn before.
+# Units are drawn in the order they were made (three render priorities each), after every
+# other transparent (beams, explosions at 0, plumes up to 2): the body pass writes
+# depth, and drawn before them it hid whatever lay behind the outline. The stencil value
+# only has to differ from the units drawn before.
 static var _units := 0
 
 
@@ -131,7 +133,7 @@ static func _next_unit() -> int:
 func _add_outline(source: MeshInstance3D, unit: int) -> void:
 	var shell := _smooth_shell(source.mesh)
 	var reference := 1 + (unit - 1) % 255
-	var priority := clampi(-120 + ((unit - 1) % 80) * 3, -128, 125)
+	var priority := 4 + ((unit - 1) % 41) * 3
 	# [depth modes, stencil mode, colour, width]: the body at its true size and fully
 	# transparent (stencil and depth only), then the halo and the rim outside it.
 	var steps := [

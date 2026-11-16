@@ -50,12 +50,14 @@ enum RangeSource { NONE, LASER, STEREO, SIZE }
 @export var body_sigma_mrad: float = 1.0
 @export var body_interval: float = 1.0 / 30.0
 @export var body_latency: float = 0.06
-## Camera positions (body frame, m) and the way each faces; each sees a hemisphere.
+## Camera positions (body frame, m) and the way each faces; each sees a hemisphere. The
+## shoulder cameras look 45° forward of sideways, so straight ahead stays seen past either
+## side of the suit's own shield (the backpack camera covers the rear quarters).
 @export var body_camera_positions: PackedVector3Array = [
 	Vector3(0, 17.0, -2.4), Vector3(0, 18.5, 5.5), Vector3(4.9, 19.0, 0.4), Vector3(-4.9, 19.0, 0.4),
 	Vector3(0, 12.0, -2.0), Vector3(0, 12.0, 2.2)]
 @export var body_camera_facings: PackedVector3Array = [
-	Vector3(0, 0, -1), Vector3(0, 0, 1), Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, -0.5, -1), Vector3(0, -0.5, 1)]
+	Vector3(0, 0, -1), Vector3(0, 0, 1), Vector3(0.71, 0, -0.71), Vector3(-0.71, 0, -0.71), Vector3(0, -0.5, -1), Vector3(0, -0.5, 1)]
 
 @export_group("Target")
 ## Visible centroid wander: share of the target's radius, and how fast it changes, s.
@@ -270,7 +272,8 @@ func _body_camera_sees(at: Vector3) -> bool:
 	return false
 
 
-## Nothing but the suit itself and the target between `from` and `to`.
+## Nothing but the suit itself and the target between `from` and `to`. The suit's own
+## shield does block (its head can't see through it while dug in behind it).
 func _line_clear(from: Vector3, to: Vector3) -> bool:
 	var space := _body.get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(from, to)

@@ -196,7 +196,31 @@ func _run() -> void:
 	hits[1] = 0
 	await _ticks(240)
 	print("turret vs shield: hits taken %d, blocked %d" % [hits[0], hits[1]])
-	_check("shield blocks what the pilot looks at", hits[1] > 0 and hits[0] == 0)
+	_check("shield blocks the turret's shots", hits[1] > 0 and hits[0] == 0)
+
+	# Dug in: the head can't see through the shield, a body camera holds the track, and
+	# the vulcans can't fire through it.
+	drone.queue_free()
+	await _ticks(2)
+	drone = _spawn(TargetDrone.Behaviour.STATIC, 400.0, Vector2(0, 0))
+	drone.hit_points = 5000.0
+	_fcs.sensors.enabled = true
+	_fcs.lock(drone)
+	await _ticks(60)
+	print("dug in: sensor source %s" % SensorSuite.Source.keys()[_fcs.sensors.source])
+	_check("body camera tracks while dug in", _fcs.sensors.source == SensorSuite.Source.BODY)
+	_fcs.sensors.enabled = false
+	var vulcan_left := vulcan.ammo
+	_input.cmd.vulcan_ready = true
+	_input.cmd.vulcan_fire = true
+	await _ticks(90)
+	var masked := vulcan.masked
+	_input.cmd.vulcan_ready = false
+	_input.cmd.vulcan_fire = false
+	await _ticks(60)
+	print("vulcan at own shield: masked %s, fired %d" % [masked, vulcan_left - vulcan.ammo])
+	_check("vulcans hold fire into own shield", masked and vulcan.ammo == vulcan_left)
+	_input.cmd.shield_block = false
 
 	print("RESULT: %s" % ("PASS" if _failures == 0 else "%d FAILED" % _failures))
 	quit(1 if _failures > 0 else 0)

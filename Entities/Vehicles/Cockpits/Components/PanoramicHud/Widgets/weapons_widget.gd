@@ -127,8 +127,8 @@ func _draw_envelope(weapon: MsWeapon, strength: float) -> void:
 		pts.append(_canvas(angles))
 	seam_safe_polyline(pts, faint, 1.5, false)
 	# A bold bracket at each corner.
-	var az := weapon.az_limits
-	var el := weapon.el_limits
+	var az := weapon.get_az_limits()
+	var el := weapon.get_el_limits()
 	for corner in [Vector2(az.x, el.x), Vector2(az.y, el.x), Vector2(az.y, el.y), Vector2(az.x, el.y)]:
 		var inward := Vector2(1.0 if corner.x == az.x else -1.0, 1.0 if corner.y == el.x else -1.0)
 		for leg in [Vector2(inward.x * corner_deg, 0.0), Vector2(0.0, inward.y * corner_deg)]:
@@ -185,6 +185,8 @@ func _draw_solution(weapon: MsWeapon) -> void:
 	var cue := ""
 	if not weapon.target_in_envelope:
 		cue = "OUT"
+	elif weapon.masked:
+		cue = "MASKED"
 	elif shoot:
 		cue = "SHOOT" if _fcs.master_arm else "SAFE"
 	if cue != "":
@@ -195,7 +197,8 @@ func _draw_solution(weapon: MsWeapon) -> void:
 
 func _draw_vulcan(weapon: MsWeapon) -> void:
 	_draw_envelope(weapon, 0.55 * weapon.readiness)
-	var c := hud.primary_color if weapon.state == MsWeapon.State.READY else PanoramicHud.dimmed(hud.primary_color)
+	var up := weapon.state == MsWeapon.State.READY and not weapon.masked
+	var c := hud.primary_color if up else PanoramicHud.dimmed(hud.primary_color)
 	var gun := patch(hud.world_to_display(_body * SpatialMath.angles_to_direction(weapon.aim)), Vector3.UP)
 	patch_arc(gun, Vector2.ZERO, 0.8, 0.0, TAU, c, 1.8, 20)
 	if weapon.on_target:

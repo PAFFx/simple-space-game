@@ -141,6 +141,11 @@ func get_gimbal_deflection() -> Vector2:
 	return Vector2(_dir.x, _dir.y) / limit
 
 
+## Actual sideways swing, rad: atan2(d.x, −d.z) of the thrust direction (+ tips it to +X).
+func get_yaw() -> float:
+	return atan2(_dir.x, -_dir.z)
+
+
 func get_hud_label() -> String:
 	return hud_label if hud_label != "" else String(name)
 

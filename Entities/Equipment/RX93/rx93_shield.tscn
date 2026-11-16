@@ -32,10 +32,6 @@ weapon_id = &"shield_guard"
 display_name = "SHIELD"
 ready_time = 0.45
 pose = &"shield_guard"
-aim_bone = &"upper_arm.L"
-az_limits = Vector2(-110, 35)
-el_limits = Vector2(-50, 60)
-slew_rate_deg = 140.0
 
 [node name="MuzzleFace" type="Marker3D" parent="Guard"]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -6.8, 13.5, 0.2)
@@ -51,6 +47,9 @@ cycle_time = 0.6
 ready_time = 0.8
 pose = &"shield_fire"
 aim_bone = &"upper_arm.L"
+aim_assist_bones = Array[StringName]([&"clavicle.L"])
+aim_assist_shares = PackedFloat32Array(0.25)
+aim_assist_limits_deg = PackedFloat32Array(12)
 az_limits = Vector2(-60, 25)
 el_limits = Vector2(-40, 45)
 slew_rate_deg = 70.0

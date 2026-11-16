@@ -10,7 +10,7 @@ PilotCommand (weapon fields)          keyboard / twin sticks / scripted
 FireControl (suit)                    master arm, master mode, lock, selection, block
   ├── MsWeapon "Weapon"   (BeamRifle equipment)    beam_rifle      PULSE; arm aims, torso helps
   ├── MsWeapon "Linear"   (BeamRifle equipment)    beam_linear     LINEAR; draws on Weapon's E-pack
-  ├── MsWeapon "Guard"    (Shield equipment)       shield_guard    follows the pilot's look
+  ├── MsWeapon "Guard"    (Shield equipment)       shield_guard    fixed dug-in pose
   ├── MsWeapon "Missiles" (Shield equipment)       shield_missile  unguided, proximity burst
   └── MsWeapon "Vulcan"   (rides the head bone)    vulcan          head tracks the target
       │  aim (az / el in the body frame)      │ shots
@@ -64,13 +64,31 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 - **Lock.** Preview marks the contact nearest the designation (pulsing brackets); commit locks it,
   or unlocks when the candidate is already locked or nothing is designated. The designation is
   the HUD cursor (default sensor of interest) or the pilot's line of sight (HMCS).
-- **Shield block** holds the shield toward where the pilot looks, within its envelope. It stops
-  shots arriving within `shield_cover_deg` of its facing (HUD: BLOCK, else HIT). Missiles can't
+- **Shield block** digs the suit in behind the shield (one fixed pose, `shield_guard`): the waist
+  turns the left side 30° toward the front, the arm holds the shield in front with a natural
+  bend, and the shield spins upright on its swivel (`shield_mount.L`, thigh to above the head,
+  facing ahead). The legs aren't posed: they stay free for AMBAC. While it is up the rifle's
+  envelope shrinks to `guard_az_limits` / `guard_el_limits` (az 0…+90, el −45…+55) so it
+  never crosses the shield; the HUD outline follows. The shield is solid (`MsShield`: a convex hull per mesh on
+  `Layers.PHYS_SHIELD`, no mask, so it never pushes its own suit): a shot that hits it stops
+  there and counts as blocked (HUD: BLOCK), one that reaches the body is a hit (HIT). The
+  suit's own shots exclude only its hull, so its vulcans can't fire through its own shield.
+  Dug in, the shield hides the target from the head's main camera too, and a body camera
+  (the right shoulder's, past the shield's edge) holds a coarser track. Missiles can't
   launch while blocking. The suit has no damage model yet.
 
 ## Aiming
 
-`MsWeapon.aim` is azimuth / elevation in the body frame. With a lock it slews (`slew_rate_deg`,
+**Masked.** Every tick a weapon that is up casts one ray 40 m from its muzzle along its aim;
+if the first thing it meets is the suit itself (its shield, its hull), it holds fire
+(`MsWeapon.masked`) and the HUD cue reads MASKED (the vulcan ring dims). Its own shots would
+otherwise pass its hull and stop on its shield.
+
+`MsWeapon.aim` is azimuth / elevation in the body frame. With a lock it follows the lead through a jitter filter (a "1 euro" filter,
+`aim_smoothing_hz` 1 Hz rising by `aim_smoothing_beta` 0.5 Hz per deg/s of real motion): the
+track's tick-to-tick noise made the arm shake (muzzle 0.0026°/frame at rest, 0.05° dug in on a
+body-camera track; filtered 0.0006° / 0.014°, `Tools/Weapons/muzzle_jitter_probe.gd`), and the
+hit rate on a jinking drone went up with it. It slews (`slew_rate_deg`,
 speeding up and braking at `slew_accel_deg` 600°/s², so the limb's reaction on the suit stays
 finite: see LimbReaction in `Docs/FlightControl/summary.md`) toward the lead direction, clamped to `az_limits` / `el_limits`; without one it sits on
 `boresight`. Shots leave along `aim`, so the barrel's lag is real: the HUD shows the gun cross
@@ -80,15 +98,20 @@ The lead solves `|rel_pos + rel_vel·t| = distance(t)` (`SpatialMath.intercept_t
 missiles, whose speed grows during the burn. Shots inherit the shooter's velocity.
 
 `WeaponAimModifier` runs after the pose animation and AMBAC: it twists `torso_bone` by
-`torso_share` of the azimuth (rifle: 20%, ≤ 10°), then rotates each weapon's `aim_bone` by the
-arc from the muzzle's current direction to the aim. The ready pose supplies the base posture.
+`torso_share` of the azimuth (rifle: 20%, ≤ 10°), lets each of the weapon's `aim_assist_bones`
+take its share of what is left of the turn (rifle: collarbone 25% ≤ 12°, wrist 30% ≤ 25°; shield
+missiles: collarbone 25% ≤ 12°), then rotates each weapon's `aim_bone` by the
+arc from the muzzle's current direction to the aim. The ready pose supplies the base posture:
+the rifle's is bent at chest height (upper arm 40° forward, elbow 50°), out of the pilot's
+central view and its rear section clear in front of the shoulder armour; its elbow opens by up
+to 50° (straight) as the
+aim moves 25–70° off the boresight (`MsWeapon.elbow_*`), for reach at the envelope's edges.
 
 | Weapon | Azimuth | Elevation | Slew | Notes |
 |---|---|---|---|---|
-| Beam rifle | −35 … +75 | −50 … +55 | 80°/s | right arm; narrow across the chest |
+| Beam rifle | −55 … +90 | −60 … +65 | 80°/s | right arm, held low; the elbow straightens toward the edges; across the chest it stops short of its own shield |
 | Vulcans | ±55 | −25 … +40 | 200°/s | head; ready whenever a weapons mode is on |
 | Shield missiles | −60 … +25 | −40 … +45 | 70°/s | left arm raised, shield tip forward |
-| Shield guard | −110 … +35 | −50 … +60 | 140°/s | follows the look |
 
 These are first guesses to tune in the equipment scenes (`rx93_beam_rifle.tscn`,
 `rx93_shield.tscn`) and `Tools/Godot/build_rx93_scene.gd` (vulcans, `shield_fire` pose).

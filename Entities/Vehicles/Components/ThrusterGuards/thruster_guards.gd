@@ -105,6 +105,9 @@ func measure(i: int) -> float:
 	var hinge := (skeleton.global_basis * g.axis).normalized()
 	var sum := 0.0
 	for t: Thruster in list:
+		if g.follow_yaw:
+			sum += t.get_yaw()
+			continue
 		var nominal := t.get_nominal_direction_global()
 		if g.rest_thrust != Vector3.ZERO:
 			nominal = (skeleton.global_basis * g.rest_thrust).normalized()

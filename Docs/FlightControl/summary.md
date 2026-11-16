@@ -338,8 +338,12 @@ smooth (min-jerk) instead of hitting the rate limit.
 sign of its angle and a limit, so a raised leg doesn't cut through its skirt. Front skirts lift
 0.85× with a forward hip swing, rear skirts 0.85× with a backward one, side skirts open 1× with
 an outward swing and 0.35× with either fore/aft swing. Shoulder armor (pivoting on the arm joint,
-no longer the arm's parent) turns 0.8× with the arm's fore/aft swing and only 0.25×, at most 8°,
-with its sideways swing (the arm already has room there), ready for aiming.
+not the arm's parent; both hang from the collarbone) follows the arm's *final* pose
+(`LimbFollower.from_pose`: animation, AMBAC and weapon aim), measured in the collarbone's frame:
+all of its fore/aft swing (≤ 120°, eased in from 25° to 70° of swing so it stays level over
+the rifle's ready pose: `LimbFollower.ease_in_deg`) and half its sideways swing (≤ 40°), so a raised
+or aimed arm never meets it. `LimbFollowerModifier` keeps itself just before `LimbReactionModifier` so it
+runs after the weapon aim.
 
 ## AMBAC
 
@@ -622,6 +626,10 @@ the armor, and the main and calf nozzles are the model's own, moved by `Thruster
   so the push point and plume move with the pod and the allocator sees the moved position. The
   pod housings are 1 m deeper than on the source model (front still on the backpack) so they
   clear the body; the hyper bazooka between them moves back with them.
+- **Nozzle cups** (`main_nozzle_up.*`, `main_nozzle_low.*`): each cup has its own bone under its
+  pod, pivoting at its throat, and turns with its thruster's own sideways swing
+  (`ThrusterGuard.follow_yaw`, reading `Thruster.get_yaw()`), so the 10° outward swing shows on
+  the mesh, not just in the plume.
 - **Plumes**: backpack 16 m (the biggest), chest 10, calves 4.5, shoulders and soles 3, small
   ports 1–1.6. Slot-shaped ports (chest, rear skirts, shins) get a flat plume along the slot
   (`Thruster.plume_slot`).

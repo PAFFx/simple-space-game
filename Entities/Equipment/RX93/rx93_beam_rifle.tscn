@@ -32,9 +32,16 @@ cycle_time = 2.0
 ready_time = 0.8
 pose = &"rifle_ready"
 aim_bone = &"upper_arm.R"
+aim_assist_bones = Array[StringName]([&"clavicle.R", &"hand.R"])
+aim_assist_shares = PackedFloat32Array(0.25, 0.3)
+aim_assist_limits_deg = PackedFloat32Array(12, 25)
+elbow_bone = &"forearm.R"
+elbow_extend_deg = 50.0
 torso_share = 0.2
-az_limits = Vector2(-35, 75)
-el_limits = Vector2(-50, 55)
+az_limits = Vector2(-55, 90)
+el_limits = Vector2(-60, 65)
+guard_az_limits = Vector2(0, 90)
+guard_el_limits = Vector2(-45, 55)
 slew_rate_deg = 80.0
 
 [node name="Muzzle" type="Marker3D" parent="Weapon"]

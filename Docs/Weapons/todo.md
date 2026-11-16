@@ -33,13 +33,6 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
       linear beam is still coming out, instead of swinging back to the boresight.
       Charge and muzzle glows ride the muzzle where it is drawn (physics-interpolated), so
       they no longer stutter behind a moving gun; the charge is a boiling knot with arcs.
-- [ ] LINEAR needs another pass on its mechanic and numbers. As it stands it is a straight
-      beam for 0.6 s whose front travels at 3200 m/s, so its reach is only 1.9 km (pulse:
-      7.5 km), and the shorter firing time cut its range in half. Decide how it should work
-      (longer emission, faster front, a detached slug flying on after release, ...) and
-      retune speed, emission, damage and cooldown with it.
-- [ ] Beam speeds in general (pulse 3000 m/s, linear 3200 m/s, turret 900 m/s) need tuning
-      against suit manoeuvrability: see the Physics item about other MS' beams.
 
 ## 2. Physics
 
@@ -66,11 +59,10 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
       coupled mode. Done: the measured limb momentum is smoothed (frame / tick timing noise),
       and AMBAC leaves the waist alone while an arm weapon aims (its twist made the aimed arm
       swing back, which needed countering again). Body rate 0.5 → 0.004 °/s, no visible firing.
-- [ ] The mains' nozzles swing up to 10° sideways (outward), but their meshes belong to the pod
+- [x] The mains' nozzles swing up to 10° sideways (outward), but their meshes belong to the pod
       (fore/aft only): give each nozzle its own bone so the swing shows, not just the plume.
-- [ ] Other MS' beams should definitely be faster than the turret's here, so MS manoeuvrability
-      needs to be better: probably have to resort to increasing thruster output.
-      (Partly: the side-thrust pass above. Revisit once beam speeds are set.)
+      Done: each cup has its own bone under its pod, pivoting at its throat, turned by its
+      thruster's sideways gimbal (`ThrusterGuard.follow_yaw`); it stays inside the pod channel.
 
 ## 3. HUD
 
@@ -96,12 +88,25 @@ fix bit by bit. Details of what's done are in `Docs/FlightControl/summary.md`.
 
 ## 4. Animation
 
-- [ ] Add a lot more joints so both the rifle and the shield are more manoeuvrable; joints
+- [x] Add a lot more joints so both the rifle and the shield are more manoeuvrable; joints
       other than the arm can also help widen the targeting envelope.
+      Done: collarbones (chest → clavicle → shoulder armour / upper arm), the wrist in the aim
+      chain, and a shield swivel (`shield_mount.L`, spins about the outward axis at the
+      forearm bracket). `MsWeapon.aim_assist_bones` spread the turn: rifle collarbone 25% ≤ 12°,
+      wrist 30% ≤ 25°; shield missiles collarbone 25% ≤ 12°. The rifle is held low with a bent
+      elbow that straightens toward the edges; its envelope widened to az −55…+90, el −60…+65
+      (the HUD outline follows `az_limits` / `el_limits`).
 - [ ] Shield is bad: it clips through the body. The design where it follows the pilot's look is
       also bad: it should just be posed. Increase the shoulder joint's range, and let the shield
       itself rotate around its attachment point, so it can protect more than the abdomen.
-- [ ] Look at the shoulder armour blocking the way (it can definitely be moved).
+      In progress (to check in game): one dug-in pose (waist turns the left side 30° forward,
+      shield upright on its swivel in front, legs free for AMBAC); the shield is solid (shots
+      stop on it, own weapons hold fire into it: MASKED); the rifle's envelope shrinks while
+      it is up; the head loses the target behind it and a body camera tracks.
+- [x] Look at the shoulder armour blocking the way (it can definitely be moved).
+      Done: it followed AMBAC angles only, so the pose and the aim never moved it. Now it follows
+      the arm's final pose (`LimbFollower.from_pose`): all of its fore/aft swing, half its
+      sideways one.
 - [ ] Mid / late UC MS have magnetic coating: joint movement (rifle aiming, shield, etc.) can
       be a lot faster. Note: limbs now push the suit (LimbReaction), so faster joints kick it
       harder; `MsWeapon.slew_accel_deg` sets how hard.

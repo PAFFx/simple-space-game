@@ -31,7 +31,8 @@ the official 63.0 t max weight together with the equipment) by volume × a tank 
 | Pelvis | 27.9 | 1.2 | 0.4 | 1,880 | 4,240 |
 | Head | 10.2 | 1.0 | — | 570 | — |
 | Backpack | 20.8 | 1.3 | 0.6 | 1,520 | 4,740 |
-| Main pods (engines) | 13.7 / 12.9 | 1.6 | — | 1,230 / 1,160 | — |
+| Main pods (engines) | 12.2 / 11.5 | 1.6 | — | 1,100 / 1,030 | — |
+| Main nozzle cups (4) | 0.7 each | 1.6 | — | 63–65 each | — |
 | Shoulder armour | 17.3 / 17.5 | 0.8 | — | 780 / 790 | — |
 | Upper arms | 6.3 | 1.2 | — | 430 | — |
 | Forearms | 12.7 / 15.1 | 1.0 | — | 710 / 850 | — |

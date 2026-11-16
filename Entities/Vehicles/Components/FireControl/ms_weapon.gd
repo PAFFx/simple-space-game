@@ -50,6 +50,23 @@ enum State { STOWED, READYING, READY, STOWING }
 @export_group("Aim")
 ## Bone turned to point the weapon. Empty = it points where the suit does.
 @export var aim_bone: StringName = &""
+## Joints that help `aim_bone` (collarbone, wrist), in the order they turn: each takes
+## `aim_assist_shares` of what is left of the turn (at most `aim_assist_limits_deg`),
+## then `aim_bone` takes the rest. A share of the reach spread down the limb keeps the
+## big joint inside its range and the arm off the body.
+@export var aim_assist_bones: Array[StringName] = []
+@export var aim_assist_shares := PackedFloat32Array()
+@export var aim_assist_limits_deg := PackedFloat32Array()
+## Elbow that straightens as the aim swings away from the boresight: the ready pose holds
+## the weapon low with a bent arm (out of the pilot's view), the reach to the envelope's
+## edges comes from extending it. `elbow_axis` is the bend axis (skeleton space at rest, +
+## bends); it opens by up to `elbow_extend_deg`, from `elbow_extend_from_deg` off the
+## boresight to all of it at `elbow_extend_full_deg`.
+@export var elbow_bone: StringName = &""
+@export var elbow_axis := Vector3.RIGHT
+@export var elbow_extend_deg: float = 0.0
+@export var elbow_extend_from_deg: float = 25.0
+@export var elbow_extend_full_deg: float = 70.0
 ## Share of the aim's azimuth the torso takes by twisting, and its limit, deg.
 @export_range(0.0, 1.0) var torso_share: float = 0.0
 @export var torso_limit_deg: float = 10.0
@@ -63,6 +80,16 @@ enum State { STOWED, READYING, READY, STOWING }
 ## How fast the slew speeds up and slows down, deg/s² (0 = instant). A limb jumping to
 ## full speed would kick the suit with its whole momentum in one tick (LimbReaction).
 @export var slew_accel_deg: float = 600.0
+## Jitter filter on the lead it follows (a "1 euro" filter): the track's noise moves the
+## lead a little every tick, and a limb chasing it shakes. Slow wander is smoothed with
+## `aim_smoothing_hz`; the cutoff rises by `aim_smoothing_beta` per deg/s the lead really
+## moves, so a crossing target isn't lagged. 0 Hz = off.
+@export var aim_smoothing_hz: float = 1.0
+@export var aim_smoothing_beta: float = 0.5
+## While the suit holds its shield up the weapon can't point into it: this envelope
+## replaces az_limits / el_limits then (zero size = no change).
+@export var guard_az_limits := Vector2.ZERO
+@export var guard_el_limits := Vector2.ZERO
 ## How close the barrel must be to the lead direction to call the shot good, deg.
 @export var on_target_deg: float = 0.35
 ## The lock lost (target destroyed, unlocked): keep pointing where it was this long before
@@ -82,6 +109,15 @@ var wanted := false
 var triggered := false
 ## Point at this instead of the lead direction (azimuth / elevation, deg), or null.
 var aim_override: Variant = null
+## The suit holds its shield up (set by FireControl): the guard envelope applies.
+var guarded := false
+## The line of fire runs into the suit itself (its shield, its body): it holds fire.
+var masked := false
+## How far along the line of fire the suit looks for itself, m.
+const MASK_CHECK_DISTANCE := 40.0
+var _lead_smooth := Vector2.ZERO
+var _lead_rate := Vector2.ZERO
+var _lead_smoothed := false
 
 ## 0 = stowed, 1 = ready.
 var readiness := 0.0
@@ -182,20 +218,33 @@ func get_muzzle_position() -> Vector3:
 	return sum / muzzles.size()
 
 
+## Azimuth limits now: reduced while the shield is up (guard_az_limits).
+func get_az_limits() -> Vector2:
+	return guard_az_limits if guarded and guard_az_limits != Vector2.ZERO else az_limits
+
+
+func get_el_limits() -> Vector2:
+	return guard_el_limits if guarded and guard_el_limits != Vector2.ZERO else el_limits
+
+
 func is_inside_envelope(angles: Vector2) -> bool:
-	return angles.x >= az_limits.x and angles.x <= az_limits.y \
-			and angles.y >= el_limits.x and angles.y <= el_limits.y
+	var az := get_az_limits()
+	var el := get_el_limits()
+	return angles.x >= az.x and angles.x <= az.y and angles.y >= el.x and angles.y <= el.y
 
 
 func clamp_to_envelope(angles: Vector2) -> Vector2:
-	return Vector2(clampf(angles.x, az_limits.x, az_limits.y), clampf(angles.y, el_limits.x, el_limits.y))
+	var az := get_az_limits()
+	var el := get_el_limits()
+	return Vector2(clampf(angles.x, az.x, az.y), clampf(angles.y, el.x, el.y))
 
 
 ## The envelope's edge as azimuth / elevation points, `step` degrees apart.
 func get_envelope_outline(step := 4.0) -> PackedVector2Array:
 	var pts := PackedVector2Array()
-	var corners := [Vector2(az_limits.x, el_limits.x), Vector2(az_limits.y, el_limits.x),
-			Vector2(az_limits.y, el_limits.y), Vector2(az_limits.x, el_limits.y)]
+	var az := get_az_limits()
+	var el := get_el_limits()
+	var corners := [Vector2(az.x, el.x), Vector2(az.y, el.x), Vector2(az.y, el.y), Vector2(az.x, el.y)]
 	for k in 4:
 		var a: Vector2 = corners[k]
 		var b: Vector2 = corners[(k + 1) % 4]
@@ -225,14 +274,18 @@ func update(delta: float, fcs: FireControl) -> void:
 	if aim_override != null:
 		desired = clamp_to_envelope(aim_override)
 	elif solution_valid:
-		desired = clamp_to_envelope(lead_angles)
+		desired = clamp_to_envelope(_smooth_lead(lead_angles, delta))
 		_held_aim = desired
 		_hold_left = lock_loss_hold
 	elif _hold_left > 0.0 or streaming:
 		desired = _held_aim
 		_hold_left = maxf(_hold_left - delta, 0.0)
+	if not solution_valid:
+		_lead_smoothed = false
 	_slew(desired, delta)
-	on_target = solution_valid and target_in_envelope and aim.distance_to(lead_angles) <= _tolerance(fcs)
+	masked = readiness > 0.0 and _line_masked(fcs)
+	on_target = solution_valid and target_in_envelope and not masked \
+			and aim.distance_to(lead_angles) <= _tolerance(fcs)
 	var twist := clampf(aim.x * torso_share, -torso_limit_deg, torso_limit_deg) * readiness
 	torso_yaw = move_toward(torso_yaw, twist, 40.0 * delta)
 	# A weapon that is always on follows the target with the model as soon as there is
@@ -261,6 +314,27 @@ func _update_spool(delta: float, fcs: FireControl) -> void:
 	ProjectileManager.of(self).set_charge(self, get_muzzle(), projectile, get_spool_fraction())
 
 
+## The lead with the track's tick-to-tick noise filtered out (see aim_smoothing_hz).
+func _smooth_lead(lead: Vector2, delta: float) -> Vector2:
+	if aim_smoothing_hz <= 0.0 or delta <= 0.0:
+		return lead
+	if not _lead_smoothed:
+		_lead_smoothed = true
+		_lead_smooth = lead
+		_lead_rate = Vector2.ZERO
+		return lead
+	var rate := (lead - _lead_smooth) / delta
+	_lead_rate = _lead_rate.lerp(rate, _alpha(1.0, delta))
+	var cutoff := aim_smoothing_hz + aim_smoothing_beta * _lead_rate.length()
+	_lead_smooth = _lead_smooth.lerp(lead, _alpha(cutoff, delta))
+	return _lead_smooth
+
+
+static func _alpha(cutoff_hz: float, delta: float) -> float:
+	var tau := 1.0 / (TAU * cutoff_hz)
+	return 1.0 / (1.0 + tau / delta)
+
+
 ## Moves the aim toward `desired` at up to slew_rate_deg, accelerating and braking at
 ## slew_accel_deg so it arrives without overshoot.
 func _slew(desired: Vector2, delta: float) -> void:
@@ -282,7 +356,26 @@ func _slew(desired: Vector2, delta: float) -> void:
 
 
 func can_fire() -> bool:
-	return state == State.READY and _magazine()._cooldown <= 0.0 and ammo >= ammo_cost and projectile != null
+	return state == State.READY and not masked and _magazine()._cooldown <= 0.0 \
+			and ammo >= ammo_cost and projectile != null
+
+
+## Whether the first thing along the line of fire is the suit itself. Its own shots skip
+## its hull (they start inside it), so this is what keeps it from shooting itself.
+func _line_masked(fcs: FireControl) -> bool:
+	if muzzles.is_empty() or projectile == null:
+		return false
+	var body := fcs.get_body()
+	if body == null:
+		return false
+	var from := get_muzzle_position()
+	var dir := fcs.get_body_basis() * SpatialMath.angles_to_direction(aim)
+	var query := PhysicsRayQueryParameters3D.create(from, from + dir * MASK_CHECK_DISTANCE)
+	var hit := body.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return false
+	var collider := hit.collider as Node
+	return collider == body or VehicleBase.find_vehicle(collider) == fcs.vehicle
 
 
 ## World direction the barrel points along.

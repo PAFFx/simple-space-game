@@ -192,7 +192,9 @@ const PARTS := [
 	# bone, volume m³, density, tank share
 	["chest", 59.38, 1.6, 0.2], ["spine", 5.52, 1.4, 0.0], ["pelvis", 27.90, 1.2, 0.4],
 	["hatch", 0.44, 1.0, 0.0], ["head", 10.18, 1.0, 0.0],
-	["backpack", 20.77, 1.3, 0.6], ["main_pod.R", 13.67, 1.6, 0.0], ["main_pod.L", 12.90, 1.6, 0.0],
+	["backpack", 20.77, 1.3, 0.6], ["main_pod.R", 12.24, 1.6, 0.0], ["main_pod.L", 11.50, 1.6, 0.0],
+	["main_nozzle_up.R", 0.72, 1.6, 0.0], ["main_nozzle_low.R", 0.71, 1.6, 0.0],
+	["main_nozzle_up.L", 0.70, 1.6, 0.0], ["main_nozzle_low.L", 0.70, 1.6, 0.0],
 	["shoulder.R", 17.34, 0.8, 0.0], ["upper_arm.R", 6.34, 1.2, 0.0], ["forearm.R", 12.69, 1.0, 0.0], ["hand.R", 2.83, 1.3, 0.0],
 	["shoulder.L", 17.48, 0.8, 0.0], ["upper_arm.L", 6.35, 1.2, 0.0], ["forearm.L", 15.06, 1.0, 0.0], ["hand.L", 2.77, 1.3, 0.0],
 	["skirt_front.R", 5.68, 0.5, 0.4], ["skirt_front.L", 6.01, 0.5, 0.4],
@@ -230,35 +232,51 @@ const STANCES := [
 ]
 
 # Armor that follows a limb (LimbFollowers): bone, axis, source bone, source axis, factor
-# when the source angle is > 0, factor when < 0, limit deg. Front skirts lift with a
-# forward leg swing, rear skirts with a backward one, side skirts open with an outward
-# swing and a little with either fore/aft swing. Shoulder armor turns with the arm's
-# fore/aft swing, only a little with its sideways one (the arm already has room there).
+# when the source angle is > 0, factor when < 0, limit deg, follow the final pose (pose
+# layers, AMBAC, stances, weapon aim) instead of the AMBAC angle alone, [ease in over this
+# source angle range, deg]. Front skirts lift
+# with a forward leg swing, rear skirts with a backward one, side skirts open with an
+# outward swing and a little with either fore/aft swing. The shoulder armor rides all of
+# the arm's fore/aft swing and half of its sideways one, so a raised or aimed arm never
+# meets it; it eases in from 25° to 70°, so it stays level over the rifle's ready pose
+# (tipping with it put its front edge into the rifle).
 const FOLLOWERS := [
-	["skirt_front.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.85, 0.0, 75.0],
-	["skirt_front.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.85, 0.0, 75.0],
-	["skirt_rear.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.0, 0.85, 75.0],
-	["skirt_rear.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.0, 0.85, 75.0],
-	["skirt_side.R", Vector3.BACK, "thigh.R", Vector3.BACK, 1.0, 0.0, 30.0],
-	["skirt_side.L", Vector3.BACK, "thigh.L", Vector3.BACK, 0.0, 1.0, 30.0],
-	["skirt_side.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.35, 0.35, 30.0],
-	["skirt_side.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.35, 0.35, 30.0],
-	["shoulder.R", Vector3.RIGHT, "upper_arm.R", Vector3.RIGHT, 0.8, 0.8, 60.0],
-	["shoulder.L", Vector3.RIGHT, "upper_arm.L", Vector3.RIGHT, 0.8, 0.8, 60.0],
-	["shoulder.R", Vector3.BACK, "upper_arm.R", Vector3.BACK, 0.25, 0.25, 8.0],
-	["shoulder.L", Vector3.BACK, "upper_arm.L", Vector3.BACK, 0.25, 0.25, 8.0],
+	["skirt_front.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.85, 0.0, 75.0, true],
+	["skirt_front.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.85, 0.0, 75.0, true],
+	["skirt_rear.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.0, 0.85, 75.0, true],
+	["skirt_rear.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.0, 0.85, 75.0, true],
+	["skirt_side.R", Vector3.BACK, "thigh.R", Vector3.BACK, 1.0, 0.0, 30.0, true],
+	["skirt_side.L", Vector3.BACK, "thigh.L", Vector3.BACK, 0.0, 1.0, 30.0, true],
+	["skirt_side.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.35, 0.35, 30.0, true],
+	["skirt_side.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.35, 0.35, 30.0, true],
+	["shoulder.R", Vector3.RIGHT, "upper_arm.R", Vector3.RIGHT, 1.0, 1.0, 120.0, true, Vector2(25, 70)],
+	["shoulder.L", Vector3.RIGHT, "upper_arm.L", Vector3.RIGHT, 1.0, 1.0, 120.0, true, Vector2(25, 70)],
+	["shoulder.R", Vector3.BACK, "upper_arm.R", Vector3.BACK, 0.5, 0.5, 40.0, true],
+	["shoulder.L", Vector3.BACK, "upper_arm.L", Vector3.BACK, 0.5, 0.5, 40.0, true],
 ]
 
 # Poses: bone → list of [axis, degrees] rotations in skeleton space (applied in order).
+# Rifle ready, held low: upper arm a little forward, elbow bent so the forearm and rifle
+# point ahead at chest height, below the head's line of sight. The aim straightens the
+# elbow toward the envelope's edges (MsWeapon.elbow_*).
 const POSE_RIFLE := {
-	"upper_arm.R": [[Vector3.RIGHT, 75.0], [Vector3.BACK, -8.0]],
-	"forearm.R": [[Vector3.RIGHT, 15.0]],
+	"upper_arm.R": [[Vector3.RIGHT, 40.0], [Vector3.BACK, -8.0]],
+	"forearm.R": [[Vector3.RIGHT, 50.0]],
 	"hand.R": [],
 }
+
+# Dug in behind the shield: the waist turns the left side 30° toward the threat (the hips
+# stay: turning them turns the whole suit's mass and kicks the hull), the arm holds the
+# shield in front with a natural bend, and the shield turns itself upright on its swivel
+# (thigh to above the head, facing ahead). The legs aren't posed: they stay free for
+# balancing. Solved for on the skeleton: the face points straight ahead, the shield stands
+# upright and clears the chest front.
 const POSE_SHIELD := {
-	"upper_arm.L": [[Vector3.RIGHT, 25.0], [Vector3.BACK, 10.0]],
-	"forearm.L": [[Vector3.RIGHT, 65.0], [Vector3.UP, -80.0]],
+	"spine": [[Vector3.UP, -30.0]],
+	"upper_arm.L": [[Vector3.RIGHT, 10.0], [Vector3.BACK, 20.0]],
+	"forearm.L": [[Vector3.RIGHT, 60.0], [Vector3.UP, -60.0]],
 	"hand.L": [],
+	"shield_mount.L": [[Vector3.RIGHT, -90.0]],
 }
 # Left arm raised forward: the shield's tip, where its missiles launch from, points ahead.
 const POSE_SHIELD_FIRE := {
@@ -514,6 +532,9 @@ func _build_limb_followers(root: Node3D) -> void:
 		follower.negative = f[5]
 		follower.min_angle_deg = -f[6]
 		follower.max_angle_deg = f[6]
+		follower.from_pose = f.size() > 7 and f[7]
+		if f.size() > 8:
+			follower.ease_in_deg = f[8]
 		list.append(follower)
 	node.followers = list
 
@@ -562,7 +583,8 @@ static func _swing_basis(exhaust: Vector3, toward: Vector3) -> Basis:
 
 
 ## The backpack pods and the calf plates (each carrying its nozzle) turn with their
-## thrusters about their hinges.
+## thrusters about their hinges; each main nozzle cup swings sideways in its pod with its
+## thruster's own sideways gimbal.
 func _build_thruster_guards(root: Node3D) -> void:
 	var node := ThrusterGuards.new()
 	node.name = "ThrusterGuards"
@@ -587,6 +609,19 @@ func _build_thruster_guards(root: Node3D) -> void:
 			guard.min_angle_deg = 0.0
 			guard.max_angle_deg = 40.0
 		guards.append(guard)
+	# Turning about this tips the cup's exhaust toward −X: what +yaw (thrust to +X) does.
+	var cup_axis := -MAIN_MODEL_EXHAUST.normalized().cross(Vector3.RIGHT).normalized()
+	for n in [["main_nozzle_up.R", "MainRU"], ["main_nozzle_low.R", "MainRL"],
+			["main_nozzle_up.L", "MainLU"], ["main_nozzle_low.L", "MainLL"]]:
+		var cup := ThrusterGuard.new()
+		cup.bone_name = n[0]
+		cup.thrusters = PackedStringArray([n[1]])
+		cup.follow_yaw = true
+		cup.axis = cup_axis
+		cup.smoothing_time = 0.0
+		cup.min_angle_deg = -12.0
+		cup.max_angle_deg = 12.0
+		guards.append(cup)
 	node.guards = guards
 
 
@@ -647,7 +682,7 @@ func _build_loadout(root: Node3D) -> void:
 	loadout.name = "Loadout"
 	_add(root, root, loadout)
 	loadout.skeleton = root.get_node(SKELETON)
-	for e in [["rx93_beam_rifle", &"hand.R", &"arm_r"], ["rx93_shield", &"forearm.L", &"arm_l"],
+	for e in [["rx93_beam_rifle", &"hand.R", &"arm_r"], ["rx93_shield", &"shield_mount.L", &"arm_l"],
 			["rx93_hyper_bazooka", &"backpack", &""], ["rx93_beam_saber", &"backpack", &""],
 			["rx93_fin_funnels", &"backpack", &""]]:
 		var eq: MsEquipment = load(EQUIPMENT + e[0] + ".tscn").instantiate()

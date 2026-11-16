@@ -17,8 +17,11 @@ extends Node
 ##                the pilot looks, by the sensor of interest) is the candidate while lock
 ##                preview is held; lock commit locks it, or unlocks if it already is (or
 ##                nothing is designated).
-##   shield       held up toward where the pilot looks while block is held; block wins
-##                over the shield's missiles, which can't launch meanwhile.
+##   shield       while block is held the suit digs in behind it (one fixed guard pose: left
+##                side forward, shield upright, knee up). The shield is solid: shots that
+##                hit it (the suit's own included) stop there and count as blocked; shots
+##                that reach the body are hits. Block wins over the shield's missiles,
+##                which can't launch meanwhile.
 ##
 ## A weapon points at the lead on the locked target if that is inside its envelope, else
 ## as near as the envelope allows; with no lock it sits on its boresight. The suit never
@@ -58,7 +61,7 @@ const CONTACT_GROUP := &"hud_contacts"
 }
 ## Selected on entering DGFT.
 @export var dgft_weapon: StringName = &"beam_rifle"
-## Weapon that holds the shield up (not a gun; aimed where the pilot looks).
+## Weapon that holds the shield up (not a gun; a fixed pose, its muzzle marks the face).
 @export var guard_weapon: StringName = &"shield_guard"
 @export var torso_bone: StringName = &"spine"
 ## AMBAC group of the waist. Held while an arm weapon is up: a balancing waist swing makes
@@ -81,8 +84,6 @@ const CONTACT_GROUP := &"hud_contacts"
 ## HUD cursor slew at full deflection, deg/s, and how far from straight ahead it goes.
 @export var cursor_rate_deg: float = 45.0
 @export var cursor_limits_deg := Vector2(70.0, 45.0)
-## The shield stops hits arriving within this angle of where it faces, deg.
-@export var shield_cover_deg: float = 50.0
 
 var weapons := {}                     ## id → MsWeapon
 var selected: MsWeapon
@@ -372,7 +373,6 @@ func _physics_process(delta: float) -> void:
 	for weapon: MsWeapon in weapons.values():
 		if weapon == guard:
 			weapon.wanted = blocking
-			weapon.aim_override = _look_angles() if blocking else null
 		elif weapon.always_on:
 			weapon.wanted = is_weapons_mode() and cmd.vulcan_ready
 			weapon.triggered = master_arm and is_weapons_mode() and cmd.vulcan_fire
@@ -382,7 +382,9 @@ func _physics_process(delta: float) -> void:
 			weapon.wanted = weapon == selected and is_weapons_mode() and not held
 			weapon.triggered = master_arm and weapon.wanted and cmd.fire_main
 	_apply_poses(guard)
+	var shield_up := blocking and guard != null and guard.readiness > 0.0
 	for weapon: MsWeapon in weapons.values():
+		weapon.guarded = shield_up
 		weapon.update(delta, self)
 	_hold_torso()
 
@@ -510,13 +512,6 @@ func _track_target(delta: float) -> void:
 		_target_tracked = true
 
 
-## Where the pilot looks, as azimuth / elevation in the body frame.
-func _look_angles() -> Vector2:
-	var camera := _pilot_camera()
-	var dir := -camera.global_basis.z if camera != null else -get_body_basis().z
-	return SpatialMath.direction_to_angles(get_body_basis().inverse() * dir)
-
-
 func _pilot_camera() -> Camera3D:
 	var cockpit := vehicle.get_cockpit() if vehicle.get_cockpit_mount() != null else null
 	return cockpit.get_player_camera() if cockpit != null else null
@@ -544,12 +539,13 @@ func _mount(weapon: MsWeapon, skeleton: Skeleton3D) -> void:
 	weapon.transform = bone_in_body.affine_inverse() * Transform3D(Basis.IDENTITY, weapon.mount_position)
 
 
-func _on_vehicle_hit(_damage: float, _at: Vector3, direction: Vector3) -> void:
-	var guard := get_weapon(guard_weapon)
-	var blocked := false
-	if blocking and guard != null and guard.readiness > 0.5:
-		var facing := get_body_basis() * SpatialMath.angles_to_direction(guard.aim)
-		blocked = rad_to_deg(facing.angle_to(-direction)) <= shield_cover_deg
+## A shot reached the body: the shield (MsShield.apply_hit) didn't stop it.
+func _on_vehicle_hit(_damage: float, _at: Vector3, _direction: Vector3) -> void:
+	register_hit(false)
+
+
+## The suit was shot: on the body, or `blocked` on its shield.
+func register_hit(blocked: bool) -> void:
 	since_hit = 0.0
 	last_hit_blocked = blocked
 	hit_taken.emit(blocked)

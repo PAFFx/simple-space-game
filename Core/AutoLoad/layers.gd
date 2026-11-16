@@ -19,6 +19,11 @@ const SENSOR_COMBAT     := 1 << 10 # Outlines of the arms and the gun, shown in 
 
 const DEBUG := 1 << 19
 
+# Physics layers.
+## Shields: shot and sensor rays hit them, nothing collides with them (the suit carrying
+## one never touches it).
+const PHYS_SHIELD := 1 << 1
+
 const MASK_THIRD_PERSION := WORLD | VEHICLE_EXT | FX
 const MASK_FIRST_PERSON  := WORLD | VEHICLE_FP | COCKPIT | PILOT | FX | HUD_3D
 # Sensor sees world + all sensor sub-layers. Includes VEHICLE_EXT so existing
