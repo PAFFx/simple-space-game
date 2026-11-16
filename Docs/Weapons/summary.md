@@ -25,7 +25,8 @@ WeaponAimModifier (skeleton)           ProjectileManager (scene) ── apply_hi
 | `Entities/Projectiles/projectile_spec.gd` + `Specs/*.tres` | how a shot flies, hurts and looks |
 | `Entities/Projectiles/projectile_manager.gd` | flies and draws every shot, flashes, sparks |
 | `Entities/Projectiles/Shader/beam.gdshader`, `flash.gdshader` | bolt + wake strip, glow sprite |
-| `.../PanoramicHud/Widgets/weapons_widget.gd` | HUD symbology |
+| `.../PanoramicHud/Widgets/weapons_widget.gd` | HUD symbology: cursors, tail, gun solution circle, zoom frame |
+| `.../PanoramicHud/Widgets/contacts_widget.gd` | contact triangles, lock dashes by track quality (drawn by the screen shader) |
 | `.../CockpitDisplays/target_page.gd`, `weapon_ring.gd` | right MFD: target, stores, weapon ring pop-up |
 | `.../Cockpits/Components/BeamGlow/cockpit_beam_glow.gd` | beams light the cockpit |
 | `Entities/Environment/Space/TargetDrone/target_drone.gd` | practice targets (static, drift, jink, turret) |
@@ -41,9 +42,12 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 | Fire selected weapon | right 2 (weapon release) | left mouse (captured) |
 | Weapon hat fwd / right / aft / left / depress | right 15 / 16 / 17 / 18 / 19 | 1 2 3 4 5 |
 | Master arm on / off | right 24 / 25 | M (toggle) |
-| Sensor of interest | right 10 (SCS forward) | Tab |
-| HUD cursor slew | right axes 3, 4 | numpad 4 6 8 2 |
-| Lock preview / commit | left 0 / 1 | T / G |
+| Sensor of interest (TMS → HMCS → SA page) | right 10 (SCS forward) | Tab |
+| Cursor slew (the SOI's) | right axes 3, 4 | numpad 4 6 8 2 |
+| Lock (contact under the cursor) | left 0 or 1 (either detent), left hat depress 19 | G |
+| Unlock (closes the zoom window first) | left hat aft 17 | T |
+| Next target right / left (by azimuth) | left hat right 16 / left 18 | `]` / `[` |
+| Zoom window open / next level | left hat forward 15 | Z |
 | Shield block (hold) | left 2 | B |
 | NAV / DGFT / BVR | left 14 / 10 / 12 | N / J / K |
 
@@ -61,9 +65,20 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 - **E-pack.** 32 rounds shared through `ammo_from`: pulse uses 1, linear 3 (`ammo_cost`).
   The cooldown is shared too (pulse 2 s, linear 5 s). Unfitted
   entries show dim on the ring and flash red when pressed.
-- **Lock.** Preview marks the contact nearest the designation (pulsing brackets); commit locks it,
-  or unlocks when the candidate is already locked or nothing is designated. The designation is
-  the HUD cursor (default sensor of interest) or the pilot's line of sight (HMCS).
+- **Lock.** With nothing locked, the contact under the cursor is the candidate (its bars
+  flash), no button needed; lock locks it. Locking never unlocks: unlock does. While locked
+  there is no cursor; on unlock it is back straight ahead. Target cycle steps the lock to the
+  next contact by azimuth. Contacts out of sight (a line-of-sight ray from the head, 10 Hz,
+  `FireControl.can_see`) aren't drawn and can't be designated.
+- **Sensor of interest** (F-16 style): the panoramic TMS cursor, the HMCS (the pilot's line of
+  sight) or a display page with a cursor (`MfdPage.has_cursor`: the SA page, where lock takes
+  the contact under its cursor). The SOI page gets a red border; out of SOI the TMS cursor is one
+  dim rail and holds still; taking SOI on the panoramic screen sweeps a ring out from the cursor.
+- **Zoom window** (`FireControl.zoom_levels` ×4 / ×8 / ×16): the sensor head's zoom camera on the
+  locked target, in a framed inset over it on the panoramic screen, resolving in from blocks at
+  each level; the HUD is faded inside it. Only where the head gimbal reaches (else GIMBAL).
+  It renders only while open: ~0.2–0.65 ms GPU (`weapons_snapshot.gd zoom` prints it).
+  The left hat no longer recentres / switches the view (`StickLook.button` -1; V switches).
 - **Shield block** digs the suit in behind the shield (one fixed pose, `shield_guard`): the waist
   turns the left side 30° toward the front, the arm holds the shield in front with a natural
   bend, and the shield spins upright on its swivel (`shield_mount.L`, thigh to above the head,

@@ -97,6 +97,10 @@ const CONTACT_GROUP := &"hud_contacts"
 ## Line-of-sight checks to every contact, per second: one hidden behind something
 ## (not the suit itself) isn't shown and can't be designated.
 @export var line_of_sight_hz: float = 10.0
+## Contacts that aren't locked have no track: the HUD shows them where a search look puts
+## them, off by a slowly wandering angle (the body cameras' noise, SensorSuite) and range
+## (known-size ranging, SensorSuite.size_range_error). Time constant of the wander, s.
+@export var search_wander_time: float = 2.5
 ## Zoom window levels (magnification), cycled by the zoom control.
 @export var zoom_levels := PackedFloat32Array([4.0, 8.0, 16.0])
 
@@ -136,6 +140,8 @@ var _target_acceleration := Vector3.ZERO
 var _shown := Vector3.ZERO
 var _shown_valid := false
 var _hidden := {}                     ## instance id of a contact out of sight → true
+var _search := {}                     ## instance id → Vector3 (angle x, angle y rad, range share)
+var _search_rng := RandomNumberGenerator.new()
 var _los_due := 0.0
 
 ## Track quality on the HUD (the lock's corner dashes).
@@ -642,7 +648,57 @@ func can_see(contact: Node3D) -> bool:
 	return not _hidden.has(contact.get_instance_id())
 
 
+## Where the HUD draws `contact`: the locked one at its track, the rest at a search look
+## (see search_wander_time), the truth without sensors. Interpolated, for drawing.
+func get_contact_position(contact: Node3D) -> Vector3:
+	if contact == locked:
+		return get_shown_target_position()
+	var truth := contact.get_global_transform_interpolated().origin
+	var err: Variant = _search.get(contact.get_instance_id())
+	if err == null or not _has_sensors():
+		return truth
+	var origin := get_view_origin()
+	var rel := truth - origin
+	var dist := rel.length()
+	if dist < 1.0:
+		return truth
+	var dir := rel / dist
+	var side := dir.cross(Vector3.UP if absf(dir.y) < 0.95 else Vector3.RIGHT).normalized()
+	var up := side.cross(dir)
+	var e: Vector3 = err
+	dir = (dir + side * e.x + up * e.y).normalized()
+	return origin + dir * dist * (1.0 + e.z)
+
+
+func _has_sensors() -> bool:
+	return sensors != null and sensors.enabled
+
+
+## Steps each contact's search error: a slow random wander, so it never jitters.
+func _update_search(dt: float) -> void:
+	if not _has_sensors():
+		_search.clear()
+		return
+	var sigma := Vector3(sensors.body_sigma_mrad * 1e-3, sensors.body_sigma_mrad * 1e-3, sensors.size_range_error)
+	var tau := maxf(search_wander_time, 0.1)
+	var kick := sqrt(2.0 * dt / tau)
+	var seen := {}
+	for node in get_tree().get_nodes_in_group(CONTACT_GROUP):
+		var id := node.get_instance_id()
+		seen[id] = true
+		if not _search.has(id):
+			_search[id] = Vector3(_search_rng.randfn(), _search_rng.randfn(), _search_rng.randfn()) * sigma
+			continue
+		var e: Vector3 = _search[id]
+		e += -e * (dt / tau) + Vector3(_search_rng.randfn(), _search_rng.randfn(), _search_rng.randfn()) * sigma * kick
+		_search[id] = e
+	for id: int in _search.keys():
+		if not seen.has(id):
+			_search.erase(id)
+
+
 func _update_line_of_sight() -> void:
+	_update_search(1.0 / maxf(line_of_sight_hz, 0.1))
 	_hidden.clear()
 	var origin := get_view_origin()
 	var space := vehicle.get_world_3d().direct_space_state

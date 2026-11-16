@@ -36,16 +36,22 @@ PanoramicHud (Node)
     ├── FlightData      left column: G MS / G PLT / ROT / AMBAC over boxed SPD and Mach (dim);
                         non-default modes just inside the right ladder column; cautions
     ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
-    ├── Weapons         mode / ARM / selected weapon and rounds; the selected weapon's envelope
-                        (body-fixed outline, bold corners), gun cross, lead diamond with SHOOT /
-                        OUT, vulcan ring, designation cursor, lock brackets, HIT / BLOCK
-                        (see Docs/Weapons/summary.md)
-    └── Contacts        a triangle pointing down around each node in group `hud_contacts`: three
-                        see-through bars short of its corners (a faint fill in a fine border), or
-                        a bracket at each corner of a square when it's too big for the triangle; hostile adds an inner triangle's corners and
-                        two strokes across each corner outside; the selected one a fine winged V
-                        (triangles drawn by the screen shader; the text in its own fine atlas,
-                        one slot per contact, redrawn 10 times a second)
+    ├── Weapons         mode / ARM / selected weapon and rounds; the TMS cursor (three double-
+                        railed arms) or HMCS ring while nothing is locked; the locked target's
+                        velocity tail; the gun solution circle (the shoot cue: where a shot goes
+                        relative to the target, sized by the impact error, never smaller than
+                        the target's mark); gun cross without a lock; vulcan ring; zoom window
+                        frame (see Docs/Weapons/summary.md)
+    └── Contacts        a triangle pointing down around each node in group `hud_contacts` in
+                        sight: three see-through bars short of its corners (a faint fill in a
+                        fine border), or a bracket at each corner of a square when it's too big
+                        for the triangle; hostile adds an inner triangle's corners; the lock
+                        candidate's bars flash; the locked one gets strokes across each corner
+                        outside by track quality (two good, one poor, one blinking coasting),
+                        sits at the sensor estimate (smoothed) and is at least as big as its
+                        angular error. Name and range only (triangles drawn by the screen shader;
+                        the text in its own fine atlas, one slot per contact, redrawn 10 times a
+                        second; the locked one's text moves outside the gun circle)
 ```
 
 `PanoramicScreen.set_hud_texture()` hands the viewport texture to the screen shader, which samples
@@ -150,9 +156,13 @@ Data sources: `hud.flight_computer` (state, thrusters, modes, propellant), `hud.
 `hud.sensor_head`.
 
 Contacts: add any `Node3D` to group `hud_contacts`; optional metadata `hud_label`, `hud_radius`
-and `hud_hostile` (`NavBuoy.hostile` sets it). Nothing selects a contact yet
-(`ContactsWidget.selected`; metadata `hud_selected` marks one for now). The shader draws the
-16 nearest.
+and `hud_hostile` (`NavBuoy.hostile` sets it). The FireControl's candidate and lock drive the
+marks. The shader draws the 16 nearest in sight.
+
+**Zoom window.** `SensorHead.set_zoom(point, magnification)` turns a narrow frustum camera
+(640×480, rendering only while open) on the point; the screen shader shows it in a 14° × 10.5°
+inset (`zoom_frame`, `zoom_half_tan`: gnomonic, so the mapping is exact), resolving in from
+blocks by `zoom_reveal`, with the HUD faded to `zoom_hud_alpha` inside.
 
 Silhouettes: add a `HudSilhouette` (outline points in its local space) to anything the pilot should
 see "through". The sensor never renders the suit or its equipment, so the shield appears only as its

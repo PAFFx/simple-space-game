@@ -107,7 +107,7 @@ func _process(delta: float) -> void:
 	locked_half = 0.0
 	for contact in contacts:
 		var is_locked := contact == locked
-		var pos := _fcs.get_shown_target_position() if is_locked else contact.get_global_transform_interpolated().origin
+		var pos := _fcs.get_contact_position(contact) if _fcs != null else contact.get_global_transform_interpolated().origin
 		var rel := pos - origin
 		var dist := rel.length()
 		if dist < 1.0:
