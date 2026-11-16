@@ -15,8 +15,6 @@ Fly each and tick it off, or note what to change.
       cross that stretch as it nears the shot; our own rifle's charge keeps its plain look.
       Check it reads from the receiving end at 0.7–3 km, and whether it should keep the
       shot's colour (it is mostly white now). Render: `weapons_snapshot.gd glow`.
-- [ ] **HUD track state**: ACQUIRING / COAST where NO SOLUTION was (part of the combat HUD
-      redesign).
 - [ ] **Break feel** (tap full boost with the stick pushed): the far-leg kick and waist lean
       on sideways breaks, the committed 0.7 s push, the 0.4 s cooldown, releasing and tapping
       again during a held full boost. Render: `Tools/Flight/dodge_snapshot.gd`.
@@ -122,7 +120,7 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
 - [x] Fire control and weapons read the track; lead with the estimated acceleration; no
       solution until firm; the lock drops when the track is lost.
 - [x] HUD: ACQUIRING / COAST where it said NO SOLUTION.
-- [ ] HUD: impact-uncertainty circle on the pipper (`FireControl.get_target_covariance_ahead`).
+- [ ] HUD: impact uncertainty as the gun solution circle: see `Docs/Weapons/todo.md` §3.
 - [ ] Practice turret and drones use the same track filter (they still aim with truth).
 - [x] Probe: hit rate against a jinking drone, sensor vs perfect track (`track_probe.gd`).
 - [ ] A drone that dodges like a pilot: changes thrust when the shooter's barrel lights up
