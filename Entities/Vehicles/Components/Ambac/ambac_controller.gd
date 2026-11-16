@@ -129,7 +129,7 @@ func get_capacity() -> Vector3:
 		var half := deg_to_rad(maxf(j.max_angle_deg - j.min_angle_deg, 1e-3)) * 0.5
 		var mid := deg_to_rad(j.max_angle_deg + j.min_angle_deg) * 0.5
 		var headroom := clampf(1.0 - absf(angles[i] - mid) / half, 0.0, 1.0)
-		out += _axes_body[i].abs() * (j.inertia * deg_to_rad(j.max_accel_deg) * headroom)
+		out += _axes_body[i].abs() * (j.inertia * j.get_max_accel() * headroom)
 	return out * capacity_fraction
 
 
@@ -180,7 +180,7 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 			alpha *= clampf((angles[i] - lo) / maxf(-lo, 1e-4), 0.0, 1.0)
 		alpha += target_accels[i] - w0 * w0 * (angles[i] - targets[i]) \
 				- 2.0 * centering_damping * w0 * (rates[i] - target_rates[i])
-		var max_accel := deg_to_rad(j.max_accel_deg)
+		var max_accel := j.get_max_accel()
 		alpha = clampf(alpha, -max_accel, max_accel)
 
 		var max_rate := deg_to_rad(j.max_rate_deg)

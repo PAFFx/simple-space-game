@@ -155,6 +155,8 @@ func _tick() -> void:
 					(fc.control_law as RateCommandControlLaw).attitude_solver.set(key.trim_prefix("solver."), value)
 				elif key.begins_with("alloc."):
 					fc.allocator.set(key.trim_prefix("alloc."), value)
+				elif key.begins_with("ambac."):
+					fc.ambac.set(key.trim_prefix("ambac."), value)
 				else:
 					fc.control_law.set(key, value)
 	var dt := 1.0 / Engine.physics_ticks_per_second

@@ -145,9 +145,10 @@ const COLLIDERS := [
 # bone, axis (skeleton space), group, inertia kg·m², min angle, max angle, priority
 # Human-like ranges, offsets from the animated pose. Signs: +X swings a hanging limb
 # forward (hip flex, elbow bend), knees bend back (−X), +Z swings a right limb outward
-# (left limbs mirror), +Y twists. Inertias are about the joint: a whole leg about the
-# hip is ~1.6e5 kg·m² (6 t, 11 m), an arm about the shoulder ~6e4. Twists move
-# little mass, so they mostly add natural motion. The side hip swing stays small.
+# (left limbs mirror), +Y twists. Inertias here are only a fallback: every joint's bone is
+# in the mass model (PARTS), which sets its inertia from the parts it swings (and refreshes
+# it as the tanks drain). Twists move little mass, so they mostly add natural motion. The
+# side hip swing stays small.
 const AMBAC := [
 	["upper_arm.R", Vector3.RIGHT, &"arm_r", 6.0e4, -35.0, 45.0, 0.7],
 	["upper_arm.R", Vector3.BACK, &"arm_r", 6.0e4, -8.0, 35.0, 0.6],
@@ -171,14 +172,31 @@ const AMBAC := [
 	["spine", Vector3.RIGHT, &"torso", 1.5e5, -10.0, 6.0, 0.5],
 ]
 
-# Limbs whose reaction torque is measured from the final pose (LimbReaction): bone, kg.
-# Everything that moves relative to the chest: arms (pose blends, weapon aim, AMBAC),
-# shoulder armour, head (vulcans), the backpack pods (main nozzle vectoring). The rifle
-# and shield add their own mass on the hand / forearm they ride.
-const LIMB_SEGMENTS := [
-	["shoulder.R", 1000.0], ["upper_arm.R", 1100.0], ["forearm.R", 1100.0], ["hand.R", 350.0],
-	["shoulder.L", 1000.0], ["upper_arm.L", 1100.0], ["forearm.L", 1100.0], ["hand.L", 350.0],
-	["head", 700.0], ["main_pod.R", 1200.0], ["main_pod.L", 1200.0],
+# Mass model (LimbReaction, body frame): every part of the model, its solid volume
+# (Tools/Godot/measure_part_volumes.gd, 0.2 m voxels), a density factor for what's inside
+# it, and the share of that volume given to propellant tanks. The dry mass is split by
+# volume × density, the propellant by volume × tank share. Dense: the chest (cockpit,
+# generator), main pods (engines), waist frame, hands. Light: armour plates (skirts, calf
+# plates, shoulder armour) and the big, mostly hollow feet. Tanks are spread around the
+# body like a fighter's, most around the torso (chest, waist, backpack, skirts) and some in
+# the thighs and shins, so the centre of mass barely moves as they drain (13.37 m full,
+# 13.44 empty). Heavier leg tanks put it ~2 m under the backpack mains' line of thrust,
+# and every forward push pitched the suit nose-down. The rifle, shield and backpack equipment add their own
+# mass on the bone that carries them. Re-run the volume tool after changing the model.
+const DRY_MASS := 27900.0
+const PROPELLANT := 25200.0
+const PARTS := [
+	# bone, volume m³, density, tank share
+	["chest", 59.38, 1.6, 0.2], ["spine", 5.52, 1.4, 0.0], ["pelvis", 27.90, 1.2, 0.4],
+	["hatch", 0.44, 1.0, 0.0], ["head", 10.18, 1.0, 0.0],
+	["backpack", 20.77, 1.3, 0.6], ["main_pod.R", 13.67, 1.6, 0.0], ["main_pod.L", 12.90, 1.6, 0.0],
+	["shoulder.R", 17.34, 0.8, 0.0], ["upper_arm.R", 6.34, 1.2, 0.0], ["forearm.R", 12.69, 1.0, 0.0], ["hand.R", 2.83, 1.3, 0.0],
+	["shoulder.L", 17.48, 0.8, 0.0], ["upper_arm.L", 6.35, 1.2, 0.0], ["forearm.L", 15.06, 1.0, 0.0], ["hand.L", 2.77, 1.3, 0.0],
+	["skirt_front.R", 5.68, 0.5, 0.4], ["skirt_front.L", 6.01, 0.5, 0.4],
+	["skirt_side.R", 3.34, 0.5, 0.3], ["skirt_side.L", 3.23, 0.5, 0.3],
+	["skirt_rear.R", 7.98, 0.5, 0.5], ["skirt_rear.L", 7.90, 0.5, 0.5],
+	["thigh.R", 22.86, 1.0, 0.15], ["shin.R", 46.46, 0.9, 0.1], ["foot.R", 32.86, 0.7, 0.0], ["calf_guard.R", 8.34, 0.6, 0.0],
+	["thigh.L", 22.85, 1.0, 0.15], ["shin.L", 46.70, 0.9, 0.1], ["foot.L", 32.91, 0.7, 0.0], ["calf_guard.L", 8.30, 0.6, 0.0],
 ]
 
 # Stances (StanceController): name, push direction (body frame), cone deg, joints as
@@ -437,9 +455,9 @@ func _build_flight_computer(root: Node3D) -> void:
 	# Official empty weight 27.9 t; equipment ~15.9 t with the fin funnels (the flight tuning
 	# predates their 6 t); propellant fills the rest of the
 	# official 63.0 t max weight (every spare volume, like a fighter).
-	fc.set("dry_mass", 27900.0)
-	fc.set("propellant_capacity", 25200.0)
-	fc.set("propellant", 25200.0)
+	fc.set("dry_mass", DRY_MASS)
+	fc.set("propellant_capacity", PROPELLANT)
+	fc.set("propellant", PROPELLANT)
 	fc.set("specific_impulse", 12000.0)
 
 	var input := Node.new()
@@ -576,6 +594,11 @@ func _build_ambac(root: Node3D) -> void:
 				or j.bone_name.begins_with("foot"):
 			j.max_rate_deg = 150.0   # legs swing well beyond balancing travel for stances
 			j.max_accel_deg = 600.0
+		# Legs and waist are rated for the torque they were tuned with (table inertia × max
+		# acceleration); the mass model's heavier limbs then swing slower on it. The arms
+		# keep their acceleration limit (their mass was measured from the start).
+		if not j.bone_name.begins_with("upper_arm") and not j.bone_name.begins_with("forearm"):
+			j.max_torque = j.inertia * deg_to_rad(j.max_accel_deg)
 		joints.append(j)
 	ambac.joints = joints
 
@@ -585,11 +608,19 @@ func _build_limb_reaction(root: Node3D) -> void:
 	node.name = "LimbReaction"
 	_add(root, root, node)
 	node.skeleton = root.get_node(SKELETON)
+	node.reference_bone = &""
+	node.drive_body_mass = true
+	var weight := 0.0
+	var tank := 0.0
+	for p in PARTS:
+		weight += p[1] * p[2]
+		tank += p[1] * p[3]
 	var list: Array[LimbSegment] = []
-	for s in LIMB_SEGMENTS:
+	for p in PARTS:
 		var seg := LimbSegment.new()
-		seg.bone_name = s[0]
-		seg.mass = s[1]
+		seg.bone_name = p[0]
+		seg.mass = snappedf(DRY_MASS * p[1] * p[2] / weight, 0.1)
+		seg.propellant_capacity = snappedf(PROPELLANT * p[1] * p[3] / tank, 0.1)
 		list.append(seg)
 	node.segments = list
 

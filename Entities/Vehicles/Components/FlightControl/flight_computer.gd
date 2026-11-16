@@ -21,7 +21,7 @@ const G0 := 9.80665
 @export var allocator: ThrustAllocator
 ## Optional limb balancing. Auto-discovered on the vehicle if left empty.
 @export var ambac: AmbacController
-## Optional reaction torque of moving limbs (arms, head, pods). Auto-discovered.
+## Optional mass model and reaction torque of the moving parts. Auto-discovered.
 @export var limb_reaction: LimbReaction
 ## Cancel the limbs' measured reaction with AMBAC and the thrusters (feed-forward, a
 ## tick late) instead of waiting for the attitude hold to notice the body turning.
@@ -113,6 +113,13 @@ func rebuild_capability_map() -> void:
 func rebuild_capability_map_async() -> void:
 	if not thrusters.is_empty():
 		_map_build = ForceCapabilityMap.start(state, allocator.duplicate(), min_thrust_alignment)
+
+
+## Drops the capability map so the next tick measures it again at once (e.g. the mass
+## model moved the centre of mass far from where the map was built).
+func invalidate_capability_map() -> void:
+	_capability_map = null
+	_map_build = null
 
 
 func get_total_mass() -> float:
