@@ -183,3 +183,34 @@ the flight time, the arm's slew, and whether the thrust changes while the shot i
 So the defender's lever is to change thrust when the enemy's barrel lights up, not
 to keep thrusting hard. Close in (300 m) the arm's slew loses about as many shots as the
 jink does.
+
+### Dodging on the cue, both ways
+
+**The drone dodges us** (`track_probe.gd dodge=6 reaction=0.25`): on top of its 3 G jink it
+watches our rifle and, 0.25 s after the spool starts, thrusts at 6 G across the line of
+sight. PULSE 1500 m/s, sensor track, hits out of 12:
+
+| | 300 m | 500 m | 700 m | 1 km | 1.5 km | 2 km |
+|---|---|---|---|---|---|---|
+| Jink only (above) | 7 | 7 | 10 | 8 | 9 | 6 |
+| Jink + dodge on the cue | 5 | 2 | 3 | 3 | 0 | 0 |
+
+**We dodge the turret** (`dodge_probe.gd`): the turret leads from its own sensor track of the
+suit (0.1 mrad, 1 m range, 50 ms, leading with the estimated acceleration), 1500 m/s bolts
+after a 0.5 s spool. The scripted pilot reacts 0.25 s after the glow and full-boosts across
+the line of sight for 0.8 s, then brakes. Hits out of 10:
+
+| Pilot | 300 m | 500 m | 1 km | 2 km |
+|---|---|---|---|---|
+| Sits still | 10 | 10 | 10 | 10 |
+| Boosts up (the mains, ~9 G) | 0 | 1 | 0 | 0 |
+| Boosts left or right (~3.6 G) | 10 | 7 | 0 | 0 (of 7) |
+
+- The cue is everything. Reacting to the spool beats any filter: the shooter commits its
+  aim when the shot leaves, the defender has already started moving, and the remaining
+  spool plus the flight time is the dodge window. Dodging up, on the ν's strongest axis,
+  works even at 300 m. Sideways (~3.6 G) only works from about 500 m out.
+- A shooter that wants hits at range has to deny the cue: a shorter or hidden spool, shots
+  fired when the target can't move freely (mid-burn, braking), or many shots at once.
+- The turret stopped firing once at 2 km after sideways dodges (its track went bad and never
+  came back firm): the probe now has a time limit per case and reports shots resolved.

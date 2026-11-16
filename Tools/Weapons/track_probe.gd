@@ -7,6 +7,9 @@ extends SceneTree
 ##
 ##   godot-double --headless --path . --fixed-fps 60 -s Tools/Weapons/track_probe.gd -- \
 ##       [speed=1500] [shots=10] [jink=3,6] [ranges=300,500,700,1000,1500,2000] [modes=sensor,truth]
+##       [dodge=0] [reaction=0.25]
+## dodge > 0: the drone also watches our barrel and, `reaction` s after the spool starts,
+## thrusts at `dodge` G across the line of sight (TargetDrone.threat).
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 
@@ -26,6 +29,8 @@ var _shots := 10
 var _jinks := PackedFloat64Array([3.0, 6.0])
 var _ranges := PackedFloat64Array([300.0, 500.0, 700.0, 1000.0, 1500.0, 2000.0])
 var _modes := PackedStringArray(["sensor", "truth"])
+var _dodge := 0.0
+var _reaction := 0.25
 
 
 func _initialize() -> void:
@@ -38,6 +43,8 @@ func _initialize() -> void:
 			"jink": _jinks = _floats(value)
 			"ranges": _ranges = _floats(value)
 			"modes": _modes = value.split(",")
+			"dodge": _dodge = float(value)
+			"reaction": _reaction = float(value)
 	_run.call_deferred()
 
 
@@ -66,7 +73,8 @@ func _run() -> void:
 	spec.speed = _speed
 	spec.lifetime = maxf(spec.lifetime, 3000.0 / _speed)
 	rifle.projectile = spec
-	print("beam %.0f m/s, %d shots per case, drone radius 7 m" % [_speed, _shots])
+	print("beam %.0f m/s, %d shots per case, drone radius 7 m%s" % [_speed, _shots,
+			", dodging at %.0f G %.2f s after the spool starts" % [_dodge, _reaction] if _dodge > 0.0 else ""])
 	for mode in _modes:
 		_fcs.sensors.enabled = mode == "sensor"
 		for g in _jinks:
@@ -86,6 +94,10 @@ func _case(rifle: MsWeapon, g: float, r: float) -> Array:
 	drone.hit_points = 1e12
 	drone.velocity = _suit.linear_velocity
 	drone.leash = maxf(r * 0.4, 100.0)
+	if _dodge > 0.0:
+		drone.threat = _fcs
+		drone.dodge_accel_g = _dodge
+		drone.dodge_reaction = _reaction
 	current_scene.add_child(drone)
 	drone.global_position = _fcs.get_view_origin() + _suit.global_basis.orthonormalized() \
 			* SpatialMath.angles_to_direction(Vector2(8, 4)) * r
