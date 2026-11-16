@@ -81,9 +81,11 @@ Fly each and tick it off, or note what to change.
             break alone, held it carries on as full boost), 0.7 s of full thrust along the
             stick with the attitude held, force before torque, up to 40% beyond the rest-
             pose capability map (more spun the body: 110°/s on an up break), then a 0.4 s
-            cooldown. Dodge stances for sideways breaks: the far leg kicks out 45° (its
-            nozzles then push along), the near leg tucks in, the waist leans into the move
-            (new side-bend joint, own AMBAC group so an aimed weapon doesn't lock it). In
+            cooldown. Dodge stances for sideways breaks: the waist leans into the move
+            (new side-bend joint, own AMBAC group so an aimed weapon doesn't lock it). A far-
+            leg kick was tried and removed (it looked wrong): without it a sideways break
+            from still is 3.4 m in 0.5 s (same), 14.5 m in 1 s (15.0 with it), and the body
+            spins less (peak 4°/s, 19 with it). The figures below were measured with it. In
             0.5 s / 1 s from still: sideways 2.5 → 2.8 / 14.3 → 15.0 m, diagonal (up and
             sideways) 4.8 / 23.7 m, up 6.8 / 35.5 m. From a forward boost (pitched −17°)
             sideways is ~20% weaker; out of a −50° full-boost dive the body swings at up to

@@ -159,12 +159,12 @@ const AMBAC := [
 	["upper_arm.L", Vector3.UP, &"arm_l", 1.0e4, -25.0, 25.0, 0.4],
 	["forearm.L", Vector3.RIGHT, &"arm_l", 2.5e4, -5.0, 50.0, 0.6],
 	["thigh.R", Vector3.RIGHT, &"leg_r", 1.6e5, -30.0, 85.0, 1.0],
-	["thigh.R", Vector3.BACK, &"leg_r", 1.6e5, -15.0, 60.0, 0.4],
+	["thigh.R", Vector3.BACK, &"leg_r", 1.6e5, -3.0, 15.0, 0.4],
 	["thigh.R", Vector3.UP, &"leg_r", 2.0e4, -15.0, 15.0, 0.5],
 	["shin.R", Vector3.RIGHT, &"leg_r", 4.5e4, -110.0, 5.0, 0.9],
 	["foot.R", Vector3.RIGHT, &"leg_r", 6.0e3, -40.0, 30.0, 0.5],
 	["thigh.L", Vector3.RIGHT, &"leg_l", 1.6e5, -30.0, 85.0, 1.0],
-	["thigh.L", Vector3.BACK, &"leg_l", 1.6e5, -60.0, 15.0, 0.4],
+	["thigh.L", Vector3.BACK, &"leg_l", 1.6e5, -15.0, 3.0, 0.4],
 	["thigh.L", Vector3.UP, &"leg_l", 2.0e4, -15.0, 15.0, 0.5],
 	["shin.L", Vector3.RIGHT, &"leg_l", 4.5e4, -110.0, 5.0, 0.9],
 	["foot.L", Vector3.RIGHT, &"leg_l", 6.0e3, -40.0, 30.0, 0.5],
@@ -216,14 +216,11 @@ const STANCES := [
 			["foot.R", Vector3.RIGHT, -30.0], ["thigh.R", Vector3.BACK, 6.0], ["thigh.L", Vector3.RIGHT, 10.0], ["shin.L", Vector3.RIGHT, -15.0]]],
 	["strafe_left", Vector3.LEFT, 50.0, [["thigh.L", Vector3.RIGHT, 70.0], ["shin.L", Vector3.RIGHT, -95.0],
 			["foot.L", Vector3.RIGHT, -30.0], ["thigh.L", Vector3.BACK, -6.0], ["thigh.R", Vector3.RIGHT, 10.0], ["shin.R", Vector3.RIGHT, -15.0]]],
-	# Breaks (dodges, StanceController picks them by the break's direction): the far leg
-	# kicks out 45° (its sole, calf and shin nozzles then push the suit the way it's going:
-	# clean sideways 3.7 → 5.0 G), the near leg tucks in, the upper body leans into the
-	# move. Quick (0.3 s) on a strong hip. When the break ends the legs swing back.
-	["break_right", Vector3.RIGHT, 50.0, [["thigh.L", Vector3.BACK, -45.0], ["thigh.R", Vector3.BACK, -10.0],
-			["spine", Vector3.BACK, -10.0]], 0.5, true],
-	["break_left", Vector3.LEFT, 50.0, [["thigh.R", Vector3.BACK, 45.0], ["thigh.L", Vector3.BACK, 10.0],
-			["spine", Vector3.BACK, 10.0]], 0.5, true],
+	# Breaks (dodges, StanceController picks them by the break's direction): the upper body
+	# leans into the move. (A far-leg kick gave ~10% more distance in the first 0.5 s but
+	# looked wrong.)
+	["break_right", Vector3.RIGHT, 50.0, [["spine", Vector3.BACK, -10.0]], 0.5, true],
+	["break_left", Vector3.LEFT, 50.0, [["spine", Vector3.BACK, 10.0]], 0.5, true],
 	# Legs trail back when driving forward, forward when braking or backing off.
 	["forward", Vector3.FORWARD, 45.0, [["thigh.R", Vector3.RIGHT, -15.0], ["shin.R", Vector3.RIGHT, -25.0],
 			["thigh.L", Vector3.RIGHT, -15.0], ["shin.L", Vector3.RIGHT, -25.0]]],
@@ -617,12 +614,6 @@ func _build_ambac(root: Node3D) -> void:
 		# keep their acceleration limit (their mass was measured from the start).
 		if not j.bone_name.begins_with("upper_arm") and not j.bone_name.begins_with("forearm"):
 			j.max_torque = j.inertia * deg_to_rad(j.max_accel_deg)
-		# The hips' sideways swing is the break's kick: a strong actuator (a full-tank leg,
-		# ~3.9e5 kg·m² about the hip, swings 45° in ~0.3 s).
-		if j.bone_name.begins_with("thigh") and j.axis == Vector3.BACK:
-			j.max_torque = 15.0e6
-			j.max_rate_deg = 300.0
-			j.max_accel_deg = 3000.0
 		joints.append(j)
 	ambac.joints = joints
 
