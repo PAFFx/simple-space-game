@@ -47,6 +47,8 @@ func _run() -> void:
 	fc.add_child(_input)
 	fc.input_source = _input
 	_fcs = vehicle.find_component(FireControl) as FireControl
+	# Logic checks shoot from a perfect track; sensor noise is track_probe's job.
+	_fcs.sensors.enabled = false
 	print("weapons: ", _fcs.weapons.keys())
 	_check("weapons found", _fcs.weapons.size() == 4)
 
