@@ -54,8 +54,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## turn that ends where the stick is released. 0 = no cap.
 @export var stop_time: float = 0.4
 ## Share of the clean torque a stop can count on while the thrusters are also pushing at
-## full capability (a boost or a hard brake); the cap above plans with it.
-@export_range(0.1, 1.0) var loaded_torque_share: float = 0.6
+## full capability (a boost or a hard brake), per axis (pitch, yaw, roll); the cap above
+## plans with it. Measure it with the suit's allocator under load before raising it.
+@export var loaded_torque_share := Vector3(0.6, 0.6, 0.6)
 ## Rate loop bandwidth for steering and stops, 1/s. Higher = snappier, more chatter.
 @export var rate_gain: float = 7.5
 ## Rate loop bandwidth while auto-rotating, 1/s. Gentler, so the swing never asks for
@@ -577,7 +578,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 			var axis := Vector3.ZERO
 			axis[k] = 1.0
 			max_rate[k] = minf(max_rate[k], _max_alpha(state, to_body * axis, 1.0) * braking_margin
-					* lerpf(1.0, loaded_torque_share, _force_load) * stop_time)
+					* lerpf(1.0, loaded_torque_share[k], _force_load) * stop_time)
 
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
 		var rate_cmd := _stick * max_rate if steering else Vector3.ZERO

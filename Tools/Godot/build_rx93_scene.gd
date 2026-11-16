@@ -448,6 +448,9 @@ func _build_flight_computer(root: Node3D) -> void:
 	# a reversal then has to roll all the way back over first (full boost: 4.5 m in its
 	# first second at 45°, 7.5 m at 30°). Pitch keeps 60° for dashes and climbs.
 	law.attitude_solver.axis_limit_deg = Vector3(60.0, 3.0, 30.0)
+	# The ν's clean yaw torque (~8 MN·m) is the same while it pushes at 4 G in any direction
+	# (measured with its allocator): yaw keeps all of it under load, pitch and roll plan with 60%.
+	law.loaded_torque_share = Vector3(0.6, 1.0, 0.6)
 	fc.set("control_law", law)
 	var alloc := ConeProjectedAllocator.new()
 	alloc.iterations = 60

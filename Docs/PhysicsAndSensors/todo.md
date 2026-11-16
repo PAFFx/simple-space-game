@@ -15,9 +15,15 @@ on the shooter's. Separate from the weapons pass (`Docs/Weapons/todo.md`).
       a torque rating (`AmbacJoint.max_torque`, the peak torque they were tuned with), and
       acceleration = torque / inertia, so a heavier limb swings slower. Arms still use their
       acceleration limit: rate them too once their actuators are sized.
-- [ ] Yaw turns are about half as quick as before (inertia about the up axis was half the
-      real value with the collision boxes): boost-forward + 1 s yaw 96° → ~50°. Decide whether
-      to give yaw more authority (side skirts, waist twist) or keep it as the ν's character.
+- [x] Yaw turns were about half as quick as before the mass model (the collision boxes gave
+      half the real yaw inertia). Clean yaw torque is a layout limit (~8 MN·m, every small
+      port saturated; the fore/aft nozzles sit only ±1.25 m off the centreline): wider
+      shoulder swings or 3× side-skirt thrust add at most 18%. But it holds all of it while
+      pushing at 4 G, where the turn-rate cap assumed 60%: `loaded_torque_share` is per axis
+      now, yaw 1.0. Boost + 1 s yaw 49° → 70°, full boost 62° → 91° (was 96 / 75 before the
+      mass model); stops take 0.42–0.48 s after release (was ~0.3). More would need AMBAC:
+      a stronger waist twist, and AMBAC planning with each joint's full 3D reaction (a leg
+      scissor makes yaw, which AMBAC's single-axis model doesn't know).
 - [ ] Forward boost now pitches the suit (up to ~38°/s, 22 m in the first second, was 24.5):
       the real centre of mass is 1.2 m below the old guess, under the mains' line of thrust.
       Look at the pods' fore/aft range or the stance for forward pushes.
