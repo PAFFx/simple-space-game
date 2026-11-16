@@ -13,10 +13,12 @@ extends Node
 ##                mode), and the selected weapon on weapon release.
 ##   weapon hat   each direction holds up to two weapons: a press selects the first, a
 ##                press again while it is selected swaps to the other.
-##   lock         the contact nearest the designation direction (the HUD cursor, or where
-##                the pilot looks, by the sensor of interest) is the candidate while lock
-##                preview is held; lock commit locks it, or unlocks if it already is (or
-##                nothing is designated).
+##   lock         with nothing locked, the contact nearest the designation direction (the
+##                HUD cursor, or where the pilot looks, by the sensor of interest) is the
+##                candidate; lock locks it. Locking never unlocks: unlock does (closing the
+##                zoom window first, if it is open). Target cycle steps the lock to the next
+##                contact by azimuth. While locked there is no cursor; on unlock it is
+##                back straight ahead.
 ##   shield       while block is held the suit digs in behind it (one fixed guard pose: left
 ##                side forward, shield upright, knee up). The shield is solid: shots that
 ##                hit it (the suit's own included) stop there and count as blocked; shots
@@ -81,9 +83,12 @@ const CONTACT_GROUP := &"hud_contacts"
 ## (plus its own apparent size).
 @export var cursor_cone_deg: float = 5.0
 @export var hmcs_cone_deg: float = 9.0
-## HUD cursor slew at full deflection, deg/s, and how far from straight ahead it goes.
+## HUD cursor slew at full deflection, deg/s; it wraps round in azimuth and stops short of
+## straight up / down.
 @export var cursor_rate_deg: float = 45.0
-@export var cursor_limits_deg := Vector2(70.0, 45.0)
+@export var cursor_elevation_limit_deg: float = 85.0
+## Zoom window levels (magnification), cycled by the zoom control.
+@export var zoom_levels := PackedFloat32Array([2.0, 4.0, 8.0])
 
 var weapons := {}                     ## id → MsWeapon
 var selected: MsWeapon
@@ -91,6 +96,8 @@ var locked: Node3D
 var candidate: Node3D
 ## HUD cursor, azimuth / elevation in the display's frame, deg.
 var cursor := Vector2.ZERO
+## Zoom window: 0 = closed, else an index + 1 into zoom_levels.
+var zoom_level := 0
 var blocking := false
 ## Seconds since the suit was last hit, and whether the shield took it.
 var since_hit := INF
@@ -323,7 +330,10 @@ func lock(target: Node3D) -> void:
 	if is_instance_valid(locked) and locked.tree_exiting.is_connected(_on_target_gone):
 		locked.tree_exiting.disconnect(_on_target_gone)
 	locked = target
-	if target != null:
+	if target == null:
+		zoom_level = 0
+		cursor = Vector2.ZERO
+	else:
 		# Destroyed or despawned: drop the lock at once, before anything draws it.
 		target.tree_exiting.connect(_on_target_gone)
 	_target_tracked = false
@@ -336,6 +346,8 @@ func lock(target: Node3D) -> void:
 
 func _on_target_gone() -> void:
 	locked = null
+	zoom_level = 0
+	cursor = Vector2.ZERO
 	candidate = null
 	_target_tracked = false
 	if sensors != null:
@@ -359,7 +371,10 @@ func _physics_process(delta: float) -> void:
 	if cmd.soi_cycle:
 		soi = Soi.HMCS if soi == Soi.HUD_CURSOR else Soi.HUD_CURSOR
 		cursor = Vector2.ZERO
-	cursor = (cursor + cmd.cursor_slew * cursor_rate_deg * delta).clamp(-cursor_limits_deg, cursor_limits_deg)
+	if is_cursor_shown():
+		cursor += cmd.cursor_slew * cursor_rate_deg * delta
+		cursor.x = wrapf(cursor.x, -180.0, 180.0)
+		cursor.y = clampf(cursor.y, -cursor_elevation_limit_deg, cursor_elevation_limit_deg)
 
 	_update_lock(cmd)
 	if sensors != null:
@@ -459,10 +474,64 @@ func _press_hat(direction: int) -> void:
 	hat_pressed.emit(direction)
 
 
+## The designation cursor (TMS or HMCS) shows, and designates, only while nothing is locked.
+func is_cursor_shown() -> bool:
+	return locked == null
+
+
+## The zoom window's magnification, or 0 when it is closed.
+func get_zoom() -> float:
+	return zoom_levels[zoom_level - 1] if zoom_level > 0 and locked != null else 0.0
+
+
 func _update_lock(cmd: PilotCommand) -> void:
-	candidate = _find_candidate() if cmd.lock_preview or cmd.lock_commit else null
-	if cmd.lock_commit:
-		lock(null if candidate == locked else candidate)
+	if cmd.unlock and locked != null:
+		if zoom_level > 0:
+			zoom_level = 0
+		else:
+			lock(null)
+	if cmd.target_cycle != 0:
+		var next := _next_by_azimuth(cmd.target_cycle)
+		if next != null:
+			lock(next)
+	candidate = _find_candidate() if is_cursor_shown() else null
+	if cmd.lock_commit and candidate != null:
+		lock(candidate)
+	if cmd.zoom and locked != null:
+		zoom_level = zoom_level % zoom_levels.size() + 1
+
+
+## The contact next to the locked one (or the designation) by azimuth in the display
+## frame: `step` 1 = the nearest further right, -1 = left, wrapping round.
+func _next_by_azimuth(step: int) -> Node3D:
+	var origin := get_view_origin()
+	var to_display := _display_basis().inverse()
+	var from := get_designation() if locked == null else get_target_position() - origin
+	var from_az := SpatialMath.direction_to_angles(to_display * from).x
+	var best: Node3D = null
+	var best_turn := INF
+	for contact in _lockable_contacts(origin):
+		if contact == locked:
+			continue
+		var az := SpatialMath.direction_to_angles(to_display * (contact.global_position - origin)).x
+		var turn := fposmod((az - from_az) * step, 360.0)
+		if turn < best_turn:
+			best_turn = turn
+			best = contact
+	return best
+
+
+## Contacts that can be designated: in range, not the suit itself.
+func _lockable_contacts(origin: Vector3) -> Array[Node3D]:
+	var out: Array[Node3D] = []
+	for node in get_tree().get_nodes_in_group(CONTACT_GROUP):
+		var contact := node as Node3D
+		if contact == null or contact == vehicle:
+			continue
+		var dist := contact.global_position.distance_to(origin)
+		if dist >= 1.0 and dist <= lock_range:
+			out.append(contact)
+	return out
 
 
 ## The contact nearest the designation, within the designation cone and lock range.
@@ -472,14 +541,9 @@ func _find_candidate() -> Node3D:
 	var cone := hmcs_cone_deg if soi == Soi.HMCS else cursor_cone_deg
 	var best: Node3D = null
 	var best_score := INF
-	for node in get_tree().get_nodes_in_group(CONTACT_GROUP):
-		var contact := node as Node3D
-		if contact == null or contact == vehicle:
-			continue
+	for contact in _lockable_contacts(origin):
 		var rel := contact.global_position - origin
 		var dist := rel.length()
-		if dist < 1.0 or dist > lock_range:
-			continue
 		var radius: float = contact.get_meta(&"hud_radius", 10.0)
 		var off := rad_to_deg(dir.angle_to(rel)) - rad_to_deg(atan(radius / dist))
 		if off <= cone and off < best_score:

@@ -19,8 +19,9 @@ extends KeyboardPilotInput
 ## vulcans, second fires them (the first stays pressed under the second); weapon release
 ## fires the selected weapon; the 5-way hat selects weapons; master arm on / off; SCS
 ## forward switches the sensor of interest and the mini-stick slews the HUD cursor.
-## Left: trigger first detent shows the lock candidate, second locks it; weapon release
-## holds the shield up; NAV / DGFT / BVR.
+## Left: either trigger detent locks the contact under the cursor; the 5-way hat zooms
+## (forward), steps the lock right / left, unlocks (aft) and locks (depress); weapon
+## release holds the shield up; NAV / DGFT / BVR.
 
 @export_group("Devices")
 @export var left_stick_name: String = "EVO L"
@@ -58,8 +59,12 @@ extends KeyboardPilotInput
 @export_range(0.0, 1.0) var cursor_expo: float = 0.5
 
 @export_group("Weapons, left stick")
-@export var lock_preview_button: int = 0
-@export var lock_commit_button: int = 1
+## Trigger detents and hat depress all lock.
+@export var lock_buttons := PackedInt32Array([0, 1, 19])
+@export var unlock_button: int = 17         ## Hat aft
+@export var target_next_button: int = 16    ## Hat right
+@export var target_prev_button: int = 18    ## Hat left
+@export var zoom_button: int = 15           ## Hat forward
 @export var shield_block_button: int = 2
 ## Master modes in FireControl.MasterMode order: NAV, DGFT, BVR.
 @export var master_mode_buttons := PackedInt32Array([14, 10, 12])
@@ -162,10 +167,18 @@ func _poll_stick_weapons(cmd: PilotCommand) -> void:
 	cmd.vulcan_fire = cmd.vulcan_fire or _button(_right, vulcan_fire_button)
 	cmd.vulcan_ready = cmd.vulcan_ready or cmd.vulcan_fire or _button(_right, vulcan_ready_button)
 	cmd.fire_main = cmd.fire_main or _button(_right, weapon_release_button)
-	cmd.lock_preview = cmd.lock_preview or _button(_left, lock_preview_button)
 	cmd.shield_block = cmd.shield_block or _button(_left, shield_block_button)
-	if _pressed(_left, lock_commit_button):
-		cmd.lock_commit = true
+	for button in lock_buttons:
+		if _pressed(_left, button):
+			cmd.lock_commit = true
+	if _pressed(_left, unlock_button):
+		cmd.unlock = true
+	if _pressed(_left, target_next_button):
+		cmd.target_cycle = 1
+	if _pressed(_left, target_prev_button):
+		cmd.target_cycle = -1
+	if _pressed(_left, zoom_button):
+		cmd.zoom = true
 	for k in weapon_select_buttons.size():
 		if _pressed(_right, weapon_select_buttons[k]):
 			cmd.weapon_select = k

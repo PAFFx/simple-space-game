@@ -38,6 +38,9 @@ var _weapon_select := -1
 var _master_arm := 0
 var _master_mode := -1
 var _lock_commit := false
+var _unlock := false
+var _target_cycle := 0
+var _zoom := false
 var _soi_cycle := false
 
 
@@ -64,6 +67,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		_master_arm = 2
 	if event.is_action(a.LOCK_COMMIT):
 		_lock_commit = true
+	if event.is_action(a.UNLOCK):
+		_unlock = true
+	if event.is_action(a.TARGET_PREV):
+		_target_cycle = -1
+	if event.is_action(a.TARGET_NEXT):
+		_target_cycle = 1
+	if event.is_action(a.ZOOM):
+		_zoom = true
 	if event.is_action(a.SOI_CYCLE):
 		_soi_cycle = true
 
@@ -106,18 +117,23 @@ func _poll_weapons(cmd: PilotCommand) -> void:
 	cmd.fire_main = Input.is_action_pressed(a.FIRE_MAIN) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	cmd.vulcan_fire = Input.is_action_pressed(a.VULCAN)
 	cmd.vulcan_ready = cmd.vulcan_fire
-	cmd.lock_preview = Input.is_action_pressed(a.LOCK_PREVIEW)
 	cmd.shield_block = Input.is_action_pressed(a.SHIELD_BLOCK)
 	cmd.cursor_slew = Vector2(Input.get_axis(a.CURSOR_LEFT, a.CURSOR_RIGHT), Input.get_axis(a.CURSOR_DOWN, a.CURSOR_UP))
 	cmd.weapon_select = _weapon_select
 	cmd.master_arm = _master_arm
 	cmd.master_mode = _master_mode
 	cmd.lock_commit = _lock_commit
+	cmd.unlock = _unlock
+	cmd.target_cycle = _target_cycle
+	cmd.zoom = _zoom
 	cmd.soi_cycle = _soi_cycle
 	_weapon_select = -1
 	_master_arm = 0
 	_master_mode = -1
 	_lock_commit = false
+	_unlock = false
+	_target_cycle = 0
+	_zoom = false
 	_soi_cycle = false
 
 

@@ -40,9 +40,13 @@ var vulcan_ready := false
 var vulcan_fire := false
 ## Fire the selected weapon (weapon release), held.
 var fire_main := false
-## Show the lock candidate while held; lock_commit (one-shot) locks it, or unlocks.
-var lock_preview := false
+## One-shots: lock the contact under the cursor (never unlocks); unlock (or close the zoom
+## window first); step the lock to the next contact by azimuth (1 = right, -1 = left);
+## open the zoom window, or cycle its level.
 var lock_commit := false
+var unlock := false
+var target_cycle := 0
+var zoom := false
 ## Hold the shield toward where the pilot looks.
 var shield_block := false
 ## One-shot: weapon select hat direction (FireControl.Hat), -1 = none.

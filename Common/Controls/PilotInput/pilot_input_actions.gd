@@ -29,8 +29,11 @@ const TOGGLE_SHIELD := &"ms_toggle_shield"
 # Weapons. On suits with a FireControl the weapon select keys replace the two toggles above.
 const FIRE_MAIN := &"ms_fire_main"
 const VULCAN := &"ms_vulcan"
-const LOCK_PREVIEW := &"ms_lock_preview"
 const LOCK_COMMIT := &"ms_lock_commit"
+const UNLOCK := &"ms_unlock"
+const TARGET_PREV := &"ms_target_prev"
+const TARGET_NEXT := &"ms_target_next"
+const ZOOM := &"ms_zoom"
 const SHIELD_BLOCK := &"ms_shield_block"
 ## Weapon select hat, in FireControl.Hat order: forward, right, aft, left, depress.
 const WEAPON_SELECT: Array[StringName] = [&"ms_weapon_forward", &"ms_weapon_right", &"ms_weapon_aft",
@@ -66,8 +69,11 @@ const _DEFAULTS := {
 	TOGGLE_RIFLE: [KEY_1],
 	TOGGLE_SHIELD: [KEY_2],
 	VULCAN: [KEY_X],
-	LOCK_PREVIEW: [KEY_T],
 	LOCK_COMMIT: [KEY_G],
+	UNLOCK: [KEY_T],
+	TARGET_PREV: [KEY_BRACKETLEFT],
+	TARGET_NEXT: [KEY_BRACKETRIGHT],
+	ZOOM: [KEY_Z],
 	SHIELD_BLOCK: [KEY_B],
 	WEAPON_SELECT[0]: [KEY_1],
 	WEAPON_SELECT[1]: [KEY_2],

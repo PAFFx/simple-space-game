@@ -17,7 +17,6 @@ class ScriptedInput extends PilotInputSource:
 		cmd.vulcan_ready = out.vulcan_ready
 		cmd.vulcan_fire = out.vulcan_fire
 		cmd.shield_block = out.shield_block
-		cmd.lock_preview = out.lock_preview
 		return out
 
 var _suit: RigidBody3D
@@ -78,13 +77,41 @@ func _run() -> void:
 	await _ticks(5)
 	# Lock through the HUD cursor: slew it onto the target, preview, commit.
 	_fcs.cursor = Vector2(20, 10)
-	_input.cmd.lock_preview = true
 	await _ticks(2)
 	_check("candidate under cursor", _fcs.candidate == drone)
 	_input.cmd.lock_commit = true
 	await _ticks(2)
 	_check("locked", _fcs.locked == drone)
-	_input.cmd.lock_preview = false
+	_check("no cursor while locked", not _fcs.is_cursor_shown() and _fcs.candidate == null)
+	_input.cmd.lock_commit = true
+	await _ticks(2)
+	_check("locking again keeps the lock", _fcs.locked == drone)
+	_input.cmd.zoom = true
+	await _ticks(1)
+	_input.cmd.zoom = true
+	await _ticks(1)
+	_check("zoom opens and cycles", _fcs.zoom_level == 2)
+	_input.cmd.unlock = true
+	await _ticks(1)
+	_check("unlock closes the zoom first", _fcs.zoom_level == 0 and _fcs.locked == drone)
+	var other := _spawn(TargetDrone.Behaviour.STATIC, 1200.0, Vector2(-20, 10))
+	await _ticks(2)
+	_input.cmd.target_cycle = 1
+	await _ticks(1)
+	_check("cycle right steps to another contact", _fcs.locked != drone and _fcs.locked != null)
+	_input.cmd.target_cycle = -1
+	await _ticks(1)
+	_check("cycle left steps back", _fcs.locked == drone)
+	other.queue_free()
+	_fcs.cursor = Vector2(50, 0)
+	_input.cmd.unlock = true
+	await _ticks(1)
+	_check("unlock drops the lock, cursor back ahead", _fcs.locked == null and _fcs.cursor == Vector2.ZERO)
+	_fcs.cursor = Vector2(20, 10)
+	await _ticks(1)
+	_check("hovering previews without a button", _fcs.candidate == drone)
+	_input.cmd.lock_commit = true
+	await _ticks(2)
 	var rifle := _fcs.get_weapon(&"beam_rifle")
 	await _ticks(90)
 	print("rifle state %d readiness %.2f aim %s lead %s on_target %s tof %.3f range %.0f" % [rifle.state, rifle.readiness,

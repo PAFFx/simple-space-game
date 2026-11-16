@@ -20,7 +20,6 @@ class ScriptedInput extends PilotInputSource:
 		cmd.vulcan_ready = out.vulcan_ready
 		cmd.vulcan_fire = out.vulcan_fire
 		cmd.shield_block = out.shield_block
-		cmd.lock_preview = out.lock_preview
 		return out
 
 var _out := "user://weapons_snapshot"
@@ -76,13 +75,11 @@ func _run(shots: PackedStringArray) -> void:
 	await _frames(5)
 	var drone := _spawn(TargetDrone.Behaviour.STATIC, 900.0, Vector2(14, 6), 100000.0)
 	_fcs.cursor = Vector2(14, 6)
-	_input.cmd.lock_preview = true
 	await _frames(8)
 	if "hud" in shots:
 		await _shot("hud_candidate")
 	_input.cmd.lock_commit = true
 	await _frames(3)
-	_input.cmd.lock_preview = false
 	await _frames(25)
 	if "hud" in shots:
 		await _shot("hud_slewing")
@@ -331,11 +328,9 @@ func _run(shots: PackedStringArray) -> void:
 		# Clear of the station, which is a contact too.
 		drone = _spawn(TargetDrone.Behaviour.STATIC, 900.0, Vector2(-25, 12), 100000.0)
 		_fcs.cursor = Vector2(-25, 12)
-		_input.cmd.lock_preview = true
 		await _frames(8)
 		_input.cmd.lock_commit = true
 		await _frames(3)
-		_input.cmd.lock_preview = false
 		await _frames(60)
 		_report_aim("locked", drone)
 		await _shot("offaxis_locked")

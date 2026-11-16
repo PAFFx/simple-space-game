@@ -12,8 +12,8 @@ extends Resource
 @export var pitch_axis: int = 4
 @export var invert_yaw: bool = false
 @export var invert_pitch: bool = false
-## Tap = recentre, hold = switch view. -1 = none.
-@export var button: int = 19
+## Tap = recentre, hold = switch view. -1 = none (the left hat is the target hat now).
+@export var button: int = -1
 @export var hold_time: float = 0.35
 ## Pan rate at full deflection, deg/s.
 @export var rate: float = 110.0
