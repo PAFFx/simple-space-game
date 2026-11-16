@@ -73,11 +73,23 @@ func _run(shots: PackedStringArray) -> void:
 	_input.cmd.master_mode = FireControl.MasterMode.DGFT
 	_input.cmd.master_arm = 1
 	await _frames(5)
+	if "hud" in shots:
+		_fcs.cursor = Vector2(55, 30)
+		await _frames(2)
+		_look(55, 30, 15.0)
+		await _shot("hud_tms_zoom")
+		_fcs.soi = FireControl.Soi.HMCS
+		await _shot("hud_hmcs_zoom")
+		_fcs.soi = FireControl.Soi.HUD_CURSOR
+		_look(0, 0)
 	var drone := _spawn(TargetDrone.Behaviour.STATIC, 900.0, Vector2(14, 6), 100000.0)
 	_fcs.cursor = Vector2(14, 6)
 	await _frames(8)
 	if "hud" in shots:
 		await _shot("hud_candidate")
+		_look(14, 6, 30.0)
+		await _shot("hud_candidate_zoom")
+		_look(0, 0)
 	_input.cmd.lock_commit = true
 	await _frames(3)
 	await _frames(25)
@@ -89,6 +101,28 @@ func _run(shots: PackedStringArray) -> void:
 		_look(14, 6, 35.0)
 		await _shot("hud_shoot_zoom")
 		_look(0, 0)
+	if "hudmove" in shots:
+		# A crossing target, far: the tail, the track's size and the circle while it settles.
+		_fcs.lock(null)
+		var mover := _spawn(TargetDrone.Behaviour.DRIFT, 2200.0, Vector2(50, 24), 100000.0)
+		mover.velocity = _suit.linear_velocity + _suit.global_basis.orthonormalized() * Vector3(-70.0, 20.0, 0.0)
+		await _frames(2)
+		_fcs.lock(mover)
+		await _frames(4)
+		var seen := _angles_of(mover)
+		_look(seen.x, seen.y, 20.0)
+		await _shot("hudmove_new_track")
+		await _frames(90)
+		seen = _angles_of(mover)
+		_look(seen.x, seen.y, 20.0)
+		await _shot("hudmove_settled")
+		_look(seen.x, seen.y, 8.0)
+		await _shot("hudmove_close")
+		_look(seen.x - 10.0, seen.y - 5.0)
+		await _shot("hudmove_wide")
+		_fcs.lock(drone)
+		mover.queue_free()
+		await _frames(30)
 
 	if "beam" in shots:
 		await _fire_sequence("beam_fp", 6)
@@ -425,6 +459,12 @@ func _look(yaw_right_deg: float, pitch_deg: float, fov := 0.0) -> void:
 		_fp.fov = fov
 	else:
 		_fp.fov = 75.0
+
+
+## Azimuth / elevation of a node from the head in the body frame, deg.
+func _angles_of(node: Node3D) -> Vector2:
+	var rel := node.global_position - _fcs.get_view_origin()
+	return SpatialMath.direction_to_angles(_suit.global_basis.orthonormalized().inverse() * rel)
 
 
 func _ext_view(eye: Vector3, target: Vector3) -> void:

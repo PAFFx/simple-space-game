@@ -1,32 +1,55 @@
 class_name WeaponsWidget
 extends HudWidget
 
-## Weapons symbology, from the suit's FireControl:
+## Weapons symbology, from the suit's FireControl. Built to keep the target in plain view:
+## nothing is drawn over it but its own contact triangle (ContactsWidget).
 ##
 ##   status        master mode and ARM / SAFE in boxes, the selected weapon with its rounds
-##                 and RDY, the vulcans, the sensor of interest
-##   envelope      where the selected weapon can point (fixed to the suit's body): a faint
-##                 outline with a bold bracket at each corner. Outside it, no shot
-##   gun cross     where the barrel points right now (it takes time to swing)
-##   lead diamond  where to shoot to hit the locked target; a line joins the gun cross to
-##                 it until they meet, then SHOOT. Amber with OUT when the lead is outside
-##                 the envelope: turn the suit
-##   vulcan ring   the head guns' aim and envelope, while they are spun up
-##   designation   the HUD cursor (open cross) or the pilot's line of sight (ring), by the
-##                 sensor of interest; brackets pulse on the lock candidate and sit solid
-##                 on the locked target
-##   HIT / BLOCK   when a shot lands on the suit or on the shield
+##                 and RDY, the vulcans
+##   cursor        while nothing is locked: the TMS cursor (three double-railed arms round
+##                 an empty middle) or the HMCS ring (where the pilot looks), by the sensor
+##                 of interest. The HMCS ring closes while a contact is under it
+##   tail          the locked target's motion across the view: a fine accent line from the
+##                 gun circle (or the triangle) outward, toward where it will be in `tail_time`
+##   gun circle    the shoot cue. It sits where a shot would go relative to the target (the
+##                 target's sensor estimate, turned by the barrel's error from the lead) and
+##                 its size is how sure that is (the predicted impact error at the time of
+##                 flight), never smaller than the target's mark. On the target = a shot;
+##                 the smaller, the surer. Dim while the weapon isn't ready
+##   gun cross     with no lock: where the barrel points (where an unaimed shot goes)
+##   vulcan ring   the head guns' aim, while they are spun up
 
 @export var status_azimuth_deg: float = 20.0
 @export var status_elevation_deg: float = -5.5
 @export var cue_elevation_deg: float = -15.0
-@export var envelope_step_deg: float = 4.0
-@export var corner_deg: float = 4.0
 @export var hit_cue_time: float = 0.9
+## Debug: HIT / BLOCK when a shot lands on the suit or on the shield.
+@export var show_hit_cue: bool = false
+
+@export_group("Cursors")
+@export var cursor_color := Color(0.74, 0.7, 0.86, 0.85)
+## TMS arms: from / to this far out, deg; the rails' spacing, deg.
+@export var tms_inner_deg: float = 1.3
+@export var tms_outer_deg: float = 4.6
+@export var tms_rail_gap_deg: float = 0.36
+@export var hmcs_radius_deg: float = 4.5
+
+@export_group("Target")
+## The tail shows where the target goes in this long (relative to the suit), s.
+@export var tail_time: float = 2.0
+@export var tail_max_deg: float = 10.0
+## Below this the target barely moves across the view: no tail, deg.
+@export var tail_min_deg: float = 0.25
+## The gun circle's least radius, as a share of the target triangle's half side (its
+## corners and lock dashes reach ~1.6), plus a margin, deg.
+@export var circle_min_share: float = 1.85
+@export var circle_margin_deg: float = 0.4
+@export var circle_max_deg: float = 25.0
 
 var _fcs: FireControl
 var _contacts: ContactsWidget
 var _body := Basis.IDENTITY
+var _circle_radius := 0.0
 
 
 func draw_widget() -> void:
@@ -39,21 +62,28 @@ func draw_widget() -> void:
 				_contacts = sibling
 		if _fcs == null:
 			return
-	if _contacts != null:
-		_contacts.selected = _fcs.locked
 	_body = hud.vehicle.get_global_transform_interpolated().basis.orthonormalized()
+	if _contacts != null:
+		_contacts.locked_label_x = 0.0
 	_draw_status()
-	_draw_designation()
-	_draw_lock_marks()
-	_draw_hit_cue()
-	if not _fcs.is_weapons_mode():
-		return
-	var vulcan := _fcs.get_vulcan()
-	if vulcan != null and vulcan.readiness > 0.0:
-		_draw_vulcan(vulcan)
-	if _fcs.selected != null:
-		_draw_envelope(_fcs.selected, 1.0)
-		_draw_solution(_fcs.selected)
+	if _fcs.is_cursor_shown():
+		_draw_cursor()
+	var locked := _fcs.locked != null and is_instance_valid(_fcs.locked)
+	_circle_radius = 0.0
+	if show_hit_cue:
+		_draw_hit_cue()
+	if _fcs.is_weapons_mode():
+		var vulcan := _fcs.get_vulcan()
+		if vulcan != null and vulcan.readiness > 0.0:
+			_draw_vulcan(vulcan)
+		var weapon := _fcs.selected
+		if weapon != null:
+			if not locked:
+				_draw_gun_cross(weapon)
+			elif weapon.solution_valid:
+				_draw_gun_circle(weapon)
+	if locked:
+		_draw_tail()
 
 
 # --- Status block ---
@@ -82,8 +112,6 @@ func _draw_status() -> void:
 		if vulcan.readiness > 0.0:
 			text(Vector2(106, y), "RDY" if vulcan.state == MsWeapon.State.READY else "SPIN", _state_color(vulcan),
 					HORIZONTAL_ALIGNMENT_LEFT, 12)
-		y += 20.0
-	text(Vector2(0, y), "SOI %s" % ("HMCS" if _fcs.soi == FireControl.Soi.HMCS else "HUD"), dim, HORIZONTAL_ALIGNMENT_LEFT, 12)
 	end_local()
 
 
@@ -117,133 +145,139 @@ func _boxed(pos: Vector2, value: String, color: Color) -> float:
 	return right
 
 
-# --- Envelope, gun cross, lead ---
+# --- Cursors ---
 
-func _draw_envelope(weapon: MsWeapon, strength: float) -> void:
-	var color := hud.equipment_color
-	var faint := Color(color, color.a * 0.4 * strength)
-	var pts := PackedVector2Array()
-	for angles in weapon.get_envelope_outline(envelope_step_deg):
-		pts.append(_canvas(angles))
-	seam_safe_polyline(pts, faint, 1.5, false)
-	# A bold bracket at each corner.
-	var az := weapon.get_az_limits()
-	var el := weapon.get_el_limits()
-	for corner in [Vector2(az.x, el.x), Vector2(az.y, el.x), Vector2(az.y, el.y), Vector2(az.x, el.y)]:
-		var inward := Vector2(1.0 if corner.x == az.x else -1.0, 1.0 if corner.y == el.x else -1.0)
-		for leg in [Vector2(inward.x * corner_deg, 0.0), Vector2(0.0, inward.y * corner_deg)]:
-			var run := PackedVector2Array()
-			for k in 5:
-				run.append(_canvas(corner + leg * (k / 4.0)))
-			seam_safe_polyline(run, Color(color, color.a * strength), 2.5)
+func _draw_cursor() -> void:
+	var at := patch(hud.world_to_display(_fcs.get_designation()), Vector3.UP)
+	if _fcs.soi == FireControl.Soi.HUD_CURSOR:
+		_draw_tms(at)
+	else:
+		_draw_hmcs(at, _fcs.candidate != null)
 
 
-func _draw_solution(weapon: MsWeapon) -> void:
+## Three double-railed arms (up-left, up-right, down) pointing at an empty middle, a faint
+## fill between the rails, and a small faint Y in the middle.
+func _draw_tms(at: Patch) -> void:
+	var c := cursor_color
+	var fill := Color(c, c.a * 0.4)
+	var faint := Color(c, c.a * 0.45)
+	for angle in [deg_to_rad(150.0), deg_to_rad(30.0), deg_to_rad(-90.0)]:
+		var along := Vector2(cos(angle), sin(angle))
+		var across := Vector2(-along.y, along.x) * tms_rail_gap_deg * 0.5
+		var a := along * tms_inner_deg
+		var b := along * tms_outer_deg
+		patch_polygon(at, PackedVector2Array([a - across, b - across, b + across, a + across]), fill)
+		patch_line(at, a - across, b - across, c, 1.6, 2)
+		patch_line(at, a + across, b + across, c, 1.6, 2)
+		patch_line(at, along * 0.15, along * 0.55, faint, 1.2, 1)
+
+
+## A big ring broken at left and right, three short inward ticks lined up with the TMS
+## arms, a dot in the middle. The breaks close while a contact is under it.
+func _draw_hmcs(at: Patch, on_contact: bool) -> void:
+	var c := cursor_color
+	var r := hmcs_radius_deg
+	if on_contact:
+		patch_arc(at, Vector2.ZERO, r, 0.0, TAU, c, 1.6, 64)
+	else:
+		var gap := deg_to_rad(16.0)
+		patch_arc(at, Vector2.ZERO, r, gap, PI - gap, c, 1.6, 28)
+		patch_arc(at, Vector2.ZERO, r, PI + gap, TAU - gap, c, 1.6, 28)
+	for angle in [deg_to_rad(150.0), deg_to_rad(30.0), deg_to_rad(-90.0)]:
+		var along := Vector2(cos(angle), sin(angle))
+		patch_line(at, along * r, along * (r - 0.8), c, 1.6, 1)
+	patch_polygon(at, PackedVector2Array([Vector2(0, 0.13), Vector2(0.13, 0), Vector2(0, -0.13), Vector2(-0.13, 0)]), c)
+
+
+# --- Target ---
+
+## Patch coordinates (deg) of a display-frame direction.
+func _in_patch(p: Patch, dir: Vector3) -> Vector2:
+	var fwd := maxf(dir.dot(p.centre), 1e-4)
+	return Vector2(rad_to_deg(atan(dir.dot(p.right) / fwd)), rad_to_deg(atan(dir.dot(p.up) / fwd)))
+
+
+func _target_half() -> float:
+	return _contacts.locked_half if _contacts != null and _contacts.locked_half > 0.0 else 2.0
+
+
+func _draw_tail() -> void:
+	var origin := hud.get_view_origin()
+	var rel := _fcs.get_shown_target_position() - origin
+	var motion := (_fcs.get_target_velocity() - _fcs.get_own_velocity()) * tail_time
+	var now_dir := hud.world_to_display(rel).normalized()
+	var at := patch(now_dir, Vector3.UP)
+	var ahead := _in_patch(at, hud.world_to_display(rel + motion).normalized())
+	var length := ahead.length()
+	if length < tail_min_deg:
+		return
+	var dir := ahead / length
+	var start := maxf(_target_half() * 1.25 + 0.3, _circle_radius + 0.4)
+	patch_line(at, dir * start, dir * (start + minf(length, tail_max_deg)), hud.suit_accent_color, 1.6, 4)
+
+
+func _draw_gun_circle(weapon: MsWeapon) -> void:
+	var origin := hud.get_view_origin()
+	var target := _fcs.get_shown_target_position() - origin
+	var dist := target.length()
+	if dist < 1.0:
+		return
+	# Where the barrel is against where it must be, carried over onto the target.
+	var gun_dir := _body * SpatialMath.angles_to_direction(weapon.aim)
+	var gun_world := weapon.get_muzzle_position() + gun_dir * (weapon.time_of_flight * maxf(weapon.projectile.speed, 1.0)) - origin
+	var lead_world := weapon.lead_point - origin
+	var turn := Quaternion(lead_world.normalized(), gun_world.normalized())
+	var centre := hud.world_to_display(turn * target).normalized()
+
+	# How sure: the impact error across the line of sight at the time of flight (2 sigma).
+	var cov := _fcs.get_target_covariance_ahead(weapon.time_of_flight)
+	var los := target / dist
+	var lateral := sqrt(maxf((cov.x.x + cov.y.y + cov.z.z - los.dot(cov * los)) * 0.5, 0.0))
+	var spread := rad_to_deg(atan(2.0 * lateral / weapon.target_range if weapon.target_range > 1.0 else 0.0))
+	var radius := clampf(maxf(spread, _target_half() * circle_min_share + circle_margin_deg), 0.5, circle_max_deg)
+
+	var ready := weapon.state == MsWeapon.State.READY and not weapon.masked
+	var c := hud.primary_color if ready else PanoramicHud.dimmed(hud.primary_color)
+	var at := patch(centre, Vector3.UP)
+	var off := _in_patch(patch(hud.world_to_display(target).normalized(), Vector3.UP), centre)
+	_circle_radius = radius + off.length()
+	if _contacts != null:
+		_contacts.locked_label_x = radius + maxf(off.x, 0.0) + 0.5
+	# Outer ring broken in four, an inner ring broken in two, offset.
+	var gap := deg_to_rad(9.0)
+	for k in 4:
+		var a := k * TAU / 4.0 + deg_to_rad(20.0)
+		patch_arc(at, Vector2.ZERO, radius, a + gap, a + TAU / 4.0 - gap, c, 1.5, 16)
+	var inner := Color(c, c.a * 0.45)
+	var r2 := radius - minf(0.6, radius * 0.08)
+	for k in 2:
+		var a := k * PI + deg_to_rad(65.0)
+		patch_arc(at, Vector2.ZERO, r2, a + gap * 2.0, a + PI - gap * 2.0, inner, 1.0, 24)
+	var cue := ""
+	if weapon.masked:
+		cue = "MASKED"
+	elif not _fcs.master_arm:
+		cue = "SAFE"
+	if cue != "":
+		patch_text(at, Vector2(0.0, -radius - 1.6), cue, hud.caution_color if weapon.masked else PanoramicHud.dimmed(c),
+				HORIZONTAL_ALIGNMENT_CENTER, 12)
+
+
+func _draw_gun_cross(weapon: MsWeapon) -> void:
 	var ready := weapon.state == MsWeapon.State.READY
 	var c := hud.primary_color if ready else PanoramicHud.dimmed(hud.primary_color)
-	# The gun line, at the target's range when there is one (the arm sits off the sensor).
-	var gun_dir := _body * SpatialMath.angles_to_direction(weapon.aim)
-	var gun_world := gun_dir
-	if weapon.solution_valid:
-		gun_world = weapon.get_muzzle_position() + gun_dir * (weapon.time_of_flight * maxf(weapon.projectile.speed, 1.0)) \
-				- hud.get_view_origin()
-	var gun := patch(hud.world_to_display(gun_world), Vector3.UP)
+	var gun := patch(hud.world_to_display(_body * SpatialMath.angles_to_direction(weapon.aim)), Vector3.UP)
 	for d in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
 		patch_line(gun, d * 0.55, d * 1.5, c, 2.0, 1)
 
-	if _fcs.locked == null:
-		return
-	if not weapon.solution_valid:
-		var at := patch(hud.world_to_display(_fcs.get_target_position() - hud.get_view_origin()), Vector3.UP)
-		var why := _fcs.get_track_label()
-		patch_text(at, Vector2(0.0, -4.2), why if why != "" else "NO SOLUTION", hud.caution_color, HORIZONTAL_ALIGNMENT_CENTER, 13)
-		return
-	var lead_world := weapon.lead_point - hud.get_view_origin()
-	var lead := patch(hud.world_to_display(lead_world), Vector3.UP)
-	var shoot := weapon.on_target and ready
-	var color := hud.primary_color
-	if not weapon.target_in_envelope:
-		color = hud.caution_color
-	elif not shoot:
-		color = PanoramicHud.dimmed(hud.primary_color)
-	var k := 1.05
-	var diamond := PackedVector2Array([Vector2(0, k), Vector2(k, 0), Vector2(0, -k), Vector2(-k, 0), Vector2(0, k)])
-	for i in 4:
-		patch_line(lead, diamond[i], diamond[i + 1], color, 2.5 if shoot else 1.8, 1)
-	if shoot:
-		patch_polygon(lead, PackedVector2Array([Vector2(0, 0.35), Vector2(0.35, 0), Vector2(0, -0.35), Vector2(-0.35, 0)]), color)
-	else:
-		# How far the barrel still has to swing.
-		var a := hud.world_to_display(gun_world).normalized()
-		var b := hud.world_to_display(lead_world).normalized()
-		if a.angle_to(b) > deg_to_rad(2.2):
-			var run := PackedVector2Array()
-			for i in 9:
-				var u := lerpf(0.12, 0.88, i / 8.0)
-				run.append(hud.projector.direction_to_canvas(a.slerp(b, u)))
-			seam_safe_polyline(run, Color(color, color.a * 0.6), 1.2, false)
-	var cue := ""
-	if not weapon.target_in_envelope:
-		cue = "OUT"
-	elif weapon.masked:
-		cue = "MASKED"
-	elif shoot:
-		cue = "SHOOT" if _fcs.master_arm else "SAFE"
-	if cue != "":
-		patch_text(lead, Vector2(0.0, 1.9), cue, hud.suit_accent_color if cue == "SHOOT" else color,
-				HORIZONTAL_ALIGNMENT_CENTER, 16 if cue == "SHOOT" else 13)
-	patch_text(lead, Vector2(-1.6, -0.3), "%.1fs" % weapon.time_of_flight, PanoramicHud.dimmed(color), HORIZONTAL_ALIGNMENT_RIGHT, 12)
-
 
 func _draw_vulcan(weapon: MsWeapon) -> void:
-	_draw_envelope(weapon, 0.55 * weapon.readiness)
 	var up := weapon.state == MsWeapon.State.READY and not weapon.masked
 	var c := hud.primary_color if up else PanoramicHud.dimmed(hud.primary_color)
 	var gun := patch(hud.world_to_display(_body * SpatialMath.angles_to_direction(weapon.aim)), Vector3.UP)
 	patch_arc(gun, Vector2.ZERO, 0.8, 0.0, TAU, c, 1.8, 20)
 	if weapon.on_target:
 		patch_polygon(gun, PackedVector2Array([Vector2(0, 0.22), Vector2(0.22, 0), Vector2(0, -0.22), Vector2(-0.22, 0)]), c)
-
-
-# --- Designation and lock ---
-
-func _draw_designation() -> void:
-	var c := Color(hud.selected_color, hud.selected_color.a * 0.75)
-	var at := patch(hud.world_to_display(_fcs.get_designation()), Vector3.UP)
-	if _fcs.soi == FireControl.Soi.HUD_CURSOR:
-		for d in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
-			patch_line(at, d * 0.9, d * 2.3, c, 1.8, 1)
-			var across := Vector2(d.y, d.x) * 0.35
-			patch_line(at, d * 2.3 - across, d * 2.3 + across, c, 1.8, 1)
-	else:
-		patch_arc(at, Vector2.ZERO, 1.5, 0.0, TAU, c, 1.5, 24)
-		for d in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
-			patch_line(at, d * 1.5, d * 2.1, c, 1.5, 1)
-
-
-func _draw_lock_marks() -> void:
-	if _fcs.candidate != null and is_instance_valid(_fcs.candidate) and _fcs.candidate != _fcs.locked:
-		var pulse := 0.55 + 0.45 * sin(Time.get_ticks_msec() * 0.018)
-		_bracket(_fcs.candidate, Color(hud.selected_color, hud.selected_color.a * pulse), 1.8, 1.25)
-	if _fcs.locked != null and is_instance_valid(_fcs.locked):
-		_bracket(_fcs.locked, hud.selected_color, 2.6, 1.45)
-
-
-## Corner brackets of a square around a contact.
-func _bracket(contact: Node3D, color: Color, width: float, fit: float) -> void:
-	var rel := contact.get_global_transform_interpolated().origin - hud.get_view_origin()
-	var dist := rel.length()
-	if dist < 1.0:
-		return
-	var radius: float = contact.get_meta(&"hud_radius", 20.0)
-	var half := clampf(rad_to_deg(atan(radius / dist)) * fit, 2.6, 30.0)
-	var at := patch(hud.world_to_display(rel), Vector3.UP)
-	var leg := half * 0.4
-	for sx in [-1.0, 1.0]:
-		for sy in [-1.0, 1.0]:
-			var corner := Vector2(half * sx, half * sy)
-			patch_line(at, corner, corner - Vector2(leg * sx, 0.0), color, width, 2)
-			patch_line(at, corner, corner - Vector2(0.0, leg * sy), color, width, 2)
 
 
 func _draw_hit_cue() -> void:
@@ -256,8 +290,3 @@ func _draw_hit_cue() -> void:
 	begin_local(0.0, cue_elevation_deg)
 	text(Vector2.ZERO, "BLOCK" if _fcs.last_hit_blocked else "HIT", color, HORIZONTAL_ALIGNMENT_CENTER, 30)
 	end_local()
-
-
-## Canvas position of a direction given as azimuth / elevation in the suit's body frame.
-func _canvas(angles: Vector2) -> Vector2:
-	return hud.world_dir_to_canvas(_body * SpatialMath.angles_to_direction(angles))

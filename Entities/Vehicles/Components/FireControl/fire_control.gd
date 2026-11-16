@@ -87,6 +87,14 @@ const CONTACT_GROUP := &"hud_contacts"
 ## straight up / down.
 @export var cursor_rate_deg: float = 45.0
 @export var cursor_elevation_limit_deg: float = 85.0
+## The locked target as shown on the HUD: the track's estimate, dead-reckoned between
+## ticks and low-passed so its noise doesn't shake the symbols. Cutoff, Hz, rising by
+## `shown_beta` per degree the estimate is away from what is shown (a real jump catches up).
+@export var shown_cutoff_hz: float = 1.5
+@export var shown_beta: float = 4.0
+## Line-of-sight checks to every contact, per second: one hidden behind something
+## (not the suit itself) isn't shown and can't be designated.
+@export var line_of_sight_hz: float = 10.0
 ## Zoom window levels (magnification), cycled by the zoom control.
 @export var zoom_levels := PackedFloat32Array([2.0, 4.0, 8.0])
 
@@ -118,6 +126,13 @@ var _target_tracked := false
 var sensors: SensorSuite
 var _target_position := Vector3.ZERO
 var _target_acceleration := Vector3.ZERO
+var _shown := Vector3.ZERO
+var _shown_valid := false
+var _hidden := {}                     ## instance id of a contact out of sight → true
+var _los_due := 0.0
+
+## Track quality on the HUD (the lock's corner dashes).
+enum TrackMark { NONE, COAST, POOR, GOOD }
 
 
 func _ready() -> void:
@@ -253,6 +268,66 @@ func get_track_label() -> String:
 	return ""
 
 
+## Where the HUD draws the locked target: the estimate, smoothed (see shown_cutoff_hz).
+func get_shown_target_position() -> Vector3:
+	return _shown if _shown_valid else get_target_position()
+
+
+## Two-sigma angular error of the target's position across the line of sight, deg (0
+## without sensors).
+func get_target_angular_error_deg() -> float:
+	if locked == null or not _has_track():
+		return 0.0
+	var est := sensors.track.get_estimate(sensors.get_time())
+	var rel: Vector3 = est[0] - get_view_origin()
+	var dist := rel.length()
+	if dist < 1.0:
+		return 0.0
+	var cov: Basis = est[3]
+	var los := rel / dist
+	var along := los.dot(cov * los)
+	var trace := cov.x.x + cov.y.y + cov.z.z
+	var lateral := sqrt(maxf((trace - along) * 0.5, 0.0))
+	return rad_to_deg(atan(2.0 * lateral / dist))
+
+
+func get_track_mark() -> TrackMark:
+	if locked == null:
+		return TrackMark.NONE
+	if not _has_track():
+		return TrackMark.GOOD
+	match sensors.track.state:
+		SensorTrack.State.COAST, SensorTrack.State.LOST:
+			return TrackMark.COAST
+		SensorTrack.State.TENTATIVE:
+			return TrackMark.POOR
+	var cov: Basis = sensors.track.get_estimate(sensors.get_time())[3]
+	var sigma := sqrt(maxf((cov.x.x + cov.y.y + cov.z.z) / 3.0, 0.0))
+	return TrackMark.GOOD if sigma < get_target_radius() else TrackMark.POOR
+
+
+func _process(delta: float) -> void:
+	if locked == null:
+		_shown_valid = false
+		return
+	# Rendering is interpolated a tick behind the physics state the estimate is at.
+	var tick := 1.0 / Engine.physics_ticks_per_second
+	var lag := (1.0 - Engine.get_physics_interpolation_fraction()) * tick
+	var est := get_target_position() - _target_velocity * lag
+	var dist := maxf(est.distance_to(get_view_origin()), 1.0)
+	if not _shown_valid:
+		_shown = est
+		_shown_valid = true
+		return
+	_shown += _target_velocity * delta
+	var off_deg := rad_to_deg(_shown.distance_to(est) / dist)
+	if off_deg > 3.0:
+		_shown = est
+		return
+	var cutoff := shown_cutoff_hz + shown_beta * off_deg
+	_shown = _shown.lerp(est, 1.0 - exp(-delta * TAU * cutoff))
+
+
 func _has_track() -> bool:
 	return sensors != null and sensors.enabled and sensors.track != null and sensors.track.is_started()
 
@@ -376,6 +451,10 @@ func _physics_process(delta: float) -> void:
 		cursor.x = wrapf(cursor.x, -180.0, 180.0)
 		cursor.y = clampf(cursor.y, -cursor_elevation_limit_deg, cursor_elevation_limit_deg)
 
+	_los_due -= delta
+	if _los_due <= 0.0:
+		_los_due = 1.0 / maxf(line_of_sight_hz, 0.1)
+		_update_line_of_sight()
 	_update_lock(cmd)
 	if sensors != null:
 		sensors.step(delta)
@@ -521,7 +600,44 @@ func _next_by_azimuth(step: int) -> Node3D:
 	return best
 
 
-## Contacts that can be designated: in range, not the suit itself.
+## False while something other than the suit itself stands between its head and `contact`.
+func can_see(contact: Node3D) -> bool:
+	return not _hidden.has(contact.get_instance_id())
+
+
+func _update_line_of_sight() -> void:
+	_hidden.clear()
+	var origin := get_view_origin()
+	var space := vehicle.get_world_3d().direct_space_state
+	for node in get_tree().get_nodes_in_group(CONTACT_GROUP):
+		var contact := node as Node3D
+		if contact == null or contact == vehicle:
+			continue
+		if not _line_clear(space, origin, contact):
+			_hidden[contact.get_instance_id()] = true
+
+
+func _line_clear(space: PhysicsDirectSpaceState3D, from: Vector3, contact: Node3D) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(from, contact.global_position)
+	var exclude: Array[RID] = _rids.duplicate()
+	if contact is CollisionObject3D:
+		exclude.append((contact as CollisionObject3D).get_rid())
+	for i in 4:
+		query.exclude = exclude
+		var hit := space.intersect_ray(query)
+		if hit.is_empty():
+			return true
+		var collider := hit.collider as Node
+		if collider == null or collider == contact or contact.is_ancestor_of(collider) or collider.is_ancestor_of(contact):
+			return true
+		# The suit's own shield and equipment don't hide anything from the HUD.
+		if not (vehicle as Node).is_ancestor_of(collider) or not (collider is CollisionObject3D):
+			return false
+		exclude.append((collider as CollisionObject3D).get_rid())
+	return true
+
+
+## Contacts that can be designated: in range and in sight, not the suit itself.
 func _lockable_contacts(origin: Vector3) -> Array[Node3D]:
 	var out: Array[Node3D] = []
 	for node in get_tree().get_nodes_in_group(CONTACT_GROUP):
@@ -529,7 +645,7 @@ func _lockable_contacts(origin: Vector3) -> Array[Node3D]:
 		if contact == null or contact == vehicle:
 			continue
 		var dist := contact.global_position.distance_to(origin)
-		if dist >= 1.0 and dist <= lock_range:
+		if dist >= 1.0 and dist <= lock_range and can_see(contact):
 			out.append(contact)
 	return out
 
