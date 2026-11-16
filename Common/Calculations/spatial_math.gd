@@ -42,3 +42,37 @@ static func ray_sphere_entry_exit(
 		return Vector2(-1.0, -1.0)
 	var sq := sqrt(disc)
 	return Vector2(-b - sq, -b + sq)
+
+
+## Time for a shot of constant `speed` to meet a target at `rel_pos` moving at `rel_vel`
+## (both relative to the shooter, whose velocity the shot inherits). -1 if it never does.
+static func intercept_time(rel_pos: Vector3, rel_vel: Vector3, speed: float) -> float:
+	var a := rel_vel.length_squared() - speed * speed
+	var b := 2.0 * rel_pos.dot(rel_vel)
+	var c := rel_pos.length_squared()
+	if absf(a) < 1e-9:
+		return -c / b if b < 0.0 else -1.0
+	var disc := b * b - 4.0 * a * c
+	if disc < 0.0:
+		return -1.0
+	var sq := sqrt(disc)
+	var t0 := (-b - sq) / (2.0 * a)
+	var t1 := (-b + sq) / (2.0 * a)
+	var lo := minf(t0, t1)
+	var hi := maxf(t0, t1)
+	if lo > 0.0:
+		return lo
+	return hi if hi > 0.0 else -1.0
+
+
+## Direction for azimuth (+ = right) and elevation (+ = up) in degrees; forward is -Z.
+static func angles_to_direction(angles_deg: Vector2) -> Vector3:
+	var az := deg_to_rad(angles_deg.x)
+	var el := deg_to_rad(angles_deg.y)
+	return Vector3(sin(az) * cos(el), sin(el), -cos(az) * cos(el))
+
+
+## Azimuth and elevation in degrees of a direction (see angles_to_direction).
+static func direction_to_angles(dir: Vector3) -> Vector2:
+	var d := dir.normalized()
+	return Vector2(rad_to_deg(atan2(d.x, -d.z)), rad_to_deg(asin(clampf(d.y, -1.0, 1.0))))

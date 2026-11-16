@@ -146,6 +146,8 @@ func _push_shader_uniforms() -> void:
 	_material.set_shader_parameter("sensor_view_proj", sensor_head.get_view_proj())
 	_material.set_shader_parameter("sensor_world_pos", sensor_head.get_world_pos())
 	_material.set_shader_parameter("display_basis",    get_display_basis())
+	_material.set_shader_parameter("overlay_viewport", sensor_head.get_overlay_texture())
+	_material.set_shader_parameter("overlay_reveal",   sensor_head.overlay_reveal)
 
 
 ## World orientation of the panoramic frame: screen-local direction d shows world direction

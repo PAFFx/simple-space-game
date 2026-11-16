@@ -54,8 +54,9 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## turn that ends where the stick is released. 0 = no cap.
 @export var stop_time: float = 0.4
 ## Share of the clean torque a stop can count on while the thrusters are also pushing at
-## full capability (a boost or a hard brake); the cap above plans with it.
-@export_range(0.1, 1.0) var loaded_torque_share: float = 0.6
+## full capability (a boost or a hard brake), per axis (pitch, yaw, roll); the cap above
+## plans with it. Measure it with the suit's allocator under load before raising it.
+@export var loaded_torque_share := Vector3(0.6, 0.6, 0.6)
 ## Rate loop bandwidth for steering and stops, 1/s. Higher = snappier, more chatter.
 @export var rate_gain: float = 7.5
 ## Rate loop bandwidth while auto-rotating, 1/s. Gentler, so the swing never asks for
@@ -111,6 +112,20 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## this, and torque/thrust limits open fully.
 @export var boost_rate_multiplier: float = 1.7
 @export var boost_rate_gain_multiplier: float = 1.5
+
+@export_group("Break")
+## A break is a committed dodge: the moment full boost engages with the stick deflected,
+## full clean thrust goes straight along the stick for break_time, with the attitude held
+## (no roll into the move: rotating costs time a dodge doesn't have) and force before
+## torque. A tap is a break alone; held, full boost carries on after it.
+@export var break_on_full_boost: bool = true
+@export var break_time: float = 0.7
+## Shortest time between two breaks, s.
+@export var break_cooldown: float = 0.4
+## Torque priority during a break (low: the push wins over trimming the attitude).
+@export_range(0.0, 2.0) var break_torque_priority: float = 0.3
+## Share beyond the capability map a break may ask for (see compute()); 0 = none.
+@export_range(0.0, 2.0) var break_beyond_map: float = 0.4
 
 @export_group("Movement modes")
 ## Auto-rotation limit in normal flight and with Shift held, deg. A double-tapped Shift
@@ -187,6 +202,10 @@ var _last_boost := false             ## For the HUD label
 var _last_boost_full := false
 var _last_brake := false
 var _last_brake_full := false
+var _break_left := 0.0               ## Time left in the current break, s
+var _break_cool := 0.0
+var _break_dir := Vector3.ZERO       ## Pilot frame
+var _was_full := false
 var _thruster_limit := Vector3.INF   ## Thrusters' share of this tick's torque limit
 var _stick := Vector3.ZERO           ## Rotation demand after horizon-lock shaping
 var _horizon_up := Vector3.UP        ## Global "up" the horizon lock levels to
@@ -253,6 +272,7 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 		_display_up = _horizon_up
 		_manual_roll = false
 
+	_update_break(state, command)
 	_analog = command.analog_thrust and not (precision or command.boost or command.boost_full)
 	# A little hysteresis, so a stick resting at the onset doesn't flicker the boost.
 	var onset := analog_boost_onset - (0.05 if _analog_boost else 0.0)
@@ -270,6 +290,9 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	_level_horizon(state.delta)
 	var force_world := _translation_force_world(state, command)
 	var drift_force := _drift_correction(state, command, force_world)
+	if _break_left > 0.0:
+		force_world = _pilot * _break_dir * _total_thrust(state)
+		drift_force = Vector3.ZERO
 	_update_offset(state, force_world, command)
 	var wanted := state.to_local(force_world + drift_force)
 	_force_load = 0.0
@@ -280,12 +303,21 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	# to turn with, so the force gives way while the pilot steers or a turn is stopping.
 	var reserve := stop_force_reserve if _is_stopping() \
 			else (steer_force_reserve if _locked != Vector3.ZERO else 0.0)
+	if _break_left > 0.0:
+		reserve = 0.0
 	var force_body := clamp_to_capability(state.to_local(force_world + drift_force), state,
 			1.0 - reserve)
+	if _break_left > 0.0 and break_beyond_map > 0.0:
+		# The map was measured with the limbs at rest; a dodge stance aims more nozzles
+		# along the push, so ask for somewhat more than it says (asking for everything
+		# saturated the allocator: an up break spun the body at 110°/s).
+		force_body = clamp_to_capability(state.to_local(force_world), state, 1.0 + break_beyond_map)
 	var wrench := Wrench.new(force_body, torque)
 	wrench.thruster_torque_limit = _thruster_limit
 	# Stopping a turn or braking into a target always wins: it matters more than a clean push.
-	if _is_stopping():
+	if _break_left > 0.0:
+		wrench.torque_priority = break_torque_priority
+	elif _is_stopping():
 		wrench.torque_priority = recover_torque_priority
 	elif _locked != Vector3.ZERO:
 		wrench.torque_priority = steer_torque_priority
@@ -305,21 +337,41 @@ func get_mode_labels() -> PackedStringArray:
 		labels.append("HORIZON FREE")
 	if coupled:
 		labels.append("COUPLED")
-	if _last_boost_full:
-		labels.append("BOOST FULL")
-	elif _last_boost:
-		labels.append("BOOST")
-	elif precision:
+	# Boost, brake and break show on the thrust cue and the flight path marker instead.
+	if precision and not (_last_boost or _break_left > 0.0):
 		labels.append("PRECISION")
-	if _last_brake_full:
-		labels.append("BRAKE HARD")
-	elif _last_brake:
-		labels.append("BRAKE")
 	return labels
 
 
 func get_boost_level() -> int:
 	return 2 if _last_boost_full else (1 if _last_boost else 0)
+
+
+func get_break_direction() -> Vector3:
+	return _break_dir if _break_left > 0.0 else Vector3.ZERO
+
+
+func is_breaking() -> bool:
+	return _break_left > 0.0
+
+
+## Starts a break when full boost engages with the stick deflected; runs it out (the
+## stick's release doesn't cut it short: it is committed).
+func _update_break(state: FlightState, command: PilotCommand) -> void:
+	_break_cool = maxf(_break_cool - state.delta, 0.0)
+	if _break_left > 0.0:
+		_break_left = maxf(_break_left - state.delta, 0.0)
+		if _break_left <= 0.0:
+			_break_cool = break_cooldown
+	var full := command.boost_full
+	if break_on_full_boost and full and not _was_full and _break_left <= 0.0 and _break_cool <= 0.0 \
+			and command.translation.length() > stick_deadzone and not precision:
+		_break_dir = command.translation.normalized()
+		_break_left = break_time
+	_was_full = full
+	if _break_left > 0.0:
+		command.boost = true
+		command.boost_full = true
 
 
 func get_brake_level() -> int:
@@ -484,6 +536,11 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 	_recover = 0.0
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
 		return
+	if _break_left > 0.0:
+		# A break holds whatever attitude it started in.
+		_offset_target_r = AttitudeOffsetSolver.to_rotation_vector(_offset)
+		_offset_vel = Vector3.ZERO
+		return
 	var r_cur := AttitudeOffsetSolver.to_rotation_vector(_offset)
 	var share := steer_auto_rotate_share
 	if _locked == Vector3.ONE and share <= 0.0:
@@ -577,7 +634,7 @@ func _rotation_torque(state: FlightState, command: PilotCommand, body_q: Quatern
 			var axis := Vector3.ZERO
 			axis[k] = 1.0
 			max_rate[k] = minf(max_rate[k], _max_alpha(state, to_body * axis, 1.0) * braking_margin
-					* lerpf(1.0, loaded_torque_share, _force_load) * stop_time)
+					* lerpf(1.0, loaded_torque_share[k], _force_load) * stop_time)
 
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
 		var rate_cmd := _stick * max_rate if steering else Vector3.ZERO

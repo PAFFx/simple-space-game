@@ -6,7 +6,8 @@ extends SceneTree
 ##   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off
 ##   godot --path . --resolution 1280x720 -s Tools/Godot/cockpit_snapshot.gd -- <out_dir> [shots]
 ##
-## shots: comma list of rest,input,lean,hatch (default all).
+## shots: comma list of rest,input,lean,hatch (default all); also look, outline, external,
+## markers, handles (the hatch lock / override handles and their interlock).
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 
@@ -66,6 +67,9 @@ func _run(shots: PackedStringArray) -> void:
 	if "outline" in shots:
 		await _frames(10)
 		var loadout := vehicle.find_component(MsLoadout) as MsLoadout
+		var fcs := vehicle.find_component(FireControl)
+		if fcs != null:
+			fcs.set_physics_process(false)   # it would lower the shield again
 		for eq in loadout.equipment:
 			if eq is MsShield:
 				eq.set_active(true)   # shield to guard
@@ -120,6 +124,27 @@ func _run(shots: PackedStringArray) -> void:
 			await _shot("look_%d_%d_front" % [look[0], -look[1]])
 		_fp_cam.set_look_rotation(Basis.IDENTITY)
 		_fp_cam.make_current()
+	if "handles" in shots:
+		# The hatch lock and override handles beside the cushion, and their interlock.
+		var hatch := vehicle.find_component(CockpitHatch) as CockpitHatch
+		var parts := vehicle.find_children("*", "HatchCockpitParts", true, false)[0] as HatchCockpitParts
+		await _handle_views("handles_locked")
+		parts._on_override(-1)
+		await _frames(30)
+		print("HANDLES override pulled with the lock down: override_up %s, hatch open %s" % [parts.override_up, hatch.is_open()])
+		parts._on_lock(-1)
+		await _frames(40)
+		await _handle_views("handles_unlocked")
+		parts._on_override(-1)
+		await _frames(30)
+		print("HANDLES both pulled: hatch open %s" % hatch.is_open())
+		await _handle_views("handles_open")
+		parts._on_lock(1)
+		await _frames(10)
+		print("HANDLES lock pushed with the override up: lock_up %s" % parts.lock_up)
+		parts._on_override(1)
+		await _frames(int(hatch.duration * 60.0) + 40)
+		print("HANDLES override pushed: hatch open %s, unsealed %s" % [hatch.is_open(), hatch.is_unsealed()])
 	if "hatch" in shots:
 		var hatch := vehicle.find_component(CockpitHatch) as CockpitHatch
 		if hatch != null:
@@ -158,6 +183,23 @@ func _ball(color: Color, radius: float) -> MeshInstance3D:
 	mesh.material_override = mat
 	mesh.layers = Layers.DEBUG
 	return mesh
+
+
+## The hatch handles from the pilot's eye and from close by, in the seat's frame.
+func _handle_views(tag: String) -> void:
+	_fp_cam.make_current()
+	_fp_cam.set_look_rotation(Basis(Vector3.UP, deg_to_rad(-58)) * Basis(Vector3.RIGHT, deg_to_rad(-60)))
+	await _shot(tag + "_fp")
+	_fp_cam.set_look_rotation(Basis(Vector3.UP, deg_to_rad(-75)) * Basis(Vector3.RIGHT, deg_to_rad(-70)))
+	await _shot(tag + "_fp_lean")
+	_fp_cam.set_look_rotation(Basis.IDENTITY)
+	_debug_cam.make_current()
+	var seat := _pilot.transform if _pilot != null else Transform3D.IDENTITY
+	var at := Vector3(0.27, -0.625, -0.18)
+	for view in [["close", Vector3(0.62, -0.5, -0.32)], ["out", Vector3(0.55, -0.62, -0.05)], ["above", Vector3(0.12, -0.33, -0.12)]]:
+		_debug_cam.transform = seat * Transform3D(Basis.IDENTITY, view[1]).looking_at(at, Vector3.UP)
+		await _shot(tag + "_" + view[0])
+	_fp_cam.make_current()
 
 
 func _views(tag: String) -> void:

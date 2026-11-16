@@ -21,6 +21,13 @@ const G0 := 9.80665
 @export var allocator: ThrustAllocator
 ## Optional limb balancing. Auto-discovered on the vehicle if left empty.
 @export var ambac: AmbacController
+## Optional mass model and reaction torque of the moving parts. Auto-discovered.
+@export var limb_reaction: LimbReaction
+## Cancel the limbs' measured reaction with AMBAC and the thrusters (feed-forward, a
+## tick late) instead of waiting for the attitude hold to notice the body turning.
+@export var counter_limb_reaction: bool = true
+## Low-pass on that measured disturbance, s (skeleton updates and physics ticks don't line up).
+@export var limb_disturbance_smoothing: float = 0.03
 ## Master FCS switch. Off = all thrusters commanded to zero.
 @export var fcs_enabled: bool = true
 ## Force the FBW may ask for in a direction is capped at what the thrusters that can aim
@@ -50,6 +57,12 @@ var last_wrench := Wrench.new()
 var _pending_toggles := {}
 ## Reaction torque AMBAC delivered last tick (body frame).
 var ambac_torque := Vector3.ZERO
+## Limbs' reaction torque on the body last tick, and the part of it AMBAC didn't plan
+## (pose blends, weapon aim, model error), smoothed (body frame).
+var limb_torque := Vector3.ZERO
+var limb_disturbance := Vector3.ZERO
+var _ambac_measured := Vector3.ZERO
+var _ambac_measured_smoothed := Vector3.ZERO
 var acceleration_g: float = 0.0
 
 var _prev_velocity := Vector3.ZERO
@@ -77,6 +90,8 @@ func _ready() -> void:
 	if vehicle != null:
 		if ambac == null:
 			ambac = vehicle.find_component(AmbacController) as AmbacController
+		if limb_reaction == null:
+			limb_reaction = vehicle.find_component(LimbReaction) as LimbReaction
 		_hatch = vehicle.find_component(CockpitHatch) as CockpitHatch
 		_stance = vehicle.find_component(StanceController) as StanceController
 	set_control_law(control_law if control_law != null else RateCommandControlLaw.new())
@@ -98,6 +113,13 @@ func rebuild_capability_map() -> void:
 func rebuild_capability_map_async() -> void:
 	if not thrusters.is_empty():
 		_map_build = ForceCapabilityMap.start(state, allocator.duplicate(), min_thrust_alignment)
+
+
+## Drops the capability map so the next tick measures it again at once (e.g. the mass
+## model moved the centre of mass far from where the map was built).
+func invalidate_capability_map() -> void:
+	_capability_map = null
+	_map_build = null
 
 
 func get_total_mass() -> float:
@@ -131,18 +153,31 @@ func _physics_process(delta: float) -> void:
 		command.set(toggle, true)
 	_pending_toggles.clear()
 
+	_apply_limb_reaction(delta)
+	_ambac_measured = Vector3.ZERO
+
 	if fcs_enabled:
 		last_wrench = control_law.compute(state, command)
 		var thrust_wrench := last_wrench
+		var torque := last_wrench.torque
+		# Countering goes through the normal split, not all to AMBAC: a waist swing makes the
+		# aimed arm swing back in the chest, which reads as a new disturbance (loop gain ~1).
+		if counter_limb_reaction:
+			torque -= limb_disturbance
 		if ambac != null and ambac.enabled:
 			# Limbs take what exceeds the thrusters plus a share of the rest.
-			var torque := last_wrench.torque
 			var limit := last_wrench.thruster_torque_limit
 			var beyond := torque - ControlLaw.scale_to_box(torque, limit)
 			ambac_torque = ambac.step(beyond + (torque - beyond) * ambac.share, delta)
-			body.apply_torque(state.to_global(ambac_torque))
+			_ambac_measured = ambac.last_measured_torque
+			# Measured joints push the body through LimbReaction instead.
+			body.apply_torque(state.to_global(ambac_torque - _ambac_measured))
 			thrust_wrench = Wrench.new(last_wrench.force, ControlLaw.scale_to_box(torque - ambac_torque, limit))
 			thrust_wrench.torque_priority = last_wrench.torque_priority
+		elif torque != last_wrench.torque:
+			thrust_wrench = Wrench.new(last_wrench.force, torque)
+			thrust_wrench.torque_priority = last_wrench.torque_priority
+			thrust_wrench.thruster_torque_limit = last_wrench.thruster_torque_limit
 		var demand := allocator.allocate(state, thrust_wrench)
 		for i in thrusters.size():
 			thrusters[i].set_command(demand[i].length(), demand[i], body)
@@ -163,6 +198,25 @@ func _physics_process(delta: float) -> void:
 	var accel := (body.linear_velocity - _prev_velocity) / delta
 	_prev_velocity = body.linear_velocity
 	acceleration_g = lerpf(acceleration_g, accel.length() / G0, 0.15)
+
+
+## Newton's third law for the limbs: the body gets their measured reaction whatever the
+## FCS does. What AMBAC didn't plan itself is the disturbance to counter.
+func _apply_limb_reaction(delta: float) -> void:
+	if limb_reaction == null or not limb_reaction.enabled:
+		limb_torque = Vector3.ZERO
+		limb_disturbance = Vector3.ZERO
+		return
+	limb_torque = limb_reaction.take_torque(delta)
+	body.apply_torque(state.to_global(limb_torque))
+	# AMBAC's own share of it (last tick's plan), through the same low-pass the measured
+	# momentum goes through, or its own arm swing would read as a disturbance for a moment.
+	var km := 1.0 if limb_reaction.momentum_smoothing <= 0.0 \
+			else 1.0 - exp(-delta / limb_reaction.momentum_smoothing)
+	_ambac_measured_smoothed = _ambac_measured_smoothed.lerp(_ambac_measured, km)
+	var unplanned := limb_torque - _ambac_measured_smoothed
+	var k := 1.0 if limb_disturbance_smoothing <= 0.0 else 1.0 - exp(-delta / limb_disturbance_smoothing)
+	limb_disturbance = limb_disturbance.lerp(unplanned, k)
 
 
 ## The allocation assumes every nozzle is already aimed and every throttle already
@@ -276,6 +330,11 @@ func get_mode_labels() -> PackedStringArray:
 	if not fcs_enabled:
 		return PackedStringArray(["FCS OFF"])
 	return control_law.get_mode_labels()
+
+
+## Direction of a break (dodge) in progress, pilot frame; zero when none.
+func get_break_direction() -> Vector3:
+	return control_law.get_break_direction() if fcs_enabled else Vector3.ZERO
 
 
 ## Boost / brake for the HUD: 0 off, 1 on, 2 full. 0 with the FCS off.

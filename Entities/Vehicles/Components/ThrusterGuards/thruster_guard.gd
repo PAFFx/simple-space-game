@@ -15,6 +15,10 @@ extends Resource
 @export var rest_thrust := Vector3.ZERO
 ## Hinge axis in skeleton space at rest (hinge mode).
 @export var axis := Vector3.RIGHT
+## Hinge mode: follow only the thrusters' own sideways (yaw) swing, read off each
+## thruster's gimbal, instead of the deflection about `axis` (a nozzle cup swinging
+## sideways inside a pod that already follows the fore/aft swing).
+@export var follow_yaw: bool = false
 ## Share of the nozzle deflection the guard follows (1 = moves with the nozzle).
 @export var follow: float = 1.0
 ## Full rotation: low-pass on the followed aim, s, so a pod carrying several nozzles

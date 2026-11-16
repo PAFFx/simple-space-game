@@ -26,14 +26,20 @@ signal active_changed(is_active: bool)
 @export var start_active: bool = false
 
 var active: bool = false
+## False while stowed off the suit (MsLoadout.set_equipped): hidden, massless, unusable.
+var equipped: bool = true
 
 
 func _ready() -> void:
 	active = start_active
-	_set_layers(self, Layers.VEHICLE_EXT)
+	# Drawn on the panoramic screen with the body in a weapons mode, unless it is shown
+	# there as an outline only (shield, funnels: the real thing would block the view).
+	var outlined := find_children("*", "", true, false).any(func(n: Node) -> bool: return n is SensorOutline)
+	_set_layers(self, Layers.VEHICLE_EXT | (0 if outlined else Layers.SENSOR_BODY_PARTS))
 
 
 func set_active(value: bool) -> void:
+	value = value and equipped
 	if value == active:
 		return
 	active = value

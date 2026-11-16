@@ -16,6 +16,8 @@
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/thrust_cue_widget.gd" id="12_cue"]
 
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/weapons_widget.gd" id="13_wpn"]
+
 [node name="PanoramicHud" type="Node"]
 script = ExtResource("1_hud")
 
@@ -49,6 +51,9 @@ script = ExtResource("5_data")
 
 [node name="Contacts" type="Node2D" parent="HudViewport"]
 script = ExtResource("7_cts")
+
+[node name="Weapons" type="Node2D" parent="HudViewport"]
+script = ExtResource("13_wpn")
 
 [node name="Hatch" type="Node2D" parent="HudViewport"]
 script = ExtResource("10_hatch")

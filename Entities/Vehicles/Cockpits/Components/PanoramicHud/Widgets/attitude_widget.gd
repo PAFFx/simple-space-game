@@ -48,9 +48,9 @@ extends HudWidget
 @export var show_horizon_ring := false
 ## Overhead attitude indicator radius, deg.
 @export var aux_radius_deg: float = 4.5
-## Course ring elevation in the cockpit frame: inside the default view (75° vertical FOV)
-## with room for the HDG box above it, clear of the data blocks below.
-@export var course_elevation_deg: float = 28.0
+## Course ring elevation in the cockpit frame: above the default view (75° vertical FOV),
+## read with a glance up, so it stays clear of the forward view and the data blocks.
+@export var course_elevation_deg: float = 45.0
 ## Opacity of the ring, its marks and numbers (the HDG box and pointer stay full).
 @export var course_alpha: float = 0.55
 @export var course_label_offset_deg: float = 1.6

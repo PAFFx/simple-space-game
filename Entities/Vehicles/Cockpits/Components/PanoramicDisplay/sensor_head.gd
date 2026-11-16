@@ -32,8 +32,23 @@ extends Node3D
 @export var min_viewport_size: int = 256
 @export var max_viewport_size: int = 4096
 
+@export_group("Overlay")
+## Seconds the suit's own overlay (its outlines, or its body) takes to resolve in from blue
+## blocks, and to break up and go.
+@export var overlay_in_time: float = 0.5
+@export var overlay_out_time: float = 0.3
+
+## 0 = overlay gone, 1 = fully resolved (PanoramicScreen composites with it).
+var overlay_reveal := 0.0
+
 var _viewport: SubViewport
 var _camera: Camera3D
+# The suit's own overlay: drawn by a second camera on its own transparent image, so the
+# screen can pixelate it in and out without touching the outside view.
+var _overlay_viewport: SubViewport
+var _overlay_camera: Camera3D
+var _overlay_layers := 0
+var _overlay_target := 0
 
 var _dbg_last_vfov: float = 0.0
 var _dbg_last_hfov: float = 0.0
@@ -44,6 +59,7 @@ func _ready() -> void:
 	_auto_discover()
 	_create_viewport()
 	_create_camera()
+	_create_overlay()
 
 
 func _process(_delta: float) -> void:
@@ -54,6 +70,17 @@ func _process(_delta: float) -> void:
 		_update_camera_fallback(viewer)
 	else:
 		_update_camera(viewer)
+	_update_overlay(_delta)
+
+
+## Shows these layers (Layers.SENSOR_COMBAT, SENSOR_BODY_PARTS; 0 = none) as the suit's own
+## overlay. A change breaks the old one up first, then resolves the new one in.
+func set_overlay(layers: int) -> void:
+	_overlay_target = layers
+
+
+func get_overlay_texture() -> ViewportTexture:
+	return _overlay_viewport.get_texture()
 
 
 ## The camera the screen is rendered for: whatever camera is currently showing
@@ -95,6 +122,10 @@ func _create_viewport() -> void:
 	_viewport.own_world_3d = false
 	_viewport.disable_3d = false
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# The outside world is drawn here, not in the window: give it the project's
+	# anti-aliasing so far suits and thin beams don't break up into crawling pixels.
+	_viewport.msaa_3d = ProjectSettings.get_setting("rendering/anti_aliasing/quality/msaa_3d", Viewport.MSAA_4X)
+	_viewport.screen_space_aa = ProjectSettings.get_setting("rendering/anti_aliasing/quality/screen_space_aa", Viewport.SCREEN_SPACE_AA_DISABLED)
 	add_child(_viewport)
 
 
@@ -108,8 +139,51 @@ func _create_camera() -> void:
 	_camera.near = 0.5
 	# Placed every frame from interpolated transforms; never interpolate it again.
 	_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
-	_camera.far = 2000.0
+	# Far enough to see a beam fight: targets and bolts out to a few kilometres.
+	_camera.far = 20000.0
 	_viewport.add_child(_camera)
+
+
+func _create_overlay() -> void:
+	_overlay_viewport = SubViewport.new()
+	_overlay_viewport.name = "OverlayViewport"
+	_overlay_viewport.size = _viewport.size
+	_overlay_viewport.own_world_3d = false
+	_overlay_viewport.transparent_bg = true
+	_overlay_viewport.msaa_3d = _viewport.msaa_3d
+	_overlay_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child(_overlay_viewport)
+	_overlay_camera = Camera3D.new()
+	_overlay_camera.name = "OverlayCamera"
+	_overlay_camera.cull_mask = 0
+	_overlay_camera.near = _camera.near
+	_overlay_camera.far = 200.0
+	_overlay_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	_overlay_viewport.add_child(_overlay_camera)
+	# The scene's look (tonemapping, ambient) but no sky behind: only the overlay is drawn.
+	var world_env := _camera.get_world_3d().environment if _camera.get_world_3d() != null else null
+	var env := world_env.duplicate() as Environment if world_env != null else Environment.new()
+	env.background_mode = Environment.BG_CLEAR_COLOR
+	_overlay_camera.environment = env
+
+
+func _update_overlay(delta: float) -> void:
+	if _overlay_layers != _overlay_target:
+		# Break the old one up first (nothing to break up: switch at once).
+		overlay_reveal = move_toward(overlay_reveal, 0.0, delta / maxf(overlay_out_time, 0.01))
+		if overlay_reveal <= 0.0:
+			_overlay_layers = _overlay_target
+			_overlay_camera.cull_mask = _overlay_layers
+	elif _overlay_layers != 0:
+		overlay_reveal = move_toward(overlay_reveal, 1.0, delta / maxf(overlay_in_time, 0.01))
+	var drawing := overlay_reveal > 0.0 or _overlay_layers != 0
+	drawing = drawing and _viewport.render_target_update_mode != SubViewport.UPDATE_DISABLED
+	_overlay_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if drawing else SubViewport.UPDATE_DISABLED
+	if drawing:
+		_overlay_camera.transform = _camera.transform
+		_overlay_camera.fov = _camera.fov
+		if _overlay_viewport.size != _viewport.size:
+			_overlay_viewport.size = _viewport.size
 
 
 func _update_camera(viewer: Camera3D) -> void:

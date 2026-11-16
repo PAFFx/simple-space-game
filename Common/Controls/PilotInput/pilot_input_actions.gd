@@ -26,6 +26,23 @@ const CLICK_MODE := &"ms_click_mode"
 const TOGGLE_VIEW := &"ms_toggle_view"
 const TOGGLE_RIFLE := &"ms_toggle_rifle"
 const TOGGLE_SHIELD := &"ms_toggle_shield"
+# Weapons. On suits with a FireControl the weapon select keys replace the two toggles above.
+const FIRE_MAIN := &"ms_fire_main"
+const VULCAN := &"ms_vulcan"
+const LOCK_PREVIEW := &"ms_lock_preview"
+const LOCK_COMMIT := &"ms_lock_commit"
+const SHIELD_BLOCK := &"ms_shield_block"
+## Weapon select hat, in FireControl.Hat order: forward, right, aft, left, depress.
+const WEAPON_SELECT: Array[StringName] = [&"ms_weapon_forward", &"ms_weapon_right", &"ms_weapon_aft",
+		&"ms_weapon_left", &"ms_weapon_depress"]
+const MASTER_ARM := &"ms_master_arm"
+## Master modes, in FireControl.MasterMode order: NAV, DGFT, BVR.
+const MASTER_MODE: Array[StringName] = [&"ms_mode_nav", &"ms_mode_dgft", &"ms_mode_bvr"]
+const SOI_CYCLE := &"ms_soi_cycle"
+const CURSOR_LEFT := &"ms_cursor_left"
+const CURSOR_RIGHT := &"ms_cursor_right"
+const CURSOR_UP := &"ms_cursor_up"
+const CURSOR_DOWN := &"ms_cursor_down"
 
 # Keyboard only. Flight sticks and HOTAS report raw axes/buttons whose indices
 # differ per device, so analog input is bound through HotasPilotInput instead.
@@ -48,6 +65,24 @@ const _DEFAULTS := {
 	TOGGLE_VIEW: [KEY_V],
 	TOGGLE_RIFLE: [KEY_1],
 	TOGGLE_SHIELD: [KEY_2],
+	VULCAN: [KEY_X],
+	LOCK_PREVIEW: [KEY_T],
+	LOCK_COMMIT: [KEY_G],
+	SHIELD_BLOCK: [KEY_B],
+	WEAPON_SELECT[0]: [KEY_1],
+	WEAPON_SELECT[1]: [KEY_2],
+	WEAPON_SELECT[2]: [KEY_3],
+	WEAPON_SELECT[3]: [KEY_4],
+	WEAPON_SELECT[4]: [KEY_5],
+	MASTER_ARM: [KEY_M],
+	MASTER_MODE[0]: [KEY_N],
+	MASTER_MODE[1]: [KEY_J],
+	MASTER_MODE[2]: [KEY_K],
+	SOI_CYCLE: [KEY_TAB],
+	CURSOR_LEFT: [KEY_KP_4],
+	CURSOR_RIGHT: [KEY_KP_6],
+	CURSOR_UP: [KEY_KP_8],
+	CURSOR_DOWN: [KEY_KP_2],
 }
 
 # Keys bound on the left of the keyboard only (right Alt is AltGr on many layouts).
@@ -56,6 +91,7 @@ const _LEFT_ONLY := [KEY_ALT]
 const _MOUSE_DEFAULTS := {
 	MOUSE_STEER: [MOUSE_BUTTON_RIGHT],
 	CLICK_MODE: [MOUSE_BUTTON_MIDDLE],
+	FIRE_MAIN: [MOUSE_BUTTON_LEFT],
 }
 
 

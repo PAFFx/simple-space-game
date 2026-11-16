@@ -9,11 +9,11 @@ extends HudWidget
 ## Nothing is drawn on the canvas: the screen shader draws the chevrons around the
 ## frame given here (hud_layers.gdshaderinc), so they stay sharp and cost no redraw.
 
-@export var alpha: float = 0.6
+@export var alpha: float = 0.95
 ## How solid the inside of each chevron is, as a share of its border.
 @export var fill: float = 0.75
-## 1 = chevrons 2° wide, their points 1.7° above and below the centre.
-@export var symbol_scale: float = 1.0
+## 1 = chevrons 2° wide, their points 1.7° above and below the centre (1.4: 2.8° wide, 2.4°).
+@export var symbol_scale: float = 1.4
 
 
 func setup_layers() -> void:

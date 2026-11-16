@@ -13,7 +13,7 @@ PanoramicHud (Node)
     ├── Attitude        pitch ladder (two unnumbered tick columns ±30° off the heading, with
                         a pointer carrying the current pitch, and a highlight running up the
                         ticks while climbing, down while descending); small attitude indicator at
-                        the zenith inside a numbered course ring at 28° elevation (translucent), with the
+                        the zenith inside a numbered course ring at 45° elevation (translucent), with the
                         HDG box on its pointer (horizon ring off, reserved)
     ├── SuitAttitude    suit vs cockpit: the suit's horizontal plane as one double-rail line
                         all the way round, open ahead between two arrowhead badges (a plate in
@@ -36,6 +36,10 @@ PanoramicHud (Node)
     ├── FlightData      left column: G MS / G PLT / ROT / AMBAC over boxed SPD and Mach (dim);
                         non-default modes just inside the right ladder column; cautions
     ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
+    ├── Weapons         mode / ARM / selected weapon and rounds; the selected weapon's envelope
+                        (body-fixed outline, bold corners), gun cross, lead diamond with SHOOT /
+                        OUT, vulcan ring, designation cursor, lock brackets, HIT / BLOCK
+                        (see Docs/Weapons/summary.md)
     └── Contacts        a triangle pointing down around each node in group `hud_contacts`: three
                         see-through bars short of its corners (a faint fill in a fine border), or
                         a bracket at each corner of a square when it's too big for the triangle; hostile adds an inner triangle's corners and

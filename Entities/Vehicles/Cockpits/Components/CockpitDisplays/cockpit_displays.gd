@@ -51,15 +51,10 @@ func _ready() -> void:
 		pages[mesh_name] = page
 		_viewports[mesh_name] = vp
 		_due[mesh_name] = 0.0
-		var mat := StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.albedo_texture = vp.get_texture()
-		mat.albedo_color = Color(brightness, brightness, brightness)
-		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
-		# The panels are turned past 90° to face the eye, which puts the model's "up"
-		# edge at the bottom: flip the page vertically to read upright.
-		mat.uv1_scale = Vector3(1, -1, 1)
-		mat.uv1_offset = Vector3(0, 1, 0)
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://Entities/Vehicles/Cockpits/Components/CockpitDisplays/mfd_screen.gdshader")
+		mat.set_shader_parameter(&"page", vp.get_texture())
+		mat.set_shader_parameter(&"brightness", brightness)
 		mesh.material_override = mat
 
 

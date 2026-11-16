@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## FBW response probe (RX-93, scripted input):
-##   godot-double --headless --path . -s Tools/Flight/fbw_probe.gd -- <scenario> [series] [law_property=value ...]
+##   godot-double --headless --path . -s Tools/Flight/fbw_probe.gd -- <scenario> [series] [no_funnels] [law_property=value ...]
 ## Tools/Flight/run_fbw_probe.sh runs every scenario.
 
 class Scripted extends PilotInputSource:
@@ -21,6 +21,13 @@ class Scripted extends PilotInputSource:
 				if on: c.translation = Vector3(1, 0, 0); c.boost = true
 			"full_right":
 				if on: c.translation = Vector3(1, 0, 0); c.boost = true; c.boost_full = true
+			"break_right", "break_left", "break_up", "break_diag":
+				# A tap of full boost with the stick held: a break, then the stick alone.
+				if on:
+					c.translation = {"break_right": Vector3(1, 0, 0), "break_left": Vector3(-1, 0, 0),
+							"break_up": Vector3(0, 1, 0), "break_diag": Vector3(1, 1, 0).normalized()}[scenario]
+					c.boost_full = t < 0.6
+					c.boost = c.boost_full
 			"boost_down":
 				if on: c.translation = Vector3(0, -1, 0); c.boost = true
 			"full_down":
@@ -115,6 +122,9 @@ func _initialize() -> void:
 func _start() -> void:
 	var args := OS.get_cmdline_user_args()
 	var suit: Node = load("res://Entities/Vehicles/MobileSuits/RX93/mobile_suit_rx93.tscn").instantiate()
+	if "no_funnels" in args:
+		# Launched without them: gone before the loadout, payload and mass model are built.
+		suit.get_node("Loadout/FinFunnels").free()
 	root.add_child(suit)
 	fc = suit.get_node("FlightComputer")
 	inp = Scripted.new()
@@ -137,12 +147,29 @@ func _tick() -> void:
 			if "=" in o:  # control law property override, e.g. rate_gain=9
 				var key := o.get_slice("=", 0)
 				var value := float(o.get_slice("=", 1))
+				# A vector component: solver.axis_limit_deg.z=40
+				var comp := key.get_slice(".", key.get_slice_count(".") - 1)
+				if comp in ["x", "y", "z"] and key.get_slice_count(".") >= 3:
+					var target: Object = fc.control_law
+					var path := key.trim_suffix("." + comp)
+					if path.begins_with("solver."):
+						target = (fc.control_law as RateCommandControlLaw).attitude_solver
+						path = path.trim_prefix("solver.")
+					var vec: Vector3 = target.get(path)
+					vec["xyz".find(comp)] = value
+					target.set(path, vec)
+					continue
 				if key.begins_with("fc."):
 					fc.set(key.trim_prefix("fc."), value)
 				elif key.begins_with("solver."):
 					(fc.control_law as RateCommandControlLaw).attitude_solver.set(key.trim_prefix("solver."), value)
 				elif key.begins_with("alloc."):
 					fc.allocator.set(key.trim_prefix("alloc."), value)
+				elif key.begins_with("ambac."):
+					fc.ambac.set(key.trim_prefix("ambac."), value)
+				elif key.begins_with("stance."):
+					var stance := (fc.body as Node as VehicleBase).find_component(StanceController)
+					stance.set(key.trim_prefix("stance."), value)
 				else:
 					fc.control_law.set(key, value)
 	var dt := 1.0 / Engine.physics_ticks_per_second

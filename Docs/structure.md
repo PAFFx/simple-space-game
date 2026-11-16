@@ -31,17 +31,21 @@ simple-space-game/
 │   │   ├── BeamRifle/             Beam rifle scene + GLB
 │   │   └── Shield/                Shield scene + GLB + HudSilhouette outline
 │   │
+│   ├── Projectiles/               ProjectileSpec, ProjectileManager, beam / flash shaders
+│   │
 │   ├── Environment/
 │   │   └── Space/
 │   │       ├── SpaceStation/      Space station with constant rotation components
 │   │       ├── DebrisField/       MultiMesh rock shell for motion cues
-│   │       └── NavBuoy/           Blinking buoy that registers as a HUD contact
+│   │       ├── NavBuoy/           Blinking buoy that registers as a HUD contact
+│   │       └── TargetDrone/       Practice targets: static, drifting, jinking, turret
 │   │
 │   └── Vehicles/
 │       ├── Components/            Vehicle-level components shared across vehicle types
 │       │   ├── FlightControl/     FlightComputer, Thruster, ControlLaws/, Allocators/, AttitudeSolvers/
 │       │   ├── Ambac/             AMBAC limb balancing (controller, joints, skeleton modifier)
 │       │   ├── Loadout/           MsLoadout: mounts equipment on bones, toggles it
+│       │   ├── FireControl/       FireControl, MsWeapon, WeaponAimModifier (see Docs/Weapons)
 │       │   ├── PoseAnimator/      AnimationTree with per-limb equipment pose layers
 │       │   ├── Hatch/             CockpitHatch + HatchPanel (bone-driven, sequences screen aperture)
 │       │   └── ViewSwitcher/      Cockpit ↔ external camera toggle
@@ -269,4 +273,5 @@ types. Any cockpit that extends `CockpitBase` and has a `PanoramicDisplayMount` 
 | `Docs/FlightControl/summary.md` | Input → FBW → allocator → thruster pipeline, swapping stages, controls, HOTAS |
 | `Docs/MobileSuit/prototype.md` | Prototype suit scene tree, rig, render layers, regenerating models |
 | `Docs/MobileSuit/linear_seat_v2_cockpit.md` | RX-93 linear seat v2 cockpit, seated pilot (IK, G lean), sensor outlines |
+| `Docs/Weapons/summary.md` | Fire control, envelopes and aiming, projectiles, beam look, controls, test tools |
 | `Docs/Performance/frame_budget.md` | Frame time by phase, subtree and GPU pass (dated snapshot), measuring pitfalls |

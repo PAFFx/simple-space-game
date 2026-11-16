@@ -40,6 +40,9 @@ var target_rates := PackedFloat32Array()
 var target_accels := PackedFloat32Array()
 var _locked := {}                    ## Group → true: hard-locked (no balancing)
 var last_torque := Vector3.ZERO      ## Achieved body torque, body frame
+## Part of last_torque from measured joints: LimbReaction applies their real reaction.
+var last_measured_torque := Vector3.ZERO
+var _measured := PackedByteArray()
 var _loadout: MsLoadout
 var _axes_body: Array[Vector3] = []
 
@@ -50,6 +53,7 @@ func _ready() -> void:
 	targets.resize(joints.size())
 	target_rates.resize(joints.size())
 	target_accels.resize(joints.size())
+	_measured.resize(joints.size())
 	var vehicle := VehicleBase.find_vehicle(self)
 	if vehicle != null:
 		_loadout = vehicle.find_component(MsLoadout) as MsLoadout
@@ -95,6 +99,14 @@ func find_joint(bone: StringName, axis: Vector3) -> int:
 	return -1
 
 
+## Joint i's limb is tracked by LimbReaction, which applies its real reaction torque;
+## AMBAC plans with `inertia` (from the same mass model) but doesn't apply it itself.
+func set_measured(i: int, inertia: float) -> void:
+	_measured[i] = 1
+	if inertia > 0.0:
+		joints[i].inertia = inertia
+
+
 ## Pose target for joint i: angle (rad) plus its rate and acceleration, fed forward so
 ## the limb follows a moving target without lag.
 func set_target(i: int, angle: float, rate := 0.0, accel := 0.0) -> void:
@@ -117,7 +129,7 @@ func get_capacity() -> Vector3:
 		var half := deg_to_rad(maxf(j.max_angle_deg - j.min_angle_deg, 1e-3)) * 0.5
 		var mid := deg_to_rad(j.max_angle_deg + j.min_angle_deg) * 0.5
 		var headroom := clampf(1.0 - absf(angles[i] - mid) / half, 0.0, 1.0)
-		out += _axes_body[i].abs() * (j.inertia * deg_to_rad(j.max_accel_deg) * headroom)
+		out += _axes_body[i].abs() * (j.inertia * j.get_max_accel() * headroom)
 	return out * capacity_fraction
 
 
@@ -155,6 +167,7 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 
 	var w0 := centering_frequency
 	var total := Vector3.ZERO
+	var measured := Vector3.ZERO
 	for i in n:
 		var j := joints[i]
 		var lo := deg_to_rad(minf(j.min_angle_deg, 0.0))
@@ -167,7 +180,7 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 			alpha *= clampf((angles[i] - lo) / maxf(-lo, 1e-4), 0.0, 1.0)
 		alpha += target_accels[i] - w0 * w0 * (angles[i] - targets[i]) \
 				- 2.0 * centering_damping * w0 * (rates[i] - target_rates[i])
-		var max_accel := deg_to_rad(j.max_accel_deg)
+		var max_accel := j.get_max_accel()
 		alpha = clampf(alpha, -max_accel, max_accel)
 
 		var max_rate := deg_to_rad(j.max_rate_deg)
@@ -179,8 +192,12 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 		var actual_alpha := (new_rate - rates[i]) / delta
 		rates[i] = new_rate
 		angles[i] = new_angle
-		total += -_axes_body[i] * j.inertia * actual_alpha
+		var reaction := -_axes_body[i] * j.inertia * actual_alpha
+		total += reaction
+		if _measured[i]:
+			measured += reaction
 	last_torque = total
+	last_measured_torque = measured
 	return total
 
 
