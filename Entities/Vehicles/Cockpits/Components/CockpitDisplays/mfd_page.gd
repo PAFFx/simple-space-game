@@ -21,8 +21,8 @@ const SOI := Color(0.96, 0.42, 0.4)
 ## schedules it), not every rendered frame: like a real display's own refresh rate.
 var refresh_hz: float = 20.0
 
-## The page has a cursor, so it can be the sensor of interest (FireControl.cycle_soi). Such
-## a page overrides soi_slew, soi_candidate and soi_reset.
+## Every page can be the sensor of interest (FireControl.select_soi: a red border). One with
+## a cursor also slews it and designates: it overrides soi_slew, soi_candidate, soi_reset.
 var has_cursor := false
 ## Set by the FireControl: this page is the SOI, so it gets the border and the cursor slew.
 var is_soi := false

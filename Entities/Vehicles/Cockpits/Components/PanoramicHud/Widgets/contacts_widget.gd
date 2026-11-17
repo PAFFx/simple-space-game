@@ -9,7 +9,8 @@ extends HudWidget
 ##                 fill inside a fine border, so they don't hide what's behind. A contact
 ##                 too big for the triangle gets a bracket at each corner of a square
 ##   hostile       adds the corners of a smaller triangle inside, in the hostile colour
-##   candidate     (under the designation cursor) its bars flash
+##   candidate     (under the designation cursor) its bars blink between filled solid (the
+##                 border's colour) and their usual faint fill
 ##   locked        strokes across each corner outside, by the track's quality: two = good,
 ##                 one = poor, one blinking = coasting. It is drawn where the sensors put it
 ##                 (FireControl.get_shown_target_position), not where it really is, and at
@@ -43,9 +44,8 @@ const MAX_LABEL_LENGTH := 12
 @export var max_box_deg: float = 35.0
 ## How solid the inside of the bars is, as a share of their border.
 @export var bar_fill: float = 0.5
-## Candidate flash: cycles per second, and how far the bars dim at the bottom of it.
-@export var flash_hz: float = 2.5
-@export_range(0.0, 0.95) var flash_dim: float = 0.85
+## Candidate blink: cycles per second (half filled solid, half the usual fill).
+@export var flash_hz: float = 2.0
 ## Coasting track: the lock's one dash blinks this many times a second.
 @export var coast_blink_hz: float = 3.0
 ## Text redraws per second.
@@ -125,7 +125,7 @@ func _process(delta: float) -> void:
 		if is_locked:
 			locked_half = half * (1.42 if box else 1.0)
 		var hostile: bool = contact.get_meta("hud_hostile", false)
-		# Lock dashes in the integer part, how far the bars dim in the fraction.
+		# Lock dashes in the integer part; the fraction fills the bars solid (the blink).
 		var marks := 0.0
 		if is_locked:
 			match _fcs.get_track_mark():
@@ -136,7 +136,7 @@ func _process(delta: float) -> void:
 				FireControl.TrackMark.COAST:
 					marks = 1.0 if fmod(now * coast_blink_hz, 1.0) < 0.5 else 0.0
 		elif contact == candidate:
-			marks = flash_dim * (0.5 + 0.5 * cos(now * TAU * flash_hz)) * 0.999
+			marks = 0.9 if fmod(now * flash_hz, 1.0) < 0.5 else 0.0
 		# The triangle lies within 1.7 half sides of the middle, the text further right.
 		var reach := maxf(half * 1.7, half * 0.62 + 0.5 + SLOT_DEG.length())
 		if box:

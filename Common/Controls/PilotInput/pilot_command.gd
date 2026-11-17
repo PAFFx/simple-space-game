@@ -44,6 +44,8 @@ var fire_main := false
 ## window first); step the lock to the next contact by azimuth (1 = right, -1 = left);
 ## open the zoom window, or cycle its level.
 var lock_commit := false
+## One-shot: lock the nearest contact in sight.
+var lock_nearest := false
 var unlock := false
 var target_cycle := 0
 var zoom := false
@@ -55,7 +57,9 @@ var weapon_select := -1
 var master_arm := 0
 ## One-shot: master mode to enter (FireControl.MasterMode), -1 = none.
 var master_mode := -1
-## One-shot: switch the sensor of interest (HUD cursor / pilot's view).
-var soi_cycle := false
+## One-shot: Sensor Control Switch direction (FireControl.Scs), -1 = none. Forward
+## toggles the HUD cursor / HMCS, aft / left / right give the SOI to the centre / left /
+## right display.
+var scs := -1
 ## HUD cursor slew, each in [-1, 1]: x = right, y = up.
 var cursor_slew := Vector2.ZERO

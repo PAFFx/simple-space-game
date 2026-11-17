@@ -41,7 +41,8 @@ var _lock_commit := false
 var _unlock := false
 var _target_cycle := 0
 var _zoom := false
-var _soi_cycle := false
+var _scs := -1
+var _lock_nearest := false
 
 
 func _ready() -> void:
@@ -75,8 +76,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_target_cycle = 1
 	if event.is_action(a.ZOOM):
 		_zoom = true
-	if event.is_action(a.SOI_CYCLE):
-		_soi_cycle = true
+	for k in a.SCS.size():
+		if event.is_action(a.SCS[k]):
+			_scs = k
+	if event.is_action(a.LOCK_NEAREST):
+		_lock_nearest = true
 
 
 func poll_command() -> PilotCommand:
@@ -126,7 +130,8 @@ func _poll_weapons(cmd: PilotCommand) -> void:
 	cmd.unlock = _unlock
 	cmd.target_cycle = _target_cycle
 	cmd.zoom = _zoom
-	cmd.soi_cycle = _soi_cycle
+	cmd.scs = _scs
+	cmd.lock_nearest = _lock_nearest
 	_weapon_select = -1
 	_master_arm = 0
 	_master_mode = -1
@@ -134,7 +139,8 @@ func _poll_weapons(cmd: PilotCommand) -> void:
 	_unlock = false
 	_target_cycle = 0
 	_zoom = false
-	_soi_cycle = false
+	_scs = -1
+	_lock_nearest = false
 
 
 ## Pitch/yaw demand from mouse motion while steering.

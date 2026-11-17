@@ -49,8 +49,8 @@ func _ready() -> void:
 		vp.add_child(page)
 		page.setup(vehicle)
 		var fcs := vehicle.find_component(FireControl) as FireControl if vehicle != null else null
-		if fcs != null and page.has_cursor:
-			fcs.register_soi_display(page)
+		if fcs != null:
+			fcs.register_soi_display(page, StringName(mesh_name.trim_prefix("Screen").to_lower()))
 		pages[mesh_name] = page
 		_viewports[mesh_name] = vp
 		_due[mesh_name] = 0.0

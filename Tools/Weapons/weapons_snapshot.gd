@@ -73,6 +73,8 @@ func _run(shots: PackedStringArray) -> void:
 	_input.cmd.master_mode = FireControl.MasterMode.DGFT
 	_input.cmd.master_arm = 1
 	await _frames(5)
+	# The centre display has the SOI from the start; these shots designate with the HUD cursor.
+	_fcs.select_soi(FireControl.Scs.FORWARD)
 	if "hud" in shots:
 		_fcs.cursor = Vector2(55, 30)
 		await _frames(2)
@@ -114,6 +116,7 @@ func _run(shots: PackedStringArray) -> void:
 		await _shot("hudmove_new_track")
 		await _frames(90)
 		seen = _angles_of(mover)
+		print("HUDMOVE mover at %s, locked %s, valid %s" % [seen, _fcs.locked, is_instance_valid(mover)])
 		_look(seen.x, seen.y, 20.0)
 		await _shot("hudmove_settled")
 		_look(seen.x, seen.y, 8.0)
@@ -177,16 +180,30 @@ func _run(shots: PackedStringArray) -> void:
 		_look(0, 0)
 		await _frames(20)
 
+	if "blink" in shots:
+		_fcs.lock(null)
+		var cand := _spawn(TargetDrone.Behaviour.STATIC, 1500.0, Vector2(55, 30), 100000.0)
+		await _frames(12)
+		_fcs.cursor = _angles_of(cand)
+		_look(55, 30, 15.0)
+		for i in 4:
+			await _frames(4)
+			await _shot("blink_%d" % i)
+		cand.queue_free()
+		_fcs.lock(drone)
+		_look(0, 0)
+		await _frames(5)
+
 	if "soi" in shots:
 		_fcs.lock(null)
 		await _frames(2)
-		_fcs.cycle_soi()
+		_fcs.select_soi(FireControl.Scs.FORWARD)
 		await _frames(2)
 		await _shot("soi_hmcs_sweep")
-		_fcs.cycle_soi()
+		_fcs.select_soi(FireControl.Scs.AFT)
 		var displays := _vehicle.get_cockpit().find_children("*", "CockpitDisplays", true, false)
 		var sa: SaPage = (displays[0] as CockpitDisplays).pages["ScreenCentre"] if not displays.is_empty() else null
-		print("SOI after two cycles: %d, display %s" % [_fcs.soi, _fcs.soi_display])
+		print("SOI after SCS aft: %d, display %s" % [_fcs.soi, _fcs.soi_display])
 		await _frames(6)
 		await _shot("soi_hud_tms_dim")
 		_look(0, -42, 34.0)
@@ -201,7 +218,10 @@ func _run(shots: PackedStringArray) -> void:
 			await _frames(6)
 			print("locked from the SA page: %s" % (_fcs.locked == drone))
 			await _shot("soi_sa_locked")
-		_fcs.cycle_soi()
+		_fcs.select_soi(FireControl.Scs.LEFT)
+		await _frames(8)
+		await _shot("soi_left_mfd")
+		_fcs.select_soi(FireControl.Scs.FORWARD)
 		_look(0, 0)
 		await _frames(3)
 

@@ -11,14 +11,14 @@ extends HudWidget
 ##                 of interest. The HMCS ring closes while a contact is under it. With a
 ##                 display page as the SOI the TMS cursor drops to one dim rail and holds;
 ##                 taking the SOI back, a ring sweeps out from the cursor once
-##   tail          the locked target's motion across the view: a fine accent line from the
-##                 gun circle (or the triangle) outward, toward where it will be in `tail_time`
+##   tail          the locked target's own motion (its estimated velocity, not relative to
+##                 the suit, so our own flying doesn't draw one): a fine accent line from its
+##                 triangle's edge toward where it will be in `tail_time`
 ##   gun circle    the shoot cue. It sits where a shot would go relative to the target (the
 ##                 target's sensor estimate, turned by the barrel's error from the lead) and
 ##                 its size is how sure that is (the predicted impact error at the time of
 ##                 flight), never smaller than the target's mark. On the target = a shot;
 ##                 the smaller, the surer. Dim while the weapon isn't ready
-##   gun cross     with no lock: where the barrel points (where an unaimed shot goes)
 ##   vulcan ring   the head guns' aim, while they are spun up
 ##   zoom window   (FireControl.get_zoom) the sensor head's zoom camera on the locked target
 ##                 in a framed inset over it, with its level. Only while the head's gimbal
@@ -57,7 +57,6 @@ extends HudWidget
 var _fcs: FireControl
 var _contacts: ContactsWidget
 var _body := Basis.IDENTITY
-var _circle_radius := 0.0
 
 
 func draw_widget() -> void:
@@ -77,7 +76,6 @@ func draw_widget() -> void:
 	if _fcs.is_cursor_shown():
 		_draw_cursor()
 	var locked := _fcs.locked != null and is_instance_valid(_fcs.locked)
-	_circle_radius = 0.0
 	if show_hit_cue:
 		_draw_hit_cue()
 	if _fcs.is_weapons_mode():
@@ -86,9 +84,7 @@ func draw_widget() -> void:
 			_draw_vulcan(vulcan)
 		var weapon := _fcs.selected
 		if weapon != null:
-			if not locked:
-				_draw_gun_cross(weapon)
-			elif weapon.solution_valid:
+			if locked and weapon.solution_valid:
 				_draw_gun_circle(weapon)
 	if locked:
 		_draw_tail()
@@ -225,7 +221,7 @@ func _target_half() -> float:
 func _draw_tail() -> void:
 	var origin := hud.get_view_origin()
 	var rel := _fcs.get_shown_target_position() - origin
-	var motion := (_fcs.get_target_velocity() - _fcs.get_own_velocity()) * tail_time
+	var motion := _fcs.get_target_velocity() * tail_time
 	var now_dir := hud.world_to_display(rel).normalized()
 	var at := patch(now_dir, Vector3.UP)
 	var ahead := _in_patch(at, hud.world_to_display(rel + motion).normalized())
@@ -233,7 +229,7 @@ func _draw_tail() -> void:
 	if length < tail_min_deg:
 		return
 	var dir := ahead / length
-	var start := maxf(_target_half() * 1.25 + 0.3, _circle_radius + 0.4)
+	var start := _target_half() * 1.25 + 0.3
 	patch_line(at, dir * start, dir * (start + minf(length, tail_max_deg)), hud.suit_accent_color, 1.6, 4)
 
 
@@ -261,7 +257,6 @@ func _draw_gun_circle(weapon: MsWeapon) -> void:
 	var c := hud.primary_color if ready else PanoramicHud.dimmed(hud.primary_color)
 	var at := patch(centre, Vector3.UP)
 	var off := _in_patch(patch(hud.world_to_display(target).normalized(), Vector3.UP), centre)
-	_circle_radius = radius + off.length()
 	if _contacts != null:
 		_contacts.locked_label_x = radius + maxf(off.x, 0.0) + 0.5
 	# Outer ring broken in four, an inner ring broken in two, offset.
@@ -321,14 +316,6 @@ func _head_reaches(world_point: Vector3) -> bool:
 		return true
 	var a := SpatialMath.direction_to_angles(_body.inverse() * (world_point - hud.get_view_origin()))
 	return absf(a.x) <= sensors.head_az_limit_deg and a.y >= sensors.head_el_limits_deg.x and a.y <= sensors.head_el_limits_deg.y
-
-
-func _draw_gun_cross(weapon: MsWeapon) -> void:
-	var ready := weapon.state == MsWeapon.State.READY
-	var c := hud.primary_color if ready else PanoramicHud.dimmed(hud.primary_color)
-	var gun := patch(hud.world_to_display(_body * SpatialMath.angles_to_direction(weapon.aim)), Vector3.UP)
-	for d in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
-		patch_line(gun, d * 0.55, d * 1.5, c, 2.0, 1)
 
 
 func _draw_vulcan(weapon: MsWeapon) -> void:

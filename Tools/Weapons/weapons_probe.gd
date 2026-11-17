@@ -53,6 +53,19 @@ func _run() -> void:
 
 	# NAV: nothing selected; the hat drops into DGFT with the rifle.
 	_check("starts NAV / SAFE", _fcs.mode == FireControl.MasterMode.NAV and not _fcs.master_arm and _fcs.selected == null)
+	_check("centre display has the SOI from the start", _fcs.soi == FireControl.Soi.MFD)
+	_input.cmd.scs = FireControl.Scs.FORWARD
+	await _ticks(1)
+	_check("SCS forward: HUD cursor", _fcs.soi == FireControl.Soi.HUD_CURSOR)
+	_input.cmd.scs = FireControl.Scs.FORWARD
+	await _ticks(1)
+	_check("SCS forward again: HMCS", _fcs.soi == FireControl.Soi.HMCS)
+	_input.cmd.scs = FireControl.Scs.LEFT
+	await _ticks(1)
+	_check("SCS left: left display", _fcs.soi == FireControl.Soi.MFD and _fcs.soi_display != null)
+	_input.cmd.scs = FireControl.Scs.FORWARD
+	await _ticks(1)
+	_check("SCS forward from a display: HUD cursor", _fcs.soi == FireControl.Soi.HUD_CURSOR)
 	_input.cmd.weapon_select = FireControl.Hat.FORWARD
 	await _ticks(2)
 	_check("hat forward → DGFT + rifle", _fcs.mode == FireControl.MasterMode.DGFT and _id() == &"beam_rifle")
@@ -110,6 +123,23 @@ func _run() -> void:
 	_fcs.cursor = Vector2(20, 10)
 	await _ticks(1)
 	_check("hovering previews without a button", _fcs.candidate == drone)
+	_input.cmd.zoom = true
+	await _ticks(2)
+	_check("zoom with nothing locked locks the candidate and opens", _fcs.locked == drone and _fcs.zoom_level == 1)
+	_input.cmd.unlock = true
+	await _ticks(1)
+	_input.cmd.unlock = true
+	await _ticks(1)
+	var near := _spawn(TargetDrone.Behaviour.STATIC, 60.0, Vector2(-40, -10))
+	await _ticks(10)
+	_input.cmd.lock_nearest = true
+	await _ticks(2)
+	_check("TMS depress locks the nearest contact", _fcs.locked == near)
+	_fcs.lock(null)
+	near.queue_free()
+	await _ticks(2)
+	_fcs.cursor = Vector2(20, 10)
+	await _ticks(1)
 	# Behind a wall: out of sight, so it can't be designated.
 	var wall := StaticBody3D.new()
 	var wall_shape := CollisionShape3D.new()

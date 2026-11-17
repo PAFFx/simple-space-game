@@ -17,11 +17,13 @@ extends KeyboardPilotInput
 ##
 ## Weapons (both sticks number their buttons alike). Right: trigger first detent opens the
 ## vulcans, second fires them (the first stays pressed under the second); weapon release
-## fires the selected weapon; the 5-way hat selects weapons; master arm on / off; SCS
-## forward switches the sensor of interest and the mini-stick slews the HUD cursor.
-## Left: either trigger detent locks the contact under the cursor; the 5-way hat zooms
-## (forward), steps the lock right / left, unlocks (aft) and locks (depress); weapon
-## release holds the shield up; NAV / DGFT / BVR.
+## fires the selected weapon; the 5-way hat selects weapons; master arm on / off; the
+## Sensor Control Switch picks the sensor of interest (forward: HUD cursor / HMCS; aft,
+## left, right: the centre, left, right display) and the mini-stick slews its cursor.
+## Left: either trigger detent locks the contact under the cursor; the Target Management
+## Switch (5-way hat) zooms (forward; locks first if nothing is), steps the lock right /
+## left, unlocks (aft) and locks the nearest contact (depress); weapon release holds the
+## shield up; NAV / DGFT / BVR.
 
 @export_group("Devices")
 @export var left_stick_name: String = "EVO L"
@@ -51,7 +53,8 @@ extends KeyboardPilotInput
 @export var weapon_select_buttons := PackedInt32Array([15, 16, 17, 18, 19])
 @export var master_arm_on_button: int = 24
 @export var master_arm_off_button: int = 25
-@export var soi_button: int = 10           ## SCS forward
+## Sensor Control Switch in FireControl.Scs order: forward, right, aft, left.
+@export var scs_buttons := PackedInt32Array([10, 11, 12, 13])
 @export var cursor_x_axis: int = 3
 @export var cursor_y_axis: int = 4
 @export var invert_cursor_y: bool = false
@@ -59,12 +62,13 @@ extends KeyboardPilotInput
 @export_range(0.0, 1.0) var cursor_expo: float = 0.5
 
 @export_group("Weapons, left stick")
-## Trigger detents and hat depress all lock.
-@export var lock_buttons := PackedInt32Array([0, 1, 19])
-@export var unlock_button: int = 17         ## Hat aft
-@export var target_next_button: int = 16    ## Hat right
-@export var target_prev_button: int = 18    ## Hat left
-@export var zoom_button: int = 15           ## Hat forward
+## Trigger detents lock the contact under the cursor; TMS depress the nearest one.
+@export var lock_buttons := PackedInt32Array([0, 1])
+@export var lock_nearest_button: int = 19   ## TMS depress
+@export var unlock_button: int = 17         ## TMS aft
+@export var target_next_button: int = 16    ## TMS right
+@export var target_prev_button: int = 18    ## TMS left
+@export var zoom_button: int = 15           ## TMS forward
 @export var shield_block_button: int = 2
 ## Master modes in FireControl.MasterMode order: NAV, DGFT, BVR.
 @export var master_mode_buttons := PackedInt32Array([14, 10, 12])
@@ -171,6 +175,8 @@ func _poll_stick_weapons(cmd: PilotCommand) -> void:
 	for button in lock_buttons:
 		if _pressed(_left, button):
 			cmd.lock_commit = true
+	if _pressed(_left, lock_nearest_button):
+		cmd.lock_nearest = true
 	if _pressed(_left, unlock_button):
 		cmd.unlock = true
 	if _pressed(_left, target_next_button):
@@ -189,8 +195,9 @@ func _poll_stick_weapons(cmd: PilotCommand) -> void:
 		cmd.master_arm = 1
 	if _pressed(_right, master_arm_off_button):
 		cmd.master_arm = -1
-	if _pressed(_right, soi_button):
-		cmd.soi_cycle = true
+	for k in scs_buttons.size():
+		if _pressed(_right, scs_buttons[k]):
+			cmd.scs = k
 	var slew := Vector2(
 		JoyDevices.shape(_raw_axis(_right, cursor_x_axis), cursor_deadzone, cursor_expo),
 		JoyDevices.shape(_raw_axis(_right, cursor_y_axis), cursor_deadzone, cursor_expo))

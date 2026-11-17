@@ -61,8 +61,8 @@ uniform float hud_control_fill = 0.75;
 
 // Contacts: a triangle pointing down around each. Per contact: xyz = direction (display
 // frame), w = half the triangle's side in deg (0 = unused); then x = hostile, y = the lock's
-// strokes across each corner (integer part, 0-2) and how far the bars dim (fraction, the
-// candidate's flash), z = cos of the angle that bounds everything drawn for it (mark and
+// strokes across each corner (integer part, 0-2) and, in the fraction, the bars filled solid
+// (the candidate's blink), z = cos of the angle that bounds everything drawn for it (mark and
 // text), w = 1 for a big contact: corner brackets of a square (half its side in at.w)
 // instead of the triangle.
 const int HUD_CONTACT_MAX = 16;
@@ -379,7 +379,7 @@ vec3 hud_contacts(vec3 color, vec3 d, float brightness, float aa) {
 		float thin = 0.05 / at.w;
 
 		float marks = floor(state.y + 0.001);
-		float dim = 1.0 - fract(state.y + 0.001);
+		float solid = step(0.5, fract(state.y + 0.001));
 		float bars;
 		float hostile = 1e9;
 		float lock = 1e9;
@@ -424,10 +424,9 @@ vec3 hud_contacts(vec3 color, vec3 d, float brightness, float aa) {
 		float strokes = min(min(border, hostile), lock);
 
 		vec4 acc = vec4(0.0);
-		hud_ink(acc, vec4(hud_symbol_halo_color.rgb, hud_symbol_halo_color.a * mix(dim, 1.0, 0.5)),
-				hud_fill(strokes - hud_symbol_halo_deg / at.w, unit_aa));
-		hud_ink(acc, vec4(hud_contact_color.rgb, hud_contact_color.a * hud_contact_fill * dim), hud_fill(bars, unit_aa));
-		hud_ink(acc, vec4(hud_contact_color.rgb, hud_contact_color.a * dim), hud_fill(border, unit_aa));
+		hud_ink(acc, hud_symbol_halo_color, hud_fill(strokes - hud_symbol_halo_deg / at.w, unit_aa));
+		hud_ink(acc, vec4(hud_contact_color.rgb, hud_contact_color.a * mix(hud_contact_fill, 1.0, solid)), hud_fill(bars, unit_aa));
+		hud_ink(acc, hud_contact_color, hud_fill(border, unit_aa));
 		hud_ink(acc, hud_contact_hostile_color, hud_fill(hostile, unit_aa));
 		hud_ink(acc, hud_contact_hostile_color, hud_fill(lock, unit_aa));
 		color = hud_compose(color, acc, brightness);

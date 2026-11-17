@@ -39,6 +39,8 @@ enum MasterMode { NAV, DGFT, BVR }
 ## page with its own cursor (soi_display), F-16 style.
 enum Soi { HUD_CURSOR, HMCS, MFD }
 enum Hat { FORWARD, RIGHT, AFT, LEFT, DEPRESS }
+## Sensor Control Switch directions.
+enum Scs { FORWARD, RIGHT, AFT, LEFT }
 
 ## A weapon was selected, or a hat press found nothing to select.
 signal hat_pressed(direction: int)
@@ -110,11 +112,14 @@ var locked: Node3D
 var candidate: Node3D
 ## HUD cursor, azimuth / elevation in the display's frame, deg.
 var cursor := Vector2.ZERO
-## The display page that is the SOI when soi is MFD (an MfdPage with has_cursor).
+## The display page that is the SOI when soi is MFD (an MfdPage).
 var soi_display: Object
+## The display that has the SOI from the start (and the SCS aft one): by slot name.
+@export var default_soi_slot: StringName = &"centre"
 ## Time.get_ticks_msec() / 1000 when the SOI last changed (the HUD's take-over sweep).
 var soi_changed_at := -INF
 var _soi_displays: Array[Object] = []
+var _soi_slots := {}                  ## slot (left / centre / right) → display page
 ## Zoom window: 0 = closed, else an index + 1 into zoom_levels.
 var zoom_level := 0
 var blocking := false
@@ -454,8 +459,8 @@ func _physics_process(delta: float) -> void:
 		set_mode(cmd.master_mode as MasterMode)
 	if cmd.weapon_select >= 0:
 		_press_hat(cmd.weapon_select)
-	if cmd.soi_cycle:
-		cycle_soi()
+	if cmd.scs >= 0:
+		select_soi(cmd.scs)
 	if is_cursor_shown() and soi == Soi.MFD:
 		soi_display.call(&"soi_slew", cmd.cursor_slew, delta)
 	elif is_cursor_shown() and soi == Soi.HUD_CURSOR:
@@ -565,28 +570,44 @@ func _press_hat(direction: int) -> void:
 	hat_pressed.emit(direction)
 
 
-## A display page with a cursor that can take the SOI (MfdPage.has_cursor).
-func register_soi_display(page: Object) -> void:
+## A display page that can take the SOI, in its slot (left / centre / right). Every page
+## can; one with a cursor (MfdPage.has_cursor) also designates. The default slot's page
+## takes the SOI at once.
+func register_soi_display(page: Object, slot: StringName) -> void:
 	if not _soi_displays.has(page):
 		_soi_displays.append(page)
+	_soi_slots[slot] = page
+	if slot == default_soi_slot:
+		_set_soi(Soi.MFD, page, false)
 
 
-## Next SOI: the HUD cursor, the HMCS, then each display page with a cursor.
-func cycle_soi() -> void:
-	var order: Array = [Soi.HUD_CURSOR, Soi.HMCS]
-	order.append_array(_soi_displays)
-	var at := order.find(soi_display if soi == Soi.MFD else soi)
-	var next: Variant = order[(at + 1) % order.size()]
-	if next is Object:
-		soi = Soi.MFD
-		soi_display = next
-	else:
-		soi = next
-		soi_display = null
+## Sensor Control Switch: forward toggles the HUD cursor and the HMCS (from a display, the
+## HUD cursor); aft / left / right give the SOI to the centre / left / right display.
+func select_soi(direction: int) -> void:
+	match direction:
+		Scs.FORWARD:
+			_set_soi(Soi.HMCS if soi == Soi.HUD_CURSOR else Soi.HUD_CURSOR, null)
+		Scs.AFT:
+			_set_soi_slot(&"centre")
+		Scs.LEFT:
+			_set_soi_slot(&"left")
+		Scs.RIGHT:
+			_set_soi_slot(&"right")
+
+
+func _set_soi_slot(slot: StringName) -> void:
+	if _soi_slots.has(slot):
+		_set_soi(Soi.MFD, _soi_slots[slot])
+
+
+func _set_soi(value: Soi, display: Object, announce := true) -> void:
+	soi = value
+	soi_display = display
 	for page in _soi_displays:
-		page.set(&"is_soi", page == soi_display)
+		page.set(&"is_soi", page == display)
 	cursor = Vector2.ZERO
-	soi_changed_at = Time.get_ticks_msec() / 1000.0
+	if announce:
+		soi_changed_at = Time.get_ticks_msec() / 1000.0
 
 
 func _reset_cursors() -> void:
@@ -617,10 +638,27 @@ func _update_lock(cmd: PilotCommand) -> void:
 		if next != null:
 			lock(next)
 	candidate = _find_candidate() if is_cursor_shown() else null
-	if cmd.lock_commit and candidate != null:
+	if (cmd.lock_commit or cmd.zoom) and locked == null and candidate != null:
 		lock(candidate)
+	if cmd.lock_nearest:
+		var nearest := _nearest_contact()
+		if nearest != null:
+			lock(nearest)
 	if cmd.zoom and locked != null:
 		zoom_level = zoom_level % zoom_levels.size() + 1
+
+
+## The nearest contact in sight and in range.
+func _nearest_contact() -> Node3D:
+	var origin := get_view_origin()
+	var best: Node3D = null
+	var best_d := INF
+	for contact in _lockable_contacts(origin):
+		var d := contact.global_position.distance_squared_to(origin)
+		if d < best_d:
+			best_d = d
+			best = contact
+	return best
 
 
 ## The contact next to the locked one (or the designation) by azimuth in the display

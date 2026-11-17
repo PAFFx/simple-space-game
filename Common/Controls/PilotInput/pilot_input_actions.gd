@@ -41,7 +41,9 @@ const WEAPON_SELECT: Array[StringName] = [&"ms_weapon_forward", &"ms_weapon_righ
 const MASTER_ARM := &"ms_master_arm"
 ## Master modes, in FireControl.MasterMode order: NAV, DGFT, BVR.
 const MASTER_MODE: Array[StringName] = [&"ms_mode_nav", &"ms_mode_dgft", &"ms_mode_bvr"]
-const SOI_CYCLE := &"ms_soi_cycle"
+## Sensor Control Switch, in FireControl.Scs order: forward, right, aft, left.
+const SCS: Array[StringName] = [&"ms_scs_forward", &"ms_scs_right", &"ms_scs_aft", &"ms_scs_left"]
+const LOCK_NEAREST := &"ms_lock_nearest"
 const CURSOR_LEFT := &"ms_cursor_left"
 const CURSOR_RIGHT := &"ms_cursor_right"
 const CURSOR_UP := &"ms_cursor_up"
@@ -84,7 +86,11 @@ const _DEFAULTS := {
 	MASTER_MODE[0]: [KEY_N],
 	MASTER_MODE[1]: [KEY_J],
 	MASTER_MODE[2]: [KEY_K],
-	SOI_CYCLE: [KEY_TAB],
+	SCS[0]: [KEY_TAB],
+	SCS[1]: [KEY_KP_9],
+	SCS[2]: [KEY_KP_5],
+	SCS[3]: [KEY_KP_7],
+	LOCK_NEAREST: [KEY_H],
 	CURSOR_LEFT: [KEY_KP_4],
 	CURSOR_RIGHT: [KEY_KP_6],
 	CURSOR_UP: [KEY_KP_8],
