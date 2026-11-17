@@ -274,6 +274,7 @@ types. Any cockpit that extends `CockpitBase` and has a `PanoramicDisplayMount` 
 | `Docs/PanoramicCockpit/panoramic_screen_shader.md` | Shader walkthrough, coordinate systems, artefact guide |
 | `Docs/PanoramicCockpit/hud.md` | HUD canvas mapping, writing widgets, hatch aperture timeline |
 | `Docs/FlightControl/summary.md` | Input → FBW → allocator → thruster pipeline, swapping stages, controls, HOTAS |
+| `Docs/FlightControl/thrust_sizing.md` | Thruster ratings vs Raptor, nozzle size vs chamber pressure, jet power and Isp, the ×1.5 thrust change |
 | `Docs/MobileSuit/prototype.md` | Prototype suit scene tree, rig, render layers, regenerating models |
 | `Docs/MobileSuit/linear_seat_v2_cockpit.md` | RX-93 linear seat v2 cockpit, seated pilot (IK, G lean), sensor outlines |
 | `Docs/Weapons/summary.md` | Fire control, envelopes and aiming, projectiles, beam look, controls, test tools |
