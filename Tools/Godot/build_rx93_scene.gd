@@ -477,6 +477,10 @@ func _build_flight_computer(root: Node3D) -> void:
 	# The ν's clean yaw torque (~8 MN·m) is the same while it pushes at 4 G in any direction
 	# (measured with its allocator): yaw keeps all of it under load, pitch and roll plan with 60%.
 	law.loaded_torque_share = Vector3(0.6, 1.0, 0.6)
+	# Movement limits ×1.5 with the thrust (THRUST_SCALE), so each keeps its share of it.
+	law.cruise_accel_g = 1.2
+	law.boost_accel_g = 10.5
+	law.stop_accel_g = 9.0
 	fc.set("control_law", law)
 	var alloc := ConeProjectedAllocator.new()
 	alloc.iterations = 60

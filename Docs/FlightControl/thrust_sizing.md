@@ -95,3 +95,16 @@ oscillation, and stray force stays ≤ 0.24 G.
 | full-boost reversal | 7.9 m in 1 s | 12.5 m |
 | break right | 14.4 m in 1 s | 21.5 m |
 | full yaw turn | 72° in 1 s, still 0.45 s after release | 95°, still after 0.40 s |
+
+Movement limits on the ν ×1.5 too (`build_rx93_scene.gd`; MSP-02 keeps the script defaults):
+cruise 0.8 → 1.2 G, Shift boost 7 → 10.5 G, braking 6 → 9 G. Each keeps its share of the
+thrust, so auto-rotation (which leans by load = demand / capability) leans as it did before
+the thrust change. Its angle limits are unchanged, so the 30° roll cap holds a Shift strafe
+to ~8.6 G (reaching 90% of the target in 1.0 s instead of 0.7 s).
+
+| Scenario (Shift) | 7 G limit | 10.5 G limit |
+|---|---|---|
+| forward | 7.0 G, 27.7 m in 1 s | 10.5 G, 35.5 m |
+| diagonal | 6.9 G, 26.1 m | 10.4 G, 32.5 m |
+| strafe right | 6.8 G, 23.2 m | 8.6 G, 23.6 m |
+| down | 3.2 G | 3.2 G (thrust-limited) |
