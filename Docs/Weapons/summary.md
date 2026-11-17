@@ -74,7 +74,7 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 - **Sensor of interest** (F-16 style, SCS): the centre MFD from the start; forward toggles the
   HUD cursor and the HMCS (the pilot's line of sight); aft / left / right the centre / left /
   right MFD. Every MFD can be the SOI (a red border); one with a cursor (`MfdPage.has_cursor`:
-  the SA page) also designates, lock taking the contact under its cursor. The out of SOI the TMS cursor is one
+  the SA page) also designates, lock taking the contact under its cursor. Out of SOI the HUD cursor is one
   dim rail and holds still; taking SOI on the panoramic screen sweeps a ring out from the cursor.
 - **Zoom window** (`FireControl.zoom_levels` ×4 / ×8 / ×16): the sensor head's zoom camera on the
   locked target, in a framed inset over it on the panoramic screen, resolving in from blocks at

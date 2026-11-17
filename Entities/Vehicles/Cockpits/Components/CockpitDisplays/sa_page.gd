@@ -135,7 +135,7 @@ func _contact(centre: Vector2, radius: float, heading: float, node: Node3D, rel:
 	label(at + Vector2(14, 15), "%s  %+.0f" % [_fmt_range(dist), rel.y], Color(color, 0.75), 12)
 
 
-## The panoramic TMS cursor in small: three double-railed arms round an empty middle.
+## The panoramic HUD cursor in small: three double-railed arms round an empty middle.
 func _draw_cursor(at: Vector2) -> void:
 	for angle in [deg_to_rad(-150.0), deg_to_rad(-30.0), deg_to_rad(90.0)]:
 		var along := Vector2(cos(angle), sin(angle))

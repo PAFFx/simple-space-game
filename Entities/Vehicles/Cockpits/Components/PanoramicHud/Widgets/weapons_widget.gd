@@ -6,10 +6,10 @@ extends HudWidget
 ##
 ##   status        master mode and ARM / SAFE in boxes, the selected weapon with its rounds
 ##                 and RDY, the vulcans
-##   cursor        while nothing is locked: the TMS cursor (three double-railed arms round
+##   cursor        while nothing is locked: the HUD cursor (three double-railed arms round
 ##                 an empty middle) or the HMCS ring (where the pilot looks), by the sensor
 ##                 of interest. The HMCS ring closes while a contact is under it. With a
-##                 display page as the SOI the TMS cursor drops to one dim rail and holds;
+##                 display page as the SOI the HUD cursor drops to one dim rail and holds;
 ##                 taking the SOI back, a ring sweeps out from the cursor once
 ##   tail          the locked target's own motion (its estimated velocity, not relative to
 ##                 the suit, so our own flying doesn't draw one): a fine accent line from its
@@ -33,10 +33,10 @@ extends HudWidget
 
 @export_group("Cursors")
 @export var cursor_color := Color(0.74, 0.7, 0.86, 0.85)
-## TMS arms: from / to this far out, deg; the rails' spacing, deg.
-@export var tms_inner_deg: float = 1.3
-@export var tms_outer_deg: float = 4.6
-@export var tms_rail_gap_deg: float = 0.36
+## HUD cursor arms: from / to this far out, deg; the rails' spacing, deg.
+@export var cursor_inner_deg: float = 1.3
+@export var cursor_outer_deg: float = 4.6
+@export var cursor_rail_gap_deg: float = 0.36
 @export var hmcs_radius_deg: float = 4.5
 ## The SOI take-over sweep: how long, s, and how far out it runs, deg.
 @export var soi_sweep_time: float = 0.45
@@ -157,7 +157,7 @@ func _draw_cursor() -> void:
 	if _fcs.soi == FireControl.Soi.HMCS:
 		_draw_hmcs(at, _fcs.candidate != null)
 	else:
-		_draw_tms(at, _fcs.soi == FireControl.Soi.HUD_CURSOR)
+		_draw_hud_cursor(at, _fcs.soi == FireControl.Soi.HUD_CURSOR)
 	var since := Time.get_ticks_msec() / 1000.0 - _fcs.soi_changed_at
 	if _fcs.soi != FireControl.Soi.MFD and since < soi_sweep_time:
 		var u := since / soi_sweep_time
@@ -168,28 +168,28 @@ func _draw_cursor() -> void:
 
 ## Three double-railed arms (up-left, up-right, down) pointing at an empty middle, a faint
 ## fill between the rails, and a small faint Y in the middle. Out of SOI: one dim rail.
-func _draw_tms(at: Patch, is_soi: bool) -> void:
+func _draw_hud_cursor(at: Patch, is_soi: bool) -> void:
 	var c := cursor_color
 	if not is_soi:
 		c = PanoramicHud.dimmed(c)
 		for angle in [deg_to_rad(150.0), deg_to_rad(30.0), deg_to_rad(-90.0)]:
 			var along := Vector2(cos(angle), sin(angle))
-			patch_line(at, along * tms_inner_deg, along * tms_outer_deg, c, 1.4, 2)
+			patch_line(at, along * cursor_inner_deg, along * cursor_outer_deg, c, 1.4, 2)
 		return
 	var fill := Color(c, c.a * 0.4)
 	var faint := Color(c, c.a * 0.45)
 	for angle in [deg_to_rad(150.0), deg_to_rad(30.0), deg_to_rad(-90.0)]:
 		var along := Vector2(cos(angle), sin(angle))
-		var across := Vector2(-along.y, along.x) * tms_rail_gap_deg * 0.5
-		var a := along * tms_inner_deg
-		var b := along * tms_outer_deg
+		var across := Vector2(-along.y, along.x) * cursor_rail_gap_deg * 0.5
+		var a := along * cursor_inner_deg
+		var b := along * cursor_outer_deg
 		patch_polygon(at, PackedVector2Array([a - across, b - across, b + across, a + across]), fill)
 		patch_line(at, a - across, b - across, c, 1.6, 2)
 		patch_line(at, a + across, b + across, c, 1.6, 2)
 		patch_line(at, along * 0.15, along * 0.55, faint, 1.2, 1)
 
 
-## A big ring broken at left and right, three short inward ticks lined up with the TMS
+## A big ring broken at left and right, three short inward ticks lined up with the HUD cursor
 ## arms, a dot in the middle. The breaks close while a contact is under it.
 func _draw_hmcs(at: Patch, on_contact: bool) -> void:
 	var c := cursor_color
