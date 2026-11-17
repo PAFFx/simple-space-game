@@ -1,8 +1,9 @@
 class_name RangeControl
 extends CanvasLayer
 
-## Test range control (F4): spawn and clear practice targets and rearm the suit. While
-## its panel is open the number keys pick an entry instead of a weapon.
+## Test range control (F4): spawn and clear practice targets, rearm the suit and count
+## the shots it took (rearm resets the count). While its panel is open the number keys
+## pick an entry instead of a weapon.
 ##
 ##   1 static · 2 drifting · 3 jinking · 4 hard jinking · 5 evasive (dodges your shots)
 ##   6 ace (hard jinking and dodging) · 7 turret · 8 hunter turret · 9 clear all · 0 rearm
@@ -33,6 +34,9 @@ const PRESETS := [
 var drones: Array[TargetDrone] = []
 var _range_index := 2
 var _count := 0
+## Enemy shots that reached the suit since the last rearm: on the body, and on the shield.
+var hits_taken := 0
+var hits_blocked := 0
 var _panel: PanelContainer
 var _label: Label
 
@@ -47,6 +51,7 @@ func _ready() -> void:
 	add_to_group(PANEL_GROUP)
 	_build_ui()
 	_panel.visible = false
+	_hook_fire_control.call_deferred()
 
 
 func _input(event: InputEvent) -> void:
@@ -122,6 +127,24 @@ func rearm() -> void:
 	var fcs := suit.find_component(FireControl) as FireControl if suit != null else null
 	if fcs != null:
 		fcs.rearm()
+	hits_taken = 0
+	hits_blocked = 0
+
+
+func _hook_fire_control() -> void:
+	var suit := _vehicle()
+	var fcs := suit.find_component(FireControl) as FireControl if suit != null else null
+	if fcs != null:
+		fcs.hit_taken.connect(_on_hit_taken)
+
+
+func _on_hit_taken(blocked: bool) -> void:
+	if blocked:
+		hits_blocked += 1
+	else:
+		hits_taken += 1
+	if _panel.visible:
+		_refresh()
 
 
 ## Spawns one of PRESETS.
@@ -197,5 +220,6 @@ func _refresh() -> void:
 		if is_instance_valid(drone):
 			alive += 1
 	lines.append("targets  %d" % alive)
+	lines.append("hits taken  %d   blocked  %d" % [hits_taken, hits_blocked])
 	_label.text = "\n".join(lines)
 	_panel.reset_size()
