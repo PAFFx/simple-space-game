@@ -64,7 +64,7 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
   letting go early drops it. Press again for the next shot. The glow
   (`ProjectileManager.set_charge`) is the dodge cue; the turret drone spools too (0.5 s).
 - **E-pack.** 32 rounds shared through `ammo_from`: pulse uses 1, linear 3 (`ammo_cost`).
-  The cooldown is shared too (pulse 2 s, linear 5 s). Unfitted
+  The cooldown is shared too (pulse 1 s, linear 5 s). Unfitted
   entries show dim on the ring and flash red when pressed.
 - **Lock.** With nothing locked, the contact under the cursor is the candidate (its bars
   filled solid), no button needed; lock locks it. Locking never unlocks: unlock does. While locked
