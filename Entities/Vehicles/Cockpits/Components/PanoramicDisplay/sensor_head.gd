@@ -119,6 +119,10 @@ func set_zoom(world_point: Vector3, magnification: float) -> void:
 	if magnification > 0.0:
 		_zoom_point = world_point
 		zoom_magnification = magnification
+	# Aimed now, not in _process: the HUD hands the point over while drawing, after this
+	# node's _process, and a camera a frame behind leaves a crossing target off centre.
+	if zoom_reveal > 0.0:
+		_aim_zoom()
 
 
 func get_zoom_texture() -> ViewportTexture:
@@ -245,8 +249,13 @@ func _update_zoom(delta: float) -> void:
 			zoom_magnification = 0.0
 	var drawing := zoom_reveal > 0.0 and _viewport.render_target_update_mode != SubViewport.UPDATE_DISABLED
 	_zoom_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if drawing else SubViewport.UPDATE_DISABLED
-	if not drawing:
-		return
+	if drawing:
+		_aim_zoom()
+
+
+## Points the zoom camera at the zoom point and hands the screen the matching inset frame,
+## together, so the image and where the screen puts it never disagree for a frame.
+func _aim_zoom() -> void:
 	var origin := get_global_transform_interpolated().origin
 	var to := _zoom_point - origin
 	if to.length_squared() > 1.0:
@@ -262,6 +271,8 @@ func _update_zoom(delta: float) -> void:
 	_zoom_camera.size = 2.0 * _zoom_camera.near * get_zoom_half_tan().y / maxf(zoom_magnification, 1.0)
 	if _zoom_viewport.size != zoom_size:
 		_zoom_viewport.size = zoom_size
+	if panoramic_screen != null:
+		panoramic_screen.push_zoom_uniforms()
 
 
 func _update_overlay(delta: float) -> void:

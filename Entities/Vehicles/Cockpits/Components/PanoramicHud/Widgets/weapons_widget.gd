@@ -23,8 +23,11 @@ extends HudWidget
 ##                 target's size. Hugging the triangle = a likely hit; twice the size =
 ##                 the miss is about the target's size. Dim while the weapon isn't ready
 ##   vulcan ring   the head guns' aim, while they are spun up
-##   zoom window   (FireControl.get_zoom) what the head's telescope sees (its gimbal's aim,
-##                 lag and all) in a framed inset, with its level and a bar of the levels.
+##   zoom window   (FireControl.get_zoom) what the head's telescope sees, in a framed inset
+##                 with its level and a bar of the levels. The telescope is stabilised: its
+##                 line of sight is held in space (the suit's own motion doesn't reach it)
+##                 and eased onto the target, more gently the higher the zoom, with a soft
+##                 dead zone of a few image pixels and the gimbal's slew limit.
 ##                 Only while the gimbal can reach the target (SensorSuite head limits);
 ##                 else GIMBAL under it
 
@@ -46,6 +49,16 @@ extends HudWidget
 @export var soi_sweep_time: float = 0.45
 @export var soi_sweep_deg: float = 14.0
 
+@export_group("Zoom stabiliser")
+## How fast the line of sight eases onto the target, Hz, at ×1; divided by √zoom (×2: ~8 Hz,
+## ×128: ~1 Hz).
+@export var zoom_track_hz: float = 12.0
+## Errors under this many zoom-image pixels are eased away ever more gently (no hunting).
+@export var zoom_deadband_px: float = 3.0
+## What the stabiliser leaves: a slow wander of this size, µrad, and time constant, s.
+@export var zoom_jitter_urad: float = 3.0
+@export var zoom_jitter_time: float = 0.4
+
 @export_group("Target")
 ## The tail shows where the target goes in this long (relative to the suit), s.
 @export var tail_time: float = 2.0
@@ -61,6 +74,11 @@ extends HudWidget
 var _fcs: FireControl
 var _contacts: ContactsWidget
 var _body := Basis.IDENTITY
+# Zoom stabiliser: the telescope's line of sight (world), its residual jitter (rad, two
+# first-order stages).
+var _los := Vector3.ZERO
+var _jitter := Vector2.ZERO
+var _jitter_drive := Vector2.ZERO
 var _circle_radius := 0.0
 
 
@@ -306,11 +324,13 @@ func _update_zoom(locked: bool) -> void:
 		mag = 0.0
 		var at := patch(hud.world_to_display(target - hud.get_view_origin()).normalized(), Vector3.UP)
 		patch_text(at, Vector2(0.0, -_target_half() * 1.6 - 1.6), "GIMBAL", hud.caution_color, HORIZONTAL_ALIGNMENT_CENTER, 12)
-	# The zoom is the head's telescope: it looks where the gimbal points, lagging a
-	# jinking target as the gimbal does.
-	if mag > 0.0 and _fcs.sensors != null and _fcs.sensors.enabled:
-		var dist := target.distance_to(hud.get_view_origin())
-		target = hud.get_view_origin() + _body * SpatialMath.angles_to_direction(_fcs.sensors.head_aim) * dist
+	if mag > 0.0:
+		# The stabiliser smooths on its own: it follows the raw track, at the frame's time.
+		var tick := 1.0 / Engine.physics_ticks_per_second
+		var lag := (1.0 - Engine.get_physics_interpolation_fraction()) * tick
+		target = _stabilised(_fcs.get_target_position() - _fcs.get_target_velocity() * lag, mag, head)
+	else:
+		_los = Vector3.ZERO
 	head.set_zoom(target, mag)
 	if head.zoom_reveal <= 0.0:
 		return
@@ -326,6 +346,38 @@ func _update_zoom(locked: bool) -> void:
 	var half := Vector2(rad_to_deg(atan(head.get_zoom_half_tan().x)), rad_to_deg(atan(head.get_zoom_half_tan().y)))
 	var at := patch(hud.world_to_display(head.zoom_direction).normalized(), Vector3.UP)
 	patch_text(at, Vector2(-half.x + 0.1, half.y + 1.25), "×%d" % roundi(head.zoom_magnification), c, HORIZONTAL_ALIGNMENT_LEFT, 14)
+
+
+## The point the stabilised telescope looks at: its line of sight held in space and eased
+## onto `target` (carried on with the target's motion across the view, so a crossing
+## target doesn't drag behind), with the gimbal's slew limit and a small residual jitter.
+func _stabilised(target: Vector3, mag: float, head: SensorHead) -> Vector3:
+	var dt := get_process_delta_time()
+	var origin := hud.get_view_origin()
+	var rel := target - origin
+	var dist := maxf(rel.length(), 1.0)
+	var want := rel / dist
+	if _los == Vector3.ZERO or _los.angle_to(want) > deg_to_rad(5.0):
+		_los = want
+	# The target's turn rate across the view: carry the line of sight on with it.
+	var rate := want.cross((_fcs.get_target_velocity() - _fcs.get_own_velocity()) / dist)
+	if rate.length() > 1e-9:
+		_los = _los.rotated(rate.normalized(), rate.length() * dt).normalized()
+	var err := _los.angle_to(want)
+	if err > 1e-9:
+		var px := 2.0 * head.get_zoom_half_tan().y / float(head.zoom_size.y) / mag
+		var soft := smoothstep(0.0, zoom_deadband_px * px, err)
+		var k := (1.0 - exp(-dt * TAU * zoom_track_hz / sqrt(mag))) * soft
+		var slew := deg_to_rad(_fcs.sensors.head_slew_deg if _fcs.sensors != null else 220.0) * dt
+		_los = _los.slerp(want, minf(err * k, slew) / err).normalized()
+	# The stabiliser's residual: smooth, a few µrad.
+	var w := dt / maxf(zoom_jitter_time, 0.01)
+	var sigma := zoom_jitter_urad * 1e-6
+	_jitter_drive += -_jitter_drive * w + Vector2(randfn(0.0, 1.0), randfn(0.0, 1.0)) * sigma * sqrt(4.0 * w)
+	_jitter += (_jitter_drive - _jitter) * w
+	var side := _los.cross(Vector3.UP if absf(_los.y) < 0.95 else Vector3.RIGHT).normalized()
+	var up := side.cross(_los)
+	return origin + (_los + side * _jitter.x + up * _jitter.y).normalized() * dist
 
 
 ## Whether the sensor head's gimbal (the main camera) can turn to `world_point`.

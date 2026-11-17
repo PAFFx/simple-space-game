@@ -78,7 +78,8 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
   the SA page) also designates, lock taking the contact under its cursor. Out of SOI the TMS cursor is one
   dim rail and holds still; taking SOI on the panoramic screen sweeps a ring out from the cursor.
 - **Zoom window** (`FireControl.zoom_levels`, ×2 doubling to ×128): what the head telescope
-  sees (it follows the gimbal's aim, lag and all), in a framed inset over the target on the
+  sees, stabilised (its line of sight held in space and eased onto the track, gentler the higher
+  the zoom: `WeaponsWidget` zoom stabiliser), in a framed inset over the target on the
   panoramic screen with the level and a row of level cells, resolving in from blocks at each
   level; the HUD is faded inside it. Only where the head gimbal reaches (else GIMBAL).
   It renders only while open: +0.5 ms a frame in all (`Tools/Profiling/zoom_cost.gd`).

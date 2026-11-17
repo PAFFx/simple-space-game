@@ -127,9 +127,15 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
 - [ ] The jink / turret drones barely jink once they reach their speed cap (true jink 3–17
       m/s² for a "6 G" drone): make them change thrust like a suit so the gun circle and
       the hit-rate probe see real agility.
-- [x] Zoom ×2–×128 (the telescope's view, following its gimbal): flown, passed (2026-11-17).
-      If shake or sharpness ever shows past ×32: a stabilisation model, or blur the inset to
-      the telescope's 20 µrad resolution.
+- [x] Zoom shake at high levels (reported 2026-11-17): the telescope is now stabilised (line
+      of sight held in space, eased onto the raw track at 12 Hz / √zoom with a 3-pixel soft
+      dead zone and the gimbal's slew limit, a 3 µrad residual), and the zoom camera and the
+      screen's inset are aimed together the moment the HUD hands over the point (before, the
+      camera rendered a frame late). `Tools/Weapons/zoom_shake_probe.gd`, ×128, crossing drone
+      at 1.5 km: shake 113 → 0.9 zoom px a frame (suit still), 906 → 1.0 (strafing and
+      turning); the target sits ~100 px off centre, the track's own error there.
+- [ ] Zoom point-track mode (the image re-centred on the target by a video tracker) if the
+      ~100 px sensor offset at ×128 bothers.
 - [ ] Practice turret and drones use the same track filter (they still aim with truth).
 - [x] Probe: hit rate against a jinking drone, sensor vs perfect track (`track_probe.gd`).
 - [ ] A drone that dodges like a pilot: changes thrust when the shooter's barrel lights up

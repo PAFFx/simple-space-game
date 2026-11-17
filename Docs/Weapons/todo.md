@@ -70,8 +70,7 @@ Reference: the TMS cursor, three double-railed arms pointing at an empty centre:
 
 ## 5. Zoom window
 
-- [x] What the head telescope sees (it follows the gimbal, lag and limits: GIMBAL when out of
-      reach) in a 14° × 10.5° inset over the target, ×2 doubling to ×128, resolving in from blocks
+- [x] What the head telescope sees, stabilised (GIMBAL when out of the gimbal's reach) in a 14° × 10.5° inset over the target, ×2 doubling to ×128, resolving in from blocks
       at each level; the HUD fades to 35% inside it.
 - [x] The level number and a row of square cells, one per level, filled up to the one shown.
 - [x] Cost: +0.5 ms a frame open (`Tools/Profiling/zoom_cost.gd`). The frame and cells are drawn

@@ -163,8 +163,10 @@ where (`FireControl.can_see`, `get_contact_position`); the FireControl's candida
 drive the marks. The shader draws the 16 nearest.
 
 **Zoom window.** `SensorHead.set_zoom(point, magnification)` turns a narrow frustum camera
-(640×480, rendering only while open) on the point (the WeaponsWidget passes where the head
-telescope's gimbal points); the screen shader shows it in a 14° × 10.5° inset (`zoom_frame`,
+(640×480, rendering only while open) on the point, and aims it there at once together with
+the screen's inset uniforms (`PanoramicScreen.push_zoom_uniforms`), so neither runs a frame
+behind. The WeaponsWidget passes a stabilised line of sight (held in space, eased onto the raw
+track at `zoom_track_hz` / √zoom); the screen shader shows it in a 14° × 10.5° inset (`zoom_frame`,
 `zoom_half_tan`: gnomonic, so the mapping is exact), resolving in from blocks by `zoom_reveal`,
 with the HUD faded to `zoom_hud_alpha` inside, and draws its frame and level cells itself
 (`composite_zoom_frame`, `zoom_level_count` / `zoom_level_shown`): on the HUD canvas they cost
