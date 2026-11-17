@@ -103,6 +103,8 @@ var _sprite_pool: Array[MeshInstance3D] = []
 var _light_pool: Array[OmniLight3D] = []
 var _sparks: Array[GPUParticles3D] = []
 var _next_sparks := 0
+## Seconds of game time, for the charge flicker (frame-rate and time-scale true).
+var _clock := 0.0
 
 
 ## The scene's manager, or null if nothing has been fired yet.
@@ -478,6 +480,7 @@ func _process(delta: float) -> void:
 			_place_linear(shot, lead)
 		else:
 			_place_shot(shot, lead)
+	_clock += delta
 	_place_charges()
 	for i in range(_flashes.size() - 1, -1, -1):
 		var f := _flashes[i]
@@ -554,7 +557,7 @@ func _place_flash(f: Flash) -> void:
 
 
 func _place_charges() -> void:
-	var t := Time.get_ticks_msec() * 0.001
+	var t := _clock
 	for owner in _charges.keys():
 		var charge: Charge = _charges[owner]
 		if not is_instance_valid(owner) or not is_instance_valid(charge.muzzle):
