@@ -79,7 +79,7 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 - **Zoom window** (`FireControl.zoom_levels`, ×2 doubling to ×128): the sensor head's zoom camera on the
   locked target, in a framed inset over it on the panoramic screen, resolving in from blocks at
   each level; the HUD is faded inside it. Only where the head gimbal reaches (else GIMBAL).
-  It renders only while open: ~0.2–0.65 ms GPU (`weapons_snapshot.gd zoom` prints it).
+  It renders only while open: +0.5 ms a frame in all (`Tools/Profiling/zoom_cost.gd`).
   The left hat no longer recentres / switches the view (`StickLook.button` -1; V switches).
 - **Shield block** digs the suit in behind the shield (one fixed pose, `shield_guard`): the waist
   turns the left side 30° toward the front, the arm holds the shield in front with a natural
