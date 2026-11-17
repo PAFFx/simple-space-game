@@ -6,10 +6,10 @@ extends HudWidget
 ##
 ##   status        master mode and ARM / SAFE in boxes, the selected weapon with its rounds
 ##                 and RDY, the vulcans
-##   cursor        while nothing is locked: the HUD cursor (three double-railed arms round
+##   cursor        while nothing is locked: the TMS cursor (three double-railed arms round
 ##                 an empty middle) or the HMCS ring (where the pilot looks), by the sensor
 ##                 of interest. The HMCS ring closes while a contact is under it. With a
-##                 display page as the SOI the HUD cursor drops to one dim rail and holds;
+##                 display page as the SOI the TMS cursor drops to one dim rail and holds;
 ##                 taking the SOI back, a ring sweeps out from the cursor once
 ##   tail          the locked target's own motion (its estimated velocity, not relative to
 ##                 the suit, so our own flying doesn't draw one): a fine accent line from its
@@ -33,7 +33,7 @@ extends HudWidget
 
 @export_group("Cursors")
 @export var cursor_color := Color(0.74, 0.7, 0.86, 0.85)
-## HUD cursor arms: from / to this far out, deg; the rails' spacing, deg.
+## TMS cursor arms: from / to this far out, deg; the rails' spacing, deg.
 @export var cursor_inner_deg: float = 1.3
 @export var cursor_outer_deg: float = 4.6
 @export var cursor_rail_gap_deg: float = 0.36
@@ -157,7 +157,7 @@ func _draw_cursor() -> void:
 	if _fcs.soi == FireControl.Soi.HMCS:
 		_draw_hmcs(at, _fcs.candidate != null)
 	else:
-		_draw_hud_cursor(at, _fcs.soi == FireControl.Soi.HUD_CURSOR)
+		_draw_tms_cursor(at, _fcs.soi == FireControl.Soi.HUD_CURSOR)
 	var since := Time.get_ticks_msec() / 1000.0 - _fcs.soi_changed_at
 	if _fcs.soi != FireControl.Soi.MFD and since < soi_sweep_time:
 		var u := since / soi_sweep_time
@@ -168,7 +168,7 @@ func _draw_cursor() -> void:
 
 ## Three double-railed arms (up-left, up-right, down) pointing at an empty middle, a faint
 ## fill between the rails, and a small faint Y in the middle. Out of SOI: one dim rail.
-func _draw_hud_cursor(at: Patch, is_soi: bool) -> void:
+func _draw_tms_cursor(at: Patch, is_soi: bool) -> void:
 	var c := cursor_color
 	if not is_soi:
 		c = PanoramicHud.dimmed(c)
@@ -189,7 +189,7 @@ func _draw_hud_cursor(at: Patch, is_soi: bool) -> void:
 		patch_line(at, along * 0.15, along * 0.55, faint, 1.2, 1)
 
 
-## A big ring broken at left and right, three short inward ticks lined up with the HUD cursor
+## A big ring broken at left and right, three short inward ticks lined up with the TMS cursor
 ## arms, a dot in the middle. The breaks close while a contact is under it.
 func _draw_hmcs(at: Patch, on_contact: bool) -> void:
 	var c := cursor_color
@@ -306,7 +306,27 @@ func _update_zoom(locked: bool) -> void:
 			var corner := Vector2(half.x * sx, half.y * sy)
 			patch_line(at, corner, corner - Vector2(leg * sx, 0.0), c, 2.2, 2)
 			patch_line(at, corner, corner - Vector2(0.0, leg * sy), c, 2.2, 2)
-	patch_text(at, Vector2(-half.x + 0.3, half.y + 0.9), "×%d" % roundi(head.zoom_magnification), c, HORIZONTAL_ALIGNMENT_LEFT, 14)
+	patch_text(at, Vector2(-half.x + 0.1, half.y + 2.3), "×%d" % roundi(head.zoom_magnification), c, HORIZONTAL_ALIGNMENT_LEFT, 14)
+	_draw_zoom_levels(at, Vector2(-half.x + 0.1, half.y + 1.05), c)
+
+
+## Under the level: an outlined cell per zoom level, filled up to the one shown.
+func _draw_zoom_levels(at: Patch, top_left: Vector2, c: Color) -> void:
+	var levels := _fcs.zoom_levels
+	var shown := levels.find(_fcs.get_zoom() if _fcs.get_zoom() > 0.0 else hud.sensor_head.zoom_magnification) + 1
+	var size := Vector2(1.6, 0.6)
+	var gap := 0.3
+	var cut := 0.15
+	for i in levels.size():
+		var o := top_left + Vector2(i * (size.x + gap), 0.0)
+		# A rectangle with its corners cut: rounded at this size.
+		var cell := PackedVector2Array([o + Vector2(cut, 0), o + Vector2(size.x - cut, 0), o + Vector2(size.x, -cut),
+				o + Vector2(size.x, -size.y + cut), o + Vector2(size.x - cut, -size.y), o + Vector2(cut, -size.y),
+				o + Vector2(0, -size.y + cut), o + Vector2(0, -cut)])
+		if i < shown:
+			patch_polygon(at, cell, c)
+		for k in cell.size():
+			patch_line(at, cell[k], cell[(k + 1) % cell.size()], c, 1.4, 1)
 
 
 ## Whether the sensor head's gimbal (the main camera) can turn to `world_point`.

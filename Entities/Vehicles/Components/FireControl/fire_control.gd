@@ -14,7 +14,7 @@ extends Node
 ##   weapon hat   each direction holds up to two weapons: a press selects the first, a
 ##                press again while it is selected swaps to the other.
 ##   lock         with nothing locked, the contact nearest the designation direction (the
-##                HUD cursor, or where the pilot looks, by the sensor of interest) is the
+##                TMS cursor, or where the pilot looks, by the sensor of interest) is the
 ##                candidate; lock locks it. Locking never unlocks: unlock does (closing the
 ##                zoom window first, if it is open). Target cycle steps the lock to the next
 ##                contact by azimuth. While locked there is no cursor; on unlock it is
@@ -87,7 +87,7 @@ const CONTACT_GROUP := &"hud_contacts"
 ## (plus its own apparent size).
 @export var cursor_cone_deg: float = 5.0
 @export var hmcs_cone_deg: float = 9.0
-## HUD cursor slew at full deflection, deg/s; it wraps round in azimuth and stops short of
+## TMS cursor slew at full deflection, deg/s; it wraps round in azimuth and stops short of
 ## straight up / down.
 @export var cursor_rate_deg: float = 45.0
 @export var cursor_elevation_limit_deg: float = 85.0
@@ -110,7 +110,7 @@ var weapons := {}                     ## id → MsWeapon
 var selected: MsWeapon
 var locked: Node3D
 var candidate: Node3D
-## HUD cursor, azimuth / elevation in the display's frame, deg.
+## TMS cursor, azimuth / elevation in the display's frame, deg.
 var cursor := Vector2.ZERO
 ## The display page that is the SOI when soi is MFD (an MfdPage).
 var soi_display: Object
@@ -379,7 +379,7 @@ func get_weapon(id: StringName) -> MsWeapon:
 	return weapons.get(id)
 
 
-## Where the designation points, world direction: the HUD cursor or the pilot's look.
+## Where the designation points, world direction: the TMS cursor or the pilot's look.
 func get_designation() -> Vector3:
 	if soi == Soi.HMCS:
 		var camera := _pilot_camera()
@@ -581,8 +581,8 @@ func register_soi_display(page: Object, slot: StringName) -> void:
 		_set_soi(Soi.MFD, page, false)
 
 
-## Sensor Control Switch: forward toggles the HUD cursor and the HMCS (from a display, the
-## HUD cursor); aft / left / right give the SOI to the centre / left / right display.
+## Sensor Control Switch: forward toggles the TMS cursor and the HMCS (from a display, the
+## TMS cursor); aft / left / right give the SOI to the centre / left / right display.
 func select_soi(direction: int) -> void:
 	match direction:
 		Scs.FORWARD:

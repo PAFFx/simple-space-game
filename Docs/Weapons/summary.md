@@ -42,10 +42,10 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 | Fire selected weapon | right 2 (weapon release) | left mouse (captured) |
 | Weapon hat fwd / right / aft / left / depress | right 15 / 16 / 17 / 18 / 19 | 1 2 3 4 5 |
 | Master arm on / off | right 24 / 25 | M (toggle) |
-| Sensor Control Switch (SCS): fwd HUD cursor ↔ HMCS; aft / left / right centre / left / right MFD | right 10 / 11 / 12 / 13 | Tab / numpad 9 / 5 / 7 |
+| Sensor Control Switch (SCS): fwd TMS cursor ↔ HMCS; aft / left / right centre / left / right MFD | right 10 / 11 / 12 / 13 | Tab / numpad 9 / 5 / 7 |
 | Cursor slew (the SOI's) | right axes 3, 4 | numpad 4 6 8 2 |
 | Lock (contact under the cursor) | left 0 or 1 (either detent) | G |
-| Target Management Switch (TMS, left 5-way hat): depress = lock the nearest contact | left 19 | H |
+| TMS switch (left 5-way hat): depress = lock the nearest contact | left 19 | H |
 | TMS aft: unlock (closes the zoom window first) | left 17 | T |
 | TMS right / left: next target by azimuth | left 16 / 18 | `]` / `[` |
 | TMS forward: zoom window open / next level (locks the candidate first if nothing is) | left 15 | Z |
@@ -72,9 +72,9 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
   next contact by azimuth. Contacts out of sight (a line-of-sight ray from the head, 10 Hz,
   `FireControl.can_see`) aren't drawn and can't be designated.
 - **Sensor of interest** (F-16 style, SCS): the centre MFD from the start; forward toggles the
-  HUD cursor and the HMCS (the pilot's line of sight); aft / left / right the centre / left /
+  TMS cursor and the HMCS (the pilot's line of sight); aft / left / right the centre / left /
   right MFD. Every MFD can be the SOI (a red border); one with a cursor (`MfdPage.has_cursor`:
-  the SA page) also designates, lock taking the contact under its cursor. Out of SOI the HUD cursor is one
+  the SA page) also designates, lock taking the contact under its cursor. Out of SOI the TMS cursor is one
   dim rail and holds still; taking SOI on the panoramic screen sweeps a ring out from the cursor.
 - **Zoom window** (`FireControl.zoom_levels` ×4 / ×8 / ×16): the sensor head's zoom camera on the
   locked target, in a framed inset over it on the panoramic screen, resolving in from blocks at

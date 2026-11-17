@@ -11,9 +11,9 @@ Reference: small target triangle, red velocity tail, gun solution circle (two th
 
 ![target, tail and gun solution circle](images/ref_target_and_gun_circle.png)
 
-Reference: the HUD cursor, three double-railed arms pointing at an empty centre:
+Reference: the TMS cursor, three double-railed arms pointing at an empty centre:
 
-![HUD cursor](images/ref_tms_cursor.png)
+![TMS cursor](images/ref_tms_cursor.png)
 
 ## 1. Lock flow and controls
 
@@ -82,7 +82,7 @@ Reference: the HUD cursor, three double-railed arms pointing at an empty centre:
 
 ## 4. Cursors
 
-- [x] **HUD cursor**: three double-railed arms (up-left, up-right, down) pointing at an empty
+- [x] **TMS cursor**: three double-railed arms (up-left, up-right, down) pointing at an empty
       centre with a small faint Y in it (see the reference). Steel blue, a fainter fill between
       the rails.
 - [x] **HMCS cursor**: a large ring, about 4.5° radius (now 1.5°), made of two arcs with
@@ -94,7 +94,7 @@ Reference: the HUD cursor, three double-railed arms pointing at an empty centre:
 
 ## 5. Sensor of interest (F-16 / F-18 style)
 
-- [x] The SOI is a display: the panoramic screen (HUD cursor), the HMCS, or an MFD page that has a
+- [x] The SOI is a display: the panoramic screen (TMS cursor), the HMCS, or an MFD page that has a
       cursor. Pages without one can't take it. The SOI switch (right SCS forward, Tab) cycles
       through the ones that can.
 - [x] **MFD**: the SOI page gets a border in the HUD's red / pink-violet accent.

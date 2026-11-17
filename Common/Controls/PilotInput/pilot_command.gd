@@ -58,8 +58,8 @@ var master_arm := 0
 ## One-shot: master mode to enter (FireControl.MasterMode), -1 = none.
 var master_mode := -1
 ## One-shot: Sensor Control Switch direction (FireControl.Scs), -1 = none. Forward
-## toggles the HUD cursor / HMCS, aft / left / right give the SOI to the centre / left /
+## toggles the TMS cursor / HMCS, aft / left / right give the SOI to the centre / left /
 ## right display.
 var scs := -1
-## HUD cursor slew, each in [-1, 1]: x = right, y = up.
+## TMS cursor slew, each in [-1, 1]: x = right, y = up.
 var cursor_slew := Vector2.ZERO

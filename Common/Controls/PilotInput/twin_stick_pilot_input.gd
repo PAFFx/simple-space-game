@@ -18,10 +18,10 @@ extends KeyboardPilotInput
 ## Weapons (both sticks number their buttons alike). Right: trigger first detent opens the
 ## vulcans, second fires them (the first stays pressed under the second); weapon release
 ## fires the selected weapon; the 5-way hat selects weapons; master arm on / off; the
-## Sensor Control Switch picks the sensor of interest (forward: HUD cursor / HMCS; aft,
+## Sensor Control Switch picks the sensor of interest (forward: TMS cursor / HMCS; aft,
 ## left, right: the centre, left, right display) and the mini-stick slews its cursor.
-## Left: either trigger detent locks the contact under the cursor; the Target Management
-## Switch (5-way hat) zooms (forward; locks first if nothing is), steps the lock right /
+## Left: either trigger detent locks the contact under the cursor; the TMS switch
+## (5-way hat) zooms (forward; locks first if nothing is), steps the lock right /
 ## left, unlocks (aft) and locks the nearest contact (depress); weapon release holds the
 ## shield up; NAV / DGFT / BVR.
 

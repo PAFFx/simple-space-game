@@ -36,7 +36,7 @@ PanoramicHud (Node)
     ├── FlightData      left column: G MS / G PLT / ROT / AMBAC over boxed SPD and Mach (dim);
                         non-default modes just inside the right ladder column; cautions
     ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
-    ├── Weapons         mode / ARM / selected weapon and rounds; the HUD cursor (three double-
+    ├── Weapons         mode / ARM / selected weapon and rounds; the TMS cursor (three double-
                         railed arms) or HMCS ring while nothing is locked; the locked target's
                         velocity tail; the gun solution circle (the shoot cue: where a shot goes
                         relative to the target, sized by the impact error, never smaller than
