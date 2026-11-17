@@ -20,9 +20,10 @@ extends HudWidget
 ##                 flight), never smaller than the target's mark. On the target = a shot;
 ##                 the smaller, the surer. Dim while the weapon isn't ready
 ##   vulcan ring   the head guns' aim, while they are spun up
-##   zoom window   (FireControl.get_zoom) the sensor head's zoom camera on the locked target
-##                 in a framed inset over it, with its level. Only while the head's gimbal
-##                 can reach the target (SensorSuite head limits); else GIMBAL under it
+##   zoom window   (FireControl.get_zoom) what the head's telescope sees (its gimbal's aim,
+##                 lag and all) in a framed inset, with its level and a bar of the levels.
+##                 Only while the gimbal can reach the target (SensorSuite head limits);
+##                 else GIMBAL under it
 
 @export var status_azimuth_deg: float = 20.0
 @export var status_elevation_deg: float = -5.5
@@ -289,6 +290,11 @@ func _update_zoom(locked: bool) -> void:
 		mag = 0.0
 		var at := patch(hud.world_to_display(target - hud.get_view_origin()).normalized(), Vector3.UP)
 		patch_text(at, Vector2(0.0, -_target_half() * 1.6 - 1.6), "GIMBAL", hud.caution_color, HORIZONTAL_ALIGNMENT_CENTER, 12)
+	# The zoom is the head's telescope: it looks where the gimbal points, lagging a
+	# jinking target as the gimbal does.
+	if mag > 0.0 and _fcs.sensors != null and _fcs.sensors.enabled:
+		var dist := target.distance_to(hud.get_view_origin())
+		target = hud.get_view_origin() + _body * SpatialMath.angles_to_direction(_fcs.sensors.head_aim) * dist
 	head.set_zoom(target, mag)
 	if head.zoom_reveal <= 0.0:
 		return
@@ -306,23 +312,19 @@ func _update_zoom(locked: bool) -> void:
 			var corner := Vector2(half.x * sx, half.y * sy)
 			patch_line(at, corner, corner - Vector2(leg * sx, 0.0), c, 2.2, 2)
 			patch_line(at, corner, corner - Vector2(0.0, leg * sy), c, 2.2, 2)
-	patch_text(at, Vector2(-half.x + 0.1, half.y + 2.3), "×%d" % roundi(head.zoom_magnification), c, HORIZONTAL_ALIGNMENT_LEFT, 14)
-	_draw_zoom_levels(at, Vector2(-half.x + 0.1, half.y + 1.05), c)
+	patch_text(at, Vector2(-half.x + 0.1, half.y + 2.05), "×%d" % roundi(head.zoom_magnification), c, HORIZONTAL_ALIGNMENT_LEFT, 14)
+	_draw_zoom_levels(at, Vector2(-half.x + 0.1, half.y + 0.9), c)
 
 
 ## Under the level: an outlined cell per zoom level, filled up to the one shown.
 func _draw_zoom_levels(at: Patch, top_left: Vector2, c: Color) -> void:
 	var levels := _fcs.zoom_levels
 	var shown := levels.find(_fcs.get_zoom() if _fcs.get_zoom() > 0.0 else hud.sensor_head.zoom_magnification) + 1
-	var size := Vector2(1.6, 0.6)
-	var gap := 0.3
-	var cut := 0.15
+	var size := Vector2(1.25, 0.42)
+	var gap := 0.24
 	for i in levels.size():
 		var o := top_left + Vector2(i * (size.x + gap), 0.0)
-		# A rectangle with its corners cut: rounded at this size.
-		var cell := PackedVector2Array([o + Vector2(cut, 0), o + Vector2(size.x - cut, 0), o + Vector2(size.x, -cut),
-				o + Vector2(size.x, -size.y + cut), o + Vector2(size.x - cut, -size.y), o + Vector2(cut, -size.y),
-				o + Vector2(0, -size.y + cut), o + Vector2(0, -cut)])
+		var cell := PackedVector2Array([o, o + Vector2(size.x, 0), o + Vector2(size.x, -size.y), o + Vector2(0, -size.y)])
 		if i < shown:
 			patch_polygon(at, cell, c)
 		for k in cell.size():
