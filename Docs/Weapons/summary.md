@@ -151,7 +151,7 @@ source)` on the collider or its nearest ancestor that has it. Missiles burst wit
 | `nu_beam_linear` | 3200 m/s, emits 0.6 s | 0.6 s | 1.9 km | 3000 once per target |
 | `vulcan_60mm` | 1100 m/s | 1.6 s | 1.8 km | 14 (2 × 640 rpm, 300 rounds) |
 | `shield_missile` | 120 m/s + 450 m/s² for 1.6 s | 6 s | ~3.9 km | 450, blast 90 m |
-| `drone_shot` | 900 m/s | 5 s | 4.5 km | 100 |
+| `drone_shot` | 1500 m/s | 5 s | 7.5 km | 100 |
 
 A 4–7 G target moves 5–9 m in 0.5 s, so a shot is roughly unavoidable inside `speed × 0.5 s`
 and dodgeable beyond: the tuning rule for `speed`.

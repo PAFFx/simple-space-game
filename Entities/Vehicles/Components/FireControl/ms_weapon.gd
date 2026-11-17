@@ -32,6 +32,9 @@ enum State { STOWED, READYING, READY, STOWING }
 @export var ammo_from: NodePath
 ## Rounds one shot uses.
 @export var ammo_cost: int = 1
+## The rounds you can see loaded (the shield's missiles), one per muzzle: each is hidden
+## as it is fired from its muzzle, in order, and shown again on rearm.
+@export var round_meshes: Array[NodePath] = []
 ## Rounds leave the muzzles in turn (twin vulcans, missile tubes).
 @export var dispersion_deg: float = 0.0
 ## Not picked with the weapon select hat: ready whenever a weapons mode is on (vulcans).
@@ -175,6 +178,10 @@ func is_gun() -> bool:
 func rearm() -> void:
 	if _ammo_source == null:
 		ammo = max_ammo
+	for path in round_meshes:
+		var loaded := get_node_or_null(path) as Node3D
+		if loaded != null:
+			loaded.visible = true
 
 
 func _magazine() -> MsWeapon:
@@ -207,7 +214,18 @@ func take_over(other: MsWeapon) -> void:
 
 
 func get_muzzle() -> Node3D:
+	if not round_meshes.is_empty():
+		return muzzles[clampi(max_ammo - ammo, 0, muzzles.size() - 1)]
 	return muzzles[_next_muzzle % muzzles.size()]
+
+
+## The solids of the equipment it is mounted on, which its shots leave from inside (the
+## shield's missiles).
+func get_mount_rids() -> Array[RID]:
+	var rids: Array[RID] = []
+	if equipment != null and equipment.has_method(&"get_solid_rids"):
+		rids.append_array(equipment.call(&"get_solid_rids"))
+	return rids
 
 
 ## Mean of the muzzles, global.
@@ -371,6 +389,7 @@ func _line_masked(fcs: FireControl) -> bool:
 	var from := get_muzzle_position()
 	var dir := fcs.get_body_basis() * SpatialMath.angles_to_direction(aim)
 	var query := PhysicsRayQueryParameters3D.create(from, from + dir * MASK_CHECK_DISTANCE)
+	query.exclude = get_mount_rids()
 	var hit := body.get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
 		return false
@@ -447,6 +466,10 @@ func _tolerance(fcs: FireControl) -> float:
 
 func _fire(fcs: FireControl) -> void:
 	var muzzle := get_muzzle()
+	if not round_meshes.is_empty():
+		var loaded := get_node_or_null(round_meshes[muzzles.find(muzzle)]) as Node3D
+		if loaded != null:
+			loaded.visible = false
 	_next_muzzle += 1
 	var angles := aim
 	if dispersion_deg > 0.0:
@@ -455,7 +478,7 @@ func _fire(fcs: FireControl) -> void:
 	var own_velocity := fcs.get_own_velocity()
 	var manager := ProjectileManager.of(self)
 	var at := muzzle.global_position
-	var shot := manager.spawn(projectile, at, own_velocity + dir * projectile.speed, dir, fcs.get_own_rids(), fcs.get_body())
+	var shot := manager.spawn(projectile, at, own_velocity + dir * projectile.speed, dir, fcs.get_own_rids() + get_mount_rids(), fcs.get_body())
 	if projectile.kind == ProjectileSpec.Kind.LINEAR:
 		_stream = shot
 		_stream_muzzle = muzzle

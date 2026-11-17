@@ -7,7 +7,8 @@ extends MsEquipment
 ## It is solid: a static body hull around each of its meshes, on the shield physics layer
 ## (Layers.PHYS_SHIELD) with no mask, so it never pushes the suit carrying it, but every
 ## shot ray and sensor sight line meets it. The suit's own shots exclude only its hull, so
-## its vulcans can't fire through its own shield.
+## its vulcans can't fire through its own shield. Weapons mounted on the shield (its
+## missiles) skip it (get_solid_rids).
 
 var _bodies: Array[StaticBody3D] = []
 
@@ -16,7 +17,7 @@ func _ready() -> void:
 	super()
 	var model := get_node_or_null(^"Model")
 	for mesh: MeshInstance3D in (model.find_children("*", "MeshInstance3D", true, false) if model else []):
-		if mesh.mesh == null:
+		if mesh.mesh == null or mesh.name.begins_with("ShieldMissile"):
 			continue
 		var body := StaticBody3D.new()
 		body.name = "Solid"
@@ -28,6 +29,13 @@ func _ready() -> void:
 		mesh.add_child(body)
 		_bodies.append(body)
 	visibility_changed.connect(_sync_solid)
+
+
+func get_solid_rids() -> Array[RID]:
+	var rids: Array[RID] = []
+	for body in _bodies:
+		rids.append(body.get_rid())
+	return rids
 
 
 ## Stowed (hidden by MsLoadout): nothing to hit.

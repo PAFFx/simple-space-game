@@ -86,17 +86,22 @@ GROUPS = {
             86, 87, 88, 94, 95, 99, 100, 106, 107, 108)],
     # Weapons
     "W:BeamRifle": ids((109, 122)),
-    "W:Shield": ids((128, 138)),
+    "W:Shield": ids((128, 134)),
     "W:HyperBazooka": ids(86, 87, 88, 94, 95, 99, 100, 106, 107),
     "W:BeamSaber": ids(108),
 }
 # Six fin funnels, five parts each in index order (tip, blade, tip, hinge block, blade).
 for n in range(6):
     GROUPS[f"W:FinFunnel{n + 1}"] = list(range(139 + 5 * n, 144 + 5 * n))
+# The four red missiles on the shield face, each its own mesh in nu_shield.glb (Godot
+# hides each as it is fired).
+for n in range(4):
+    GROUPS[f"W:ShieldMissile{n + 1}"] = [135 + n]
 
 WEAPON_FILES = {
     "BeamRifle": "nu_beam_rifle.glb",
     "Shield": "nu_shield.glb",
+    "ShieldMissile": "nu_shield.glb",
     "HyperBazooka": "nu_hyper_bazooka.glb",
     "BeamSaber": "nu_beam_saber.glb",
     "FinFunnel": "nu_fin_funnels.glb",
@@ -631,8 +636,11 @@ def main():
         return
     os.makedirs(out_dir, exist_ok=True)
     export(os.path.join(out_dir, "mobile_suit_nu.glb"), [arm] + suit, skins=True)
+    files = {}
     for kind, objs in weapons.items():
-        export(os.path.join(out_dir, WEAPON_FILES[kind]), objs, skins=False)
+        files.setdefault(WEAPON_FILES[kind], []).extend(objs)
+    for name, objs in files.items():
+        export(os.path.join(out_dir, name), objs, skins=False)
     print(f"[nu] exported to {out_dir}")
 
 

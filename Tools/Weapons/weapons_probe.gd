@@ -255,6 +255,28 @@ func _run() -> void:
 	await _ticks(240)
 	print("missile: left %d, damage %.0f" % [missile.ammo, hp - drone.hit_points])
 	_check("missile blast hurts the target", hp - drone.hit_points > 50.0)
+	_check("fired missile leaves the shield", not missile.get_node(missile.round_meshes[0]).visible
+			and missile.get_node(missile.round_meshes[1]).visible)
+	# The rest of the rack, flying fast: none may stop on the suit's own shield.
+	_suit.linear_velocity = -_suit.global_basis.z * 300.0
+	var self_hits := [0]
+	var on_self := func(_spec: ProjectileSpec, _at: Vector3, collider: Node) -> void:
+		if VehicleBase.find_vehicle(collider) == _fcs.vehicle:
+			self_hits[0] += 1
+	ProjectileManager.of(_suit).shot_hit.connect(on_self)
+	for i in 3:
+		_input.cmd.fire_main = true
+		await _ticks(3)
+		_input.cmd.fire_main = false
+		await _ticks(60)
+	await _ticks(180)
+	ProjectileManager.of(_suit).shot_hit.disconnect(on_self)
+	print("missile rack: left %d, self hits %d" % [missile.ammo, self_hits[0]])
+	_check("whole rack fired", missile.ammo == 0)
+	_check("no missile stops on its own shield", self_hits[0] == 0)
+	_check("rack empty on the model", missile.round_meshes.all(func(p: NodePath) -> bool: return not missile.get_node(p).visible))
+	_fcs.rearm()
+	_check("rearm reloads the rack", missile.round_meshes.all(func(p: NodePath) -> bool: return missile.get_node(p).visible))
 
 	# A turret shoots back; the hit is reported, and blocked when the shield faces it.
 	drone.queue_free()
