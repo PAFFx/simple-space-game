@@ -99,10 +99,8 @@ const CONTACT_GROUP := &"hud_contacts"
 ## Line-of-sight checks to every contact, per second: one hidden behind something
 ## (not the suit itself) isn't shown and can't be designated.
 @export var line_of_sight_hz: float = 10.0
-## Contacts that aren't locked have no track: the HUD shows them where a search look puts
-## them, off by a slowly wandering angle (the body cameras' noise, SensorSuite) and range
-## (known-size ranging, SensorSuite.size_range_error). Time constant of the wander, s.
-@export var search_wander_time: float = 2.5
+## How long the target's manoeuvring is remembered (get_target_agility), s.
+@export var agility_time: float = 2.0
 ## Zoom window levels (magnification), cycled by the zoom control.
 @export var zoom_levels := PackedFloat32Array([4.0, 8.0, 16.0])
 
@@ -142,11 +140,11 @@ var _target_tracked := false
 var sensors: SensorSuite
 var _target_position := Vector3.ZERO
 var _target_acceleration := Vector3.ZERO
+var _agility_sq := 0.0
+var _accel_mean := Vector3.ZERO
 var _shown := Vector3.ZERO
 var _shown_valid := false
 var _hidden := {}                     ## instance id of a contact out of sight → true
-var _search := {}                     ## instance id → Vector3 (angle x, angle y rad, range share)
-var _search_rng := RandomNumberGenerator.new()
 var _los_due := 0.0
 
 ## Track quality on the HUD (the lock's corner dashes).
@@ -256,6 +254,22 @@ func get_target_velocity() -> Vector3:
 
 func get_target_acceleration() -> Vector3:
 	return _target_acceleration
+
+
+## How hard the locked target has been jinking lately, m/s²: RMS over ~agility_time of how
+## far its estimated acceleration across the line of sight strays from its own recent
+## average. A steady thrust is predictable (the lead follows it); one that keeps changing
+## puts the target up to ½·a·t² off the lead by the time a shot gets there.
+func get_target_agility() -> float:
+	return sqrt(_agility_sq)
+
+
+func _update_agility(delta: float) -> void:
+	var los := (_target_position - get_view_origin()).normalized()
+	var across := _target_acceleration - los * _target_acceleration.dot(los)
+	var w := 1.0 - exp(-delta / maxf(agility_time * 0.5, 0.01))
+	_accel_mean = _accel_mean.lerp(across, w)
+	_agility_sq = lerpf(_agility_sq, (across - _accel_mean).length_squared(), 1.0 - exp(-delta / maxf(agility_time, 0.01)))
 
 
 ## Whether the target is known well enough to shoot at.
@@ -431,6 +445,8 @@ func lock(target: Node3D) -> void:
 	_target_tracked = false
 	_target_velocity = Vector3.ZERO
 	_target_acceleration = Vector3.ZERO
+	_agility_sq = 0.0
+	_accel_mean = Vector3.ZERO
 	if sensors != null:
 		sensors.set_target(target)
 	locked_changed.emit(target)
@@ -654,7 +670,7 @@ func _nearest_contact() -> Node3D:
 	var best: Node3D = null
 	var best_d := INF
 	for contact in _lockable_contacts(origin):
-		var d := contact.global_position.distance_squared_to(origin)
+		var d := get_contact_position_now(contact).distance_squared_to(origin)
 		if d < best_d:
 			best_d = d
 			best = contact
@@ -673,7 +689,7 @@ func _next_by_azimuth(step: int) -> Node3D:
 	for contact in _lockable_contacts(origin):
 		if contact == locked:
 			continue
-		var az := SpatialMath.direction_to_angles(to_display * (contact.global_position - origin)).x
+		var az := SpatialMath.direction_to_angles(to_display * (get_contact_position_now(contact) - origin)).x
 		var turn := fposmod((az - from_az) * step, 360.0)
 		if turn < best_turn:
 			best_turn = turn
@@ -681,63 +697,106 @@ func _next_by_azimuth(step: int) -> Node3D:
 	return best
 
 
-## False while something other than the suit itself stands between its head and `contact`.
+## Whether the suit knows of `contact`: a live sensor track on it (the lock's or a search
+## track). Without sensors: nothing other than the suit itself between its head and it.
 func can_see(contact: Node3D) -> bool:
+	if _has_sensors():
+		return sensors.is_tracked(contact)
 	return not _hidden.has(contact.get_instance_id())
 
 
-## Where the HUD draws `contact`: the locked one at its track, the rest at a search look
-## (see search_wander_time), the truth without sensors. Interpolated, for drawing.
+## Where the suit believes `contact` is now (physics time): the lock's track, a search
+## track's estimate carried on by its velocity, the truth without sensors.
+func get_contact_position_now(contact: Node3D) -> Vector3:
+	if contact == locked:
+		return get_target_position()
+	if _has_sensors():
+		var est := sensors.get_search_estimate(contact)
+		if not est.is_empty():
+			return est[0] + est[1] * (sensors.get_time() - est[3])
+	return contact.global_position
+
+
+## Where the HUD draws `contact` (interpolated, for drawing): the locked one smoothed (see
+## shown_cutoff_hz), the rest at their search tracks.
 func get_contact_position(contact: Node3D) -> Vector3:
 	if contact == locked:
 		return get_shown_target_position()
-	var truth := contact.get_global_transform_interpolated().origin
-	var err: Variant = _search.get(contact.get_instance_id())
-	if err == null or not _has_sensors():
-		return truth
-	var origin := get_view_origin()
-	var rel := truth - origin
+	if _has_sensors():
+		var est := sensors.get_search_estimate(contact)
+		if not est.is_empty():
+			var tick := 1.0 / Engine.physics_ticks_per_second
+			var lag := (1.0 - Engine.get_physics_interpolation_fraction()) * tick
+			return est[0] + est[1] * (sensors.get_time() - est[3] - lag)
+	return contact.get_global_transform_interpolated().origin
+
+
+## Velocity the sensors estimate for `contact` (zero if untracked), world.
+func get_contact_velocity(contact: Node3D) -> Vector3:
+	if contact == locked:
+		return _target_velocity
+	if _has_sensors():
+		var est := sensors.get_search_estimate(contact)
+		if not est.is_empty():
+			return est[1]
+	return Vector3.ZERO
+
+
+## Two-sigma angular error of where the sensors put `contact`, across the line of sight, deg.
+func get_contact_angular_error_deg(contact: Node3D) -> float:
+	if contact == locked:
+		return get_target_angular_error_deg()
+	if not _has_sensors():
+		return 0.0
+	var est := sensors.get_search_estimate(contact)
+	if est.is_empty():
+		return 0.0
+	return _lateral_deg(est[0] - get_view_origin(), est[2])
+
+
+## Two-sigma range error of `contact` as a share of its range (0 without sensors).
+func get_contact_range_error_share(contact: Node3D) -> float:
+	if not _has_sensors():
+		return 0.0
+	var rel := Vector3.ZERO
+	var cov := Basis()
+	if contact == locked:
+		if not _has_track():
+			return 0.0
+		var est := sensors.track.get_estimate(sensors.get_time())
+		rel = est[0] - get_view_origin()
+		cov = est[3]
+	else:
+		var est := sensors.get_search_estimate(contact)
+		if est.is_empty():
+			return 0.0
+		rel = est[0] - get_view_origin()
+		cov = est[2]
 	var dist := rel.length()
 	if dist < 1.0:
-		return truth
-	var dir := rel / dist
-	var side := dir.cross(Vector3.UP if absf(dir.y) < 0.95 else Vector3.RIGHT).normalized()
-	var up := side.cross(dir)
-	var e: Vector3 = err
-	dir = (dir + side * e.x + up * e.y).normalized()
-	return origin + dir * dist * (1.0 + e.z)
+		return 0.0
+	var los := rel / dist
+	return 2.0 * sqrt(maxf(los.dot(cov * los), 0.0)) / dist
+
+
+static func _lateral_deg(rel: Vector3, cov: Basis) -> float:
+	var dist := rel.length()
+	if dist < 1.0:
+		return 0.0
+	var los := rel / dist
+	var lateral := sqrt(maxf((cov.x.x + cov.y.y + cov.z.z - los.dot(cov * los)) * 0.5, 0.0))
+	return rad_to_deg(atan(2.0 * lateral / dist))
 
 
 func _has_sensors() -> bool:
 	return sensors != null and sensors.enabled
 
 
-## Steps each contact's search error: a slow random wander, so it never jitters.
-func _update_search(dt: float) -> void:
-	if not _has_sensors():
-		_search.clear()
-		return
-	var sigma := Vector3(sensors.body_sigma_mrad * 1e-3, sensors.body_sigma_mrad * 1e-3, sensors.size_range_error)
-	var tau := maxf(search_wander_time, 0.1)
-	var kick := sqrt(2.0 * dt / tau)
-	var seen := {}
-	for node in get_tree().get_nodes_in_group(CONTACT_GROUP):
-		var id := node.get_instance_id()
-		seen[id] = true
-		if not _search.has(id):
-			_search[id] = Vector3(_search_rng.randfn(), _search_rng.randfn(), _search_rng.randfn()) * sigma
-			continue
-		var e: Vector3 = _search[id]
-		e += -e * (dt / tau) + Vector3(_search_rng.randfn(), _search_rng.randfn(), _search_rng.randfn()) * sigma * kick
-		_search[id] = e
-	for id: int in _search.keys():
-		if not seen.has(id):
-			_search.erase(id)
-
-
+## Without sensors, the HUD's own line of sight to each contact.
 func _update_line_of_sight() -> void:
-	_update_search(1.0 / maxf(line_of_sight_hz, 0.1))
 	_hidden.clear()
+	if _has_sensors():
+		return
 	var origin := get_view_origin()
 	var space := vehicle.get_world_3d().direct_space_state
 	for node in get_tree().get_nodes_in_group(CONTACT_GROUP):
@@ -775,8 +834,10 @@ func _lockable_contacts(origin: Vector3) -> Array[Node3D]:
 		var contact := node as Node3D
 		if contact == null or contact == vehicle:
 			continue
-		var dist := contact.global_position.distance_to(origin)
-		if dist >= 1.0 and dist <= lock_range and can_see(contact):
+		if not can_see(contact):
+			continue
+		var dist := get_contact_position_now(contact).distance_to(origin)
+		if dist >= 1.0 and dist <= lock_range:
 			out.append(contact)
 	return out
 
@@ -793,7 +854,7 @@ func _find_candidate() -> Node3D:
 	var best: Node3D = null
 	var best_score := INF
 	for contact in _lockable_contacts(origin):
-		var rel := contact.global_position - origin
+		var rel := get_contact_position_now(contact) - origin
 		var dist := rel.length()
 		var radius: float = contact.get_meta(&"hud_radius", 10.0)
 		var off := rad_to_deg(dir.angle_to(rel)) - rad_to_deg(atan(radius / dist))
@@ -813,6 +874,7 @@ func _track_target(delta: float) -> void:
 		_target_position = est[0]
 		_target_velocity = est[1]
 		_target_acceleration = est[2]
+		_update_agility(delta)
 		return
 	_target_acceleration = Vector3.ZERO
 	if locked is RigidBody3D:

@@ -175,8 +175,29 @@ until the table above shows up in practice.
   new 41. Without the lean test the 3 G case fell to 25-38. Firm after 4 hits, coast after 0.25 s
   without one, lost after 1.2 s (the lock drops).
 - **Fire control**: target position, velocity and acceleration come from the track; no
-  solution until it is firm; the lead includes ½·a·t². The HUD says ACQUIRING or COAST
-  where it said NO SOLUTION.
+  solution until it is firm; the lead includes ½·a·t². The HUD shows the track's state as the lock's
+  corner dashes.
+- **Search tracks** (2026-11-17): every other contact the head's wide field or a body
+  camera sees (line of sight clear; the suit's own shield blocks) gets its own `SensorTrack`,
+  looked at 10 times a second, spread round-robin over the ticks (~0.2 ms a tick for 5
+  contacts, `Tools/Weapons/search_probe.gd`). Angles from that camera; range from stereo
+  close in, else apparent size: noise 10% a look plus a bias per contact (4%, wandering over
+  6 s) the filter can't average out. A new contact starts coarse (angles ×25, range ×3.5,
+  settling over 2.5 s). Settled, at 150 m–2 km: range 1–5% off (up to ~12%), angles
+  0.03–0.1°. Locking hands the search track to the main pipeline (no fresh start);
+  unlocking hands it back. A contact with no live track doesn't exist for the suit: not on
+  the HUD, the SA page, or designatable. Everything the pilot sees of other contacts (HUD
+  triangles, ranges, SA page, target page range, designation, cycling, nearest) comes from
+  these tracks. Still from the engine: which contacts exist to be looked at, their type,
+  hostile flag and size (identification, see todo §3), and the size used for size ranging.
+- **Gun solution circle** (HUD): expected miss at the time of flight = √((2σ prediction
+  across the line of sight)² + (½·agility·t²)²), agility = RMS over ~2 s of how far the
+  estimated acceleration across the line of sight strays from its recent average (a steady
+  thrust is predictable; a changing one isn't). Radius = 1.3 × the triangle's half side ×
+  √(1 + (miss / target radius)²). `Tools/Weapons/circle_probe.gd` prints the terms: the test
+  drones barely jink once at their speed cap (true high-passed accel 3–17 m/s²), so the
+  circle stays within 1.0–1.5× its least size against them; a 6 G jink changing every half
+  second (~40 m/s²) at 0.66 s flight time would put it near 1.6×.
 
 ### Hit rate against a jinking drone (`Tools/Weapons/track_probe.gd`)
 

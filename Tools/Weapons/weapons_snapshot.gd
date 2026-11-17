@@ -194,6 +194,37 @@ func _run(shots: PackedStringArray) -> void:
 		_look(0, 0)
 		await _frames(5)
 
+	if "contact" in shots:
+		# A new far contact, unlocked: big while the sensors settle on it, then smaller.
+		_fcs.lock(null)
+		var fresh := _spawn(TargetDrone.Behaviour.STATIC, 2500.0, Vector2(45, 22), 100000.0)
+		_look(45, 22, 25.0)
+		# Shots at 0.3, 1, 2 and 4 s after it appears (60 ticks a second).
+		for step in [[18, "0.3"], [42, "1.0"], [60, "2.0"], [120, "4.0"]]:
+			await _frames(step[0])
+			await _shot("contact_%ss" % step[1])
+		fresh.queue_free()
+		_fcs.lock(drone)
+		_look(0, 0)
+		await _frames(5)
+
+	if "jink" in shots:
+		# Jinking against holding still: the gun circle grows with how hard it manoeuvres.
+		_fcs.lock(null)
+		var jinker := _spawn(TargetDrone.Behaviour.JINK, 1500.0, Vector2(45, 22), 100000.0)
+		jinker.jink_accel_g = 4.0
+		await _frames(2)
+		_fcs.lock(jinker)
+		await _frames(240)
+		var seen := _angles_of(jinker)
+		_look(seen.x, seen.y, 20.0)
+		print("JINK agility %.1f m/s², tof %.2f s" % [_fcs.get_target_agility(), _fcs.selected.time_of_flight])
+		await _shot("jink_circle")
+		jinker.queue_free()
+		_fcs.lock(drone)
+		_look(0, 0)
+		await _frames(5)
+
 	if "soi" in shots:
 		_fcs.lock(null)
 		await _frames(2)

@@ -11,14 +11,17 @@ extends HudWidget
 ##                 of interest. The HMCS ring closes while a contact is under it. With a
 ##                 display page as the SOI the TMS cursor drops to one dim rail and holds;
 ##                 taking the SOI back, a ring sweeps out from the cursor once
-##   tail          the locked target's own motion (its estimated velocity, not relative to
-##                 the suit, so our own flying doesn't draw one): a fine accent line from its
-##                 triangle's edge toward where it will be in `tail_time`
+##   tail          where the locked target has come from: a fine accent line trailing
+##                 from its triangle's edge back along its own motion (its estimated
+##                 velocity, not relative to the suit, so our own flying draws none), as far
+##                 as it moved in `tail_time`. A tail on the left: it is moving right
 ##   gun circle    the shoot cue. It sits where a shot would go relative to the target (the
-##                 target's sensor estimate, turned by the barrel's error from the lead) and
-##                 its size is how sure that is (the predicted impact error at the time of
-##                 flight), never smaller than the target's mark. On the target = a shot;
-##                 the smaller, the surer. Dim while the weapon isn't ready
+##                 target's sensor estimate, turned by the barrel's error from the lead).
+##                 Its size is the hit chance, scaled to the target: the expected miss at
+##                 the time of flight (the track's prediction error and how far the target
+##                 could dodge, from how hard it has been manoeuvring) against the
+##                 target's size. Hugging the triangle = a likely hit; twice the size =
+##                 the miss is about the target's size. Dim while the weapon isn't ready
 ##   vulcan ring   the head guns' aim, while they are spun up
 ##   zoom window   (FireControl.get_zoom) what the head's telescope sees (its gimbal's aim,
 ##                 lag and all) in a framed inset, with its level and a bar of the levels.
@@ -50,14 +53,15 @@ extends HudWidget
 ## Below this the target barely moves across the view: no tail, deg.
 @export var tail_min_deg: float = 0.25
 ## The gun circle's least radius, as a share of the target triangle's half side (its
-## corners and lock dashes reach ~1.6), plus a margin, deg.
-@export var circle_min_share: float = 1.85
-@export var circle_margin_deg: float = 0.4
+## corners reach 1.15), and its largest, deg; how fast its size follows, Hz.
+@export var circle_min_share: float = 1.3
 @export var circle_max_deg: float = 25.0
+@export var circle_follow_hz: float = 3.0
 
 var _fcs: FireControl
 var _contacts: ContactsWidget
 var _body := Basis.IDENTITY
+var _circle_radius := 0.0
 
 
 func draw_widget() -> void:
@@ -77,6 +81,8 @@ func draw_widget() -> void:
 	if _fcs.is_cursor_shown():
 		_draw_cursor()
 	var locked := _fcs.locked != null and is_instance_valid(_fcs.locked)
+	if not locked:
+		_circle_radius = 0.0
 	if show_hit_cue:
 		_draw_hit_cue()
 	if _fcs.is_weapons_mode():
@@ -222,7 +228,8 @@ func _target_half() -> float:
 func _draw_tail() -> void:
 	var origin := hud.get_view_origin()
 	var rel := _fcs.get_shown_target_position() - origin
-	var motion := _fcs.get_target_velocity() * tail_time
+	# Behind it: where it was tail_time ago.
+	var motion := -_fcs.get_target_velocity() * tail_time
 	var now_dir := hud.world_to_display(rel).normalized()
 	var at := patch(now_dir, Vector3.UP)
 	var ahead := _in_patch(at, hud.world_to_display(rel + motion).normalized())
@@ -251,8 +258,16 @@ func _draw_gun_circle(weapon: MsWeapon) -> void:
 	var cov := _fcs.get_target_covariance_ahead(weapon.time_of_flight)
 	var los := target / dist
 	var lateral := sqrt(maxf((cov.x.x + cov.y.y + cov.z.z - los.dot(cov * los)) * 0.5, 0.0))
-	var spread := rad_to_deg(atan(2.0 * lateral / weapon.target_range if weapon.target_range > 1.0 else 0.0))
-	var radius := clampf(maxf(spread, _target_half() * circle_min_share + circle_margin_deg), 0.5, circle_max_deg)
+	# Expected miss (m): the prediction's error and the dodge a manoeuvring target makes
+	# good during the flight, against the target's size.
+	var tof := weapon.time_of_flight
+	var dodge := 0.5 * _fcs.get_target_agility() * tof * tof
+	var miss := sqrt(4.0 * lateral * lateral + dodge * dodge)
+	var want := _target_half() * circle_min_share * sqrt(1.0 + pow(miss / maxf(_fcs.get_target_radius(), 0.5), 2.0))
+	want = minf(want, circle_max_deg)
+	var follow := 1.0 - exp(-get_process_delta_time() * TAU * circle_follow_hz)
+	_circle_radius = want if _circle_radius <= 0.0 else lerpf(_circle_radius, want, follow)
+	var radius := _circle_radius
 
 	var ready := weapon.state == MsWeapon.State.READY and not weapon.masked
 	var c := hud.primary_color if ready else PanoramicHud.dimmed(hud.primary_color)

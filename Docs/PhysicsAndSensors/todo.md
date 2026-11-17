@@ -120,7 +120,16 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
 - [x] Fire control and weapons read the track; lead with the estimated acceleration; no
       solution until firm; the lock drops when the track is lost.
 - [x] HUD: ACQUIRING / COAST where it said NO SOLUTION.
-- [ ] HUD: impact uncertainty as the gun solution circle: see `Docs/Weapons/todo.md` §3.
+- [x] HUD: impact uncertainty as the gun solution circle (prediction error + agility dodge,
+      scaled to the target): see `sensors.md` As built.
+- [x] Search tracks: every contact the head's wide field or a body camera sees is tracked;
+      the HUD, SA page and designation read only these (`sensors.md` As built).
+- [ ] The jink / turret drones barely jink once they reach their speed cap (true jink 3–17
+      m/s² for a "6 G" drone): make them change thrust like a suit so the gun circle and
+      the hit-rate probe see real agility.
+- [ ] The zoom image is the telescope's view at ×4–×16 within its 1° field; ×32+ would
+      need a stabilised gimbal model (any shake magnified), a sharper zoom render and a
+      check that mesh LOD doesn't drop detail at long range.
 - [ ] Practice turret and drones use the same track filter (they still aim with truth).
 - [x] Probe: hit rate against a jinking drone, sensor vs perfect track (`track_probe.gd`).
 - [ ] A drone that dodges like a pilot: changes thrust when the shooter's barrel lights up
@@ -136,6 +145,15 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
 - [ ] Minovsky density field: radar range and radio datalinks fall off with it.
 - [ ] IR: plumes visible far away, coasting suits hard to see.
 - [ ] Laser datalink: wingmen's bearings triangulate range.
+- [ ] Radar, radio and datalink as sensors in their own right, each degraded by the Minovsky
+      density.
+- [ ] **Identification / IFF** (from the combat HUD review, 2026-11-17): today a contact's
+      type, hostile flag and size come straight from its metadata, known from the first
+      sighting. It should take something to identify: the telescope's resolution at range,
+      an IFF reply (jammed by Minovsky particles), datalink from friendlies. Until then the
+      contact is UNKNOWN and size-ranging can't use its real size.
+- [ ] Friend / foe / unknown symbology on the panoramic HUD and the SA page (today: blue
+      contact, red inner corners for hostile, nothing for friendly or unknown).
 
 ## 4. Related (damage, for the weapons list)
 

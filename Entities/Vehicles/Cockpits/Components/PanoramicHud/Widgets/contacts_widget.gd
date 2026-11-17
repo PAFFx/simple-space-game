@@ -12,10 +12,13 @@ extends HudWidget
 ##   candidate     (under the designation cursor) its bars blink between filled solid (the
 ##                 border's colour) and their usual faint fill
 ##   locked        strokes across each corner outside, by the track's quality: two = good,
-##                 one = poor, one blinking = coasting. It is drawn where the sensors put it
-##                 (FireControl.get_shown_target_position), not where it really is, and at
-##                 least as big as the track's angular error: a new far track starts big
-##   out of sight  (FireControl.can_see) not drawn
+##                 one = poor, one blinking = coasting
+##   from sensors  every contact is drawn where its sensor track puts it
+##                 (FireControl.get_contact_position), not where it really is, and at
+##                 as big as it could look: its angular error, and how much nearer (so
+##                 bigger) it could be for its range error. A new contact starts big and
+##                 shrinks as the track settles, in steps (`size_hz`, `size_step`) so it
+##                 never jitters. A contact the sensors don't track isn't drawn
 ##
 ## Nothing is drawn on the HUD canvas. The screen shader draws the triangles
 ## (hud_layers.gdshaderinc) from the directions and sizes given here. The text goes into
@@ -44,6 +47,9 @@ const MAX_LABEL_LENGTH := 12
 @export var max_box_deg: float = 35.0
 ## How solid the inside of the bars is, as a share of their border.
 @export var bar_fill: float = 0.5
+## How often a triangle's size may change, per second, and by at least what share.
+@export var size_hz: float = 3.0
+@export var size_step: float = 0.12
 ## Candidate blink: cycles per second (half filled solid, half the usual fill).
 @export var flash_hz: float = 2.0
 ## Coasting track: the lock's one dash blinks this many times a second.
@@ -69,6 +75,8 @@ var _labels := {}
 var _label_viewport: SubViewport
 var _label_canvas: Node2D
 var _label_due := 0.0
+var _size_due := 0.0
+var _half_shown := {}                 ## contact instance id → half side drawn, deg
 
 
 func setup_layers() -> void:
@@ -105,6 +113,10 @@ func _process(delta: float) -> void:
 	var changed := _assign_slots(contacts)
 	var labels := {}
 	locked_half = 0.0
+	_size_due -= delta
+	var resize := _size_due <= 0.0
+	if resize:
+		_size_due = 1.0 / maxf(size_hz, 0.1)
 	for contact in contacts:
 		var is_locked := contact == locked
 		var pos := _fcs.get_contact_position(contact) if _fcs != null else contact.get_global_transform_interpolated().origin
@@ -120,8 +132,12 @@ func _process(delta: float) -> void:
 		# Too big for the triangle: a square around it instead.
 		var box := apparent * fit > max_half_deg
 		var half := minf(apparent, max_box_deg) if box else maxf(apparent * fit, min_half_deg)
-		if is_locked and not box:
-			half = clampf(_fcs.get_target_angular_error_deg(), half, max_half_deg)
+		if not box and _fcs != null:
+			# Unsure of its range, it could be nearer, so bigger: drawn as big as that.
+			var share := minf(_fcs.get_contact_range_error_share(contact), 0.75)
+			half = maxf(half / (1.0 - share), _fcs.get_contact_angular_error_deg(contact))
+			half = minf(half, max_half_deg)
+		half = _stepped_half(id, half, resize)
 		if is_locked:
 			locked_half = half * (1.42 if box else 1.0)
 		var hostile: bool = contact.get_meta("hud_hostile", false)
@@ -166,6 +182,16 @@ func draw_widget() -> void:
 	pass
 
 
+## The size a contact's mark is drawn at: it follows `want` only at size_hz, and only when it
+## differs by more than size_step.
+func _stepped_half(id: int, want: float, resize: bool) -> float:
+	var shown: float = _half_shown.get(id, 0.0)
+	if shown <= 0.0 or (resize and absf(want - shown) > shown * size_step):
+		shown = want
+	_half_shown[id] = shown
+	return shown
+
+
 ## Keeps each contact in the slot it already has, so its text stays with it between
 ## atlas redraws; true if any slot changed hands.
 func _assign_slots(contacts: Array[Node3D]) -> bool:
@@ -176,6 +202,7 @@ func _assign_slots(contacts: Array[Node3D]) -> bool:
 	for id: int in _slots.keys():
 		if not ids.has(id):
 			_slots.erase(id)
+			_half_shown.erase(id)
 			changed = true
 	var used := {}
 	for id: int in _slots:
@@ -226,9 +253,13 @@ func _nearest(origin: Vector3) -> Array[Node3D]:
 		contacts.append(contact)
 	if contacts.size() > MAX_CONTACTS:
 		contacts.sort_custom(func(a: Node3D, b: Node3D) -> bool:
-			return a.global_position.distance_squared_to(origin) < b.global_position.distance_squared_to(origin))
+			return _known_position(a).distance_squared_to(origin) < _known_position(b).distance_squared_to(origin))
 		contacts.resize(MAX_CONTACTS)
 	return contacts
+
+
+func _known_position(contact: Node3D) -> Vector3:
+	return _fcs.get_contact_position_now(contact) if _fcs != null else contact.global_position
 
 
 static func _format_range(metres: float) -> String:

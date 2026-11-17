@@ -20,6 +20,14 @@ extends Node
 ## Each measurement is the direction to the target's visible centroid (which wanders
 ## about its centre as its limbs move and its plumes flare), plus noise, delivered after
 ## the sensor's processing latency.
+##
+## Search tracks: every other contact the head's wide field or a body camera can see (line
+## of sight clear: the suit's own shield blocks too) gets its own track, scanned at
+## `search_hz`. Angles from that camera, range from stereo close in, else the contact's
+## apparent size (a slowly wandering bias plus noise, which the filter averages down). A new
+## contact starts coarse (`acquire_*`): the blob is a few pixels until the tracker settles
+## on it. Locking hands its search track to the main pipeline; unlocking hands it back.
+## Contacts without a live track aren't known to the suit at all.
 
 enum Source { NONE, NARROW, WIDE, BODY }
 enum RangeSource { NONE, LASER, STEREO, SIZE }
@@ -59,6 +67,19 @@ enum RangeSource { NONE, LASER, STEREO, SIZE }
 @export var body_camera_facings: PackedVector3Array = [
 	Vector3(0, 0, -1), Vector3(0, 0, 1), Vector3(0.71, 0, -0.71), Vector3(-0.71, 0, -0.71), Vector3(0, -0.5, -1), Vector3(0, -0.5, 1)]
 
+@export_group("Search")
+## Scans per second of the other contacts.
+@export var search_hz: float = 10.0
+## A new contact's angle errors start this many times worse, its range errors
+## acquire_range_scale times, and settle over acquire_time, s.
+@export var acquire_scale: float = 25.0
+@export var acquire_range_scale: float = 3.5
+@export var acquire_time: float = 2.5
+## Size ranging: a bias per contact (aspect, which part shows) that wanders with this
+## spread and time constant, on top of size_range_error noise per look.
+@export var size_bias: float = 0.04
+@export var size_bias_time: float = 6.0
+
 @export_group("Target")
 ## Visible centroid wander: share of the target's radius, and how fast it changes, s.
 ## Smooth (second order): a wander that jumps every tick reads as velocity to the track.
@@ -87,6 +108,23 @@ var _wander_drive := Vector3.ZERO   ## The wander's first stage, low-passed into
 var _laser_due := 0.0
 var _body_due := 0.0
 var _rng := RandomNumberGenerator.new()
+## Contact instance id → SearchTrack.
+var _search := {}
+var _scan_next := 0                  ## Round robin: where the next tick's share of the scan starts
+
+
+## Another contact the suit tracks without a lock.
+class SearchTrack:
+	var node: Node3D
+	var track: SensorTrack
+	var first_seen := 0.0
+	var last_look := 0.0
+	var size_bias := 0.0
+	## Estimate cached at the last scan: position, velocity, position covariance, time.
+	var position := Vector3.ZERO
+	var velocity := Vector3.ZERO
+	var covariance := Basis()
+	var at := 0.0
 
 
 func _ready() -> void:
@@ -99,8 +137,20 @@ func _ready() -> void:
 func set_target(node: Node3D) -> void:
 	if node == target:
 		return
+	# The old target goes back to the search; the new one takes its search track.
+	if target != null and is_instance_valid(target) and track != null and track.is_started():
+		var back := SearchTrack.new()
+		back.node = target
+		back.track = track
+		back.first_seen = _time - acquire_time
+		_search[target.get_instance_id()] = back
+		_cache(back)
 	target = node
-	track = SensorTrack.new() if node != null else null
+	track = null
+	if node != null:
+		var st: SearchTrack = _search.get(node.get_instance_id())
+		_search.erase(node.get_instance_id())
+		track = st.track if st != null else SensorTrack.new()
 	_queue.clear()
 	_wander = Vector3.ZERO
 	_wander_drive = Vector3.ZERO
@@ -133,6 +183,7 @@ func step(delta: float) -> void:
 		set_target(null)
 	_slew_head(delta)
 	lasing = false
+	_scan_share(delta)
 	if target == null:
 		source = Source.NONE
 		return
@@ -262,26 +313,152 @@ func _deliver() -> void:
 		track.add_measurement(m[1], m[2], m[3])
 
 
-func _body_camera_sees(at: Vector3) -> bool:
+func _body_camera_sees(at: Vector3, node: Node3D = null) -> bool:
 	var basis := _body_basis()
 	for i in body_camera_positions.size():
 		var cam := _body.global_transform * body_camera_positions[i]
 		var facing := (basis * body_camera_facings[i]).normalized()
-		if facing.dot(at - cam) > 0.0 and _line_clear(cam, at):
+		if facing.dot(at - cam) > 0.0 and _line_clear(cam, at, node):
 			return true
 	return false
 
 
-## Nothing but the suit itself and the target between `from` and `to`. The suit's own
-## shield does block (its head can't see through it while dug in behind it).
-func _line_clear(from: Vector3, to: Vector3) -> bool:
+## Nothing but the suit itself and `node` (default: the target) between `from` and `to`.
+## The suit's own shield does block (its head can't see through it while dug in behind it).
+func _line_clear(from: Vector3, to: Vector3, node: Node3D = null) -> bool:
 	var space := _body.get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	var exclude: Array[RID] = [_body.get_rid()]
-	if target is CollisionObject3D:
-		exclude.append((target as CollisionObject3D).get_rid())
+	var seen := node if node != null else target
+	if seen is CollisionObject3D:
+		exclude.append((seen as CollisionObject3D).get_rid())
 	query.exclude = exclude
-	return space.intersect_ray(query).is_empty()
+	var hit := space.intersect_ray(query)
+	if hit.is_empty():
+		return true
+	# Part of the contact itself (a station's structure, a drone's own body).
+	var collider := hit.collider as Node
+	return seen != null and collider != null and (seen.is_ancestor_of(collider) or collider.is_ancestor_of(seen))
+
+
+# --- Search tracks ---
+
+## True while the suit has a live track on `node` (the lock's, or a search track).
+func is_tracked(node: Node3D) -> bool:
+	if node == target:
+		return track != null and track.is_started() and track.state != SensorTrack.State.LOST
+	var st: SearchTrack = _search.get(node.get_instance_id())
+	return st != null and st.track.state != SensorTrack.State.LOST
+
+
+## A search track's estimate as of the last scan: [position, velocity, position
+## covariance, time (get_time)], or [] if `node` isn't tracked by the search.
+func get_search_estimate(node: Node3D) -> Array:
+	var st: SearchTrack = _search.get(node.get_instance_id())
+	if st == null or st.track.state == SensorTrack.State.LOST:
+		return []
+	return [st.position, st.velocity, st.covariance, st.at]
+
+
+## Every contact with a search track (not the locked target).
+func get_search_contacts() -> Array[Node3D]:
+	var out: Array[Node3D] = []
+	for st: SearchTrack in _search.values():
+		if is_instance_valid(st.node) and st.track.state != SensorTrack.State.LOST:
+			out.append(st.node)
+	return out
+
+
+## This tick's share of the search: each contact is looked at search_hz times a second,
+## spread over the ticks so no tick pays for all of them. Every track steps its state;
+## lost ones go.
+func _scan_share(delta: float) -> void:
+	var contacts: Array[Node3D] = []
+	for node in get_tree().get_nodes_in_group(FireControl.CONTACT_GROUP):
+		var contact := node as Node3D
+		if contact != null and contact != (_vehicle as Node) and contact != target:
+			contacts.append(contact)
+	if not contacts.is_empty():
+		var share := ceili(contacts.size() * search_hz * delta)
+		for k in mini(share, contacts.size()):
+			_look(contacts[(_scan_next + k) % contacts.size()])
+		_scan_next = (_scan_next + share) % contacts.size()
+	for id: int in _search.keys():
+		var st: SearchTrack = _search[id]
+		if not is_instance_valid(st.node):
+			_search.erase(id)
+			continue
+		st.track.tick(_time)
+		if st.track.state == SensorTrack.State.LOST:
+			_search.erase(id)
+
+
+## Every contact at once (tests).
+func _scan() -> void:
+	for node in get_tree().get_nodes_in_group(FireControl.CONTACT_GROUP):
+		var contact := node as Node3D
+		if contact != null and contact != (_vehicle as Node) and contact != target:
+			_look(contact)
+
+
+## One look at a contact: measure it if the head's wide field or a body camera sees it.
+func _look(contact: Node3D) -> void:
+	var eye := get_eye()
+	var truth := contact.global_position
+	var rel := truth - eye
+	var dist := rel.length()
+	if dist < 1.0:
+		return
+	var dir := rel / dist
+	var sigma := 0.0
+	var latency := camera_latency
+	if rad_to_deg(dir.angle_to(get_head_direction())) <= wide_half_fov_deg and _line_clear(eye, truth, contact):
+		sigma = wide_sigma_mrad * 1e-3
+	elif _body_camera_sees(truth, contact):
+		sigma = body_sigma_mrad * 1e-3
+		latency = body_latency
+	if sigma <= 0.0:
+		return
+	var id := contact.get_instance_id()
+	var st: SearchTrack = _search.get(id)
+	if st == null:
+		st = SearchTrack.new()
+		st.node = contact
+		st.track = SensorTrack.new()
+		st.first_seen = _time
+		st.last_look = _time
+		st.size_bias = _rng.randfn() * size_bias
+		_search[id] = st
+	var dt := _time - st.last_look
+	st.last_look = _time
+	# Coarse while it is being acquired.
+	var settle := clampf((_time - st.first_seen) / maxf(acquire_time, 0.01), 0.0, 1.0)
+	settle = settle * settle * (3.0 - 2.0 * settle)
+	sigma *= lerpf(acquire_scale, 1.0, settle)
+	var range_coarse := lerpf(acquire_range_scale, 1.0, settle)
+	st.size_bias += -st.size_bias * dt / size_bias_time + _rng.randfn() * size_bias * sqrt(2.0 * dt / size_bias_time)
+	var stereo_sigma := dist * dist * sigma / stereo_baseline
+	var size_sigma := dist * size_range_error * range_coarse
+	var r := dist + _rng.randfn() * stereo_sigma
+	var sigma_r := stereo_sigma
+	if size_sigma < stereo_sigma:
+		r = dist * (1.0 + st.size_bias + _rng.randfn() * size_range_error * range_coarse)
+		sigma_r = sqrt(size_sigma * size_sigma + pow(dist * size_bias, 2.0))
+	r = maxf(r, dist * 0.3)
+	var basis := _los_basis(dir)
+	var noisy := (dir + basis.x * _rng.randfn() * sigma + basis.y * _rng.randfn() * sigma).normalized()
+	var cross2 := r * r * sigma * sigma
+	var cov := basis * Basis(Vector3(cross2, 0, 0), Vector3(0, cross2, 0), Vector3(0, 0, sigma_r * sigma_r)) * basis.transposed()
+	st.track.add_measurement(_time - latency, eye + noisy * r, cov)
+	_cache(st)
+
+
+func _cache(st: SearchTrack) -> void:
+	var est := st.track.get_estimate(_time)
+	st.position = est[0]
+	st.velocity = est[1]
+	st.covariance = est[3]
+	st.at = _time
 
 
 func _body_basis() -> Basis:

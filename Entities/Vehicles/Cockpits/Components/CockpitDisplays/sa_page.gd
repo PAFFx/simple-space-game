@@ -44,13 +44,13 @@ func soi_slew(slew: Vector2, delta: float) -> void:
 func soi_candidate() -> Node3D:
 	var best: Node3D = null
 	var best_d := cursor_pick_px
-	for node: Node3D in _drawn:
+	for node: Variant in _drawn:
 		if not is_instance_valid(node):
 			continue
 		var d: float = (_drawn[node] as Vector2).distance_to(_cursor)
 		if d < best_d:
 			best_d = d
-			best = node
+			best = node as Node3D
 	return best
 
 
@@ -73,7 +73,11 @@ func draw_page() -> void:
 		var n := node as Node3D
 		if n == null or n == vehicle:
 			continue
-		var rel := hud_basis.inverse() * (n.get_global_transform_interpolated().origin - body_pos)
+		# Only what the sensors track, where they put it.
+		if _fcs != null and not _fcs.can_see(n):
+			continue
+		var at := _fcs.get_contact_position(n) if _fcs != null else n.get_global_transform_interpolated().origin
+		var rel := hud_basis.inverse() * (at - body_pos)
 		contacts.append([n, rel])
 		farthest = maxf(farthest, Vector2(rel.x, rel.z).length())
 	_range = RANGES[-1]

@@ -75,7 +75,7 @@ func _draw_target(dt: float) -> void:
 		label(r.get_center() + Vector2(0, 8), "NO TARGET", DIM, 30, HORIZONTAL_ALIGNMENT_CENTER)
 		_last_range = 0.0
 		return
-	var dist := target.global_position.distance_to(_fcs.get_view_origin())
+	var dist := _fcs.get_target_position().distance_to(_fcs.get_view_origin())
 	if _last_range > 0.0 and dt > 0.0:
 		_closure = lerpf(_closure, (_last_range - dist) / dt, 0.3)
 	_last_range = dist
