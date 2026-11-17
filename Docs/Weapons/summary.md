@@ -76,7 +76,7 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
   right MFD. Every MFD can be the SOI (a red border); one with a cursor (`MfdPage.has_cursor`:
   the SA page) also designates, lock taking the contact under its cursor. Out of SOI the TMS cursor is one
   dim rail and holds still; taking SOI on the panoramic screen sweeps a ring out from the cursor.
-- **Zoom window** (`FireControl.zoom_levels` ×4 / ×8 / ×16): the sensor head's zoom camera on the
+- **Zoom window** (`FireControl.zoom_levels` ×2 … ×128 (doubling, 7 levels)): the sensor head's zoom camera on the
   locked target, in a framed inset over it on the panoramic screen, resolving in from blocks at
   each level; the HUD is faded inside it. Only where the head gimbal reaches (else GIMBAL).
   It renders only while open: ~0.2–0.65 ms GPU (`weapons_snapshot.gd zoom` prints it).

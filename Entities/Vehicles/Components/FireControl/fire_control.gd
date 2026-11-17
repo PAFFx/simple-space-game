@@ -107,7 +107,7 @@ const CONTACT_GROUP := &"hud_contacts"
 @export var contact_velocity_time: float = 1.0
 @export var contact_cutoff_hz: float = 0.8
 ## Zoom window levels (magnification), cycled by the zoom control.
-@export var zoom_levels := PackedFloat32Array([4.0, 8.0, 16.0])
+@export var zoom_levels := PackedFloat32Array([2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0])
 
 var weapons := {}                     ## id → MsWeapon
 var selected: MsWeapon

@@ -107,7 +107,7 @@ Reference: the TMS cursor, three double-railed arms pointing at an empty centre:
 
 ## 6. Zoom window (left hat forward, 15; key Z)
 
-Built: levels ×4 / ×8 / ×16 (×2 was barely visible); the HUD is faded to 35% inside the window
+Built: levels ×2 … ×128 (doubling, 7 levels) (×2 was barely visible); the HUD is faded to 35% inside the window
 so the magnified target reads; measured 0.2–0.65 ms GPU while open.
 
 - [x] With a lock, it opens a rectangular inset on the panoramic screen over the target, showing it

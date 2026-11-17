@@ -127,7 +127,7 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
 - [ ] The jink / turret drones barely jink once they reach their speed cap (true jink 3–17
       m/s² for a "6 G" drone): make them change thrust like a suit so the gun circle and
       the hit-rate probe see real agility.
-- [ ] The zoom image is the telescope's view at ×4–×16 within its 1° field; ×32+ would
+- [ ] The zoom image is the telescope's view at ×2–×128 within its 1° field; ×32+ would
       need a stabilised gimbal model (any shake magnified), a sharper zoom render and a
       check that mesh LOD doesn't drop detail at long range.
 - [ ] Practice turret and drones use the same track filter (they still aim with truth).

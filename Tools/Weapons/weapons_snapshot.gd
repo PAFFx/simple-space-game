@@ -166,15 +166,11 @@ func _run(shots: PackedStringArray) -> void:
 		_fcs.lock(far)
 		await _frames(40)
 		_look(50, 24, 40.0)
-		_input.cmd.zoom = true
-		await _frames(30)
-		await _shot("zoom_sky_x4")
-		_input.cmd.zoom = true
-		await _frames(30)
-		await _shot("zoom_sky_x8")
-		_input.cmd.zoom = true
-		await _frames(30)
-		await _shot("zoom_sky_x16")
+		for level in [2, 4, 8, 16, 32, 64, 128]:
+			_input.cmd.zoom = true
+			await _frames(30)
+			if level in [2, 16, 128]:
+				await _shot("zoom_sky_x%d" % level)
 		_fcs.lock(drone)
 		far.queue_free()
 		_look(0, 0)
