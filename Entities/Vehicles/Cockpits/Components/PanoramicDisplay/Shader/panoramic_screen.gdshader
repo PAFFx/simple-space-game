@@ -71,6 +71,63 @@ uniform float zoom_block_px = 32.0;
 uniform float zoom_hud_alpha = 0.35;
 
 
+// Its frame, drawn here rather than on the HUD canvas (recording it there cost ~1.3 ms a
+// frame): a faint rim, bold corners, and over the top left a row of cells, one per zoom
+// level, filled up to the one shown. The level number stays on the canvas.
+uniform vec4 zoom_frame_color : source_color, color_conversion_disabled = vec4(0.88, 0.91, 0.93, 0.92);
+uniform int zoom_level_count = 0;
+uniform int zoom_level_shown = 0;
+const vec2 ZOOM_CELL = vec2(1.25, 0.42);   // deg
+const float ZOOM_CELL_GAP = 0.24;
+const vec2 ZOOM_CELLS_AT = vec2(0.1, 0.48); // left edge from the frame's, bottom above its top
+
+
+float sd_box(vec2 p, vec2 half_size) {
+	vec2 d = abs(p) - half_size;
+	return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+
+
+vec3 composite_zoom_frame(vec3 color, vec3 local_dir, float brightness, float aa) {
+	if (zoom_reveal <= 0.0) {
+		return color;
+	}
+	float depth = dot(local_dir, zoom_frame[2]);
+	if (depth <= 0.0) {
+		return color;
+	}
+	// Degrees from the window's middle (gnomonic; a 14° window bends by well under a pixel).
+	vec2 p = degrees(vec2(dot(local_dir, zoom_frame[0]), dot(local_dir, zoom_frame[1])) / depth);
+	vec2 half_deg = degrees(zoom_half_tan);
+	float reach = max(half_deg.x, half_deg.y) + 2.0;
+	if (abs(p.x) > reach || abs(p.y) > reach) {
+		return color;
+	}
+	float rim = abs(sd_box(p, half_deg)) - max(0.045, aa * 0.5);
+	float leg = min(half_deg.x, half_deg.y) * 0.25;
+	float near_corner = step(half_deg.x - leg, abs(p.x)) * step(half_deg.y - leg, abs(p.y));
+	float corner = near_corner > 0.5 ? abs(sd_box(p, half_deg)) - max(0.1, aa) : 1e9;
+	float cells_outline = 1e9;
+	float cells_fill = 1e9;
+	vec2 origin = vec2(-half_deg.x + ZOOM_CELLS_AT.x, half_deg.y + ZOOM_CELLS_AT.y);
+	for (int i = 0; i < zoom_level_count; i++) {
+		vec2 centre = origin + vec2(float(i) * (ZOOM_CELL.x + ZOOM_CELL_GAP), 0.0) + ZOOM_CELL * 0.5;
+		float box = sd_box(p - centre, ZOOM_CELL * 0.5);
+		cells_outline = min(cells_outline, abs(box) - max(0.06, aa * 0.6));
+		if (i < zoom_level_shown) {
+			cells_fill = min(cells_fill, box);
+		}
+	}
+	vec4 c = vec4(zoom_frame_color.rgb, zoom_frame_color.a * zoom_reveal);
+	float strokes = min(min(corner, cells_outline), cells_fill);
+	vec4 acc = vec4(0.0);
+	hud_ink(acc, vec4(hud_symbol_halo_color.rgb, hud_symbol_halo_color.a * zoom_reveal), hud_fill(strokes - hud_symbol_halo_deg, aa));
+	hud_ink(acc, vec4(c.rgb, c.a * 0.35), hud_fill(rim, aa));
+	hud_ink(acc, c, hud_fill(strokes, aa));
+	return hud_compose(color, acc, brightness);
+}
+
+
 // 1 inside the zoom window (a little short of its edge), else 0.
 float zoom_inside(vec3 local_dir) {
 	float depth = dot(local_dir, zoom_frame[2]);
@@ -247,6 +304,7 @@ void fragment() {
 		vec4 hud = texture(hud_texture, hud_uv);
 		color = mix(color, hud.rgb * hud_brightness, hud.a);
 		color = mix(color, mix(under_hud, color, zoom_hud_alpha), zoom_inside(local_dir) * zoom_reveal);
+		color = composite_zoom_frame(color, local_dir, hud_brightness, degrees(length(fwidth(local_dir))) * 0.7);
 	}
 
 	ALBEDO   = color;

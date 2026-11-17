@@ -55,6 +55,10 @@ var zoom_direction := Vector3.FORWARD
 var zoom_basis := Basis.IDENTITY
 ## The magnification shown (kept while the window breaks up).
 var zoom_magnification := 0.0
+## For the window's level cells: how many levels there are, and which one is shown (1 = the
+## first). Set by whoever drives the zoom (WeaponsWidget).
+var zoom_level_count := 0
+var zoom_level_shown := 0
 
 var _viewport: SubViewport
 var _camera: Camera3D

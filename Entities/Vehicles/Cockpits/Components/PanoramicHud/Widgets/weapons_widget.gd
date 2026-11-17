@@ -74,6 +74,7 @@ func draw_widget() -> void:
 				_contacts = sibling
 		if _fcs == null:
 			return
+		hud.set_hud_parameter(&"zoom_frame_color", hud.primary_color)
 	_body = hud.vehicle.get_global_transform_interpolated().basis.orthonormalized()
 	if _contacts != null:
 		_contacts.locked_label_x = 0.0
@@ -313,37 +314,18 @@ func _update_zoom(locked: bool) -> void:
 	head.set_zoom(target, mag)
 	if head.zoom_reveal <= 0.0:
 		return
-	# The frame: a faint rim, bold corners, the level on a tab over the top left.
+	# The frame and the level cells are drawn by the screen shader (composite_zoom_frame);
+	# only the level number is text, here.
+	var levels := _fcs.zoom_levels
+	var shown := levels.find(mag if mag > 0.0 else head.zoom_magnification) + 1
+	if shown > 0:
+		head.zoom_level_shown = shown
+	head.zoom_level_count = levels.size()
 	var c := hud.primary_color
 	c.a *= head.zoom_reveal
 	var half := Vector2(rad_to_deg(atan(head.get_zoom_half_tan().x)), rad_to_deg(atan(head.get_zoom_half_tan().y)))
 	var at := patch(hud.world_to_display(head.zoom_direction).normalized(), Vector3.UP)
-	var rim := Color(c, c.a * 0.35)
-	for e in [[Vector2(-1, -1), Vector2(1, -1)], [Vector2(1, -1), Vector2(1, 1)], [Vector2(1, 1), Vector2(-1, 1)], [Vector2(-1, 1), Vector2(-1, -1)]]:
-		patch_line(at, e[0] * half, e[1] * half, rim, 1.0, 8)
-	var leg := minf(half.x, half.y) * 0.25
-	for sx in [-1.0, 1.0]:
-		for sy in [-1.0, 1.0]:
-			var corner := Vector2(half.x * sx, half.y * sy)
-			patch_line(at, corner, corner - Vector2(leg * sx, 0.0), c, 2.2, 2)
-			patch_line(at, corner, corner - Vector2(0.0, leg * sy), c, 2.2, 2)
-	patch_text(at, Vector2(-half.x + 0.1, half.y + 2.05), "×%d" % roundi(head.zoom_magnification), c, HORIZONTAL_ALIGNMENT_LEFT, 14)
-	_draw_zoom_levels(at, Vector2(-half.x + 0.1, half.y + 0.9), c)
-
-
-## Under the level: an outlined cell per zoom level, filled up to the one shown.
-func _draw_zoom_levels(at: Patch, top_left: Vector2, c: Color) -> void:
-	var levels := _fcs.zoom_levels
-	var shown := levels.find(_fcs.get_zoom() if _fcs.get_zoom() > 0.0 else hud.sensor_head.zoom_magnification) + 1
-	var size := Vector2(1.25, 0.42)
-	var gap := 0.24
-	for i in levels.size():
-		var o := top_left + Vector2(i * (size.x + gap), 0.0)
-		var cell := PackedVector2Array([o, o + Vector2(size.x, 0), o + Vector2(size.x, -size.y), o + Vector2(0, -size.y)])
-		if i < shown:
-			patch_polygon(at, cell, c)
-		for k in cell.size():
-			patch_line(at, cell[k], cell[(k + 1) % cell.size()], c, 1.4, 1)
+	patch_text(at, Vector2(-half.x + 0.1, half.y + 1.25), "×%d" % roundi(head.zoom_magnification), c, HORIZONTAL_ALIGNMENT_LEFT, 14)
 
 
 ## Whether the sensor head's gimbal (the main camera) can turn to `world_point`.

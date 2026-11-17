@@ -99,3 +99,12 @@ headroom first.
 - Headless runs skip all render submission and sleep `low_processor_usage_mode_sleep_usec`
   per frame (set it to 0). They show script cost only.
 - Jolt's `get_process_info()` always returns 0. Time the physics phase from signals instead.
+
+## Zoom window (2026-11-17)
+
+`Tools/Profiling/zoom_cost.gd` (windowed, vsync off, main scene, a drone locked ahead, ×16):
+the zoom camera itself is cheap (0.2 ms CPU, 0.2 ms GPU, 640×480). Drawing its frame and
+level cells on the HUD canvas cost ~1.3 ms of script a frame plus the canvas render, +3.9 ms
+in all (115 → 79 fps). Drawn by the screen shader instead (`composite_zoom_frame`), opening
+the zoom costs +0.5 ms (116 → 110 fps). Lesson as for the contact triangles: symbols that
+only move or scale belong in the shader, not on the per-frame canvas.
