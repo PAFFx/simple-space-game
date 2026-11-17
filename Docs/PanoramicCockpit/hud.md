@@ -46,7 +46,7 @@ PanoramicHud (Node)
                         sight: three see-through bars short of its corners (a faint fill in a
                         fine border), or a bracket at each corner of a square when it's too big
                         for the triangle; hostile adds an inner triangle's corners; the lock
-                        candidate's bars flash; the locked one gets strokes across each corner
+                        candidate's bars filled solid; the locked one gets strokes across each corner
                         outside by track quality (two good, one poor, one blinking coasting),
                         sits at the sensor estimate (smoothed) and is at least as big as its
                         angular error. Name and range only (triangles drawn by the screen shader;

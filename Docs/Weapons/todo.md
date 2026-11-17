@@ -18,7 +18,7 @@ Reference: the TMS cursor, three double-railed arms pointing at an empty centre:
 ## 1. Lock flow and controls
 
 - [x] **Hovering previews.** Whatever is under the active cursor (TMS or HMCS) is the lock
-      candidate with no button held: its blue bars flash. No first-detent preview.
+      candidate with no button held: its blue bars fill solid. No first-detent preview.
 - [x] **Lock**: left trigger first *or* second detent (buttons 0 / 1), left hat depress (19), key G.
       Locking again with a target locked does **not** unlock it (with no cursor while locked,
       it does nothing).
@@ -132,7 +132,7 @@ Built while the user was asleep (2026-11-17), checked with the probe and rendere
 
 - [ ] Lock flow on the sticks: either trigger detent / hat depress locks, aft unlocks, left /
       right cycles, forward zooms. Is the cycle order by azimuth what you want?
-- [ ] Candidate flash rate (`ContactsWidget.flash_hz` 2.5, `flash_dim` 0.85) and coast blink.
+- [ ] Candidate mark (bars filled solid while under the cursor) and coast blink.
 - [ ] Track dashes: two = firm and position error under the target's radius, one = tentative
       or worse, blinking = coasting (`FireControl.get_track_mark`).
 - [ ] Shown-target smoothing (`FireControl.shown_cutoff_hz` 1.5, `shown_beta` 4): no jitter, no

@@ -67,7 +67,7 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
   The cooldown is shared too (pulse 2 s, linear 5 s). Unfitted
   entries show dim on the ring and flash red when pressed.
 - **Lock.** With nothing locked, the contact under the cursor is the candidate (its bars
-  blink filled), no button needed; lock locks it. Locking never unlocks: unlock does. While locked
+  filled solid), no button needed; lock locks it. Locking never unlocks: unlock does. While locked
   there is no cursor; on unlock it is back straight ahead. Target cycle steps the lock to the
   next contact by azimuth. Contacts out of sight (a line-of-sight ray from the head, 10 Hz,
   `FireControl.can_see`) aren't drawn and can't be designated.

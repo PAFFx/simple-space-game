@@ -9,8 +9,8 @@ extends HudWidget
 ##                 fill inside a fine border, so they don't hide what's behind. A contact
 ##                 too big for the triangle gets a bracket at each corner of a square
 ##   hostile       adds the corners of a smaller triangle inside, in the hostile colour
-##   candidate     (under the designation cursor) its bars blink between filled solid (the
-##                 border's colour) and their usual faint fill
+##   candidate     (under the designation cursor) its bars filled solid, in the border's
+##                 colour
 ##   locked        strokes across each corner outside, by the track's quality: two = good,
 ##                 one = poor, one blinking = coasting
 ##   from sensors  every contact is drawn where its sensor track puts it
@@ -57,8 +57,6 @@ const MAX_LABEL_LENGTH := 12
 ## settled range still wanders a few percent, and the mark shouldn't follow that.
 @export var settled_size_step: float = 0.25
 @export var size_ease: float = 0.5
-## Candidate blink: cycles per second (half filled solid, half the usual fill).
-@export var flash_hz: float = 2.0
 ## Coasting track: the lock's one dash blinks this many times a second.
 @export var coast_blink_hz: float = 3.0
 ## Text redraws per second.
@@ -144,7 +142,7 @@ func _process(delta: float) -> void:
 		if is_locked:
 			locked_half = half * (1.42 if box else 1.0)
 		var hostile: bool = contact.get_meta("hud_hostile", false)
-		# Lock dashes in the integer part; the fraction fills the bars solid (the blink).
+		# Lock dashes in the integer part; the fraction fills the bars solid (the candidate).
 		var marks := 0.0
 		if is_locked:
 			match _fcs.get_track_mark():
@@ -155,7 +153,7 @@ func _process(delta: float) -> void:
 				FireControl.TrackMark.COAST:
 					marks = 1.0 if fmod(now * coast_blink_hz, 1.0) < 0.5 else 0.0
 		elif contact == candidate:
-			marks = 0.9 if fmod(now * flash_hz, 1.0) < 0.5 else 0.0
+			marks = 0.9
 		# The triangle lies within 1.7 half sides of the middle, the text further right.
 		var reach := maxf(half * 1.7, half * 0.62 + 0.5 + SLOT_DEG.length())
 		if box:
