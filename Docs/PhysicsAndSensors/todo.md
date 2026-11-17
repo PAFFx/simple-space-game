@@ -119,7 +119,7 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
 - [x] Stereo range from the twin eyes, and known-size range as a last resort.
 - [x] Fire control and weapons read the track; lead with the estimated acceleration; no
       solution until firm; the lock drops when the track is lost.
-- [x] HUD: ACQUIRING / COAST where it said NO SOLUTION.
+- [x] HUD: track state shown (now as the lock's corner dashes).
 - [x] HUD: impact uncertainty as the gun solution circle (prediction error + agility dodge,
       scaled to the target): see `sensors.md` As built.
 - [x] Search tracks: every contact the head's wide field or a body camera sees is tracked;
@@ -135,11 +135,14 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
 - [x] Probe: hit rate against a jinking drone, sensor vs perfect track (`track_probe.gd`).
 - [ ] A drone that dodges like a pilot: changes thrust when the shooter's barrel lights up
       (spool cue), so the probe measures the dodge the design is about, not a timer.
-- [ ] Shoot-cue report: "the SHOOT cue sits far off the real target after locking and moving
-      off". Not reproduced (`weapons_snapshot.gd offaxis`: lead, gun and shot agree while
-      turning and strafing). The lead does move off the target as the suit's own speed grows
-      (3.4° at 190 m/s, 900 m), because the beam keeps the suit's velocity. Need the exact
-      situation (speed, range, weapon, target moving?) from a flight.
+- [x] Shoot-cue report ("the SHOOT cue sits far off the real target"): superseded. The cue is
+      now the gun solution circle, drawn on the target and offset only by the barrel's error.
+- [x] Steady HUD marks: unlocked contacts coast on an averaged velocity, sizes picked once a
+      second and eased (`hud_steadiness_probe.gd`, `sensors.md` As built).
+- [ ] Still read from the engine, not the sensors (audit 2026-11-17): which contacts exist to be
+      looked at (the `hud_contacts` group: no detection range or chance yet), their type,
+      hostile flag and size (identification: see §3), and the true size used for size ranging.
+      Own state (speed, attitude, G) is read off the body, like a perfect inertial unit.
 
 ## 3. Later (BVR)
 

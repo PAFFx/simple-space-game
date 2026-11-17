@@ -52,7 +52,7 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 | Shield block (hold) | left 2 | B |
 | NAV / DGFT / BVR | left 14 / 10 / 12 | N / J / K |
 
-- **Master arm** SAFE: triggers dead, symbology live (the lead cue says SAFE instead of SHOOT).
+- **Master arm** SAFE: triggers dead, symbology live (the gun circle says SAFE).
 - **Modes.** NAV stows everything. DGFT always opens on the beam rifle. BVR is a label only for
   now; selecting a weapon in NAV drops to DGFT, in BVR it doesn't.
 - **Weapon hat** ("press again"): a press selects the direction's first weapon at once; pressing
@@ -69,16 +69,18 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 - **Lock.** With nothing locked, the contact under the cursor is the candidate (its bars
   filled solid), no button needed; lock locks it. Locking never unlocks: unlock does. While locked
   there is no cursor; on unlock it is back straight ahead. Target cycle steps the lock to the
-  next contact by azimuth. Contacts out of sight (a line-of-sight ray from the head, 10 Hz,
-  `FireControl.can_see`) aren't drawn and can't be designated.
+  next contact by azimuth. Only contacts the sensors track exist for the pilot (search
+  tracks, `Docs/PhysicsAndSensors/sensors.md`): one hidden or out of every camera's view isn't
+  drawn and can't be designated.
 - **Sensor of interest** (F-16 style, SCS): the centre MFD from the start; forward toggles the
   TMS cursor and the HMCS (the pilot's line of sight); aft / left / right the centre / left /
   right MFD. Every MFD can be the SOI (a red border); one with a cursor (`MfdPage.has_cursor`:
   the SA page) also designates, lock taking the contact under its cursor. Out of SOI the TMS cursor is one
   dim rail and holds still; taking SOI on the panoramic screen sweeps a ring out from the cursor.
-- **Zoom window** (`FireControl.zoom_levels`, ×2 doubling to ×128): the sensor head's zoom camera on the
-  locked target, in a framed inset over it on the panoramic screen, resolving in from blocks at
-  each level; the HUD is faded inside it. Only where the head gimbal reaches (else GIMBAL).
+- **Zoom window** (`FireControl.zoom_levels`, ×2 doubling to ×128): what the head telescope
+  sees (it follows the gimbal's aim, lag and all), in a framed inset over the target on the
+  panoramic screen with the level and a row of level cells, resolving in from blocks at each
+  level; the HUD is faded inside it. Only where the head gimbal reaches (else GIMBAL).
   It renders only while open: +0.5 ms a frame in all (`Tools/Profiling/zoom_cost.gd`).
   The left hat no longer recentres / switches the view (`StickLook.button` -1; V switches).
 - **Shield block** digs the suit in behind the shield (one fixed pose, `shield_guard`): the waist
@@ -86,9 +88,10 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
   bend, and the shield spins upright on its swivel (`shield_mount.L`, thigh to above the head,
   facing ahead). The legs aren't posed: they stay free for AMBAC. While it is up the rifle's
   envelope shrinks to `guard_az_limits` / `guard_el_limits` (az 0…+90, el −45…+55) so it
-  never crosses the shield; the HUD outline follows. The shield is solid (`MsShield`: a convex hull per mesh on
+  never crosses the shield. The shield is solid (`MsShield`: a convex hull per mesh on
   `Layers.PHYS_SHIELD`, no mask, so it never pushes its own suit): a shot that hits it stops
-  there and counts as blocked (HUD: BLOCK), one that reaches the body is a hit (HIT). The
+  there and counts as blocked, one that reaches the body is a hit (`FireControl.hit_taken`;
+  the HUD's HIT / BLOCK cue is a debug export, off). The
   suit's own shots exclude only its hull, so its vulcans can't fire through its own shield.
   Dug in, the shield hides the target from the head's main camera too, and a body camera
   (the right shoulder's, past the shield's edge) holds a coarser track. Missiles can't
@@ -108,8 +111,8 @@ body-camera track; filtered 0.0006° / 0.014°, `Tools/Weapons/muzzle_jitter_pro
 hit rate on a jinking drone went up with it. It slews (`slew_rate_deg`,
 speeding up and braking at `slew_accel_deg` 600°/s², so the limb's reaction on the suit stays
 finite: see LimbReaction in `Docs/FlightControl/summary.md`) toward the lead direction, clamped to `az_limits` / `el_limits`; without one it sits on
-`boresight`. Shots leave along `aim`, so the barrel's lag is real: the HUD shows the gun cross
-(where the barrel is) and the lead diamond (where it must be); SHOOT when they meet.
+`boresight`. Shots leave along `aim`, so the barrel's lag is real: the HUD's gun solution circle
+sits off the target by the barrel's error from the lead, and on it when they meet.
 
 The lead solves `|rel_pos + rel_vel·t| = distance(t)` (`SpatialMath.intercept_time`), iterated for
 missiles, whose speed grows during the burn. Shots inherit the shooter's velocity.

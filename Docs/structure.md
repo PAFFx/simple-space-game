@@ -97,8 +97,11 @@ simple-space-game/
 │
 ├── Tools/                         Non-Godot tooling (ignored by Godot via .gdignore)
 │   ├── Blender/                   Procedural model build scripts
+│   ├── Flight/                    Flight-control probes and snapshots
 │   ├── Godot/                     Scene generators (MSP-02 scene + animation library)
-│   └── Profiling/                 Frame-time probes (phases, cost per subtree)
+│   ├── Profiling/                 Frame-time probes (phases, cost per subtree, zoom cost)
+│   └── Weapons/                   Weapons, sensors and combat HUD probes (weapons, search
+│                                  tracks, gun circle, HUD steadiness, hit rate) and snapshots
 │
 └── addons/                        Editor plugins (gdshader, plugin_refresher, gdLinter)
 ```
