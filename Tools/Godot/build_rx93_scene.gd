@@ -37,9 +37,9 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 # Positions/exhausts are the model's (yellow) thruster ports, measured in the body frame.
 # 2D = swings in one plane only, fixed = no gimbal, so the limbs carrying them must move
 # to aim them. Ports built into the armor show only a plume.
-# Ratings below are design ratios (sized by nozzle). Anime-strong for now (an overheat
-# limit may tame it later): THRUST_SCALE keeps the thrust-to-weight the suit was tuned
-# with (at 59.5 t) on the official 63.0 t max weight.
+# Ratings below are design ratios (sized by nozzle). THRUST_SCALE: 63.0 / 59.5 keeps the
+# thrust-to-weight the suit was tuned with (at 59.5 t) on the official 63.0 t max weight,
+# ×1.5 for future chamber pressures (~1.6 MN per main; Docs/FlightControl/thrust_sizing.md).
 const CONE_3D := [30.0, 90.0, 90.0]
 # Mains are the model's own nozzles in two backpack pods, made deeper than on the source
 # (see build_mobile_suit_nu.py) so they clear the body. Each pod pivots fore/aft
@@ -83,7 +83,7 @@ const FIXED := [0.0, 0.0, 0.0]
 const MAIN_RATING_KN := 300.0
 # Nozzle light on each main (lights the backpack and legs while boosting).
 const MAIN_GLOW_LIGHT := 1.5
-const THRUST_SCALE := 63.0 / 59.5
+const THRUST_SCALE := 1.5 * 63.0 / 59.5
 const MAIN_DYNAMICS := {spool_up_time = 0.12, spool_down_time = 0.08, gimbal_rate_deg = 240.0}
 const VERNIER_DYNAMICS := {spool_up_time = 0.06, spool_down_time = 0.04, gimbal_rate_deg = 360.0}
 const THRUSTERS := [
@@ -477,6 +477,10 @@ func _build_flight_computer(root: Node3D) -> void:
 	# The ν's clean yaw torque (~8 MN·m) is the same while it pushes at 4 G in any direction
 	# (measured with its allocator): yaw keeps all of it under load, pitch and roll plan with 60%.
 	law.loaded_torque_share = Vector3(0.6, 1.0, 0.6)
+	# Movement limits ×1.5 with the thrust (THRUST_SCALE), so each keeps its share of it.
+	law.cruise_accel_g = 1.2
+	law.boost_accel_g = 10.5
+	law.stop_accel_g = 9.0
 	fc.set("control_law", law)
 	var alloc := ConeProjectedAllocator.new()
 	alloc.iterations = 60
