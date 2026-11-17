@@ -127,7 +127,8 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
 - [ ] The jink / turret drones barely jink once they reach their speed cap (true jink 3–17
       m/s² for a "6 G" drone): make them change thrust like a suit so the gun circle and
       the hit-rate probe see real agility.
-- [x] Zoom shake at high levels (reported 2026-11-17): the telescope is now stabilised (line
+- [x] Zoom shake at high levels (reported and confirmed fixed in game 2026-11-17): the
+      telescope is now stabilised (line
       of sight held in space, eased onto the raw track at 12 Hz / √zoom with a 3-pixel soft
       dead zone and the gimbal's slew limit, a 3 µrad residual), and the zoom camera and the
       screen's inset are aimed together the moment the HUD hands over the point (before, the
