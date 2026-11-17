@@ -190,6 +190,12 @@ until the table above shows up in practice.
   triangles, ranges, SA page, target page range, designation, cycling, nearest) comes from
   these tracks. Still from the engine: which contacts exist to be looked at, their type,
   hostile flag and size (identification, see todo §3), and the size used for size ranging.
+- **Steady marks** (HUD, `Tools/Weapons/hud_steadiness_probe.gd`): an unlocked contact is
+  drawn carried on by its velocity averaged over 1 s and pulled to its track at 0.8 Hz (its
+  raw velocity read 3–20 m/s on a still buoy, and coasting on that made the mark hop at
+  every look: 0.1–0.2°; now 0.002–0.02° RMS). A mark picks a new size at most once a second,
+  only for a change over 8% (25% once the range doubt is under ~10%), and eases there over
+  0.5 s.
 - **Gun solution circle** (HUD): expected miss at the time of flight = √((2σ prediction
   across the line of sight)² + (½·agility·t²)²), agility = RMS over ~2 s of how far the
   estimated acceleration across the line of sight strays from its recent average (a steady

@@ -101,6 +101,11 @@ const CONTACT_GROUP := &"hud_contacts"
 @export var line_of_sight_hz: float = 10.0
 ## How long the target's manoeuvring is remembered (get_target_agility), s.
 @export var agility_time: float = 2.0
+## Unlocked contacts are drawn smoother still: their tracks look at them only search_hz
+## times a second, coarser, so their velocity is noisy. The HUD carries them on with their
+## velocity averaged over this long, s, and pulls them to the estimate at this cutoff, Hz.
+@export var contact_velocity_time: float = 1.0
+@export var contact_cutoff_hz: float = 0.8
 ## Zoom window levels (magnification), cycled by the zoom control.
 @export var zoom_levels := PackedFloat32Array([4.0, 8.0, 16.0])
 
@@ -144,6 +149,7 @@ var _agility_sq := 0.0
 var _accel_mean := Vector3.ZERO
 var _shown := Vector3.ZERO
 var _shown_valid := false
+var _contact_shown := {}              ## search contact instance id → [drawn at, velocity averaged]
 var _hidden := {}                     ## instance id of a contact out of sight → true
 var _los_due := 0.0
 
@@ -339,25 +345,42 @@ func get_track_mark() -> TrackMark:
 
 
 func _process(delta: float) -> void:
-	if locked == null:
-		_shown_valid = false
-		return
-	# Rendering is interpolated a tick behind the physics state the estimate is at.
+	# Rendering is interpolated a tick behind the physics state the estimates are at.
 	var tick := 1.0 / Engine.physics_ticks_per_second
 	var lag := (1.0 - Engine.get_physics_interpolation_fraction()) * tick
-	var est := get_target_position() - _target_velocity * lag
-	var dist := maxf(est.distance_to(get_view_origin()), 1.0)
-	if not _shown_valid:
-		_shown = est
+	var origin := get_view_origin()
+	if locked == null:
+		_shown_valid = false
+	else:
+		var est := get_target_position() - _target_velocity * lag
+		_shown = _smooth_shown(_shown if _shown_valid else est, est, _target_velocity, origin, delta, shown_cutoff_hz)
 		_shown_valid = true
-		return
-	_shown += _target_velocity * delta
-	var off_deg := rad_to_deg(_shown.distance_to(est) / dist)
+	# Every other tracked contact, the same way.
+	var seen := {}
+	if _has_sensors():
+		for contact in sensors.get_search_contacts():
+			var est := sensors.get_search_estimate(contact)
+			var at: Vector3 = est[0] + est[1] * (sensors.get_time() - est[3] - lag)
+			var id := contact.get_instance_id()
+			var was: Array = _contact_shown.get(id, [at, est[1]])
+			var velocity: Vector3 = (was[1] as Vector3).lerp(est[1], 1.0 - exp(-delta / maxf(contact_velocity_time, 0.01)))
+			_contact_shown[id] = [_smooth_shown(was[0], at, velocity, origin, delta, contact_cutoff_hz), velocity]
+			seen[id] = true
+	for id: int in _contact_shown.keys():
+		if not seen.has(id):
+			_contact_shown.erase(id)
+
+
+## Carries `shown` on with the estimated velocity and eases it to `est` (cutoff
+## shown_cutoff_hz, faster the further off it is); a jump over 3° snaps.
+func _smooth_shown(shown: Vector3, est: Vector3, velocity: Vector3, origin: Vector3, delta: float, cutoff_hz: float) -> Vector3:
+	var dist := maxf(est.distance_to(origin), 1.0)
+	shown += velocity * delta
+	var off_deg := rad_to_deg(shown.distance_to(est) / dist)
 	if off_deg > 3.0:
-		_shown = est
-		return
-	var cutoff := shown_cutoff_hz + shown_beta * off_deg
-	_shown = _shown.lerp(est, 1.0 - exp(-delta * TAU * cutoff))
+		return est
+	var cutoff := cutoff_hz + shown_beta * off_deg
+	return shown.lerp(est, 1.0 - exp(-delta * TAU * cutoff))
 
 
 func _has_track() -> bool:
@@ -717,17 +740,18 @@ func get_contact_position_now(contact: Node3D) -> Vector3:
 	return contact.global_position
 
 
-## Where the HUD draws `contact` (interpolated, for drawing): the locked one smoothed (see
-## shown_cutoff_hz), the rest at their search tracks.
+## Where the HUD draws `contact` (interpolated, for drawing): its track's estimate,
+## smoothed (see shown_cutoff_hz).
 func get_contact_position(contact: Node3D) -> Vector3:
 	if contact == locked:
 		return get_shown_target_position()
 	if _has_sensors():
+		var shown: Variant = _contact_shown.get(contact.get_instance_id())
+		if shown != null:
+			return shown[0]
 		var est := sensors.get_search_estimate(contact)
 		if not est.is_empty():
-			var tick := 1.0 / Engine.physics_ticks_per_second
-			var lag := (1.0 - Engine.get_physics_interpolation_fraction()) * tick
-			return est[0] + est[1] * (sensors.get_time() - est[3] - lag)
+			return est[0] + est[1] * (sensors.get_time() - est[3])
 	return contact.get_global_transform_interpolated().origin
 
 

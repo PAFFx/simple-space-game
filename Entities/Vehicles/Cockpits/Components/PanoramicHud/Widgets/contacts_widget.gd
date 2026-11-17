@@ -17,7 +17,10 @@ extends HudWidget
 ##                 (FireControl.get_contact_position), not where it really is, and at
 ##                 as big as it could look: its angular error, and how much nearer (so
 ##                 bigger) it could be for its range error. A new contact starts big and
-##                 shrinks as the track settles, in steps (`size_hz`, `size_step`) so it
+##                 shrinks as the track settles: it picks a new size at most once every
+##                 `size_period` s, only for a change over `size_step` (`settled_size_step`
+##                 once the range has settled), and eases to it
+##                 over `size_ease` s, so it
 ##                 never jitters. A contact the sensors don't track isn't drawn
 ##
 ## Nothing is drawn on the HUD canvas. The screen shader draws the triangles
@@ -48,8 +51,12 @@ const MAX_LABEL_LENGTH := 12
 ## How solid the inside of the bars is, as a share of their border.
 @export var bar_fill: float = 0.5
 ## How often a triangle's size may change, per second, and by at least what share.
-@export var size_hz: float = 3.0
-@export var size_step: float = 0.12
+@export var size_period: float = 1.0
+@export var size_step: float = 0.08
+## Once the range is settled (doubt under ~10%) a size change must beat this instead: the
+## settled range still wanders a few percent, and the mark shouldn't follow that.
+@export var settled_size_step: float = 0.25
+@export var size_ease: float = 0.5
 ## Candidate blink: cycles per second (half filled solid, half the usual fill).
 @export var flash_hz: float = 2.0
 ## Coasting track: the lock's one dash blinks this many times a second.
@@ -75,8 +82,7 @@ var _labels := {}
 var _label_viewport: SubViewport
 var _label_canvas: Node2D
 var _label_due := 0.0
-var _size_due := 0.0
-var _half_shown := {}                 ## contact instance id → half side drawn, deg
+var _half_shown := {}                 ## contact instance id → [drawn, aimed at, next pick (s)]
 
 
 func setup_layers() -> void:
@@ -113,10 +119,7 @@ func _process(delta: float) -> void:
 	var changed := _assign_slots(contacts)
 	var labels := {}
 	locked_half = 0.0
-	_size_due -= delta
-	var resize := _size_due <= 0.0
-	if resize:
-		_size_due = 1.0 / maxf(size_hz, 0.1)
+	var ease := 1.0 - exp(-delta / maxf(size_ease, 0.01))
 	for contact in contacts:
 		var is_locked := contact == locked
 		var pos := _fcs.get_contact_position(contact) if _fcs != null else contact.get_global_transform_interpolated().origin
@@ -132,12 +135,12 @@ func _process(delta: float) -> void:
 		# Too big for the triangle: a square around it instead.
 		var box := apparent * fit > max_half_deg
 		var half := minf(apparent, max_box_deg) if box else maxf(apparent * fit, min_half_deg)
+		var doubt := _fcs.get_contact_range_error_share(contact) if _fcs != null else 0.0
 		if not box and _fcs != null:
 			# Unsure of its range, it could be nearer, so bigger: drawn as big as that.
-			var share := minf(_fcs.get_contact_range_error_share(contact), 0.75)
-			half = maxf(half / (1.0 - share), _fcs.get_contact_angular_error_deg(contact))
+			half = maxf(half / (1.0 - minf(doubt, 0.75)), _fcs.get_contact_angular_error_deg(contact))
 			half = minf(half, max_half_deg)
-		half = _stepped_half(id, half, resize)
+		half = _smoothed_half(id, half, now, ease, lerpf(settled_size_step, size_step, clampf((doubt - 0.1) / 0.2, 0.0, 1.0)))
 		if is_locked:
 			locked_half = half * (1.42 if box else 1.0)
 		var hostile: bool = contact.get_meta("hud_hostile", false)
@@ -182,14 +185,20 @@ func draw_widget() -> void:
 	pass
 
 
-## The size a contact's mark is drawn at: it follows `want` only at size_hz, and only when it
-## differs by more than size_step.
-func _stepped_half(id: int, want: float, resize: bool) -> float:
-	var shown: float = _half_shown.get(id, 0.0)
-	if shown <= 0.0 or (resize and absf(want - shown) > shown * size_step):
-		shown = want
-	_half_shown[id] = shown
-	return shown
+## The size a contact's mark is drawn at: once a size_period it may pick `want` as its new
+## size (if that differs by more than `step`), and it eases there.
+func _smoothed_half(id: int, want: float, now: float, ease: float, step: float) -> float:
+	var st: Array = _half_shown.get(id, [])
+	if st.is_empty():
+		# Spread the picks over the period, so contacts don't all change together.
+		st = [want, want, now + randf() * size_period]
+		_half_shown[id] = st
+	if now >= st[2]:
+		st[2] = now + size_period
+		if absf(want - st[1]) > st[1] * step:
+			st[1] = want
+	st[0] = lerpf(st[0], st[1], ease)
+	return st[0]
 
 
 ## Keeps each contact in the slot it already has, so its text stays with it between
