@@ -28,7 +28,7 @@ Reference: the TMS cursor, three double-railed arms pointing at an empty centre:
       preview button: hovering is the preview. Locking never unlocks.
 - [x] **SCS** (right stick, 10 / 11 / 12 / 13 forward / right / aft / left; Tab, numpad 9 / 5 / 7):
       forward = TMS cursor ↔ HMCS, aft / left / right = centre / left / right MFD. The centre MFD
-      has the SOI from the start. Button numbers guessed from the left hat's: check them.
+      has the SOI from the start.
 - [x] The cursor hides while locked and is back straight ahead on unlock.
 - [x] The left hat no longer recentres / switches the view (`StickLook.button` -1; key V does).
 
@@ -77,22 +77,13 @@ Reference: the TMS cursor, three double-railed arms pointing at an empty centre:
 - [x] Cost: +0.5 ms a frame open (`Tools/Profiling/zoom_cost.gd`). The frame and cells are drawn
       by the screen shader; on the HUD canvas they cost +3.9 ms.
 
-## Needs review in game
+## Reviewed in game
 
-Checked with the probes and rendered snapshots (`weapons_snapshot.gd
-hud,hudmove,soi,zoom,contact,jink,blink`), not flown. Fly each and tick it off, or note what to
-change.
+Flown and passed by the user (2026-11-17): the SCS button numbers (10–13), the lock flow and
+cycle order, the track dashes, the contact marks' steadiness, the gun circle against jinking,
+the tail length (2 s), zoom at ×32–×128.
 
-- [ ] SCS button numbers (10–13) on the right stick.
-- [ ] Lock flow on the sticks; cycle order by azimuth.
-- [ ] Track dashes: two = firm and position error under the target's radius
-      (`FireControl.get_track_mark`).
-- [ ] Contact marks: steady enough (`hud_steadiness_probe.gd`: 0.002–0.02° wobble settled)? The
-      new-contact shrink and the once-a-second size picks.
-- [ ] Gun circle: size against real jinking (the test drones barely jink, see the sensors todo).
-- [ ] Tail length (2 s).
-- [ ] Zoom ×32–×128: shake, sharpness (see the sensors todo).
-- [ ] If the marks still feel busy: snap sizes to a few classes by range, or freeze a contact's
+- [ ] If the marks ever feel busy: snap sizes to a few classes by range, or freeze a contact's
       size once identified with a fading outer bracket for the range doubt.
 
 ## Later / TBD

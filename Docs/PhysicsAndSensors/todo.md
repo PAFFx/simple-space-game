@@ -127,10 +127,9 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
 - [ ] The jink / turret drones barely jink once they reach their speed cap (true jink 3–17
       m/s² for a "6 G" drone): make them change thrust like a suit so the gun circle and
       the hit-rate probe see real agility.
-- [ ] Zoom ×2–×128 (the telescope's view, following its gimbal): fly the high levels. Past
-      ×32 any shake of the gimbal is magnified (a stabilisation model may be needed), the
-      640×480 inset is finer than the telescope's 20 µrad resolution (×128: ~3 µrad a pixel,
-      so it could blur to match), and mesh LOD at long range needs a look.
+- [x] Zoom ×2–×128 (the telescope's view, following its gimbal): flown, passed (2026-11-17).
+      If shake or sharpness ever shows past ×32: a stabilisation model, or blur the inset to
+      the telescope's 20 µrad resolution.
 - [ ] Practice turret and drones use the same track filter (they still aim with truth).
 - [x] Probe: hit rate against a jinking drone, sensor vs perfect track (`track_probe.gd`).
 - [ ] A drone that dodges like a pilot: changes thrust when the shooter's barrel lights up
