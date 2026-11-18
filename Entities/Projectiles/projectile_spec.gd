@@ -2,12 +2,12 @@ class_name ProjectileSpec
 extends Resource
 
 ## What a weapon fires: how the shot flies, what it does on a hit and how it looks.
-## Nothing is hit-scan. A beam is a bolt of dense Minovsky particles flying at `speed`,
-## fast but dodgeable from far enough; it leaves a glowing wake that fades after it.
-## A LINEAR beam keeps pouring out of the barrel for `emit_time`: a long column whose
-## tail stays on the muzzle and bends with it, dissipating after the barrel lets go.
+## Nothing is hit-scan. A BEAM is a straight line of condensed Minovsky particles: the
+## barrel pours it out for `emit_time`, the whole line following the barrel, its front
+## travelling at `speed` (fast, but dodgeable from far enough). Let go, it flies on, its
+## front dissipating at its range, leaving a short wake. Bullets and missiles are bolts.
 
-enum Kind { BEAM, BULLET, MISSILE, LINEAR }
+enum Kind { BEAM, BULLET, MISSILE }
 
 @export var kind := Kind.BEAM
 ## Speed off the muzzle, m/s, on top of the shooter's own velocity.
@@ -25,16 +25,16 @@ enum Kind { BEAM, BULLET, MISSILE, LINEAR }
 ## Seconds the barrel glows before the shot leaves: the dodge cue, seen from afar.
 ## The trigger has to be held through it (0 = fires on the press).
 @export var spool_time: float = 0.0
-## LINEAR: seconds the beam keeps leaving the barrel.
+## BEAM: seconds the beam keeps leaving the barrel (its length: speed × emit_time).
 @export var emit_time: float = 0.0
 
 @export_group("Look")
 @export var color := Color(1.0, 0.16, 0.12)
 ## Radius of the bolt's glowing core, m.
 @export var width: float = 0.9
-## Length of the bright bolt at the head, m.
+## Length of the bright bolt at the head, m (bolts).
 @export var bolt_length: float = 60.0
-## How long the wake keeps glowing after the bolt has passed, s.
+## How long the wake keeps glowing after the shot has passed, s.
 @export var trail_time: float = 0.55
 ## Brightness (HDR): the core reaches this, so glow blooms around it.
 @export var intensity: float = 9.0

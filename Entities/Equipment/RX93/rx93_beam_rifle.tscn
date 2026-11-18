@@ -24,8 +24,8 @@ fill_alpha = 0.04
 [node name="Weapon" type="Node3D" parent="."]
 script = ExtResource("3_weapon")
 weapon_id = &"beam_rifle"
-display_name = "BEAM RIFLE (PULSE)"
-hud_name = "PULSE"
+display_name = "BEAM RIFLE"
+hud_name = "BEAM"
 projectile = ExtResource("4_beam")
 max_ammo = 32
 cycle_time = 1.0

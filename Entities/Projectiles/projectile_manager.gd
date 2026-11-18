@@ -8,14 +8,16 @@ extends Node3D
 ## ancestor that has it. Missiles burst near anything in the `damageable` group.
 ##
 ## One manager per scene, made on first use: ProjectileManager.of(node).
-## Drawing: each shot is a camera-facing strip (beam.gdshader) placed every rendered frame
-## from the shot's state, plus a glow at its head; flashes and sparks mark muzzles and
+## Drawing: each shot is a camera-facing strip placed every rendered frame from the
+## shot's state, plus a glow at its head; flashes and sparks mark muzzles and
 ## impacts. sample_glow() tells a cockpit how much nearby beams light it up.
 ##
-## A LINEAR beam is a straight beam from the barrel for as long as it emits (stream_from):
-## it swings with the barrel like a laser, but its front still travels at the beam's speed,
-## so it reaches only as far as it has had time to. Once the barrel lets go it stays where
-## it was and breaks up over trail_time.
+## A beam is one straight line of particles along the barrel (beam.gdshader). While the
+## barrel pours it out (stream_from, emit_time) the whole line runs from the muzzle along
+## the barrel and swings with it; its front travels at the beam's speed. Let go, the line
+## flies on at that speed. Its front dissipates at the beam's range, and it leaves a short
+## wake where it has passed. What it hits takes the front: the particles stop there.
+## Bullets and missiles are bolts (bolt.gdshader).
 ## A spooling weapon shows a charge glow on its muzzle (set_charge): the dodge cue.
 ## Anything riding a muzzle is placed where the muzzle is drawn (physics-interpolated),
 ## not where it was last physics tick, so it doesn't stutter behind a moving gun.
@@ -43,19 +45,22 @@ class Shot:
 	var strip: MeshInstance3D
 	var head: MeshInstance3D
 	var seed := 0.0
-	# LINEAR only: the beam runs from `position` (the barrel) along `thrust_dir` for
-	# `length` m; `reach` is how far its front has got. prev_* are last tick's, to
-	# interpolate between.
+	# Beams only: the line lies along `thrust_dir` from `position` (the barrel while it
+	# emits), its front `reach` m along it and its tail `tail` m. prev_* are last tick's,
+	# to interpolate between.
 	var emitting := false
-	var emit_end := 0.0
 	var feed: Callable
 	var muzzle: Node3D
 	var mouth: MeshInstance3D
 	var reach := 0.0
-	var length := 0.0
+	var tail := 0.0
 	var blocked := false
+	var at_range := false
+	var fizzle := 0.0
+	var prev_position := Vector3.ZERO
 	var prev_dir := Vector3.ZERO
-	var prev_length := 0.0
+	var prev_reach := 0.0
+	var prev_tail := 0.0
 	var hit_ids := {}
 	var last_splash := -1.0
 
@@ -94,8 +99,8 @@ signal shot_hit(spec: ProjectileSpec, position: Vector3, collider: Node)
 var _shots: Array[Shot] = []
 var _flashes: Array[Flash] = []
 var _charges := {}   # owner → Charge
-var _linear_mesh: ArrayMesh
-var _linear_pool: Array[MeshInstance3D] = []
+var _beam_mesh: ArrayMesh
+var _beam_pool: Array[MeshInstance3D] = []
 var _strip_mesh: ArrayMesh
 var _quad_mesh: QuadMesh
 var _strip_pool: Array[MeshInstance3D] = []
@@ -176,21 +181,24 @@ func spawn(spec: ProjectileSpec, position: Vector3, velocity: Vector3, aim_dir: 
 	shot.head.set_instance_shader_parameter(&"flash_ball", 0.0)
 	shot.head.set_instance_shader_parameter(&"flash_charge", 0.0)
 	shot.head.set_instance_shader_parameter(&"flash_max_angle", 0.22)
-	if spec.kind == ProjectileSpec.Kind.LINEAR:
-		# Swap the pulse strip for the linear one.
+	if spec.kind == ProjectileSpec.Kind.BEAM:
+		# Swap the bolt strip for the beam's.
 		_release(shot.strip, _strip_pool)
-		shot.strip = _take(_linear_pool, _linear_mesh, &"linear")
+		shot.strip = _take(_beam_pool, _beam_mesh, &"beam")
 		shot.strip.set_instance_shader_parameter(&"beam_color", spec.color)
 		shot.strip.set_instance_shader_parameter(&"beam_width", spec.width)
 		shot.strip.set_instance_shader_parameter(&"beam_intensity", spec.intensity)
 		shot.strip.set_instance_shader_parameter(&"beam_seed", shot.seed)
 		shot.strip.set_instance_shader_parameter(&"beam_speed", spec.speed)
+		shot.strip.set_instance_shader_parameter(&"beam_trail", spec.trail_time)
 		shot.prev_dir = aim_dir
+		# Velocity is the frame it flies in (the shooter's); the line moves along itself.
+		shot.velocity -= aim_dir * spec.speed
 	_shots.append(shot)
 	return shot
 
 
-## Keeps a LINEAR shot coming out of `muzzle` for its emit_time: `feed` returns this tick's
+## Keeps a beam coming out of `muzzle` for its emit_time: `feed` returns this tick's
 ## [position, velocity, direction] at the barrel.
 func stream_from(shot: Shot, muzzle: Node3D, feed: Callable) -> void:
 	shot.emitting = true
@@ -317,11 +325,13 @@ func sample_glow(at: Vector3) -> Array:
 		var spec := shot.spec
 		if spec.glow <= 0.0:
 			continue
-		if spec.kind == ProjectileSpec.Kind.LINEAR:
-			var along := clampf((at - shot.position).dot(shot.thrust_dir), 0.0, shot.length)
+		if spec.kind == ProjectileSpec.Kind.BEAM:
+			if shot.tail >= shot.reach:
+				continue
+			var along := clampf((at - shot.position).dot(shot.thrust_dir), shot.tail, shot.reach)
 			var nearest := shot.position + shot.thrust_dir * along
 			var d := nearest.distance_to(at)
-			var k := spec.glow * (1.0 - _linear_fade(shot)) / (1.0 + (d / 70.0) * (d / 70.0))
+			var k := spec.glow / (1.0 + (d / 70.0) * (d / 70.0))
 			sum += Vector3(spec.color.r, spec.color.g, spec.color.b) * k
 			dir += (nearest - at).normalized() * k
 			continue
@@ -369,8 +379,8 @@ func _physics_process(delta: float) -> void:
 			shot.dead_time += delta
 			continue
 		var spec := shot.spec
-		if spec.kind == ProjectileSpec.Kind.LINEAR:
-			_step_linear(shot, delta, space, query)
+		if spec.kind == ProjectileSpec.Kind.BEAM:
+			_step_beam(shot, delta, space, query)
 			continue
 		shot.age += delta
 		if spec.acceleration > 0.0 and shot.age <= spec.burn_time:
@@ -395,70 +405,90 @@ func _physics_process(delta: float) -> void:
 	# Drop shots whose wake has gone.
 	for i in range(_shots.size() - 1, -1, -1):
 		var shot := _shots[i]
-		var linear := shot.spec.kind == ProjectileSpec.Kind.LINEAR
-		if shot.dead and (linear or shot.dead_time > shot.spec.trail_time + 0.05):
-			_release(shot.strip, _linear_pool if linear else _strip_pool)
+		var beam := shot.spec.kind == ProjectileSpec.Kind.BEAM
+		if shot.dead and (beam or shot.dead_time > shot.spec.trail_time + 0.05):
+			_release(shot.strip, _beam_pool if beam else _strip_pool)
 			_release(shot.head, _sprite_pool)
 			if shot.mouth != null:
 				_release(shot.mouth, _sprite_pool)
 			_shots.remove_at(i)
 
 
-func _step_linear(shot: Shot, delta: float, space: PhysicsDirectSpaceState3D, query: PhysicsRayQueryParameters3D) -> void:
+func _step_beam(shot: Shot, delta: float, space: PhysicsDirectSpaceState3D, query: PhysicsRayQueryParameters3D) -> void:
 	var spec := shot.spec
 	shot.age += delta
+	shot.prev_position = shot.position
 	shot.prev_dir = shot.thrust_dir
-	shot.prev_length = shot.length
+	shot.prev_reach = shot.reach
+	shot.prev_tail = shot.tail
 	if shot.emitting and not (shot.age < spec.emit_time and shot.feed.is_valid() and is_instance_valid(shot.muzzle)):
 		shot.emitting = false
-		shot.emit_end = shot.age
 		if shot.mouth != null:
 			_release(shot.mouth, _sprite_pool)
 			shot.mouth = null
-	if not shot.emitting:
-		# Let go: it stays where it was (moving on with the shooter's velocity then) and
-		# breaks up.
+	# A free beam that ran into something, or is all used up, has no front moving on.
+	var stopped := not shot.emitting and (shot.blocked or shot.tail >= shot.reach)
+	if shot.emitting:
+		var at: Array = shot.feed.call()
+		shot.position = at[0]
+		shot.thrust_dir = at[2]
+		shot.velocity = (at[1] as Vector3) - shot.thrust_dir * spec.speed
+	else:
+		# Let go: the line flies on along itself (in the shooter's frame at release).
 		shot.position += shot.velocity * delta
-		shot.prev_dir = shot.thrust_dir
-		if _linear_fade(shot) >= 1.0:
+		shot.tail += spec.speed * delta
+	var range := spec.get_range()
+	if not stopped:
+		shot.reach = minf(shot.reach + spec.speed * delta, range)
+	shot.at_range = shot.reach >= range
+	shot.fizzle = move_toward(shot.fizzle, 1.0 if shot.at_range else 0.0, delta / 0.12)
+	if shot.tail >= shot.reach:
+		# Gone: only its wake is left, fading.
+		shot.blocked = false
+		if shot.tail - spec.speed * spec.trail_time >= shot.reach:
 			shot.dead = true
 		return
-	var at: Array = shot.feed.call()
-	var dir: Vector3 = at[2]
-	shot.position = at[0]
-	shot.thrust_dir = dir
-	shot.velocity = (at[1] as Vector3) - dir * spec.speed
-	shot.reach += spec.speed * delta
-	# The whole beam swings with the barrel: whatever lies along it is in it.
 	query.exclude = shot.exclude
-	query.from = shot.position
+	var dir := shot.thrust_dir
+	var swing := shot.prev_dir.angle_to(dir) if shot.emitting else 0.0
+	# A swinging barrel sweeps the line sideways: rays in between catch what it swept
+	# across (they hurt it, but don't end the beam).
+	var between := clampi(ceili(swing * shot.reach / 4.0), 0, 8)
+	for i in between:
+		var d := shot.prev_dir.slerp(dir, (i + 1.0) / (between + 1.0)).normalized()
+		query.from = shot.position + d * shot.tail
+		query.to = shot.position + d * shot.reach
+		var swept := space.intersect_ray(query)
+		if not swept.is_empty():
+			_beam_hit(shot, swept.collider as Node, swept.position, d)
+	# From last tick's tail: what the tail has just passed was still in the beam, so a
+	# thin plate it slipped through this tick still takes the rest of it.
+	query.from = shot.position + dir * minf(shot.prev_tail, shot.tail)
 	query.to = shot.position + dir * shot.reach
 	var hit := space.intersect_ray(query)
 	shot.blocked = not hit.is_empty()
 	if not shot.blocked:
-		shot.length = shot.reach
 		return
 	var point: Vector3 = hit.position
-	shot.length = shot.position.distance_to(point)
+	# It ends where it hit: the particles stop there.
+	shot.reach = maxf(shot.position.distance_to(point), shot.tail)
+	shot.at_range = false
 	var collider := hit.collider as Node
-	var velocity := _velocity_of(collider)
-	var id := collider.get_instance_id() if collider != null else 0
-	if not shot.hit_ids.has(id):
-		# It hurts what it hits once; the rest of it splashes on it.
-		shot.hit_ids[id] = true
-		_damage(collider, spec.damage, point, dir, shot.source)
-		impact(spec, point, velocity)
-		shot_hit.emit(spec, point, collider)
-	elif shot.age - shot.last_splash > 0.06:
+	if not _beam_hit(shot, collider, point, dir) and shot.age - shot.last_splash > 0.06:
 		shot.last_splash = shot.age
-		impact(spec, point, velocity, 0.45)
+		impact(spec, point, _velocity_of(collider), 0.45)
 
 
-## 0 while the barrel holds it, rising to 1 as it breaks up over trail_time.
-func _linear_fade(shot: Shot) -> float:
-	if shot.emitting:
-		return 0.0
-	return clampf((shot.age - shot.emit_end) / maxf(shot.spec.trail_time, 0.01), 0.0, 1.0)
+## A beam touching `collider` at `point`: hurts it the first time (true), else nothing.
+func _beam_hit(shot: Shot, collider: Node, point: Vector3, dir: Vector3) -> bool:
+	var id := collider.get_instance_id() if collider != null else 0
+	if shot.hit_ids.has(id):
+		return false
+	shot.hit_ids[id] = true
+	_damage(collider, shot.spec.damage, point, dir, shot.source)
+	impact(shot.spec, point, _velocity_of(collider))
+	shot_hit.emit(shot.spec, point, collider)
+	return true
 
 
 ## Where `node` is drawn this frame: between the last two physics ticks, like the suit
@@ -476,8 +506,8 @@ static func drawn_position(node: Node3D) -> Vector3:
 func _process(delta: float) -> void:
 	var lead := Engine.get_physics_interpolation_fraction() / Engine.physics_ticks_per_second
 	for shot in _shots:
-		if shot.spec.kind == ProjectileSpec.Kind.LINEAR:
-			_place_linear(shot, lead)
+		if shot.spec.kind == ProjectileSpec.Kind.BEAM:
+			_place_beam(shot, lead)
 		else:
 			_place_shot(shot, lead)
 	_clock += delta
@@ -579,35 +609,40 @@ func _place_charges() -> void:
 		charge.sprite.set_instance_shader_parameter(&"flash_glare", charge_glare * k)
 
 
-## Draws a LINEAR shot: straight from the barrel (where it is drawn) along the barrel's
-## direction, turned smoothly between ticks.
-func _place_linear(shot: Shot, lead: float) -> void:
+## Draws a beam: its line and wake along the barrel (turned smoothly between ticks while
+## it emits), the near end on the muzzle where it is drawn.
+func _place_beam(shot: Shot, _lead: float) -> void:
 	var spec := shot.spec
-	var fade := _linear_fade(shot)
 	var f := Engine.get_physics_interpolation_fraction()
 	var dir := shot.prev_dir.slerp(shot.thrust_dir, f).normalized() if shot.emitting else shot.thrust_dir
-	var length := lerpf(shot.prev_length, shot.length, f) if shot.emitting else shot.length
-	var tail := shot.position + shot.velocity * lead
+	var reach := lerpf(shot.prev_reach, shot.reach, f)
+	var tail := lerpf(shot.prev_tail, shot.tail, f)
+	# Interpolated like the barrel it left, so it doesn't jump a tick ahead on release.
+	var origin := shot.prev_position.lerp(shot.position, f)
 	if shot.emitting and is_instance_valid(shot.muzzle):
-		tail = drawn_position(shot.muzzle)
+		origin = drawn_position(shot.muzzle)
+	var back := maxf(tail - spec.speed * spec.trail_time, 0.0)
+	var length := reach - back
 	shot.strip.visible = length > 0.5
+	shot.head.visible = false
 	if not shot.strip.visible:
-		shot.head.visible = false
 		return
-	var head := tail + dir * length
+	var head := origin + dir * reach
 	var up := Vector3.UP if absf(dir.y) < 0.95 else Vector3.RIGHT
 	shot.strip.transform = Transform3D(Basis.looking_at(dir, up).scaled_local(Vector3(1.0, 1.0, length)), head)
 	shot.strip.set_instance_shader_parameter(&"beam_length", length)
-	shot.strip.set_instance_shader_parameter(&"beam_fade", fade)
+	shot.strip.set_instance_shader_parameter(&"beam_body", reach - tail)
 	shot.strip.set_instance_shader_parameter(&"beam_tip", 0.0 if shot.blocked else 1.0)
-	shot.head.visible = shot.emitting and not shot.blocked
-	shot.head.position = head
-	shot.head.set_instance_shader_parameter(&"flash_size", spec.width * 8.0)
+	shot.strip.set_instance_shader_parameter(&"beam_fizzle", shot.fizzle)
+	shot.strip.set_instance_shader_parameter(&"beam_free", 0.0 if shot.emitting else 1.0)
+	shot.head.visible = tail < reach and not shot.blocked and shot.fizzle < 0.5
+	shot.head.position = head - dir * spec.width * 6.0
+	shot.head.set_instance_shader_parameter(&"flash_size", spec.width * 7.0)
 	if shot.mouth != null:
 		shot.mouth.visible = true
-		shot.mouth.position = tail
-		shot.mouth.set_instance_shader_parameter(&"flash_size", spec.flash_size * 0.5)
-		shot.mouth.set_instance_shader_parameter(&"flash_intensity", spec.intensity * 0.9)
+		shot.mouth.position = origin
+		shot.mouth.set_instance_shader_parameter(&"flash_size", spec.flash_size * 0.22)
+		shot.mouth.set_instance_shader_parameter(&"flash_intensity", spec.intensity * 0.45)
 
 
 ## The shot stops at `at`, on `collider`.
@@ -699,7 +734,7 @@ func _build_meshes() -> void:
 	# The shader widens the strip in view space: leave room for it.
 	_strip_mesh.custom_aabb = AABB(Vector3(-40.0, -40.0, 0.0), Vector3(80.0, 80.0, 1.0))
 	var beam := ShaderMaterial.new()
-	beam.shader = preload("res://Entities/Projectiles/Shader/beam.gdshader")
+	beam.shader = preload("res://Entities/Projectiles/Shader/bolt.gdshader")
 	_strip_mesh.surface_set_material(0, beam)
 
 	_quad_mesh = QuadMesh.new()
@@ -709,10 +744,10 @@ func _build_meshes() -> void:
 	glow.shader = preload("res://Entities/Projectiles/Shader/flash.gdshader")
 	_quad_mesh.material = glow
 
-	# The linear beam: denser at both ends (its tip far away, the barrel near the eye).
+	# The beam: denser at both ends (its front far away, the barrel near the eye).
 	verts = PackedVector3Array()
 	indices = PackedInt32Array()
-	var n := 64
+	var n := 96
 	for i in n + 1:
 		var z := 0.5 - 0.5 * cos(PI * float(i) / n)
 		verts.append(Vector3(-1.0, 0.0, z))
@@ -724,12 +759,12 @@ func _build_meshes() -> void:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = verts
 	arrays[Mesh.ARRAY_INDEX] = indices
-	_linear_mesh = ArrayMesh.new()
-	_linear_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	_linear_mesh.custom_aabb = AABB(Vector3(-60.0, -60.0, 0.0), Vector3(120.0, 120.0, 1.0))
-	var linear := ShaderMaterial.new()
-	linear.shader = preload("res://Entities/Projectiles/Shader/linear_beam.gdshader")
-	_linear_mesh.surface_set_material(0, linear)
+	_beam_mesh = ArrayMesh.new()
+	_beam_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_beam_mesh.custom_aabb = AABB(Vector3(-60.0, -60.0, 0.0), Vector3(120.0, 120.0, 1.0))
+	var line := ShaderMaterial.new()
+	line.shader = preload("res://Entities/Projectiles/Shader/beam.gdshader")
+	_beam_mesh.surface_set_material(0, line)
 
 
 func _take(pool: Array[MeshInstance3D], mesh: Mesh, _kind: StringName) -> MeshInstance3D:

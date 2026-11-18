@@ -65,6 +65,26 @@ static func intercept_time(rel_pos: Vector3, rel_vel: Vector3, speed: float) -> 
 	return hi if hi > 0.0 else -1.0
 
 
+## intercept_time for a beam whose front is already `reach` out: t when
+## |rel_pos + rel_vel·t| = reach + speed·t (0 if already within reach, -1 if never).
+static func intercept_time_ahead(rel_pos: Vector3, rel_vel: Vector3, speed: float, reach: float) -> float:
+	if rel_pos.length() <= reach:
+		return 0.0
+	var a := rel_vel.dot(rel_vel) - speed * speed
+	var b := 2.0 * (rel_pos.dot(rel_vel) - reach * speed)
+	var c := rel_pos.dot(rel_pos) - reach * reach
+	if absf(a) < 1e-6:
+		return -c / b if b < 0.0 else -1.0
+	var disc := b * b - 4.0 * a * c
+	if disc < 0.0:
+		return -1.0
+	var r := sqrt(disc)
+	var t1 := (-b - r) / (2.0 * a)
+	var t2 := (-b + r) / (2.0 * a)
+	var t := minf(t1, t2) if minf(t1, t2) > 0.0 else maxf(t1, t2)
+	return t if t > 0.0 else -1.0
+
+
 ## Direction for azimuth (+ = right) and elevation (+ = up) in degrees; forward is -Z.
 static func angles_to_direction(angles_deg: Vector2) -> Vector3:
 	var az := deg_to_rad(angles_deg.x)

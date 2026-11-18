@@ -1,6 +1,6 @@
 extends SceneTree
 
-## Hit rate of the beam rifle (PULSE) against a jinking drone, with the sensor track and
+## Hit rate of the beam rifle against a jinking drone, with the sensor track and
 ## with a perfect one, across range: how much the sensors' delay and noise give the
 ## defender (Docs/PhysicsAndSensors/sensors.md, "The dodge budget"). The suit holds still;
 ## each shot is held through its spool, then judged by the drone's hit points.
@@ -120,7 +120,7 @@ func _case(rifle: MsWeapon, g: float, r: float) -> Array:
 			if rifle.ammo < ammo:
 				break
 		_input.cmd.fire_main = false
-		await _ticks(ceili((r / _speed + 0.3) * Engine.physics_ticks_per_second))
+		await _ticks(ceili((r / _speed + 0.3 + rifle.projectile.emit_time) * Engine.physics_ticks_per_second))
 		if drone.hit_points < hp:
 			hits += 1
 	var breaks := _fcs.sensors.track.breaks if _fcs.sensors.track != null else 0

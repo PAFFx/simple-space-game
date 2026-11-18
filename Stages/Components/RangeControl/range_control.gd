@@ -167,6 +167,8 @@ func spawn_preset(index: int, distance: float) -> TargetDrone:
 	if p[7]:
 		drone.use_track = true
 		drone.fire_interval = Vector2(1.0, 2.0)
+		# Its barrel follows you while the beam pours out.
+		drone.beam_slew_deg = 20.0
 	return drone
 
 

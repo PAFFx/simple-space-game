@@ -15,15 +15,17 @@ Fly each and tick it off, or note what to change.
       cross that stretch as it nears the shot; our own rifle's charge keeps its plain look.
       Check it reads from the receiving end at 0.7–3 km, and whether it should keep the
       shot's colour (it is mostly white now). Render: `weapons_snapshot.gd glow`.
-- [ ] **Break feel** (tap full boost with the stick pushed): the far-leg kick and waist lean
-      on sideways breaks, the committed 0.7 s push, the 0.4 s cooldown, releasing and tapping
+- [ ] **Break feel** (tap full boost with the stick pushed): the waist lean on sideways
+      breaks (the far-leg kick is gone, `d0b4045`), the committed 0.7 s push, the 0.4 s cooldown, releasing and tapping
       again during a held full boost. Render: `Tools/Flight/dodge_snapshot.gd`.
 - [ ] **Break out of a steep full-boost dive** (−50° pitch): the body swings at up to 72°/s.
-- [ ] **Yaw**: turns are back to 70–90° in a second under boost, but stops take 0.42–0.48 s
-      after release (was ~0.3): more overshoot when letting go.
+- [ ] **Yaw**: with the ×1.5 thrust a full yaw turn is 95° in a second and stops 0.40 s after
+      release (was ~0.3 before the mass model): check the overshoot when letting go.
 - [ ] **Forward boost pitching** with the mass model's lower centre of mass (see Physics).
 - [ ] **Heavier handling overall** from the mass model: yaw inertia about twice the old value,
       pitch and roll lighter, the suit getting nimbler as the tanks drain.
+- [ ] **×1.5 thrust and movement limits** (`Docs/FlightControl/thrust_sizing.md`, 2026-11-17):
+      cruise 1.2 G, Shift boost 10.5 G, brake 9 G, climb ~13.5 G with no G-limiter yet.
 
 ## 1. Physics
 
@@ -49,10 +51,11 @@ Fly each and tick it off, or note what to change.
       Look at the pods' fore/aft range or the stance for forward pushes.
 - [ ] The loadout is lopsided (shield on the left forearm, fin funnels on the left of the
       backpack): the centre of mass sits 0.6 m left of the centreline full, 1.0 m empty.
-      The FBW trims it, at some cost in thrust. Check it in flight; jettisoning the funnels
-      or the bazooka should shift it back.
-- [ ] Jettison equipment (bazooka, funnels, shield): drop the part from the mass model and
-      the payload, push the suit by the release impulse.
+      The FBW trims it, at some cost in thrust. Check it in flight; taking the funnels or the
+      bazooka off (F5 loadout panel) should shift it back.
+- [ ] Jettison equipment in flight (bazooka, funnels, shield). Done on the test range's F5
+      panel: the part leaves the mass model and the payload (`MsLoadout.set_equipped`). Left:
+      a jettison control, the part released as a free body, and the release impulse.
 - [ ] Off-diagonal inertia isn't applied: Godot takes principal moments along the body axes
       only. The products of inertia are ~5–10% of the diagonal (`mass_model_probe.gd report`).
       Either accept it or rotate the body's inertia frame.
@@ -93,10 +96,13 @@ Fly each and tick it off, or note what to change.
             ~12% more distance; sideways at 500 m 14 → 5 hits.
             Sideways inside 500 m is still unreliable: 3.7 G of clean sideways thrust isn't
             enough in that window. Break up or diagonally there.
+            Since the ×1.5 thrust (2026-11-17): clean sideways 5.4–5.6 G, break right
+            14.4 → 21.5 m in 1 s. Still short of the ~8 G it needs; the turret dodge test
+            hasn't been re-run (`dodge_probe.gd`).
       - [ ] Main pods swinging sideways (a second pod axis, ±30–45°), measured first in the
             capability probe, then a model / bone change.
-      - [ ] Optional: a 60° roll cap for a sustained full-boost sideways sprint (7.4 G), not
-            for dodging.
+      - [ ] Optional: a higher roll cap for a sustained sideways sprint, not for dodging
+            (the 30° cap now holds a Shift strafe to ~8.6 G of the 10.5 G limit).
 
 - [ ] Physics cost: one RX-93 is ~8 ms of physics per tick (mostly the thrust allocator),
       half a 60 Hz frame. Fixed today: the capability map was rebuilt on every limb swing
@@ -137,10 +143,11 @@ First pass built: `Entities/Vehicles/Components/Sensors/`, see `sensors.md` ("As
       turning); the target sits ~100 px off centre, the track's own error there.
 - [ ] Zoom point-track mode (the image re-centred on the target by a video tracker) if the
       ~100 px sensor offset at ×128 bothers.
-- [ ] Practice turret and drones use the same track filter (they still aim with truth).
+- [x] Practice turret aims from its own `SensorTrack` (`TargetDrone.use_track`, the
+      hunter turret preset; `dodge_probe.gd`). The default turret still aims with truth.
 - [x] Probe: hit rate against a jinking drone, sensor vs perfect track (`track_probe.gd`).
-- [ ] A drone that dodges like a pilot: changes thrust when the shooter's barrel lights up
-      (spool cue), so the probe measures the dodge the design is about, not a timer.
+- [x] A drone that dodges like a pilot: with a `threat` it thrusts across the line of sight
+      `dodge_reaction` after our spool starts (evasive / ace presets, `track_probe.gd dodge=`).
 - [x] Shoot-cue report ("the SHOOT cue sits far off the real target"): superseded. The cue is
       now the gun solution circle, drawn on the target and offset only by the barrel's error.
 - [x] Steady HUD marks: unlocked contacts coast on an averaged velocity, sizes picked once a

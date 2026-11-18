@@ -39,7 +39,7 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_out = args[0]
-	var shots := PackedStringArray(["hud", "beam", "external", "linear", "explode", "impact", "ring", "vulcan", "missile", "block", "turret", "glow", "offaxis"])
+	var shots := PackedStringArray(["hud", "beam", "external", "sweep", "explode", "impact", "ring", "vulcan", "missile", "block", "turret", "glow", "offaxis"])
 	if args.size() > 1:
 		shots = args[1].split(",")
 	DirAccess.make_dir_recursive_absolute(_out)
@@ -283,26 +283,26 @@ func _run(shots: PackedStringArray) -> void:
 		await _frames(90)
 		_fp.make_current()
 
-	if "linear" in shots:
-		_input.cmd.weapon_select = FireControl.Hat.FORWARD
-		await _frames(10)
-		var linear := _fcs.selected
-		await _fire_sequence("linear_fp", 6, 2)
-		# Side-on from far away, the barrel sweeping while it pours out: the column bends
-		# with it and stays on the muzzle.
+	if "sweep" in shots:
+		# The barrel sweeping while the beam pours out: the whole line swings with it,
+		# straight, its near end on the muzzle. From below (against space), then close.
+		var rifle := _fcs.selected
 		_ext.make_current()
-		_ext_view(Vector3(700, 120, -500), Vector3(60, 40, -500))
-		_ext.fov = 70.0
-		_sweep = linear
-		await _fire_sequence("linear_ext_sweep", 10, 3)
+		_ext_view(Vector3(40, -700, -420), Vector3(40, 0, -421))
+		_ext.fov = 75.0
+		_sweep = rifle
+		await _fire_sequence("sweep_ext_top", 10, 2)
 		_sweep = null
-		linear.aim_override = null
+		rifle.aim_override = null
+		await _frames(60)
 		_ext_view(Vector3(26, 22, 30), Vector3(4, 16, -10))
 		_ext.fov = 45.0
-		await _fire_sequence("linear_ext_close", 6, 2)
+		_sweep = rifle
+		await _fire_sequence("sweep_ext_close", 8, 2)
+		_sweep = null
+		rifle.aim_override = null
 		_fp.make_current()
-		_input.cmd.weapon_select = FireControl.Hat.FORWARD
-		await _frames(30)
+		await _frames(60)
 
 	if "explode" in shots:
 		var victim := _spawn(TargetDrone.Behaviour.STATIC, 600.0, Vector2(-20, 0), 1.0)

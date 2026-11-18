@@ -62,7 +62,7 @@ const CONTACT_GROUP := &"hud_contacts"
 ]
 ## Names for the weapon ring, including weapons that aren't fitted yet.
 @export var weapon_labels := {
-	&"beam_rifle": "PULSE", &"shield_missile": "MISSILE", &"fin_funnel": "FUNNEL",
+	&"beam_rifle": "BEAM", &"shield_missile": "MISSILE", &"fin_funnel": "FUNNEL",
 	&"bazooka_back": "BZK-B", &"bazooka_hand": "BZK-H", &"beam_saber": "SABER",
 }
 ## Selected on entering DGFT.
@@ -446,7 +446,7 @@ func set_mode(value: MasterMode) -> void:
 func select(weapon: MsWeapon) -> void:
 	if weapon == selected:
 		return
-	# Another mode of the same gun (pulse ↔ linear): it is already up.
+	# Another mode of the same gun: it is already up.
 	if selected != null and weapon != null and weapon.equipment != null \
 			and weapon.equipment == selected.equipment and weapon.pose == selected.pose:
 		weapon.take_over(selected)

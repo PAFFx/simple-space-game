@@ -9,20 +9,22 @@ extends SceneTree
 ## Args after --: <out_dir> then any of
 ##   spec=res://...tres        the shot to film (default the RX-93 beam rifle)
 ##   dist=900                  muzzle to plate, m
-##   views=spool,recv,side,track,fp,impact   (track rides 60 m beside the bolt head)
+##   noplate                   no plate: the beam flies on to its range (lifetime=…)
+##   sweep=20                  the barrel swings right at this many deg/s while it fires
+##   views=spool,recv,side,track,fp,impact,top   (track rides 60 m beside the bolt head)
 ##   size=960x540              per view
 ##   video=side                save every frame of that view and encode <out>/<variant>_side.mp4
 ##   times.<view>=s0.5,+0.05,i+0.02   capture times: s = fraction of the spool,
 ##                             + = s after the shot leaves, i = s after it reaches the plate
 ##   <variant>:<key>=<value>   one override; variants run in order of first mention, after
 ##                             "base" (unchanged) unless `nobase` is given. Keys: a
-##                             ProjectileSpec property (width, bolt_length, color, ...), or
-##                             mgr.<export>, beam.<uniform>, flash.<uniform>, linear.<uniform>.
+##                             ProjectileSpec property (width, emit_time, color, ...), or
+##                             mgr.<export>, beam.<uniform>, bolt.<uniform>, flash.<uniform>.
 ##                             Values go through str_to_var: 0.8, Color(1,0.2,0.1,1), true.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 const DEFAULT_SPEC := "res://Entities/Projectiles/Specs/nu_beam_rifle.tres"
-const ALL_VIEWS := ["spool", "recv", "side", "track", "fp", "impact"]
+const ALL_VIEWS := ["spool", "recv", "side", "track", "fp", "impact", "top"]
 const DEFAULT_TIMES := {
 	"spool": "s0.1,s0.3,s0.5,s0.7,s0.9,+0.008,+0.03,+0.08",
 	"recv": "s0.2,s0.5,s0.8,s1.0,i-0.15,i-0.08,i-0.03,i+0.0",
@@ -30,11 +32,14 @@ const DEFAULT_TIMES := {
 	"track": "+0.01,+0.03,+0.06,+0.1,+0.15,+0.2,i-0.01,i+0.01",
 	"fp": "+0.0,+0.02,+0.05,+0.1,+0.2,i+0.0",
 	"impact": "i-0.02,i+0.01,i+0.03,i+0.08,i+0.15,i+0.3,i+0.6,i+1.0",
+	"top": "+0.05,+0.1,+0.15,+0.2,+0.25,+0.3,+0.4,+0.5",
 }
 
 var _out := "user://beam_fx_lab"
 var _spec_path := DEFAULT_SPEC
 var _dist := 900.0
+var _plate := true
+var _sweep := 0.0
 var _views: Array = ALL_VIEWS.duplicate()
 var _size := Vector2i(960, 540)
 var _video := ""
@@ -60,6 +65,10 @@ func _initialize() -> void:
 			_out = a
 		elif a == "nobase":
 			keep_base = false
+		elif a == "noplate":
+			_plate = false
+		elif a.begins_with("sweep="):
+			_sweep = a.trim_prefix("sweep=").to_float()
 		elif ":" in a.get_slice("=", 0):
 			var name := a.get_slice(":", 0)
 			var kv := a.substr(name.length() + 1)
@@ -147,7 +156,10 @@ func _build_lab() -> void:
 	mesh.mesh = bm
 	plate.add_child(mesh)
 	plate.position = Vector3(0, 0, -_dist)
-	_lab.add_child(plate)
+	if _plate:
+		_lab.add_child(plate)
+	else:
+		plate.free()
 
 	var eyes := {
 		"spool": [Vector3(5, 1.5, -12), Vector3(0, 0, -1), 40.0],
@@ -156,6 +168,8 @@ func _build_lab() -> void:
 		"track": [Vector3(60, 10, 0), Vector3.ZERO, 50.0],
 		"fp": [Vector3(0.8, 0.6, 3), Vector3(0, 0, -_dist), 75.0],
 		"impact": [Vector3(40, 15, -_dist + 50), Vector3(0, 0, -_dist), 50.0],
+		# From below, against space (Earth is down there): shows a sweep.
+		"top": [Vector3(0, -_dist * 0.75, -_dist * 0.45), Vector3(0, 0, -_dist * 0.45 - 1.0), 75.0],
 	}
 	for view in _views:
 		var vp := SubViewport.new()
@@ -204,6 +218,12 @@ func _film(variant: String, overrides: Dictionary) -> void:
 	var owner := RefCounted.new()
 	var t := 0.0
 	var fired := false
+	# Lambdas capture locals by value: the clock is shared through a Dictionary.
+	var clock := {"t": 0.0, "fired": 0.0}
+	# What the barrel feeds a beam each tick, swinging at _sweep.
+	var feed := func() -> Array:
+		var dir := Vector3.FORWARD.rotated(Vector3.UP, -deg_to_rad(_sweep) * (clock.t - clock.fired))
+		return [_muzzle.global_position, dir * spec.speed, dir]
 	var frame := 0
 	var dt := 0.0
 	while t <= end:
@@ -213,7 +233,10 @@ func _film(variant: String, overrides: Dictionary) -> void:
 			if t >= spool:
 				manager.set_charge(owner, _muzzle, spec, 0.0)
 				var dir := Vector3.FORWARD
-				manager.spawn(spec, _muzzle.global_position, dir * spec.speed, dir)
+				clock.fired = t
+				var shot := manager.spawn(spec, _muzzle.global_position, dir * spec.speed, dir)
+				if spec.kind == ProjectileSpec.Kind.BEAM:
+					manager.stream_from(shot, _muzzle, feed)
 				manager.muzzle_flash(spec, _muzzle.global_position, Vector3.ZERO, _muzzle)
 				fired = true
 			elif spool > 0.0:
@@ -225,6 +248,9 @@ func _film(variant: String, overrides: Dictionary) -> void:
 				var shot: ProjectileManager.Shot = manager._shots[0]
 				var lead := 0.0 if shot.dead else Engine.get_physics_interpolation_fraction() / Engine.physics_ticks_per_second
 				z = (shot.position + shot.velocity * lead).z
+				if shot.spec.kind == ProjectileSpec.Kind.BEAM:
+					var f := Engine.get_physics_interpolation_fraction()
+					z += (shot.thrust_dir * lerpf(shot.prev_reach, shot.reach, f)).z
 			elif fired:
 				z = -_dist
 			_track.global_transform = Transform3D(Basis.IDENTITY, Vector3(60, 10, z + 30)) \
@@ -241,6 +267,7 @@ func _film(variant: String, overrides: Dictionary) -> void:
 			_cams[_video].get_texture().get_image().save_png("%s/video_%s/%05d.png" % [_out, variant, frame])
 		frame += 1
 		t += dt
+		clock.t = t
 	manager.set_charge(owner, _muzzle, spec, 0.0)
 	if _video != "" and _cams.has(_video):
 		var fps := roundi(1.0 / maxf(dt, 1e-4))
@@ -262,9 +289,9 @@ func _resolve(token: String, spool: float, arrive: float) -> float:
 
 func _apply(manager: ProjectileManager, spec: ProjectileSpec, overrides: Dictionary) -> void:
 	var materials := {
-		"beam": manager._strip_mesh.surface_get_material(0),
+		"bolt": manager._strip_mesh.surface_get_material(0),
 		"flash": manager._quad_mesh.material,
-		"linear": manager._linear_mesh.surface_get_material(0),
+		"beam": manager._beam_mesh.surface_get_material(0),
 	}
 	for key: String in overrides:
 		var value: Variant = overrides[key]

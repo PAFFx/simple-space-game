@@ -189,12 +189,30 @@ func _run() -> void:
 	await _ticks(spool_ticks + 2)
 	_check("held through the spool: shot leaves", rifle.ammo == rifle.max_ammo - 1)
 	var hp := drone.hit_points if is_instance_valid(drone) else 0.0
+	# The beam: one straight line on the barrel while it pours out, then flying free.
+	var manager := ProjectileManager.find(_fcs)
+	var beam: ProjectileManager.Shot = null
+	for shot in manager._shots:
+		if shot.spec == rifle.projectile:
+			beam = shot
+	await _ticks(maxi(ceili(rifle.projectile.emit_time * Engine.physics_ticks_per_second / 2.0) - 2, 1))
+	_check("beam pours out along the barrel", beam != null and beam.emitting and beam.tail == 0.0
+			and rad_to_deg(beam.thrust_dir.angle_to(rifle.get_aim_direction(_fcs))) < 0.5
+			and beam.position.distance_to(rifle.get_muzzle_position()) < 1.0)
+	if beam != null:
+		print("beam: front %.0f m after %.3f s (speed × age %.0f)" % [beam.reach, beam.age, rifle.projectile.speed * beam.age])
+		_check("its front travels at the beam's speed", absf(beam.reach - rifle.projectile.speed * beam.age) < 60.0)
+		await _ticks(ceili(rifle.projectile.emit_time * Engine.physics_ticks_per_second))
+		print("beam let go: tail %.0f front %.0f blocked %s" % [beam.tail, beam.reach, beam.blocked])
+		_check("let go, the line flies on", not beam.emitting and beam.tail > 0.0)
 	await _ticks(ceili(rifle.cycle_time * Engine.physics_ticks_per_second) + spool_ticks + 10)
 	_check("held on: no second shot", rifle.ammo == rifle.max_ammo - 1)
 	_input.cmd.fire_main = false
 	await _ticks(40)
 	_check("beam kills the static drone", not is_instance_valid(drone) or drone.hit_points < hp)
 	_check("lock drops with the target", _fcs.locked == null)
+
+	await _beam_range_check()
 
 	# Drifting target crossing at ~100 m/s: lead must hit.
 	drone = _spawn(TargetDrone.Behaviour.DRIFT, 2000.0, Vector2(10, 0))
@@ -345,6 +363,28 @@ func _check(what: String, ok: bool) -> void:
 	print("%s  %s" % ["ok  " if ok else "FAIL", what])
 	if not ok:
 		_failures += 1
+
+
+## A beam fired straight up from high above the suit into empty space, its range cut to
+## 1.2 km: its front stops and dissipates there, and the whole shot is gone after its tail
+## and wake get there.
+func _beam_range_check() -> void:
+	var spec := (_fcs.get_weapon(&"beam_rifle").projectile as ProjectileSpec).duplicate() as ProjectileSpec
+	spec.lifetime = 1200.0 / spec.speed
+	var barrel := Node3D.new()
+	_suit.get_parent().add_child(barrel)
+	barrel.global_position = _suit.global_position + Vector3.UP * 3000.0
+	var manager := ProjectileManager.of(_suit)
+	var beam := manager.spawn(spec, barrel.global_position, Vector3.UP * spec.speed, Vector3.UP)
+	manager.stream_from(beam, barrel, func() -> Array:
+		return [barrel.global_position, Vector3.UP * spec.speed, Vector3.UP])
+	var tps := Engine.physics_ticks_per_second
+	await _ticks(ceili((1200.0 / spec.speed + 0.05) * tps))
+	print("beam at range: front %.0f tail %.0f at_range %s" % [beam.reach, beam.tail, beam.at_range])
+	_check("beam's front stops at its range", is_equal_approx(beam.reach, 1200.0) and beam.at_range and beam.tail > 0.0)
+	await _ticks(ceili((spec.emit_time + spec.trail_time + 0.1) * tps))
+	_check("then it is gone, wake and all", not manager._shots.has(beam))
+	barrel.queue_free()
 
 
 func _ticks(count: int) -> void:

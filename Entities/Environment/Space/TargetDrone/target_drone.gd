@@ -9,7 +9,7 @@ extends AnimatableBody3D
 ##   DRIFT    coasts in a straight line
 ##   JINK     changes its acceleration every second or two, like a suit dodging; stays
 ##            within `leash` of where it started
-##   TURRET   jinks gently and shoots back at `quarry` with slow bolts, to practise
+##   TURRET   jinks gently and shoots back at `quarry` with slow beams, to practise
 ##            dodging and the shield
 ##
 ## Higher specs, for testing both sides of a fight:
@@ -40,6 +40,9 @@ signal destroyed(drone: TargetDrone)
 @export var fire_interval := Vector2(1.6, 3.2)
 @export var fire_range: float = 6000.0
 @export var aim_error_deg: float = 0.25
+## How fast its barrel follows the lead while a beam pours out, deg/s (0: the beam holds
+## the direction it left in, riding along with the drone).
+@export var beam_slew_deg: float = 0.0
 @export_group("Dodge")
 ## The shooter whose barrel it watches; empty = no dodging.
 @export var threat: FireControl
@@ -65,6 +68,10 @@ var _flash := 0.0
 var _spool := -1.0
 ## Where the shot leaves: on the hull, facing the quarry.
 var _muzzle: Marker3D
+## The beam pouring out: its barrel direction and this shot's aim error.
+var _beam: ProjectileManager.Shot
+var _beam_dir := Vector3.ZERO
+var _beam_error := Vector3.ZERO
 ## Shots fired and dodges started (probes).
 var shots_fired := 0
 var dodges := 0
@@ -178,15 +185,45 @@ func _shoot(delta: float) -> void:
 	if dir == Vector3.ZERO:
 		return
 	var muzzle := global_position + dir * (radius + 1.0)
+	_muzzle.global_position = muzzle
 	shots_fired += 1
-	manager.spawn(shot, muzzle, velocity + dir * shot.speed, dir, [get_rid()], self)
+	var fired := manager.spawn(shot, muzzle, velocity + dir * shot.speed, dir, [get_rid()], self)
+	if shot.kind == ProjectileSpec.Kind.BEAM:
+		_beam = fired
+		_beam_dir = dir
+		_beam_error = dir - _lead(0.0)
+		manager.stream_from(fired, _muzzle, _beam_state)
 	manager.muzzle_flash(shot, muzzle, velocity, _muzzle)
+
+
+## Where the beam leaves the hull this tick: [position, velocity, direction].
+func _beam_state() -> Array:
+	if beam_slew_deg > 0.0 and quarry != null and is_instance_valid(quarry):
+		var lead := _lead(_beam.reach)
+		if lead != Vector3.ZERO:
+			var want := (lead + _beam_error).normalized()
+			var step := deg_to_rad(beam_slew_deg) * get_physics_process_delta_time()
+			var angle := _beam_dir.angle_to(want)
+			if angle > 1e-6:
+				_beam_dir = _beam_dir.slerp(want, minf(step / angle, 1.0)).normalized()
+	_muzzle.global_position = global_position + _beam_dir * (radius + 1.0)
+	return [_muzzle.global_position, velocity + _beam_dir * shot.speed, _beam_dir]
 
 
 ## Lead direction on the quarry (with the aim error), or zero if out of reach.
 func _aim() -> Vector3:
+	var dir := _lead(0.0)
+	if dir == Vector3.ZERO:
+		return dir
+	var error := deg_to_rad(aim_error_deg)
+	return (dir + Vector3(randfn(0.0, error), randfn(0.0, error), randfn(0.0, error))).normalized()
+
+
+## Lead direction on the quarry, or zero if out of reach. `reach`: how far a beam already
+## out has got.
+func _lead(reach: float) -> Vector3:
 	if use_track:
-		return _aim_from_track()
+		return _lead_from_track(reach)
 	var quarry_velocity := (quarry as RigidBody3D).linear_velocity if quarry is RigidBody3D else Vector3.ZERO
 	var quarry_centre := quarry.global_position
 	if quarry is RigidBody3D:
@@ -195,12 +232,10 @@ func _aim() -> Vector3:
 	if rel_pos.length() > fire_range:
 		return Vector3.ZERO
 	var rel_vel := quarry_velocity - velocity
-	var t := SpatialMath.intercept_time(rel_pos, rel_vel, shot.speed)
-	if t <= 0.0 or t > shot.lifetime:
+	var t := SpatialMath.intercept_time_ahead(rel_pos, rel_vel, shot.speed, reach)
+	if t < 0.0 or t > shot.lifetime:
 		return Vector3.ZERO
-	var dir := (rel_pos + rel_vel * t).normalized()
-	var error := deg_to_rad(aim_error_deg)
-	return (dir + Vector3(randfn(0.0, error), randfn(0.0, error), randfn(0.0, error))).normalized()
+	return (rel_pos + rel_vel * t).normalized()
 
 
 ## The cue: the threat's selected weapon spooling while it is locked on us. React after
@@ -262,7 +297,7 @@ func _update_track(delta: float) -> void:
 	_track.tick(_time)
 
 
-func _aim_from_track() -> Vector3:
+func _lead_from_track(reach: float) -> Vector3:
 	if _track == null or not _track.has_solution():
 		return Vector3.ZERO
 	var est := _track.get_estimate(_time)
@@ -271,16 +306,14 @@ func _aim_from_track() -> Vector3:
 		return Vector3.ZERO
 	var rel_vel: Vector3 = est[1] - velocity
 	var acc: Vector3 = est[2]
-	var t := SpatialMath.intercept_time(rel_pos, rel_vel, shot.speed)
+	var t := SpatialMath.intercept_time_ahead(rel_pos, rel_vel, shot.speed, reach)
 	for i in 3:
-		if t <= 0.0:
+		if t < 0.0:
 			return Vector3.ZERO
-		t = SpatialMath.intercept_time(rel_pos + acc * (0.5 * t * t), rel_vel, shot.speed)
-	if t <= 0.0 or t > shot.lifetime:
+		t = SpatialMath.intercept_time_ahead(rel_pos + acc * (0.5 * t * t), rel_vel, shot.speed, reach)
+	if t < 0.0 or t > shot.lifetime:
 		return Vector3.ZERO
-	var dir := (rel_pos + rel_vel * t + acc * (0.5 * t * t)).normalized()
-	var error := deg_to_rad(aim_error_deg)
-	return (dir + Vector3(randfn(0.0, error), randfn(0.0, error), randfn(0.0, error))).normalized()
+	return (rel_pos + rel_vel * t + acc * (0.5 * t * t)).normalized()
 
 
 func _quarry_centre() -> Vector3:

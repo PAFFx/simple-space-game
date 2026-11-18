@@ -14,8 +14,8 @@ extends Node3D
 ##
 ## A beam (projectile.spool_time > 0) fires once per pull: the trigger is held while the
 ## barrel spools up, the shot leaves when it is spooled, and letting go early drops it.
-## Two weapons can draw on one magazine (`ammo_from`): the rifle's pulse and linear beams
-## share the E-pack and its cooldown.
+## A BEAM keeps pouring out of the barrel for its emit_time, the line following the aim.
+## Two weapons can draw on one magazine (`ammo_from`), sharing it and its cooldown.
 
 enum State { STOWED, READYING, READY, STOWING }
 
@@ -96,7 +96,7 @@ enum State { STOWED, READYING, READY, STOWING }
 ## How close the barrel must be to the lead direction to call the shot good, deg.
 @export var on_target_deg: float = 0.35
 ## The lock lost (target destroyed, unlocked): keep pointing where it was this long before
-## going back to the boresight, s. A linear beam still coming out holds it until it ends.
+## going back to the boresight, s. A beam still coming out holds it until it ends.
 @export var lock_loss_hold: float = 0.8
 
 var state := State.STOWED
@@ -197,7 +197,7 @@ func is_spooling() -> bool:
 	return spool > 0.0
 
 
-## Taking over from another weapon on the same equipment and pose (pulse ↔ linear): the arm
+## Taking over from another weapon on the same equipment and pose: the arm
 ## stays up and on its aim instead of lowering and raising again.
 func take_over(other: MsWeapon) -> void:
 	readiness = other.readiness
@@ -416,12 +416,12 @@ func _solve(fcs: FireControl) -> void:
 	target_range = rel_pos.length()
 	var t := target_range / maxf(projectile.speed, 1.0)
 	if _stream != null and _stream.emitting:
-		# A linear beam already out: its front is `reach` along, so lead only by what is
+		# A beam already out: its front is `reach` along, so lead only by what is
 		# left to cover; once past the target it points straight at it, like a laser.
-		t = _lead_with_head_start(rel_pos, rel_vel, projectile.speed, _stream.reach)
+		t = SpatialMath.intercept_time_ahead(rel_pos, rel_vel, projectile.speed, _stream.reach)
 		if t < 0.0:
 			return
-		t = maxf(_lead_with_head_start(rel_pos + acc * (0.5 * t * t), rel_vel, projectile.speed, _stream.reach), 0.0)
+		t = maxf(SpatialMath.intercept_time_ahead(rel_pos + acc * (0.5 * t * t), rel_vel, projectile.speed, _stream.reach), 0.0)
 	else:
 		# A rocket speeds up on the way: solve with its average speed, a few rounds.
 		for i in 4:
@@ -437,26 +437,6 @@ func _solve(fcs: FireControl) -> void:
 	lead_angles = SpatialMath.direction_to_angles(fcs.get_body_basis().inverse() * aim_vec)
 	target_in_envelope = is_inside_envelope(lead_angles)
 	solution_valid = true
-
-
-## Time t when |rel_pos + rel_vel·t| = reach + speed·t (0 if already within reach,
-## -1 if never).
-static func _lead_with_head_start(rel_pos: Vector3, rel_vel: Vector3, speed: float, reach: float) -> float:
-	if rel_pos.length() <= reach:
-		return 0.0
-	var a := rel_vel.dot(rel_vel) - speed * speed
-	var b := 2.0 * (rel_pos.dot(rel_vel) - reach * speed)
-	var c := rel_pos.dot(rel_pos) - reach * reach
-	if absf(a) < 1e-6:
-		return -c / b if b < 0.0 else -1.0
-	var disc := b * b - 4.0 * a * c
-	if disc < 0.0:
-		return -1.0
-	var r := sqrt(disc)
-	var t1 := (-b - r) / (2.0 * a)
-	var t2 := (-b + r) / (2.0 * a)
-	var t := minf(t1, t2) if minf(t1, t2) > 0.0 else maxf(t1, t2)
-	return t if t > 0.0 else -1.0
 
 
 func _tolerance(fcs: FireControl) -> float:
@@ -479,7 +459,7 @@ func _fire(fcs: FireControl) -> void:
 	var manager := ProjectileManager.of(self)
 	var at := muzzle.global_position
 	var shot := manager.spawn(projectile, at, own_velocity + dir * projectile.speed, dir, fcs.get_own_rids() + get_mount_rids(), fcs.get_body())
-	if projectile.kind == ProjectileSpec.Kind.LINEAR:
+	if projectile.kind == ProjectileSpec.Kind.BEAM:
 		_stream = shot
 		_stream_muzzle = muzzle
 		_stream_fcs = fcs
@@ -490,7 +470,7 @@ func _fire(fcs: FireControl) -> void:
 	fcs.shot_fired.emit(self)
 
 
-## Where a linear beam leaves the barrel this tick: [position, velocity, direction].
+## Where a beam leaves the barrel this tick: [position, velocity, direction].
 func _stream_state() -> Array:
 	var dir := get_aim_direction(_stream_fcs)
 	var own_velocity := _stream_fcs.get_own_velocity()

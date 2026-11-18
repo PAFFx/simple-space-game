@@ -6,7 +6,7 @@ extends SceneTree
 ##
 ##   godot-double --headless --path . --fixed-fps 60 -s Tools/Weapons/dodge_probe.gd -- \
 ##       [speed=1500] [shots=10] [ranges=500,1000,2000] [policies=none,up,side]
-##       [aim=track,truth] [reaction=0.25] [jitter=0.15] [hold=0.8] [spool=0.5] [no_funnels] [break_time=0.7] [no_break]
+##       [aim=track,truth] [reaction=0.25] [jitter=0.15] [hold=0.8] [spool=0.5] [emit=0.3] [no_funnels] [break_time=0.7] [no_break]
 ##
 ## policies: none (sits still), up (the mains' axis, ~9 G), side (left or right at random,
 ## ~3.6 G), diag (up and left or right, 45°), any (up / down / left / right at random).
@@ -31,6 +31,8 @@ var _aims := PackedStringArray(["track"])
 var _reaction := 0.25
 var _hold := 0.8
 var _spool := 0.5
+## Seconds the turret's beam pours out (-1: the spec's).
+var _emit := -1.0
 var _hits := 0
 var _no_funnels := false
 var _break_time := -1.0
@@ -54,6 +56,7 @@ func _initialize() -> void:
 			"reaction": _reaction = float(value)
 			"hold": _hold = float(value)
 			"spool": _spool = float(value)
+			"emit": _emit = float(value)
 			"no_funnels": _no_funnels = true
 			"break_time": _break_time = float(value)
 			"jitter": _jitter = float(value)
@@ -107,6 +110,8 @@ func _case(track: bool, policy: String, r: float) -> Array:
 	var spec: ProjectileSpec = (load("res://Entities/Projectiles/Specs/drone_shot.tres") as ProjectileSpec).duplicate()
 	spec.speed = _speed
 	spec.spool_time = _spool
+	if _emit >= 0.0:
+		spec.emit_time = _emit
 	spec.lifetime = maxf(spec.lifetime, r * 1.5 / _speed)
 	var drone := TargetDrone.new()
 	drone.behaviour = TargetDrone.Behaviour.TURRET
@@ -116,7 +121,8 @@ func _case(track: bool, policy: String, r: float) -> Array:
 	drone.hit_points = 1e12
 	drone.aim_error_deg = 0.03
 	drone.fire_range = r * 2.0
-	drone.fire_interval = Vector2(1.0, 1.4)
+	# Each shot is judged before the next leaves (a beam takes its emit time to pass).
+	drone.fire_interval = Vector2(1.0, 1.4) + Vector2.ONE * maxf(r / _speed + 0.4 + spec.emit_time - 0.9, 0.0)
 	drone.use_track = track
 	drone.velocity = _suit.linear_velocity
 	current_scene.add_child(drone)
@@ -141,7 +147,7 @@ func _case(track: bool, policy: String, r: float) -> Array:
 			dodge_in = _reaction + randf_range(-0.5 * _jitter, _jitter)
 		if spooling and not cue:
 			# Fired: judge it once it has had time to arrive, then put the suit back.
-			settle = r / _speed + 0.4
+			settle = r / _speed + 0.4 + drone.shot.emit_time
 		spooling = cue
 		if dodge_in >= 0.0:
 			dodge_in -= dt

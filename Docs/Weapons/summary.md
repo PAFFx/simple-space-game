@@ -1,6 +1,6 @@
 # Weapons and Fire Control
 
-Ranged weapons on the RX-93: beam rifle (PULSE and LINEAR beams), twin head vulcans, four
+Ranged weapons on the RX-93: beam rifle, twin head vulcans, four
 shield missiles, and the shield guard. Nothing is hit-scan. The suit never turns itself to shoot: each weapon has an
 envelope fixed to the body, and bringing the target into it is flying.
 
@@ -8,8 +8,7 @@ envelope fixed to the body, and bringing the target into it is flying.
 PilotCommand (weapon fields)          keyboard / twin sticks / scripted
       │
 FireControl (suit)                    master arm, master mode, lock, selection, block
-  ├── MsWeapon "Weapon"   (BeamRifle equipment)    beam_rifle      PULSE; arm aims, torso helps
-  ├── MsWeapon "Linear"   (BeamRifle equipment)    beam_linear     LINEAR; draws on Weapon's E-pack
+  ├── MsWeapon "Weapon"   (BeamRifle equipment)    beam_rifle      BEAM; arm aims, torso helps
   ├── MsWeapon "Guard"    (Shield equipment)       shield_guard    fixed dug-in pose
   ├── MsWeapon "Missiles" (Shield equipment)       shield_missile  unguided, proximity burst
   └── MsWeapon "Vulcan"   (rides the head bone)    vulcan          head tracks the target
@@ -24,7 +23,7 @@ WeaponAimModifier (skeleton)           ProjectileManager (scene) ── apply_hi
 | `.../FireControl/weapon_aim_modifier.gd` | turns the aim bone so the muzzle points along the aim |
 | `Entities/Projectiles/projectile_spec.gd` + `Specs/*.tres` | how a shot flies, hurts and looks |
 | `Entities/Projectiles/projectile_manager.gd` | flies and draws every shot, flashes, sparks |
-| `Entities/Projectiles/Shader/beam.gdshader`, `flash.gdshader` | bolt + wake strip, glow sprite |
+| `Entities/Projectiles/Shader/beam.gdshader`, `bolt.gdshader`, `flash.gdshader` | beam line + wake, bolt strip (vulcans, missiles), glow sprite |
 | `.../PanoramicHud/Widgets/weapons_widget.gd` | HUD symbology: cursors, tail, gun solution circle, zoom frame |
 | `.../PanoramicHud/Widgets/contacts_widget.gd` | contact triangles, lock dashes by track quality (drawn by the screen shader) |
 | `.../CockpitDisplays/target_page.gd`, `weapon_ring.gd` | right MFD: target, stores, weapon ring pop-up |
@@ -57,14 +56,15 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
   now; selecting a weapon in NAV drops to DGFT, in BVR it doesn't.
 - **Weapon hat** ("press again"): a press selects the direction's first weapon at once; pressing
   the same direction while it is selected swaps to the second. Layout in `FireControl.hat_layout`:
-  forward pulse → linear, right funnels, aft bazooka (back → hand), left shield missiles,
-  depress saber. Swapping pulse ↔ linear keeps the arm up (`MsWeapon.take_over`).
+  forward beam rifle, right funnels, aft bazooka (back → hand), left shield missiles,
+  depress saber. Swapping between two weapons on one gun and pose keeps the arm up
+  (`MsWeapon.take_over`).
 - **Spool.** A beam (`ProjectileSpec.spool_time` > 0) fires once per pull: hold the trigger
-  while the barrel glows (pulse 0.3 s, linear 0.9 s), the shot leaves when it is spooled, and
+  while the barrel glows (rifle 0.3 s), the shot leaves when it is spooled, and
   letting go early drops it. Press again for the next shot. The glow
   (`ProjectileManager.set_charge`) is the dodge cue; the turret drone spools too (0.5 s).
-- **E-pack.** 32 rounds shared through `ammo_from`: pulse uses 1, linear 3 (`ammo_cost`).
-  The cooldown is shared too (pulse 1 s, linear 5 s). Unfitted
+- **E-pack.** 32 rounds, 1 per shot (`ammo_cost`), 1 s between shots; weapons can share a
+  magazine and its cooldown through `ammo_from`. Unfitted
   entries show dim on the ring and flash red when pressed.
 - **Lock.** With nothing locked, the contact under the cursor is the candidate (its bars
   filled solid), no button needed; lock locks it. Locking never unlocks: unlock does. While locked
@@ -147,35 +147,39 @@ source)` on the collider or its nearest ancestor that has it. Missiles burst wit
 
 | Spec | Speed | Life | Range | Damage |
 |---|---|---|---|---|
-| `nu_beam_rifle` (pulse) | 3000 m/s | 2.5 s | 7.5 km | 1000 |
-| `nu_beam_linear` | 3200 m/s, emits 0.6 s | 0.6 s | 1.9 km | 3000 once per target |
+| `nu_beam_rifle` | 3000 m/s, emits 0.15 s (a 450 m line) | 2.5 s | 7.5 km | 1000 once per target |
 | `vulcan_60mm` | 1100 m/s | 1.6 s | 1.8 km | 14 (2 × 640 rpm, 300 rounds) |
 | `shield_missile` | 120 m/s + 450 m/s² for 1.6 s | 6 s | ~3.9 km | 450, blast 90 m |
-| `drone_shot` | 1500 m/s | 5 s | 7.5 km | 100 |
+| `drone_shot` (beam) | 1500 m/s, emits 0.15 s (225 m) | 5 s | 7.5 km | 100 once per target |
 
 A 4–7 G target moves 5–9 m in 0.5 s, so a shot is roughly unavoidable inside `speed × 0.5 s`
 and dodgeable beyond: the tuning rule for `speed`.
 
-**Beam look** (`beam.gdshader`): a white-hot spear `bolt_length` long at the head, then a wake
-that spreads, breaks up (noise threshold rising with age) and fades over `trail_time`: the beam
-dissipates after the bolt has passed. The strip is clamped between `min_angle` and `max_angle`
-on screen, so a far beam stays a visible line and a wake passing the camera isn't a wall;
-`flash.gdshader` does the same and fades out right at the camera, so a hit on your own suit is a
-flash, not a white screen. Colour comes from the spec (ν Gundam: red).
+**Beam** (`ProjectileSpec.Kind.BEAM`, `beam.gdshader`): one straight line of condensed Minovsky
+particles, like a laser to look at but not instant. While the barrel pours it out
+(`emit_time`, 0.15 s) the whole line runs from the muzzle along the barrel: it swings with the
+barrel and the suit, the part already out included, and only its front travels, at `speed`.
+Let go, the line flies on along itself at that speed (in the shooter's frame at release). Its
+front stops at the beam's range (`speed × lifetime`) and dissipates there as the rest of the
+line runs into it. Behind its tail it leaves a faint wake that breaks up within `trail_time`
+(0.12 s). Look: a thin white-hot core in a tight coloured glow with a little grain flowing
+along it, a pointed front, a tapering tail; on screen it is clamped between `min_angle` and
+`max_angle`, so a far beam stays a visible line and one passing the camera isn't a wall.
 
-**Pulse** (`beam.gdshader`): a short spindle-shaped burst whose outline boils (noise over
-length and time), white core in a coloured halo, a few thin streaks dying within
-`trail_time` behind it. No long wake.
+Hits: each tick one ray along the line (from last tick's tail to the front, so a thin plate
+the tail slips through still stops the rest); while the barrel swings, extra rays in between
+catch what the line swept across. What it touches is hurt once per shot and takes the front:
+the particles stop there and the rest of the line pours in, splashing, until its tail arrives.
+Swinging off it, the line grows on again from there at beam speed. The aim leads by what is
+left for the front to cover (`SpatialMath.intercept_time_ahead`). The turret drone fires the
+same beam (`TargetDrone.beam_slew_deg`: how fast its barrel follows the lead while it pours
+out; 0 holds the direction it left in, the HUNTER preset 20°/s).
 
-**Linear beam** (`linear_beam.gdshader`): while it emits (`emit_time`, 0.6 s) it is a straight
-beam from the barrel along the barrel, swinging with it like a laser; its front still travels
-at `speed`, so it reaches only `speed × age`. Each tick one ray from the muzzle along it: what
-lies in it is hit (once per target), the beam ends there and splashes. The aim leads by what
-is left for the front to cover (`_lead_with_head_start`). Let go, it stays where it was and
-breaks up over `trail_time` (0.45 s).
+**Bolts** (`bolt.gdshader`, vulcan tracers and missiles): a short spindle-shaped burst whose
+outline boils, white core in a coloured halo, a few thin streaks dying within `trail_time`.
 
 **Charge** (`set_charge`, `flash.gdshader` with `flash_charge`): a ragged, boiling knot with
-arcs crackling off it and a white core growing with the spool. It, the linear beam's barrel
+arcs crackling off it and a white core growing with the spool. It, the beam's barrel
 end and muzzle flashes ride the muzzle's drawn (physics-interpolated) position
 (`ProjectileManager.drawn_position`).
 
@@ -189,7 +193,7 @@ the panoramic screen composites it, pixelated in blue blocks while `overlay_reve
 0 → 1 (resolving in) or back (breaking up). A change of layers breaks up first.
 
 **Lock loss.** A weapon whose lock drops holds its aim for `lock_loss_hold` (0.8 s), and for as
-long as its linear beam is still coming out, before going back to the boresight.
+long as its beam is still coming out, before going back to the boresight.
 
 **Cockpit glow.** `ProjectileManager.sample_glow(position)` sums nearby shots and flashes by
 `spec.glow` and distance; `CockpitBeamGlow` drives one light (cockpit + pilot layers only) in
@@ -200,9 +204,13 @@ that colour, from that direction.
 - `F4` in the test range: spawn static / drifting / jinking / turret targets at a chosen range,
   clear them, rearm.
 - `godot-double --headless --path . -s Tools/Weapons/weapons_probe.gd`: scripted check of modes,
-  hat, lock, SAFE, lead on a crossing target, vulcans, missiles, block.
-- `Tools/Weapons/weapons_snapshot.gd -- <out_dir> [shots]`: renders HUD, beam, poses, impact,
-  ring, vulcan, missile, block and turret views to PNGs (run it windowed).
+  hat, lock, SAFE, the beam (on the barrel, flying free, its range), lead on a crossing
+  target, vulcans, missiles, block.
+- `Tools/Weapons/weapons_snapshot.gd -- <out_dir> [shots]`: renders HUD, beam, sweep, poses,
+  impact, ring, vulcan, missile, block and turret views to PNGs (run it windowed).
+- `Tools/Weapons/beam_fx_lab.sh <out_dir> [views=…,top] [sweep=40] [noplate] …`: one beam
+  from a bare muzzle at exact sim times; `sweep` swings the barrel while it fires, `noplate`
+  lets it fly to its range.
 
 ## Not done yet
 
