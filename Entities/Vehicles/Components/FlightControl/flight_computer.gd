@@ -168,7 +168,7 @@ func _physics_process(delta: float) -> void:
 			# Limbs take what exceeds the thrusters plus a share of the rest.
 			var limit := last_wrench.thruster_torque_limit
 			var beyond := torque - ControlLaw.scale_to_box(torque, limit)
-			ambac_torque = ambac.step(beyond + (torque - beyond) * ambac.share, delta)
+			ambac_torque = ambac.step(beyond + (torque - beyond) * ambac.update_share(delta), delta)
 			_ambac_measured = ambac.last_measured_torque
 			# Measured joints push the body through LimbReaction instead.
 			body.apply_torque(state.to_global(ambac_torque - _ambac_measured))
