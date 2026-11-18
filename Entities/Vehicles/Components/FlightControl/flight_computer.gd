@@ -332,11 +332,6 @@ func get_mode_labels() -> PackedStringArray:
 	return control_law.get_mode_labels()
 
 
-## Direction of a break (dodge) in progress, pilot frame; zero when none.
-func get_break_direction() -> Vector3:
-	return control_law.get_break_direction() if fcs_enabled else Vector3.ZERO
-
-
 ## Boost / brake for the HUD: 0 off, 1 on, 2 full. 0 with the FCS off.
 func get_boost_level() -> int:
 	return control_law.get_boost_level() if fcs_enabled else 0

@@ -86,20 +86,6 @@ func _physics_process(delta: float) -> void:
 
 
 func _select(delta: float) -> void:
-	# A break picks its dodge stance at once, and hands back at once when it ends.
-	var break_dir := flight_computer.get_break_direction() if enabled else Vector3.ZERO
-	if break_dir != Vector3.ZERO:
-		var dodge := _pick(break_dir.normalized(), true)
-		if dodge == null:
-			dodge = _pick(break_dir.normalized(), false)   # e.g. up: the climb stance
-		if dodge != current or absf(_scale - 1.0) > 1e-3:
-			_begin(dodge, 1.0)
-		return
-	if current != null and current.dodge:
-		var after := _pick(flight_computer.get_translation_intent().normalized(), false) \
-				if flight_computer.get_translation_intent().length() >= engage else null
-		_begin(after, _wanted_scale())
-		return
 	var intent := flight_computer.get_translation_intent()
 	var dir := Vector3.ZERO
 	if enabled:
@@ -108,8 +94,6 @@ func _select(delta: float) -> void:
 	if dir != Vector3.ZERO:
 		var best := -2.0
 		for s in stances:
-			if s.dodge:
-				continue
 			var cone := s.cone_deg + (hysteresis_deg if s == current else 0.0)
 			var d := dir.dot(s.direction.normalized())
 			if d >= cos(deg_to_rad(cone)) and d + (0.2 if s == current else 0.0) > best:
@@ -130,20 +114,6 @@ func _select(delta: float) -> void:
 	_pending_time += delta
 	if _pending_time >= confirm_time and _dwell >= min_dwell:
 		_begin(pick, _wanted_scale())
-
-
-## The stance (dodge or not) whose cone holds `dir` best, or null.
-func _pick(dir: Vector3, dodge: bool) -> MsStance:
-	var pick: MsStance = null
-	var best := -2.0
-	for s in stances:
-		if s.dodge != dodge:
-			continue
-		var d := dir.dot(s.direction.normalized())
-		if d >= cos(deg_to_rad(s.cone_deg)) and d > best:
-			best = d
-			pick = s
-	return pick
 
 
 func _wanted_scale() -> float:
