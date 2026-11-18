@@ -29,13 +29,12 @@ extends Node
 ## Share of the limbs' peak torque the FBW may count on (they lose authority near
 ## their stops and while the centering spring pulls them home).
 @export_range(0.0, 1.0) var capacity_fraction: float = 0.25
-## Centering spring natural frequency (rad/s) and damping ratio.
-@export var centering_frequency: float = 1.6
+## Centering spring natural frequency (rad/s) and damping ratio. Soft: limbs stay out
+## longer and give back less of the turn they made (less propellant, looser movement);
+## much lower and they sit at their stops in big turns.
+@export var centering_frequency: float = 0.8
 @export var centering_damping: float = 1.0
-## Softer spring in NAV: limbs stay out longer and give back less of the turn they made,
-## so fine corrections take less propellant. Lower ends up at the stops in big turns.
-@export var nav_centering_frequency: float = 0.8
-## How fast these blend to the new master mode's values (fraction per second).
+## How fast the share blends to the new master mode's value (fraction per second).
 @export var nav_blend_rate: float = 2.0
 ## Regularisation of the allocation (keeps it sane when no joint can help).
 @export var regularization: float = 1e-3
@@ -144,7 +143,7 @@ func get_capacity() -> Vector3:
 
 
 ## Share of the demand to offer this tick (call once per tick before step()): `share`,
-## or `nav_share` in NAV, eased between them along with the centering spring.
+## or `nav_share` in NAV, eased between them.
 func update_share(delta: float) -> float:
 	var nav := 1.0 if _fire_control != null and not _fire_control.is_weapons_mode() else 0.0
 	_nav = nav if _nav < 0.0 else move_toward(_nav, nav, nav_blend_rate * delta)
@@ -183,7 +182,7 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 	# Solve Σ −J α a = request:  α_i = −w_i J_i a_i·λ,  M λ = request.
 	var lam := Basis(cols[0], cols[1], cols[2]).inverse() * torque_request
 
-	var w0 := lerpf(centering_frequency, nav_centering_frequency, maxf(_nav, 0.0))
+	var w0 := centering_frequency
 	var total := Vector3.ZERO
 	var measured := Vector3.ZERO
 	for i in n:
