@@ -15,10 +15,6 @@ Fly each and tick it off, or note what to change.
       cross that stretch as it nears the shot; our own rifle's charge keeps its plain look.
       Check it reads from the receiving end at 0.7–3 km, and whether it should keep the
       shot's colour (it is mostly white now). Render: `weapons_snapshot.gd glow`.
-- [ ] **Break feel** (tap full boost with the stick pushed): the waist lean on sideways
-      breaks (the far-leg kick is gone, `d0b4045`), the committed 0.7 s push, the 0.4 s cooldown, releasing and tapping
-      again during a held full boost. Render: `Tools/Flight/dodge_snapshot.gd`.
-- [ ] **Break out of a steep full-boost dive** (−50° pitch): the body swings at up to 72°/s.
 - [ ] **Yaw**: with the ×1.5 thrust a full yaw turn is 95° in a second and stops 0.40 s after
       release (was ~0.3 before the mass model): check the overshoot when letting go.
 - [ ] **Forward boost pitching** with the mass model's lower centre of mass (see Physics).
@@ -99,6 +95,8 @@ Fly each and tick it off, or note what to change.
             Since the ×1.5 thrust (2026-11-17): clean sideways 5.4–5.6 G, break right
             14.4 → 21.5 m in 1 s. Still short of the ~8 G it needs; the turret dodge test
             hasn't been re-run (`dodge_probe.gd`).
+            Removed (2026-11-18): full boost now always turns the suit into the move like
+            any boost; the break, its dodge stances and its probes are gone.
       - [ ] Main pods swinging sideways (a second pod axis, ±30–45°), measured first in the
             capability probe, then a model / bone change.
       - [ ] Optional: a higher roll cap for a sustained sideways sprint, not for dodging

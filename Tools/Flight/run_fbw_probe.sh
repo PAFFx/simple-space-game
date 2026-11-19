@@ -8,7 +8,7 @@ cd "$(dirname "$0")/../.." || exit 1
 scenarios="cruise_fwd boost_fwd full_fwd boost_right full_right boost_down full_down full_back
 	boost_diag cruise_boost_fwd cruise_boost_right cruise_boost_down boost_fwd_yaw full_fwd_yaw full_fwd_pitch cruise_fwd_roll boost_fwd_roll
 	full_fwd_roll reversal reversal_full brake_yaw brake_roll brake_full_roll brake_full_yaw
-	brake_full_pitch brake_full_only break_right break_left break_up break_diag"
+	brake_full_pitch brake_full_only"
 if [ "$1" = "-s" ]; then
 	scenarios=$2
 	shift 2

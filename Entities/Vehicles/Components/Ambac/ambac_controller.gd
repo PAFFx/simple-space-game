@@ -22,14 +22,20 @@ extends Node
 @export var skeleton: Skeleton3D
 @export var joints: Array[AmbacJoint] = []
 ## Fraction of the FBW torque demand offered to AMBAC first (on top of any demand
-## beyond the thrusters' authority, which AMBAC always gets).
+## beyond the thrusters' authority, which AMBAC always gets). Weapons modes (DGFT/BVR).
 @export_range(0.0, 1.0) var share: float = 0.4
+## The same in NAV (weapons stowed): the limbs do most of the turning to save propellant.
+@export_range(0.0, 1.0) var nav_share: float = 0.85
 ## Share of the limbs' peak torque the FBW may count on (they lose authority near
 ## their stops and while the centering spring pulls them home).
 @export_range(0.0, 1.0) var capacity_fraction: float = 0.25
-## Centering spring natural frequency (rad/s) and damping ratio.
-@export var centering_frequency: float = 1.6
+## Centering spring natural frequency (rad/s) and damping ratio. Soft: limbs stay out
+## longer and give back less of the turn they made (less propellant, looser movement);
+## much lower and they sit at their stops in big turns.
+@export var centering_frequency: float = 0.8
 @export var centering_damping: float = 1.0
+## How fast the share blends to the new master mode's value (fraction per second).
+@export var nav_blend_rate: float = 2.0
 ## Regularisation of the allocation (keeps it sane when no joint can help).
 @export var regularization: float = 1e-3
 
@@ -44,6 +50,8 @@ var last_torque := Vector3.ZERO      ## Achieved body torque, body frame
 var last_measured_torque := Vector3.ZERO
 var _measured := PackedByteArray()
 var _loadout: MsLoadout
+var _fire_control: FireControl
+var _nav := -1.0                     ## 0 = weapons mode values, 1 = NAV values
 var _axes_body: Array[Vector3] = []
 
 
@@ -57,6 +65,7 @@ func _ready() -> void:
 	var vehicle := VehicleBase.find_vehicle(self)
 	if vehicle != null:
 		_loadout = vehicle.find_component(MsLoadout) as MsLoadout
+		_fire_control = vehicle.find_component(FireControl) as FireControl
 	if skeleton == null:
 		push_error("AmbacController: skeleton not assigned")
 		return
@@ -131,6 +140,14 @@ func get_capacity() -> Vector3:
 		var headroom := clampf(1.0 - absf(angles[i] - mid) / half, 0.0, 1.0)
 		out += _axes_body[i].abs() * (j.inertia * j.get_max_accel() * headroom)
 	return out * capacity_fraction
+
+
+## Share of the demand to offer this tick (call once per tick before step()): `share`,
+## or `nav_share` in NAV, eased between them.
+func update_share(delta: float) -> float:
+	var nav := 1.0 if _fire_control != null and not _fire_control.is_weapons_mode() else 0.0
+	_nav = nav if _nav < 0.0 else move_toward(_nav, nav, nav_blend_rate * delta)
+	return lerpf(share, nav_share, _nav)
 
 
 ## Average angle / limit (in the direction it's deflected) over all joints, 0..1 (HUD).

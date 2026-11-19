@@ -16,7 +16,5 @@ extends Resource
 @export var axes: PackedVector3Array = []
 @export var angles_deg: PackedFloat32Array = []
 ## Pose change time for this stance, s (0 = the controller's transition_time). A quick
-## swing kicks the body harder (the limbs' reaction), so dodging stances are short.
+## swing kicks the body harder (the limbs' reaction).
 @export var transition_time: float = 0.0
-## Only used during a break (dodge), picked by the break's direction, at once.
-@export var dodge: bool = false

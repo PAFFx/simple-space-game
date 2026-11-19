@@ -170,8 +170,8 @@ const AMBAC := [
 	["foot.L", Vector3.RIGHT, &"leg_l", 6.0e3, -40.0, 30.0, 0.5],
 	["spine", Vector3.UP, &"torso", 1.2e5, -12.0, 12.0, 0.8],
 	["spine", Vector3.RIGHT, &"torso", 1.5e5, -10.0, 6.0, 0.5],
-	# Side bend: its own group, so a break can lean the upper body into the dodge while an
-	# arm weapon holds the waist's twist. Hardly used for balancing.
+	# Side bend: its own group, so an arm weapon can hold the waist's twist. Hardly used
+	# for balancing.
 	["spine", Vector3.BACK, &"waist_bend", 1.5e5, -12.0, 12.0, 0.15],
 ]
 
@@ -218,11 +218,6 @@ const STANCES := [
 			["foot.R", Vector3.RIGHT, -30.0], ["thigh.R", Vector3.BACK, 6.0], ["thigh.L", Vector3.RIGHT, 10.0], ["shin.L", Vector3.RIGHT, -15.0]]],
 	["strafe_left", Vector3.LEFT, 50.0, [["thigh.L", Vector3.RIGHT, 70.0], ["shin.L", Vector3.RIGHT, -95.0],
 			["foot.L", Vector3.RIGHT, -30.0], ["thigh.L", Vector3.BACK, -6.0], ["thigh.R", Vector3.RIGHT, 10.0], ["shin.R", Vector3.RIGHT, -15.0]]],
-	# Breaks (dodges, StanceController picks them by the break's direction): the upper body
-	# leans into the move. (A far-leg kick gave ~10% more distance in the first 0.5 s but
-	# looked wrong.)
-	["break_right", Vector3.RIGHT, 50.0, [["spine", Vector3.BACK, -10.0]], 0.5, true],
-	["break_left", Vector3.LEFT, 50.0, [["spine", Vector3.BACK, 10.0]], 0.5, true],
 	# Legs trail back when driving forward, forward when braking or backing off.
 	["forward", Vector3.FORWARD, 45.0, [["thigh.R", Vector3.RIGHT, -15.0], ["shin.R", Vector3.RIGHT, -25.0],
 			["thigh.L", Vector3.RIGHT, -15.0], ["shin.L", Vector3.RIGHT, -25.0]]],
@@ -565,8 +560,6 @@ func _build_stances(root: Node3D) -> void:
 		stance.angles_deg = angles
 		if st.size() > 4:
 			stance.transition_time = st[4]
-		if st.size() > 5:
-			stance.dodge = st[5]
 		list.append(stance)
 	node.stances = list
 

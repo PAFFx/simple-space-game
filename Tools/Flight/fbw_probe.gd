@@ -21,13 +21,6 @@ class Scripted extends PilotInputSource:
 				if on: c.translation = Vector3(1, 0, 0); c.boost = true
 			"full_right":
 				if on: c.translation = Vector3(1, 0, 0); c.boost = true; c.boost_full = true
-			"break_right", "break_left", "break_up", "break_diag":
-				# A tap of full boost with the stick held: a break, then the stick alone.
-				if on:
-					c.translation = {"break_right": Vector3(1, 0, 0), "break_left": Vector3(-1, 0, 0),
-							"break_up": Vector3(0, 1, 0), "break_diag": Vector3(1, 1, 0).normalized()}[scenario]
-					c.boost_full = t < 0.6
-					c.boost = c.boost_full
 			"boost_down":
 				if on: c.translation = Vector3(0, -1, 0); c.boost = true
 			"full_down":

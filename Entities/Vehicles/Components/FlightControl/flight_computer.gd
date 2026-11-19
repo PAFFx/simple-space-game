@@ -168,7 +168,7 @@ func _physics_process(delta: float) -> void:
 			# Limbs take what exceeds the thrusters plus a share of the rest.
 			var limit := last_wrench.thruster_torque_limit
 			var beyond := torque - ControlLaw.scale_to_box(torque, limit)
-			ambac_torque = ambac.step(beyond + (torque - beyond) * ambac.share, delta)
+			ambac_torque = ambac.step(beyond + (torque - beyond) * ambac.update_share(delta), delta)
 			_ambac_measured = ambac.last_measured_torque
 			# Measured joints push the body through LimbReaction instead.
 			body.apply_torque(state.to_global(ambac_torque - _ambac_measured))
@@ -330,11 +330,6 @@ func get_mode_labels() -> PackedStringArray:
 	if not fcs_enabled:
 		return PackedStringArray(["FCS OFF"])
 	return control_law.get_mode_labels()
-
-
-## Direction of a break (dodge) in progress, pilot frame; zero when none.
-func get_break_direction() -> Vector3:
-	return control_law.get_break_direction() if fcs_enabled else Vector3.ZERO
 
 
 ## Boost / brake for the HUD: 0 off, 1 on, 2 full. 0 with the FCS off.

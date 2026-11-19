@@ -607,28 +607,6 @@ bones = PackedStringArray("thigh.L", "shin.L", "foot.L", "thigh.L", "thigh.R", "
 axes = PackedVector3Array(1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0)
 angles_deg = PackedFloat32Array(70, -95, -30, -6, 10, -15)
 
-[sub_resource type="Resource" id="Resource_xdytd"]
-script = ExtResource("24_tdn4s")
-stance_name = &"break_right"
-direction = Vector3(1, 0, 0)
-cone_deg = 50.0
-bones = PackedStringArray("spine")
-axes = PackedVector3Array(0, 0, 1)
-angles_deg = PackedFloat32Array(-10)
-transition_time = 0.5
-dodge = true
-
-[sub_resource type="Resource" id="Resource_5tinx"]
-script = ExtResource("24_tdn4s")
-stance_name = &"break_left"
-direction = Vector3(-1, 0, 0)
-cone_deg = 50.0
-bones = PackedStringArray("spine")
-axes = PackedVector3Array(0, 0, 1)
-angles_deg = PackedFloat32Array(10)
-transition_time = 0.5
-dodge = true
-
 [sub_resource type="Resource" id="Resource_oryd6"]
 script = ExtResource("24_tdn4s")
 stance_name = &"forward"
@@ -1445,7 +1423,7 @@ guards = Array[ExtResource("22_htq1u")]([SubResource("Resource_1bhfg"), SubResou
 
 [node name="StanceController" type="Node" parent="." unique_id=2140839751]
 script = ExtResource("23_vowx8")
-stances = Array[ExtResource("24_tdn4s")]([SubResource("Resource_sbb60"), SubResource("Resource_unkpo"), SubResource("Resource_pvjri"), SubResource("Resource_xdytd"), SubResource("Resource_5tinx"), SubResource("Resource_oryd6"), SubResource("Resource_pmqpy")])
+stances = Array[ExtResource("24_tdn4s")]([SubResource("Resource_sbb60"), SubResource("Resource_unkpo"), SubResource("Resource_pvjri"), SubResource("Resource_oryd6"), SubResource("Resource_pmqpy")])
 
 [node name="LimbFollowers" type="Node" parent="." unique_id=568506894 node_paths=PackedStringArray("skeleton")]
 script = ExtResource("25_heo1q")
