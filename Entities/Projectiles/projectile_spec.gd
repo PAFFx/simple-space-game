@@ -44,6 +44,15 @@ enum Kind { BEAM, BULLET, MISSILE }
 @export var flash_size: float = 9.0
 @export var impact_size: float = 16.0
 
+@export_group("Sound")
+## Played on the muzzle as the shot leaves (the cockpit's simulated outside sound).
+@export var fire_sound: AudioStream
+@export var fire_volume_db: float = 0.0
+## Within this distance the fire sound plays at full volume; it falls off past it, m.
+@export var sound_unit_size: float = 150.0
+## Past this the fire sound isn't heard at all, m.
+@export var sound_max_distance: float = 2000.0
+
 
 ## Distance flown t seconds after launch, relative to the shooter's frame at launch.
 func distance_at(t: float) -> float:

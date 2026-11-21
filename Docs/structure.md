@@ -31,7 +31,8 @@ simple-space-game/
 │   │   ├── BeamRifle/             Beam rifle scene + GLB
 │   │   └── Shield/                Shield scene + GLB + HudSilhouette outline
 │   │
-│   ├── Projectiles/               ProjectileSpec, ProjectileManager, beam / flash shaders
+│   ├── Projectiles/               ProjectileSpec, ProjectileManager, beam / flash shaders,
+│   │                              Sounds/ (shot fire sounds, built by Tools/Audio)
 │   │
 │   ├── Environment/
 │   │   └── Space/
@@ -90,12 +91,14 @@ simple-space-game/
 │
 ├── Docs/                          Architecture documentation
 │   ├── structure.md               This file
+│   ├── Audio/                     Buses, shot sounds, SFX lab
 │   ├── FlightControl/             Thrusters, FBW control laws, allocation, controls
 │   ├── MobileSuit/                Prototype suit + linear seat cockpit
 │   ├── Performance/               Frame budget snapshots (where the frame time goes)
 │   └── PanoramicCockpit/          Deep-dive docs for the panoramic display system + HUD
 │
 ├── Tools/                         Non-Godot tooling (ignored by Godot via .gdignore)
+│   ├── Audio/                     SFX lab: builds game sounds from sources (uv, sox, SuperCollider)
 │   ├── Blender/                   Procedural model build scripts
 │   ├── Flight/                    Flight-control probes and snapshots
 │   ├── Godot/                     Scene generators (MSP-02 scene + animation library)
@@ -278,4 +281,6 @@ types. Any cockpit that extends `CockpitBase` and has a `PanoramicDisplayMount` 
 | `Docs/MobileSuit/prototype.md` | Prototype suit scene tree, rig, render layers, regenerating models |
 | `Docs/MobileSuit/linear_seat_v2_cockpit.md` | RX-93 linear seat v2 cockpit, seated pilot (IK, G lean), sensor outlines |
 | `Docs/Weapons/summary.md` | Fire control, envelopes and aiming, projectiles, beam look, controls, test tools |
+| `Docs/Audio/summary.md` | External bus, shot fire sounds, the SFX lab and its recipes |
+| `Docs/Audio/todo.md` | Sounds still to make; parked enemy / pass-by / cockpit-warning work |
 | `Docs/Performance/frame_budget.md` | Frame time by phase, subtree and GPU pass (dated snapshot), measuring pitfalls |

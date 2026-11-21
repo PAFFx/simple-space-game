@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="ProjectileSpec" format=3]
+[gd_resource type="Resource" script_class="ProjectileSpec" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://Entities/Projectiles/projectile_spec.gd" id="1_spec"]
+[ext_resource type="AudioStream" uid="uid://38dvk7qf2cql" path="res://Entities/Projectiles/Sounds/beam_rifle_fire.wav" id="2_fire"]
 
 [resource]
 script = ExtResource("1_spec")
@@ -16,3 +17,4 @@ intensity = 10.0
 glow = 1.2
 flash_size = 6.0
 impact_size = 22.0
+fire_sound = ExtResource("2_fire")

@@ -191,6 +191,10 @@ func _run() -> void:
 	var hp := drone.hit_points if is_instance_valid(drone) else 0.0
 	# The beam: one straight line on the barrel while it pours out, then flying free.
 	var manager := ProjectileManager.find(_fcs)
+	var fire_voice := _voice_playing(manager, rifle.projectile.fire_sound)
+	_check("rifle's fire sound plays on its muzzle, External bus", fire_voice != null
+			and String(rifle.projectile.fire_sound.resource_path).ends_with("beam_rifle_fire.wav")
+			and fire_voice.anchor == rifle.get_muzzle() and fire_voice.player.bus == ProjectileManager.SOUND_BUS)
 	var beam: ProjectileManager.Shot = null
 	for shot in manager._shots:
 		if shot.spec == rifle.projectile:
@@ -342,6 +346,13 @@ func _run() -> void:
 
 	print("RESULT: %s" % ("PASS" if _failures == 0 else "%d FAILED" % _failures))
 	quit(1 if _failures > 0 else 0)
+
+
+func _voice_playing(manager: ProjectileManager, stream: AudioStream) -> ProjectileManager.Voice:
+	for v in manager._voices:
+		if v.player.playing and v.player.stream == stream:
+			return v
+	return null
 
 
 func _id() -> StringName:

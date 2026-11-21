@@ -1,0 +1,91 @@
+# One table per game sound. Keys and defaults: DEFAULTS in sfx_lab.py.
+# Times are seconds in the source file. Sources and their licences: Sources/CREDITS.md.
+
+# ---- Beam fire (ProjectileSpec.fire_sound) ------------------------------------------
+
+[beam_rifle_fire]
+# RX-93 beam rifle. Raw cut: it sounds best with its noise. (Cleaned / made-tail versions
+# were tried; the lab can still do them: low_fade, notch_fade, tail.)
+source = "Sources/cockpit_beam_sfx.mp3"
+start = 11.163
+end = 12.461
+out = "res://Entities/Projectiles/Sounds/beam_rifle_fire.wav"
+highpass = 0.0
+noise = "none"
+
+[drone_beam_fire]
+# Enemy beam (target drones), at the barrel. Raw cut. Not in the game yet (own sounds first).
+source = "Sources/cockpit_beam_sfx.mp3"
+start = 12.477
+highpass = 0.0
+noise = "none"
+
+# ---- Beam pass-by candidates (ProjectileSpec.pass_sound; none in the game yet) ----------
+# No `out`: preview with `sfx_lab.sh report <dir> beam_pass_cut_zip ...`. (Synth/beam_pass.scd,
+# a Doppler buzz, was rejected: it sounded like a car passing.)
+
+[beam_pass_cut_zip]
+# The bright zip inside beam 2, alone. Peak ~0.03 s in.
+source = "Sources/cockpit_beam_sfx.mp3"
+start = 12.61
+end = 12.90
+highpass = 0.0
+noise = "none"
+
+[beam_pass_cut_long]
+# The zip and the beam body after it. Peak ~0.04 s in.
+source = "Sources/cockpit_beam_sfx.mp3"
+start = 12.60
+end = 13.10
+highpass = 0.0
+noise = "none"
+
+[beam_pass_cut_onset]
+# Beam 2 from its very start through the zip. Peak ~0.14 s in.
+source = "Sources/cockpit_beam_sfx.mp3"
+start = 12.50
+end = 12.95
+highpass = 0.0
+noise = "none"
+
+[beam_pass_sizzle]
+# Generated: hiss + crackle swelling to the pass at 0.3 s, no tone, no pitch drop.
+source = "Synth/beam_pass_sizzle.scd"
+highpass = 0.0
+noise = "none"
+fade_in_ms = 0.0
+
+[beam_pass_zip]
+# Generated: a short crack at 0.05 s and a crackling fizz after it.
+source = "Synth/beam_pass_zip.scd"
+highpass = 0.0
+noise = "none"
+fade_in_ms = 0.0
+
+# ---- Cockpit warnings: raw cuts, not in the game yet (Docs/Audio/todo.md) ---------------
+# Generated versions (Synth/warning_*.scd) were tried; the originals sounded better.
+
+[warning_ping_low]
+source = "Sources/cockpit_beam_sfx.mp3"
+start = 3.235
+end = 3.691
+channels = 2
+highpass = 0.0
+noise = "none"
+
+[warning_ping_medium]
+source = "Sources/cockpit_beam_sfx.mp3"
+start = 9.947
+end = 10.536
+channels = 2
+highpass = 0.0
+noise = "none"
+
+[warning_threat]
+# Plays over the medium ping in the source.
+source = "Sources/cockpit_beam_sfx.mp3"
+start = 4.738
+end = 5.796
+channels = 2
+highpass = 0.0
+noise = "none"

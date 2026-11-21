@@ -22,9 +22,12 @@ extends Node3D
 ## Anything riding a muzzle is placed where the muzzle is drawn (physics-interpolated),
 ## not where it was last physics tick, so it doesn't stutter behind a moving gun.
 ## Explosions are balls of light.
+## A shot's fire_sound plays on its muzzle (External bus): the cockpit's simulated outside sound.
 
 const GROUP := &"projectile_manager"
 const DAMAGEABLE := &"damageable"
+const SOUND_BUS := &"External"
+const MAX_VOICES := 8
 const MAX_LIGHTS := 6
 const MAX_SPARKS := 6
 const STRIP_SEGMENTS := 24
@@ -89,6 +92,12 @@ class Flash:
 	## Rides this node (drawn position) instead of flying at `velocity`.
 	var anchor: Node3D
 
+class Voice:
+	var player: AudioStreamPlayer3D
+	var position := Vector3.ZERO
+	var velocity := Vector3.ZERO
+	var anchor: Node3D
+
 signal shot_hit(spec: ProjectileSpec, position: Vector3, collider: Node)
 
 ## A charge never looks smaller than this (rad, full charge; 40% of it as it starts), and
@@ -98,6 +107,8 @@ signal shot_hit(spec: ProjectileSpec, position: Vector3, collider: Node)
 
 var _shots: Array[Shot] = []
 var _flashes: Array[Flash] = []
+## Oldest first: a new sound takes a free voice, or the oldest one.
+var _voices: Array[Voice] = []
 var _charges := {}   # owner → Charge
 var _beam_mesh: ArrayMesh
 var _beam_pool: Array[MeshInstance3D] = []
@@ -148,6 +159,13 @@ func _ready() -> void:
 		_light_pool.append(light)
 	for i in MAX_SPARKS:
 		_sparks.append(_make_sparks())
+	var bus := SOUND_BUS if AudioServer.get_bus_index(SOUND_BUS) >= 0 else &"Master"
+	for i in MAX_VOICES:
+		var voice := Voice.new()
+		voice.player = AudioStreamPlayer3D.new()
+		voice.player.bus = bus
+		add_child(voice.player)
+		_voices.append(voice)
 
 
 func get_shot_count() -> int:
@@ -278,6 +296,32 @@ func muzzle_flash(spec: ProjectileSpec, position: Vector3, velocity: Vector3, an
 			spec.glow * 1.4, spec.flash_size * 16.0 if spec.glow >= 0.5 else 0.0, velocity, 0.25)
 	f.anchor = anchor
 	_place_flash(f)
+	if spec.fire_sound != null:
+		play_sound(spec.fire_sound, position, velocity, anchor, spec.fire_volume_db, spec.sound_unit_size,
+				spec.sound_max_distance)
+
+
+## Plays `stream` at `position`, riding along at `velocity`, or on `anchor` if given; not
+## heard past `max_distance` m.
+func play_sound(stream: AudioStream, position: Vector3, velocity := Vector3.ZERO, anchor: Node3D = null,
+		volume_db := 0.0, unit_size := 150.0, max_distance := 2000.0) -> AudioStreamPlayer3D:
+	var voice := _voices[0]
+	for v in _voices:
+		if not v.player.playing:
+			voice = v
+			break
+	_voices.erase(voice)
+	_voices.append(voice)
+	voice.position = position
+	voice.velocity = velocity
+	voice.anchor = anchor
+	voice.player.stream = stream
+	voice.player.volume_db = volume_db
+	voice.player.unit_size = unit_size
+	voice.player.max_distance = max_distance
+	voice.player.global_position = position
+	voice.player.play()
+	return voice.player
 
 
 ## Flash, afterglow and sparks where a shot lands.
@@ -527,6 +571,14 @@ func _process(delta: float) -> void:
 			_flashes.remove_at(i)
 			continue
 		_place_flash(f)
+	for v in _voices:
+		if not v.player.playing:
+			continue
+		if v.anchor != null and is_instance_valid(v.anchor):
+			v.position = drawn_position(v.anchor)
+		else:
+			v.position += v.velocity * delta
+		v.player.global_position = v.position
 	for sparks in _sparks:
 		if sparks.emitting and sparks.has_meta(&"velocity"):
 			sparks.position += (sparks.get_meta(&"velocity") as Vector3) * delta
