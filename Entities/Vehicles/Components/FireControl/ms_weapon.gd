@@ -116,6 +116,8 @@ var aim_override: Variant = null
 var guarded := false
 ## The line of fire runs into the suit itself (its shield, its body): it holds fire.
 var masked := false
+## The part carrying it was shot away (SuitDamage): it stows and can't fire.
+var broken := false
 ## How far along the line of fire the suit looks for itself, m.
 const MASK_CHECK_DISTANCE := 40.0
 var _lead_smooth := Vector2.ZERO
@@ -374,7 +376,7 @@ func _slew(desired: Vector2, delta: float) -> void:
 
 
 func can_fire() -> bool:
-	return state == State.READY and not masked and _magazine()._cooldown <= 0.0 \
+	return state == State.READY and not masked and not broken and _magazine()._cooldown <= 0.0 \
 			and ammo >= ammo_cost and projectile != null
 
 

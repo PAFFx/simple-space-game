@@ -199,6 +199,48 @@ long as its beam is still coming out, before going back to the boresight.
 `spec.glow` and distance; `CockpitBeamGlow` drives one light (cockpit + pilot layers only) in
 that colour, from that direction.
 
+## Turret fairness and damage (fair-fight pass)
+
+**Turret gun arm** (`TargetDrone`, TURRET): it fights like a suit with a rifle arm. The body
+turns at `turn_rate_deg` (20°/s, easing at 60°/s²), the barrel reaches only `arm_cone_deg`
+(45°) off its facing and slews at `arm_slew_deg` (60°/s), and a spool starts only with the
+barrel on the lead; out of its arc mid-spool it lets go. A shot slewing fast is worse
+(`slew_error`, deg per deg/s). Circling it faster than it turns gets you out of its arc. A hard
+orbit with the nose on it (forward thrust for the pull, the mains along the orbit) makes
+~30°/s at 150 m and ~19°/s at 300 m (`fair_fight_probe.gd parts=arc`, 12 s per case):
+
+| Turret turn | 150 m orbit, hits / shots | 300 m orbit |
+|---|---|---|
+| old (turns at once) | 4/5 | 4/4 |
+| 35°/s | 4/5 | 5/5 |
+| 20°/s (default) | 1/1 | 5/5 |
+
+So inside ~200 m you can outfly its arc; farther out the dodge on the cue is the defence.
+The gun is a visible barrel on the hull's front right. HUNTER: 30°/s turn (90°/s²), 80°/s
+arm, 55° cone: it has to be flown closer or harder.
+
+**E-cap and recoil**: `magazine` shots (6, HUNTER 8), then it ejects the pack (it flies
+off, seen by the cameras), drops the arm and reloads for `reload_time` (4 s). After each
+shot the barrel holds where the beam left for the pour and `recover_time` (0.5 s): the
+punish window. The beam no longer follows you while it pours out.
+
+**Armour by location** (`SuitDamage`, made by `MobileSuitBody`): a shot that reaches the
+body hurts the part whose hitbox (`Col*`) is nearest the point.
+
+| Part | HP | Lost |
+|---|---|---|
+| head | 150 | vulcans; head camera angles ×5 |
+| arm R / L | 200 | that arm's weapons (rifle / shield missiles, guard) |
+| leg R / L | 250 | the thrusters on that leg |
+| backpack | 300 | mains at half thrust |
+| torso (core) | 600 | the suit: FCS off, weapons dead |
+
+Shoulders split half to the arm, half to the torso; a part already gone passes half on to
+the torso. The shield has 1200 integrity (12 turret beams): when it is gone it comes off.
+The range's rearm (F4 → 0) repairs everything; the F4 panel lists each part.
+
+Probe: `Tools/Weapons/fair_fight_probe.gd -- [parts=arc,ecap,damage]`.
+
 ## Testing
 
 - `F4` in the test range: spawn static / drifting / jinking / turret targets at a chosen range,
@@ -214,5 +256,5 @@ that colour, from that direction.
 
 ## Not done yet
 
-Damage to the player's suit and part destruction, holes in structures, recoil and missile mass,
+Part destruction on the model (parts stay on), holes in structures, recoil and missile mass,
 E-pack reloads, the pod-opening animation, funnels, bazooka, sabers, BVR, lock line-of-sight.

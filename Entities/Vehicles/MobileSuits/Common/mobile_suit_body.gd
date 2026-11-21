@@ -13,6 +13,10 @@ signal hit_taken(damage: float, position: Vector3, direction: Vector3)
 ## Model meshes the sensor head never sees, even with the body shown on the panoramic
 ## screen in a weapons mode: the head it sits in would wall it in.
 @export var sensor_hidden_parts: Array[StringName] = [&"Head"]
+## Armour by location (SuitDamage): made at start if the suit has none.
+@export var damage_model: bool = true
+
+var damage: SuitDamage
 
 
 func _ready() -> void:
@@ -23,6 +27,11 @@ func _ready() -> void:
 		if not mesh.name in sensor_hidden_parts:
 			layers |= Layers.SENSOR_BODY_PARTS
 		(mesh as MeshInstance3D).layers = layers
+	damage = find_component(SuitDamage) as SuitDamage
+	if damage == null and damage_model:
+		damage = SuitDamage.new()
+		damage.name = "Damage"
+		add_child(damage)
 
 
 func get_cockpit_mount() -> Marker3D:
@@ -37,7 +46,9 @@ func get_body() -> RigidBody3D:
 	return self as Node as RigidBody3D
 
 
-## Called by ProjectileManager when a shot lands on the suit. No damage model yet: the
-## fire control decides whether the shield took it and the HUD shows the hit.
-func apply_hit(damage: float, position: Vector3, direction: Vector3, _source: Node) -> void:
-	hit_taken.emit(damage, position, direction)
+## Called by ProjectileManager when a shot lands on the suit (not its shield): the part
+## nearest the point takes it (SuitDamage).
+func apply_hit(amount: float, position: Vector3, direction: Vector3, _source: Node) -> void:
+	if damage != null:
+		damage.apply_hit(amount, position)
+	hit_taken.emit(amount, position, direction)

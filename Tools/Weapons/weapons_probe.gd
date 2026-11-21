@@ -308,6 +308,7 @@ func _run() -> void:
 	drone = _spawn(TargetDrone.Behaviour.TURRET, 500.0, Vector2(0, 0))
 	drone.fire_interval = Vector2(0.4, 0.5)
 	drone.aim_error_deg = 0.0
+	drone.magazine = 0
 	drone.jink_accel_g = 0.0
 	await _ticks(240)
 	print("turret: hits taken %d, blocked %d" % [hits[0], hits[1]])
