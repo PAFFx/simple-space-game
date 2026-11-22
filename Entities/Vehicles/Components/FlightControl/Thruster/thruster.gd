@@ -146,6 +146,11 @@ func get_yaw() -> float:
 	return atan2(_dir.x, -_dir.z)
 
 
+## Actual swing from the nominal aim as the shortest rotation, in this node's axes.
+func get_gimbal_rotation() -> Quaternion:
+	return Quaternion(Vector3.FORWARD, _dir)
+
+
 func get_hud_label() -> String:
 	return hud_label if hud_label != "" else String(name)
 

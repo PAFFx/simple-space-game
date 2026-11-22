@@ -3,7 +3,8 @@ extends Node
 
 ## Turns the model's own nozzles with their thrusters' actual gimbal, and swings guard
 ## plates to follow them. Purely visual: the thrusters stay on their own bones, so this
-## motion doesn't add to the nozzle's aim.
+## motion doesn't add to the nozzle's aim. Except follow_aim: the limb (a foot) carries
+## its thruster and eases after the nozzle's aim, adding to its reach.
 
 @export var skeleton: Skeleton3D
 @export var guards: Array[ThrusterGuard] = []
@@ -45,6 +46,8 @@ func _ready() -> void:
 ## Skeleton-space rotation for guard i at its bone.
 func rotation_of(i: int, delta: float) -> Quaternion:
 	var g := guards[i]
+	if g.follow_aim:
+		return _follow_rotation(i, delta)
 	if g.open_angle_deg != 0.0:
 		return Quaternion(g.axis.normalized(), _cover_angle(i, delta))
 	if not g.full_rotation:
@@ -71,6 +74,44 @@ func rotation_of(i: int, delta: float) -> Quaternion:
 	_smoothed[i] = _smoothed[i].slerp(q, k).normalized()
 	angles[i] = _smoothed[i].get_angle()
 	return _smoothed[i]
+
+
+## Follow mode: the limb's turn, kept in the thruster's frame with the limb at neutral
+## (pitch about its X, sideways about its Y), eased toward the nozzle's aim; returned in
+## skeleton rest space, which the modifier applies, so a bent knee doesn't skew it.
+func _follow_rotation(i: int, delta: float) -> Quaternion:
+	var g := guards[i]
+	var list: Array = _thrusters[i]
+	if list.is_empty():
+		return Quaternion.IDENTITY
+	var t: Thruster = list[0]
+	var cur := _smoothed[i]
+	# The nozzle rides the limb: its aim from neutral is the limb's turn, then its gimbal.
+	var d := cur * (t.get_gimbal_rotation() * Vector3.FORWARD)
+	var w := g.follow * clampf(t.throttle / maxf(g.full_follow_throttle, 1e-3), 0.0, 1.0)
+	var side := deg_to_rad(g.side_limit_deg)
+	var pitch := clampf(atan2(d.y, -d.z) * w, deg_to_rad(g.min_angle_deg), deg_to_rad(g.max_angle_deg))
+	var yaw := clampf(atan2(d.x, -d.z) * w, -side, side)
+	var target := Quaternion(Vector3.FORWARD, Vector3(tan(yaw), tan(pitch), -1.0).normalized())
+	var k := 1.0 if g.smoothing_time <= 0.0 else 1.0 - exp(-delta / g.smoothing_time)
+	var next := cur.slerp(target, k)
+	var step := cur.angle_to(next)
+	var max_step := deg_to_rad(g.max_rate_deg) * delta
+	if step > max_step:
+		next = cur.slerp(next, max_step / step)
+	_smoothed[i] = next.normalized()
+	angles[i] = _smoothed[i].get_angle()
+	var rest := _rest_frame(t)
+	return rest * _smoothed[i] * rest.inverse()
+
+
+## The thruster's frame in skeleton rest space: its bone's global rest × its offset on it.
+func _rest_frame(t: Thruster) -> Quaternion:
+	var rest := Quaternion.IDENTITY
+	var attach := t.get_parent() as BoneAttachment3D
+	if attach != null:
+		rest = skeleton.get_bone_global_rest(skeleton.find_bone(attach.bone_name)).basis.get_rotation_quaternion()
+	return rest * t.transform.basis.get_rotation_quaternion()
 
 
 ## Cover: opens out (one way only) while the nozzle is swung, holds, then closes a moment
