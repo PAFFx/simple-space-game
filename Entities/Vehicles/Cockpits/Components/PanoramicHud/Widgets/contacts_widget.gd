@@ -2,8 +2,8 @@ class_name ContactsWidget
 extends HudWidget
 
 ## Marks every Node3D in the `hud_contacts` group with a triangle pointing down around
-## it, plus its name and range (the rest is on the MFD target page). On a 360° screen
-## nothing is ever "off screen", so no edge arrows.
+## it, plus its name and range, and for the locked target its closure rate Vc (the rest is
+## on the MFD target page). On a 360° screen nothing is ever "off screen", so no edge arrows.
 ##
 ##   any contact   three bars along the triangle's sides, short of its corners: a faint
 ##                 fill inside a fine border, so they don't hide what's behind. A contact
@@ -12,7 +12,9 @@ extends HudWidget
 ##   candidate     (under the designation cursor) its bars filled solid, in the border's
 ##                 colour
 ##   locked        strokes across each corner outside, by the track's quality: two = good,
-##                 one = poor, one blinking = coasting
+##                 one = poor, one blinking = coasting. Drawn last, over the rest of the
+##                 HUD (the gun circle too), so its mark and text are never covered; a
+##                 contact whose text would run into its text shows none until clear
 ##   from sensors  every contact is drawn where its sensor track puts it
 ##                 (FireControl.get_contact_position), not where it really is, and at
 ##                 as big as it could look: its angular error, and how much nearer (so
@@ -61,26 +63,28 @@ const MAX_LABEL_LENGTH := 12
 @export var coast_blink_hz: float = 3.0
 ## Text redraws per second.
 @export var label_hz: float = 10.0
-## Text height, deg: the name, and the two lines under it.
+## Text height, deg: the name, and the lines under it.
 @export var name_deg: float = 1.3
 @export var detail_deg: float = 1.15
+## The locked target's Vc follows the track's velocity estimate this slowly, s.
+@export var closure_ease: float = 0.4
 
 ## Half the locked target's triangle as drawn this frame, deg (0 = none drawn): the gun
 ## solution circle stays outside it.
 var locked_half := 0.0
-## Where the locked target's text starts, deg right of its middle (0 = beside the
-## triangle as usual): WeaponsWidget moves it outside the gun circle.
-var locked_label_x := 0.0
 
 var _fcs: FireControl
 # Contact instance id → its slot (index in the shader's arrays and the atlas).
 var _slots := {}
-# Slot → [name, range, closure, colour], as last drawn.
+# Slot → [colour, name, range, (Vc)], as last drawn.
 var _labels := {}
 var _label_viewport: SubViewport
 var _label_canvas: Node2D
 var _label_due := 0.0
 var _half_shown := {}                 ## contact instance id → [drawn, aimed at, next pick (s)]
+var _hidden := {}                     ## slots whose text gives way to the locked target's
+var _closure := 0.0
+var _closure_of: Node3D
 
 
 func setup_layers() -> void:
@@ -116,6 +120,7 @@ func _process(delta: float) -> void:
 	var contacts := _nearest(origin)
 	var changed := _assign_slots(contacts)
 	var labels := {}
+	var placed := {}                    ## slot → [direction, half, box]
 	locked_half = 0.0
 	var ease := 1.0 - exp(-delta / maxf(size_ease, 0.01))
 	for contact in contacts:
@@ -162,12 +167,20 @@ func _process(delta: float) -> void:
 		at[slot] = Vector4(dir.x, dir.y, dir.z, half)
 		state[slot] = Vector4(float(hostile), marks, cos(deg_to_rad(minf(reach, 80.0))), float(box))
 		var label: String = contact.get_meta("hud_label", String(contact.name))
-		labels[slot] = [label.to_upper().left(MAX_LABEL_LENGTH), _format_range(dist),
-				hud.hostile_color if hostile else hud.contact_color]
-	var shift := Vector2(-1.0, 0.0)
-	if locked != null and _slots.has(locked.get_instance_id()) and locked_label_x > 0.0:
-		shift = Vector2(_slots[locked.get_instance_id()], locked_label_x)
-	hud.set_hud_parameter(&"hud_contact_label_shift", shift)
+		var lines := [hud.hostile_color if hostile else hud.contact_color,
+				label.to_upper().left(MAX_LABEL_LENGTH), _format_range(dist)]
+		if is_locked and _fcs != null:
+			lines.append("Vc %+d" % roundi(_eased_closure(contact, rel / dist, delta)))
+		labels[slot] = lines
+		placed[slot] = [dir, half, box]
+	var locked_slot := -1
+	if locked != null and _slots.has(locked.get_instance_id()):
+		locked_slot = _slots[locked.get_instance_id()]
+	else:
+		_closure_of = null
+	hud.set_hud_parameter(&"hud_contact_locked", locked_slot)
+	if _hide_under_locked(labels, placed, locked_slot):
+		changed = true
 	hud.set_hud_parameter(&"hud_contact_at", at)
 	hud.set_hud_parameter(&"hud_contact_state", state)
 
@@ -181,6 +194,55 @@ func _process(delta: float) -> void:
 
 func draw_widget() -> void:
 	pass
+
+
+## Drops the text of every contact whose text would overlap the locked target's; true if
+## that set changed (the atlas must be redrawn).
+func _hide_under_locked(labels: Dictionary, placed: Dictionary, locked_slot: int) -> bool:
+	var hidden := {}
+	if placed.has(locked_slot):
+		var at: Array = placed[locked_slot]
+		var c: Vector3 = at[0]
+		var up := Vector3.UP - c * c.y
+		up = (Vector3.BACK - c * c.z if up.length_squared() < 1e-6 else up).normalized()
+		var right := c.cross(up)
+		var mine := _label_rect(Vector2.ZERO, at[1], at[2], labels[locked_slot])
+		for slot: int in placed:
+			var other: Array = placed[slot]
+			var d: Vector3 = other[0]
+			if slot == locked_slot or d.dot(c) < 0.5:
+				continue
+			var off := Vector2(rad_to_deg(atan(d.dot(right) / d.dot(c))), rad_to_deg(atan(d.dot(up) / d.dot(c))))
+			if mine.intersects(_label_rect(off, other[1], other[2], labels[slot])):
+				hidden[slot] = true
+				labels.erase(slot)
+	var changed := hidden.hash() != _hidden.hash()
+	_hidden = hidden
+	return changed
+
+
+## A contact's text block around its middle `off`, deg, y down (shader:
+## hud_contact_label_uv), as wide and tall as its text.
+func _label_rect(off: Vector2, half: float, box: bool, label: Array) -> Rect2:
+	var corner := Vector2(half + 0.6, half) if box else Vector2(half * 0.62 + 0.5, 1.0 - half * 0.3)
+	var px_per_deg := SLOT_SIZE.y / SLOT_DEG.y
+	var widest := 0.0
+	for line in range(1, label.size()):
+		var size := roundi((name_deg if line == 1 else detail_deg) * px_per_deg)
+		widest = maxf(widest, hud.font.get_string_size(label[line], HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
+	var tall := name_deg * 1.05 + (label.size() - 2) * detail_deg * 1.25 + detail_deg * 0.3
+	return Rect2(Vector2(off.x + corner.x, -(off.y + corner.y)), Vector2(minf(widest / px_per_deg + 0.2, SLOT_DEG.x), tall))
+
+
+## The locked target's closure rate, m/s (+ = closing): its track velocity against ours
+## along the line of sight, eased so the 10 Hz text doesn't flicker.
+func _eased_closure(contact: Node3D, los: Vector3, delta: float) -> float:
+	var vc := -(_fcs.get_contact_velocity(contact) - _fcs.get_own_velocity()).dot(los)
+	if contact != _closure_of:
+		_closure_of = contact
+		_closure = vc
+	_closure = lerpf(_closure, vc, 1.0 - exp(-delta / maxf(closure_ease, 0.01)))
+	return _closure
 
 
 ## The size a contact's mark is drawn at: once a size_period it may pick `want` as its new
@@ -233,18 +295,18 @@ func _draw_labels() -> void:
 	var outline := roundi(hud.halo_width * 1.5 / hud.projector.px_per_deg * px_per_deg)
 	for slot: int in _labels:
 		var label: Array = _labels[slot]
-		var color: Color = label[2]
+		var color: Color = label[0]
 		color.a = maxf(color.a, 0.95)
 		var corner := Vector2(slot % SLOT_GRID.x, slot / SLOT_GRID.x) * Vector2(SLOT_SIZE) + Vector2(outline + 2.0, 0.0)
 		var y := name_px * 1.05
-		for line in 2:
-			var size := name_px if line == 0 else detail_px
+		for line in range(1, label.size()):
+			var size := name_px if line == 1 else detail_px
 			var at := corner + Vector2(0.0, y)
 			if hud.halo_color.a > 0.0:
 				_label_canvas.draw_string_outline(hud.font, at, label[line], HORIZONTAL_ALIGNMENT_LEFT, -1, size,
 						outline, hud.halo_color)
 			_label_canvas.draw_string(hud.font, at, label[line], HORIZONTAL_ALIGNMENT_LEFT, -1, size,
-					color if line == 0 else Color(color, color.a * 0.85))
+					color if line == 1 else Color(color, color.a * 0.85))
 			y += detail_px * 1.25
 
 

@@ -6,7 +6,7 @@ extends SceneTree
 ##   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off state=floating rectangle=1280x720+0+0
 ##   godot-double --path . --resolution 1280x720 -s Tools/Weapons/weapons_snapshot.gd -- <out_dir> [shots]
 ##
-## shots: comma list of hud,beam,external,impact,ring,vulcan,missile,block,turret,glow,offaxis
+## shots: comma list of hud,stack,beam,external,impact,ring,vulcan,missile,block,turret,glow,offaxis
 ## (default all). offaxis also prints AIM lines: lead, gun and target agreement and miss.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
@@ -218,6 +218,28 @@ func _run(shots: PackedStringArray) -> void:
 		print("JINK agility %.1f m/s², tof %.2f s" % [_fcs.get_target_agility(), _fcs.selected.time_of_flight])
 		await _shot("jink_circle")
 		jinker.queue_free()
+		_fcs.lock(drone)
+		_look(0, 0)
+		await _frames(5)
+
+	if "stack" in shots:
+		# The locked target in front of the rest: a jinker (big gun circle) behind a nearer
+		# contact whose triangle overlaps it; its text stays by its triangle, with Vc.
+		_fcs.lock(null)
+		var far := _spawn(TargetDrone.Behaviour.JINK, 1500.0, Vector2(45, 22), 100000.0)
+		far.jink_accel_g = 4.0
+		var near := _spawn(TargetDrone.Behaviour.STATIC, 500.0, Vector2(46.2, 21.6), 100000.0)
+		await _frames(2)
+		_fcs.lock(far)
+		await _frames(240)
+		var seen := _angles_of(far)
+		print("STACK far at %s, near at %s, locked %s" % [seen, _angles_of(near), _fcs.locked == far])
+		_look(seen.x, seen.y, 20.0)
+		await _shot("stack_wide")
+		_look(seen.x, seen.y, 8.0)
+		await _shot("stack_close")
+		far.queue_free()
+		near.queue_free()
 		_fcs.lock(drone)
 		_look(0, 0)
 		await _frames(5)
