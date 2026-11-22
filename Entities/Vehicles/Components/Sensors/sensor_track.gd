@@ -56,6 +56,11 @@ var _bias := Vector3.ZERO        ## Running mean of the whitened innovation (1 �
 
 var _x := PackedFloat64Array()
 var _p := PackedFloat64Array()   ## N×N, row-major
+## The last get_estimate: the HUD, fire control and sensors ask for the same `now` several
+## times a frame. Keyed by now, the state's version and the process noise in force.
+var _version := 0
+var _est_key := Vector4(NAN, NAN, NAN, NAN)
+var _est: Array = []
 
 
 func _init() -> void:
@@ -79,6 +84,7 @@ func add_measurement(t: float, pos: Vector3, cov: Basis) -> void:
 		return
 	if t < time:
 		return   # older than the state (another sensor's slower pipeline): skip
+	_version += 1
 	var dt := t - time
 	_predict(dt)
 	time = t
@@ -152,6 +158,9 @@ func tick(now: float) -> void:
 func get_estimate(now: float) -> Array:
 	if not is_started():
 		return [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Basis()]
+	var key := Vector4(now, _version, _accel_sigma(), maneuver_time)
+	if key == _est_key:
+		return _est.duplicate()
 	var x := _x
 	var p := _p
 	var dt := maxf(now - time, 0.0)
@@ -165,7 +174,9 @@ func get_estimate(now: float) -> Array:
 		_p = saved_p
 	var cov := Basis(Vector3(p[0], p[3 * N], p[6 * N]), Vector3(p[3], p[3 * N + 3], p[6 * N + 3]),
 			Vector3(p[6], p[3 * N + 6], p[6 * N + 6]))
-	return [Vector3(x[0], x[3], x[6]), Vector3(x[1], x[4], x[7]), Vector3(x[2], x[5], x[8]), cov]
+	_est = [Vector3(x[0], x[3], x[6]), Vector3(x[1], x[4], x[7]), Vector3(x[2], x[5], x[8]), cov]
+	_est_key = key
+	return _est.duplicate()
 
 
 ## Covariance (m²) of where the target will be `ahead` s after `now`: what a shot that
@@ -184,6 +195,7 @@ func get_position_covariance_ahead(now: float, ahead: float) -> Basis:
 
 
 func _start(t: float, pos: Vector3, cov: Basis) -> void:
+	_version += 1
 	time = t
 	last_update = t
 	hits = 1
