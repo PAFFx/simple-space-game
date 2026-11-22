@@ -125,6 +125,6 @@ func _draw_stores() -> void:
 		var fraction := float(weapon.ammo) / maxf(weapon.max_ammo, 1.0)
 		hbar(Rect2(r.end.x - 250, y - 14, 130, 14), fraction, WARNING if weapon.ammo == 0 else color)
 		label(Vector2(r.end.x - 60, y), "%d" % weapon.ammo, WARNING if weapon.ammo == 0 else color, 18, HORIZONTAL_ALIGNMENT_RIGHT)
-		var state := "RDY" if weapon.state == MsWeapon.State.READY else ""
-		label(Vector2(r.end.x - 20, y), state, GOOD, 14, HORIZONTAL_ALIGNMENT_RIGHT)
+		var state := "RDY" if weapon.state == MsWeapon.State.READY else weapon.get_carry_label()
+		label(Vector2(r.end.x - 20, y), state, GOOD if state == "RDY" else DIM, 14, HORIZONTAL_ALIGNMENT_RIGHT)
 		y += 40.0

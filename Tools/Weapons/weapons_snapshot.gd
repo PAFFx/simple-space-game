@@ -73,6 +73,7 @@ func _run(shots: PackedStringArray) -> void:
 	_input.cmd.master_mode = FireControl.MasterMode.DGFT
 	_input.cmd.master_arm = 1
 	await _frames(5)
+	_fcs.draw_now()   # skip the rifle draw
 	# The centre display has the SOI from the start; these shots designate with the HUD cursor.
 	_fcs.select_soi(FireControl.Scs.FORWARD)
 	if "hud" in shots:
@@ -427,6 +428,7 @@ func _run(shots: PackedStringArray) -> void:
 			root.get_texture().get_image().save_png("%s/overlay_out_%02d.png" % [_out, i])
 		_input.cmd.master_mode = FireControl.MasterMode.DGFT
 		await _frames(60)
+		_fcs.draw_now()   # skip the rifle draw
 
 	if "turret" in shots:
 		if is_instance_valid(drone):

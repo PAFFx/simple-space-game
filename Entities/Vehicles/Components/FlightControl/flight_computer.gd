@@ -73,8 +73,15 @@ var _depleted_emitted := false
 var _hatch: CockpitHatch
 var _capability_map: ForceCapabilityMap
 var _map_build: ForceCapabilityMap      ## Rebuild in progress (replaces the map when done)
+var _map_task := -1                     ## WorkerThreadPool task of a threaded rebuild
+var _map_out: Array = []                ## Its result, written by the task
+var _map_again := false                 ## Another rebuild was asked for meanwhile
 var _stance: StanceController
-## Directions of the capability map measured per tick while rebuilding in flight.
+## Rebuild the capability map in flight on a worker thread (~0.4 s of allocator solves:
+## on the main thread it cost ~30 ms a tick and a ~340 ms tick at the end). Off: a few
+## directions per tick on the main thread, the same tick every run (probes).
+@export var capability_rebuild_threaded: bool = true
+## Directions of the capability map measured per tick while rebuilding in flight (not threaded).
 @export var capability_rebuild_per_tick: int = 2
 
 
@@ -111,8 +118,21 @@ func rebuild_capability_map() -> void:
 ## Rebuilds the capability map for the current pose over the next few ticks (the old
 ## map stays in use until then). Used when limbs carrying thrusters change pose.
 func rebuild_capability_map_async() -> void:
-	if not thrusters.is_empty():
+	if thrusters.is_empty():
+		return
+	if not capability_rebuild_threaded:
 		_map_build = ForceCapabilityMap.start(state, allocator.duplicate(), min_thrust_alignment)
+		return
+	if _map_task >= 0:
+		_map_again = true
+		return
+	var snap := state.snapshot()
+	var probe := allocator.duplicate()
+	var align := min_thrust_alignment
+	var out: Array = []
+	_map_out = out
+	_map_task = WorkerThreadPool.add_task(func() -> void: out.append(ForceCapabilityMap.build(snap, probe, align)),
+			false, "capability map")
 
 
 ## Drops the capability map so the next tick measures it again at once (e.g. the mass
@@ -120,6 +140,29 @@ func rebuild_capability_map_async() -> void:
 func invalidate_capability_map() -> void:
 	_capability_map = null
 	_map_build = null
+	_map_out = []   # a threaded build still running is for the old state: ignored
+	_map_again = false
+
+
+## A threaded rebuild that has finished replaces the map.
+func _collect_capability_map() -> void:
+	if _map_task < 0 or not WorkerThreadPool.is_task_completed(_map_task):
+		return
+	WorkerThreadPool.wait_for_task_completion(_map_task)
+	_map_task = -1
+	if not _map_out.is_empty():
+		_capability_map = _map_out[0]
+		state.capability_map = _capability_map
+	_map_out = []
+	if _map_again:
+		_map_again = false
+		rebuild_capability_map_async()
+
+
+func _exit_tree() -> void:
+	if _map_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_map_task)
+		_map_task = -1
 
 
 func get_total_mass() -> float:
@@ -144,6 +187,7 @@ func set_allocator(new_allocator: ThrustAllocator) -> void:
 
 func _physics_process(delta: float) -> void:
 	_build_state(delta)
+	_collect_capability_map()
 	if _map_build != null and _map_build.step(capability_rebuild_per_tick):
 		_capability_map = _map_build
 		state.capability_map = _capability_map

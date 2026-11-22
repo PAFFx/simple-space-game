@@ -47,6 +47,16 @@ var allow_attitude_offset: bool = true
 var capability_map: ForceCapabilityMap
 
 
+## A copy for another thread (a capability map build): plain values, so the live state
+## can change meanwhile.
+func snapshot() -> FlightState:
+	var copy := FlightState.new()
+	for prop in get_property_list():
+		if prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE:
+			copy.set(prop.name, get(prop.name))
+	return copy
+
+
 func to_local(global_vector: Vector3) -> Vector3:
 	return basis.transposed() * global_vector
 

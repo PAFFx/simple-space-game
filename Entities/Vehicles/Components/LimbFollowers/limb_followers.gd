@@ -11,7 +11,11 @@ extends Node
 @export var ambac: AmbacController
 @export var followers: Array[LimbFollower] = []
 
+## Seconds a held part takes to settle back to rest (hold_bone).
+@export var hold_time: float = 0.3
+
 var _sources := PackedInt32Array()
+var _hold := {}         ## bone → [held now 0..1, wanted]
 
 
 func _ready() -> void:
@@ -32,6 +36,22 @@ func _ready() -> void:
 	skeleton.add_child(modifier)
 
 
+## Holds a part at rest (eased over hold_time), e.g. the skirt a weapon is drawn from.
+func hold_bone(bone_name: StringName, on: bool) -> void:
+	if _hold.has(bone_name):
+		_hold[bone_name][1] = on
+	elif on:
+		_hold[bone_name] = [0.0, true]
+
+
+func _process(delta: float) -> void:
+	for bone: StringName in _hold.keys():
+		var h: Array = _hold[bone]
+		h[0] = move_toward(h[0], 1.0 if h[1] else 0.0, delta / maxf(hold_time, 0.01))
+		if h[0] <= 0.0 and not h[1]:
+			_hold.erase(bone)
+
+
 ## Skeleton-space rotation per bone right now. `skel` is mid modifier pass, so pose
 ## followers read the final pose of their source.
 func get_bone_rotations(skel: Skeleton3D) -> Dictionary:
@@ -45,10 +65,12 @@ func get_bone_rotations(skel: Skeleton3D) -> Dictionary:
 			a = ambac.angles[_sources[k]]
 		else:
 			continue
-		if f.ease_in_deg != Vector2.ZERO:
+		if f.ease_in_deg != Vector2.ZERO and (a > 0.0 or not f.ease_in_positive_only):
 			a *= smoothstep(deg_to_rad(f.ease_in_deg.x), deg_to_rad(f.ease_in_deg.y), absf(a))
 		var angle := clampf(a * (f.positive if a > 0.0 else f.negative),
 				deg_to_rad(f.min_angle_deg), deg_to_rad(f.max_angle_deg))
+		if _hold.has(f.bone_name):
+			angle *= 1.0 - smoothstep(0.0, 1.0, _hold[f.bone_name][0])
 		var q := Quaternion(f.axis.normalized(), angle)
 		out[f.bone_name] = (out[f.bone_name] as Quaternion) * q if out.has(f.bone_name) else q
 	return out

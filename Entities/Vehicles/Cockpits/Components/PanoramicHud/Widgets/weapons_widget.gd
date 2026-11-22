@@ -151,13 +151,18 @@ func _state_label(weapon: MsWeapon) -> String:
 		return "EMPTY"
 	if not weapon.wanted:
 		return "HOLD"
+	var carry := weapon.get_carry_label()
+	if carry != "":
+		return carry
 	return "RDY" if weapon.state == MsWeapon.State.READY else "- - -"
 
 
 func _state_color(weapon: MsWeapon) -> Color:
 	if weapon.ammo <= 0:
 		return hud.warning_color
-	return hud.primary_color if weapon.state == MsWeapon.State.READY else hud.caution_color
+	if weapon.state == MsWeapon.State.READY or weapon.get_carry_label() == "LOW":
+		return hud.primary_color
+	return hud.caution_color
 
 
 ## Text in a box, its left edge at `pos`; returns the box's right edge.

@@ -145,7 +145,8 @@ const COLLIDERS := [
 # bone, axis (skeleton space), group, inertia kg·m², min angle, max angle, priority
 # Human-like ranges, offsets from the animated pose. Signs: +X swings a hanging limb
 # forward (hip flex, elbow bend), knees bend back (−X), +Z swings a right limb outward
-# (left limbs mirror), +Y twists. Inertias here are only a fallback: every joint's bone is
+# (left limbs mirror), +Y twists. A zero axis is along the bone: the forearm's own twist
+# (the roll the rifle draw uses), small and low priority. Inertias here are only a fallback: every joint's bone is
 # in the mass model (PARTS), which sets its inertia from the parts it swings (and refreshes
 # it as the tanks drain). Twists move little mass, so they mostly add natural motion. The
 # side hip swing stays small.
@@ -154,10 +155,12 @@ const AMBAC := [
 	["upper_arm.R", Vector3.BACK, &"arm_r", 6.0e4, -8.0, 35.0, 0.6],
 	["upper_arm.R", Vector3.UP, &"arm_r", 1.0e4, -25.0, 25.0, 0.4],
 	["forearm.R", Vector3.RIGHT, &"arm_r", 2.5e4, -5.0, 50.0, 0.6],
+	["forearm.R", Vector3.ZERO, &"arm_r", 4.0e3, -30.0, 30.0, 0.3],
 	["upper_arm.L", Vector3.RIGHT, &"arm_l", 6.0e4, -35.0, 45.0, 0.7],
 	["upper_arm.L", Vector3.BACK, &"arm_l", 6.0e4, -35.0, 8.0, 0.6],
 	["upper_arm.L", Vector3.UP, &"arm_l", 1.0e4, -25.0, 25.0, 0.4],
 	["forearm.L", Vector3.RIGHT, &"arm_l", 2.5e4, -5.0, 50.0, 0.6],
+	["forearm.L", Vector3.ZERO, &"arm_l", 4.0e3, -30.0, 30.0, 0.3],
 	["thigh.R", Vector3.RIGHT, &"leg_r", 1.6e5, -30.0, 85.0, 1.0],
 	["thigh.R", Vector3.BACK, &"leg_r", 1.6e5, -3.0, 15.0, 0.4],
 	["thigh.R", Vector3.UP, &"leg_r", 2.0e4, -15.0, 15.0, 0.5],
@@ -233,8 +236,9 @@ const STANCES := [
 # with a forward leg swing, rear skirts with a backward one, side skirts open with an
 # outward swing and a little with either fore/aft swing. The shoulder armor rides all of
 # the arm's fore/aft swing and half of its sideways one, so a raised or aimed arm never
-# meets it; it eases in from 25° to 70°, so it stays level over the rifle's ready pose
-# (tipping with it put its front edge into the rifle).
+# meets it; forward it eases in from 25° to 70°, so it stays level over the rifle's ready
+# pose (tipping with it put its front edge into the rifle); back (reaching behind for the
+# stowed rifle) it follows all the way.
 const FOLLOWERS := [
 	["skirt_front.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.85, 0.0, 75.0, true],
 	["skirt_front.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.85, 0.0, 75.0, true],
@@ -244,8 +248,8 @@ const FOLLOWERS := [
 	["skirt_side.L", Vector3.BACK, "thigh.L", Vector3.BACK, 0.0, 1.0, 30.0, true],
 	["skirt_side.R", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, 0.35, 0.35, 30.0, true],
 	["skirt_side.L", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, 0.35, 0.35, 30.0, true],
-	["shoulder.R", Vector3.RIGHT, "upper_arm.R", Vector3.RIGHT, 1.0, 1.0, 120.0, true, Vector2(25, 70)],
-	["shoulder.L", Vector3.RIGHT, "upper_arm.L", Vector3.RIGHT, 1.0, 1.0, 120.0, true, Vector2(25, 70)],
+	["shoulder.R", Vector3.RIGHT, "upper_arm.R", Vector3.RIGHT, 1.0, 1.0, 120.0, true, Vector2(25, 70), true],
+	["shoulder.L", Vector3.RIGHT, "upper_arm.L", Vector3.RIGHT, 1.0, 1.0, 120.0, true, Vector2(25, 70), true],
 	["shoulder.R", Vector3.BACK, "upper_arm.R", Vector3.BACK, 0.5, 0.5, 40.0, true],
 	["shoulder.L", Vector3.BACK, "upper_arm.L", Vector3.BACK, 0.5, 0.5, 40.0, true],
 ]
@@ -259,6 +263,69 @@ const POSE_RIFLE := {
 	"forearm.R": [[Vector3.RIGHT, 50.0]],
 	"hand.R": [],
 }
+
+# Rifle held low (in the hand, nothing locked): the arm a little forward and out, the
+# elbow bent so the rifle points ahead and down past the leg. The arm stays free for AMBAC.
+const POSE_RIFLE_LOW := {
+	"upper_arm.R": [[Vector3.RIGHT, 3.0], [Vector3.BACK, 7.0]],
+	"forearm.R": [[Vector3.RIGHT, 8.0]],
+	"hand.R": [],
+}
+# Rifle ready / low blend in about as fast as the rifle comes up (MsWeapon.ready_time).
+const RIFLE_POSE_BLEND := 0.4
+
+# The rifle's stow: horizontal across the rear skirts below the main pods and in front of
+# the hyper bazooka (which hangs behind the waist from 7.9 m to 19 m), muzzle left, grip
+# down, held by a stow arm in a bay behind the right rear skirt's red marking (a hatch door
+# in the model). Drawn, the door opens, the arm comes out and turns the rifle ~80° about
+# the front-back axis (nothing flips: muzzle down, top inward, grip pointing right at the
+# hand, flat side still toward the skirt) to RIFLE_GRAB behind the right hip, 10° short of
+# vertical so the stock clears the main pod and the backpack and the barrel passes right
+# of the bazooka. The hand reaches back for it like for a pistol on the hip (a pilot's own
+# move): upper arm back, elbow out and back, the hand onto the grip from outside; the
+# shoulder turns back and shrugs up a little (RIFLE_LEAN). It brings it back past the calf
+# and forward round the outside of the leg (RIFLE_DRAW_KEYS) up to low ready, while the empty arm goes back in and
+# the door shuts.
+# Keys are where the rifle is: its wrist end, barrel and top directions, body frame.
+const RIFLE_STOW := [Vector3(4.4, 10.4, 3.4), Vector3(-1, 0, 0), Vector3(0, 1, 0)]
+const RIFLE_GRAB := [Vector3(5.2, 13.8, 3.45), Vector3(-0.17, -0.975, 0.14), Vector3(-0.985, 0.17, 0)]
+# The turn itself stays in the plane of the back (the barrel crosses behind the bazooka);
+# only once turned does the barrel tip back a little (its lower end behind the right calf).
+const RIFLE_TURNED := [Vector3(5.2, 13.8, 3.45), Vector3(-0.174, -0.985, 0), Vector3(-0.985, 0.174, 0)]
+# Pulled back and up, the muzzle swinging back (it hangs between the calves: it passes
+# behind the right one), out (the muzzle swings out) while it starts turning its top forward, then forward beside the
+# leg, barrel angled out: the rifle's body goes round the outside of the leg (straight from
+# behind to low ready it cuts through it).
+const RIFLE_DRAW_KEYS := [
+	[Vector3(5.4, 14.6, 4.6), Vector3(-0.1, -0.93, 0.35), Vector3(-0.99, 0.1, 0.0)],
+	[Vector3(6.5, 14.6, 3.0), Vector3(0.33, -0.9, 0.28), Vector3(-0.85, -0.3, -0.45)],
+	[Vector3(6.4, 14.6, 1.0), Vector3(0.35, -0.85, -0.4), Vector3(-0.45, 0.25, -0.85)],
+]
+# The shoulder turns back and shrugs up for the reach, as a person's does: the waist
+# twists a little, the collarbone goes back and up.
+const RIFLE_LEAN := {
+	"spine": [[Vector3.UP, -10.0], [Vector3.BACK, -5.0]],
+	"clavicle.R": [[Vector3.UP, -10.0], [Vector3.BACK, 12.0]],
+}
+# The hatch: the red marking at the top of the right rear skirt, cut out as a door
+# (build_mobile_suit_nu.py SKIRT_HATCH_*, bone skirt_hatch.R): centre, outward normal,
+# hinge along its top edge, size. The stow arm's first link swings from folded in (into
+# its bay, down) to straight out of it (RIFLE_ARM_LINK m), so the boom on to the gripper
+# runs clear of the plate.
+const RIFLE_HATCH := [Vector3(1.387, 14.01, 1.77), Vector3(0.257, 0.305, 0.917), Vector3(0.964, -0.019, -0.264),
+		Vector2(0.91, 0.88)]
+const RIFLE_ARM_LINK := 1.0
+const RIFLE_ARM_IN := Vector3(0.0, -0.6, -1.0)
+const RIFLE_ARM_OUT := Vector3(0.25, 0.4, 0.88)
+# Where the gripper holds the rifle (its frame: side, top, back from the wrist end): the
+# middle of its top edge, 3 m down the body from the wrist end (past the hand's fingers),
+# fingers down both flat faces (0.63 m apart). Stowed that edge is right under the hatch;
+# turned, it faces in, toward it: the arm always comes from the hatch's side.
+const RIFLE_ARM_CLAMP := Vector3(0.27, 3.2, -3.0)
+const RIFLE_GRIP_SPAN := 0.63
+# The rifle's bulk the hand's arm keeps out of, in the rifle's frame (wrist at the origin,
+# top +Y, muzzle −Z): its body from the stock end to the muzzle, 2.4 m over the wrist.
+const RIFLE_CLEARANCE := [[Vector3(0.27, 2.4, 2.2), Vector3(0.27, 2.4, -9.4), 0.8]]
 
 # Dug in behind the shield: the waist turns the left side 30° toward the threat (the hips
 # stay: turning them turns the whole suit's mass and kicks the hull), the arm holds the
@@ -534,6 +601,8 @@ func _build_limb_followers(root: Node3D) -> void:
 		follower.from_pose = f.size() > 7 and f[7]
 		if f.size() > 8:
 			follower.ease_in_deg = f[8]
+		if f.size() > 9:
+			follower.ease_in_positive_only = f[9]
 		list.append(follower)
 	node.followers = list
 
@@ -631,7 +700,8 @@ func _build_ambac(root: Node3D) -> void:
 	for a in AMBAC:
 		var j := AmbacJoint.new()
 		j.bone_name = a[0]
-		j.axis = a[1]
+		j.axis = a[1] if a[1] != Vector3.ZERO \
+				else _skel.get_bone_global_rest(_skel.find_bone(a[0])).basis.y.normalized()
 		j.group = a[2]
 		j.inertia = a[3]
 		j.min_angle_deg = a[4]
@@ -687,6 +757,99 @@ func _build_loadout(root: Node3D) -> void:
 		eq.mount_bone = e[1]
 		eq.mount_transform = Transform3D.IDENTITY
 		eq.ambac_group = e[2]
+		if e[0] == "rx93_beam_rifle":
+			eq.held_pose = &"rifle_low"
+			eq.draw_motion = _rifle_draw(eq)
+
+
+## The rifle's stow, its stow arm and the draw (RIFLE_*), as placements of the rifle
+## relative to where it sits in the hand at rest.
+func _rifle_draw(rifle: MsEquipment) -> MsDrawMotion:
+	var muzzle := rifle.get_node(^"Weapon/Muzzle") as Node3D
+	var in_hand := Transform3D(((rifle.get_node(^"Weapon") as Node3D).transform * muzzle.transform).basis.orthonormalized(),
+			_bone_rest_in_body("hand.R").origin)
+	var place := func(key: Array) -> Transform3D:
+		var back := -(key[1] as Vector3).normalized()
+		var side := (key[2] as Vector3).cross(back).normalized()
+		return Transform3D(Basis(side, back.cross(side), back), key[0]) * in_hand.affine_inverse()
+	var m := MsDrawMotion.new()
+	m.stow_bone = &"skirt_rear.R"
+	var clamp := in_hand * RIFLE_ARM_CLAMP
+	var stow: Transform3D = place.call(RIFLE_STOW)
+	var grab: Transform3D = place.call(RIFLE_GRAB)
+	var turned: Transform3D = place.call(RIFLE_TURNED)
+	# One turn about the front-back axis, the gripper carried from where it holds the stowed
+	# rifle to where it holds the turned one; then the small tip back.
+	var q0 := stow.basis.get_rotation_quaternion()
+	var q1 := turned.basis.get_rotation_quaternion()
+	var c0 := stow * clamp
+	var c1 := turned * clamp
+	var present: Array[Transform3D] = []
+	for t in [0.33, 0.67]:
+		var b := Basis(q0.slerp(q1, t))
+		present.append(Transform3D(b, c0.lerp(c1, t) - b * clamp))
+	present.append(turned)
+	present.append(grab)
+	print("[build_rx93_scene] rifle draw: gripper %s → %s, turned %.0f° about %s" % [
+			c0.snapped(Vector3.ONE * 0.01), c1.snapped(Vector3.ONE * 0.01),
+			rad_to_deg((q1 * q0.inverse()).get_angle()), (q1 * q0.inverse()).get_axis().snapped(Vector3.ONE * 0.01)])
+	m.stow_transform = stow
+	m.present_keys = present
+	# The hand sets off while the stow arm is still turning it (it gets there as the turn ends).
+	m.present_share = 0.75
+	m.hand_start = 0.25
+	m.hand_end = 1.0
+	var draw: Array[Transform3D] = []
+	for key: Array in RIFLE_DRAW_KEYS:
+		draw.append(place.call(key))
+	m.draw_keys = draw
+	m.lean = RIFLE_LEAN
+	m.lean_weights = PackedFloat32Array([1.0, 0.9, 0.6, 0.2])
+	# Elbow out and back for the reach, then out round the hip.
+	m.elbow_hints = PackedVector3Array([Vector3(1, 0.2, 0.6), Vector3(1, 0.2, 0.6), Vector3(1, 0.1, 0.3), Vector3(1, 0, 0)])
+	m.hatch_bone = &"skirt_hatch.R"
+	m.hatch_centre = RIFLE_HATCH[0]
+	m.hatch_normal = RIFLE_HATCH[1]
+	m.hatch_hinge = RIFLE_HATCH[2]
+	m.hatch_size = RIFLE_HATCH[3]
+	m.arm_link = RIFLE_ARM_LINK
+	m.arm_in_dir = RIFLE_ARM_IN
+	m.arm_out_dir = RIFLE_ARM_OUT
+	m.arm_clamp = clamp
+	# Gripper axes: out of the top edge, across it (the rifle's side), along it.
+	m.arm_clamp_basis = Basis(in_hand.basis.y, in_hand.basis.x, in_hand.basis.y.cross(in_hand.basis.x))
+	m.arm_grip_span = RIFLE_GRIP_SPAN
+	m.upper_arm_bone = &"upper_arm.R"
+	m.forearm_bone = &"forearm.R"
+	m.hand_bone = &"hand.R"
+	m.reach_time = 1.8
+	m.draw_time = 1.5
+	# Held still while it runs: the waist (the lean drives it) and the right rear skirt (the
+	# stow arm stands on it). The legs stay free for AMBAC (and the stances), kept only from
+	# swinging back into the rifle's path (draw_clip_probe.gd legs grid at=0.3 … 1.6): the
+	# right thigh not behind vertical, its shin back ≤ thigh + knee −5°; the left thigh back
+	# ≤ 5°, its shin back ≤ thigh + knee −40°. Forward they are free.
+	m.held_groups = [&"torso", &"waist_bend"] as Array[StringName]
+	m.held_followers = [&"skirt_rear.R"] as Array[StringName]
+	m.drawing_leg_limits = [["", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, "", Vector3.UP, 0.0, 0.0],
+			["thigh.R", Vector3.RIGHT, "shin.R", Vector3.RIGHT, "", Vector3.UP, -5.0, 0.0],
+			["", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, "", Vector3.UP, -5.0, 0.0],
+			["thigh.L", Vector3.RIGHT, "shin.L", Vector3.RIGHT, "", Vector3.UP, -40.0, 0.0]]
+	# The calf plates swing back with their thrusters (up to 40°) into the rifle's path behind
+	# the calves: held at rest while it runs.
+	m.drawing_thruster_swing = {"CalfR": Vector2(0, 0), "CalfL": Vector2(0, 0)}
+	# Stowed, the legs keep off it (draw_clip_probe.gd legs thighs / sweep): the right thigh no
+	# further back than 20° (its skirt, carrying the stow arm, would tip the rifle into the
+	# hyper bazooka), the left no further than 12° (its skirt would lift into the rifle), and
+	# each shin no further back than thigh + knee −60° (right) / −75° (left). Only AMBAC's
+	# balancing swings and the forward stance's trailing legs are cut short.
+	m.stowed_leg_limits = [["", Vector3.RIGHT, "thigh.R", Vector3.RIGHT, "", Vector3.UP, -20.0, 0.0],
+			["", Vector3.RIGHT, "thigh.L", Vector3.RIGHT, "", Vector3.UP, -12.0, 0.0],
+			["thigh.R", Vector3.RIGHT, "shin.R", Vector3.RIGHT, "", Vector3.UP, -60.0, 0.0],
+			["thigh.L", Vector3.RIGHT, "shin.L", Vector3.RIGHT, "", Vector3.UP, -75.0, 0.0]]
+	for c: Array in RIFLE_CLEARANCE:
+		m.clearance.append([in_hand * (c[0] as Vector3), in_hand * (c[1] as Vector3), c[2]])
+	return m
 
 
 func _build_animation(root: Node3D, library: AnimationLibrary) -> void:
@@ -700,10 +863,13 @@ func _build_animation(root: Node3D, library: AnimationLibrary) -> void:
 	_add(root, root, animator)
 	animator.animation_player = player
 	var layers: Array[MsPoseLayer] = []
-	for p in [[&"rifle_ready", POSE_RIFLE], [&"shield_guard", POSE_SHIELD], [&"shield_fire", POSE_SHIELD_FIRE]]:
+	for p in [[&"rifle_low", POSE_RIFLE_LOW], [&"rifle_ready", POSE_RIFLE], [&"shield_guard", POSE_SHIELD],
+			[&"shield_fire", POSE_SHIELD_FIRE]]:
 		var layer := MsPoseLayer.new()
 		layer.pose = p[0]
 		layer.bones = PackedStringArray((p[1] as Dictionary).keys())
+		if String(p[0]).begins_with("rifle"):
+			layer.blend_time = RIFLE_POSE_BLEND
 		layers.append(layer)
 	animator.layers = layers
 
@@ -750,6 +916,7 @@ func _build_fire_control(root: Node3D) -> void:
 func _build_animations() -> AnimationLibrary:
 	var lib := AnimationLibrary.new()
 	lib.add_animation(&"idle", _idle())
+	lib.add_animation(&"rifle_low", _pose(POSE_RIFLE_LOW))
 	lib.add_animation(&"rifle_ready", _pose(POSE_RIFLE))
 	lib.add_animation(&"shield_guard", _pose(POSE_SHIELD))
 	lib.add_animation(&"shield_fire", _pose(POSE_SHIELD_FIRE))

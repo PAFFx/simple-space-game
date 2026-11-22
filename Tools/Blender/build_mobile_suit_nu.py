@@ -550,6 +550,94 @@ def split_hatch(bm, materials, part, groups):
           f"{math.degrees(math.atan(hx / AIRLOCK_MOUTH)):.1f} x {math.degrees(math.atan(hy / AIRLOCK_MOUTH)):.1f} deg")
 
 
+# Stow-arm hatch: the red marking at the top of the right rear skirt (found by sampling the
+# texture) is cut out of the plate as a door hinged along its top edge (bone skirt_hatch.R),
+# with a small dark bay behind the opening for the rifle's stow arm. Godot space, after
+# the belly drop; keep in step with build_rx93_scene.gd's RIFLE_HATCH.
+SKIRT_PART = 29
+SKIRT_HATCH_CENTRE = (1.387, 14.01, 1.77)
+SKIRT_HATCH_NORMAL = (0.257, 0.305, 0.917)
+SKIRT_HATCH_HINGE = (0.964, -0.019, -0.264)
+SKIRT_HATCH_SIZE = (0.91, 0.88)    # along the hinge, down the plate
+SKIRT_HATCH_DEPTH = 0.55
+
+
+def _skirt_hatch_frame():
+    """Centre, outward normal, hinge axis, up-the-plate axis (suit space)."""
+    c = _suit(*SKIRT_HATCH_CENTRE)
+    n = _suit(*SKIRT_HATCH_NORMAL).normalized()
+    h = _suit(*SKIRT_HATCH_HINGE)
+    h = (h - n * h.dot(n)).normalized()
+    return c, n, h, n.cross(h).normalized()
+
+
+def split_skirt_hatch(bm, materials, part, groups):
+    """Cuts the hatch door out of the skirt plate (group "skirt_hatch.R") and lines the
+    opening with a bay. Splits faces, so part/groups are rebuilt (in place)."""
+    c, n, h, up = _skirt_hatch_frame()
+    w, ht = SKIRT_HATCH_SIZE
+    names = sorted(set(groups)) + ["skirt_hatch.R"]
+    index = {g: i for i, g in enumerate(names)}
+    lay_part = bm.faces.layers.int.new("nu_part")
+    lay_group = bm.faces.layers.int.new("nu_group")
+    for f in bm.faces:
+        f[lay_part] = part[f.index]
+        f[lay_group] = index[groups[f.index]]
+    for co, no in ((c + h * (w * 0.5), h), (c - h * (w * 0.5), -h), (c + up * (ht * 0.5), up), (c - up * (ht * 0.5), -up)):
+        faces = [f for f in bm.faces if f[lay_part] == SKIRT_PART]
+        edges = list({e for f in faces for e in f.edges})
+        verts = list({v for f in faces for v in f.verts})
+        bmesh.ops.bisect_plane(bm, geom=verts + edges + faces, dist=1e-5, plane_co=co, plane_no=no)
+    bm.faces.ensure_lookup_table()
+    door = 0
+    for f in bm.faces:
+        if f[lay_part] != SKIRT_PART:
+            continue
+        d = f.calc_center_median() - c
+        if abs(d.dot(h)) < w * 0.5 and abs(d.dot(up)) < ht * 0.5 and abs(d.dot(n)) < 0.3:
+            f[lay_group] = index["skirt_hatch.R"]
+            door += 1
+    part[:] = [f[lay_part] for f in bm.faces]
+    groups[:] = [names[f[lay_group]] for f in bm.faces]
+
+    bay = mk.make_material("MS_HatchBay", (0.05, 0.055, 0.06), roughness=0.7)
+    rim = mk.make_material("MS_HatchBayRim", (0.18, 0.19, 0.2), metallic=0.5, roughness=0.5)
+    materials.extend([bay, rim])
+    bay_i, rim_i = len(materials) - 2, len(materials) - 1
+    inside = c - n * (SKIRT_HATCH_DEPTH * 0.5)
+
+    def add_quad(quad, mat_i, group, face_into=None, face_dir=None):
+        f = bm.faces.new([bm.verts.new(q) for q in quad])
+        f.normal_update()
+        want = face_dir if face_dir is not None else (face_into - f.calc_center_median())
+        if f.normal.dot(want) < 0.0:
+            f.normal_flip()
+        f.material_index = mat_i
+        groups.append(group)
+        part.append(-1)
+
+    # The bay: four walls and a floor, facing in, its mouth just behind the plate.
+    a = [c + h * (w * 0.5 * sx) + up * (ht * 0.5 * sy) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    mouth = [p - n * 0.01 for p in a]
+    floor = [p - n * SKIRT_HATCH_DEPTH for p in a]
+    for i in range(4):
+        j = (i + 1) % 4
+        add_quad([mouth[i], mouth[j], floor[j], floor[i]], bay_i, "skirt_rear.R", face_into=inside)
+    add_quad(floor, bay_i, "skirt_rear.R", face_into=inside)
+    # The door's inside: a dark lining just behind it (seen once it swings open).
+    lining = [p - n * 0.04 for p in a]
+    add_quad(lining, rim_i, "skirt_hatch.R", face_dir=-n)
+    bm.faces.ensure_lookup_table()
+    print(f"[nu] skirt hatch: {door} door faces, {w:.2f} x {ht:.2f} m, bay {SKIRT_HATCH_DEPTH:.2f} m deep")
+
+
+def skirt_hatch_bone():
+    """The hatch door's bone: on its hinge (the top edge), child of the right rear skirt."""
+    c, n, h, up = _skirt_hatch_frame()
+    head = c + up * (SKIRT_HATCH_SIZE[1] * 0.5)
+    return [("skirt_hatch.R", tuple(head), tuple(head - up * 0.4), "skirt_rear.R")]
+
+
 def object_name(group):
     return "".join(w.capitalize() for w in group.replace(".", "_").split("_")) if not group.startswith("W:") \
         else group[2:]
@@ -612,6 +700,7 @@ def main():
     bm.verts.ensure_lookup_table()
     stretch_belly(bm, groups)
     split_hatch(bm, materials, part, groups)
+    split_skirt_hatch(bm, materials, part, groups)
     if "--pod-pivot" in argv:
         global GUARDS
         piv = argv[argv.index("--pod-pivot") + 1]
@@ -619,9 +708,9 @@ def main():
     move_pods(bm, groups, part)
     print_nozzles(bm, part)
     arm = mk.build_armature("Armature", stretch_bones(bones()) + guard_bones(bm, groups)
-                             + shield_mount_bone())
+                             + shield_mount_bone() + skirt_hatch_bone())
     suit, weapons = [], {}
-    for group in list(GROUPS) + ["hatch"] + [g for g, _r, _h in NOZZLE_CUPS]:
+    for group in list(GROUPS) + ["hatch", "skirt_hatch.R"] + [g for g, _r, _h in NOZZLE_CUPS]:
         obj = make_object(object_name(group), bm, materials, groups, group)
         if group.startswith("W:"):
             kind = group[2:].rstrip("0123456789")

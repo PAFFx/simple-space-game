@@ -52,8 +52,10 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 | NAV / DGFT / BVR | left 14 / 10 / 12 | N / J / K |
 
 - **Master arm** SAFE: triggers dead, symbology live (the gun circle says SAFE).
-- **Modes.** NAV stows everything. DGFT always opens on the beam rifle. BVR is a label only for
-  now; selecting a weapon in NAV drops to DGFT, in BVR it doesn't.
+- **Modes.** NAV stows everything (the rifle goes back on the rear skirt). DGFT always opens on
+  the beam rifle and gives the SOI to the panoramic screen's TMS cursor, unless the HUD cursor
+  or the HMCS already has it. BVR is a label only for now; selecting a weapon in NAV drops to
+  DGFT, in BVR it doesn't. DGFT and BVR draw the rifle (see *Rifle draw and low ready*).
 - **Weapon hat** ("press again"): a press selects the direction's first weapon at once; pressing
   the same direction while it is selected swaps to the second. Layout in `FireControl.hat_layout`:
   forward beam rifle, right funnels, aft bazooka (back → hand), left shield missiles,
@@ -98,6 +100,63 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
   (the right shoulder's, past the shield's edge) holds a coarser track. Missiles can't
   launch while blocking. The suit has no damage model yet.
 
+## Rifle draw and low ready
+
+**Stow.** The RX-93 starts with an empty right hand: the rifle lies horizontal across the
+rear skirts, under the main pods and in front of the hyper bazooka (which hangs behind the
+waist from 7.9 m to 19 m), muzzle left, grip down, held by its top edge by a stow arm. The
+arm (`StowArm`) lives in a bay behind the right rear skirt's red marking, which the model
+build cuts out as a door (`build_mobile_suit_nu.py` SKIRT_HATCH_*, bone `skirt_hatch.R`,
+hinged at its top edge, with a dark bay behind). Stowed, the door is shut and only the
+gripper shows. A weapons mode draws it, NAV puts it back (`MsEquipment.hand_wanted`).
+
+**Draw** (`MsLoadout`, `MsDrawMotion`, `StowArm`, `EquipmentDrawModifier`, `ArmReachSolver`;
+keys in `build_rx93_scene.gd` RIFLE_*):
+
+1. The door swings open (`EquipmentDrawModifier` turns the bone), the arm's first link pushes
+   straight out of the bay (so the boom runs clear of the plate), its boom telescopes.
+2. The arm turns the rifle ~80° about the front-back axis, nothing flipped: muzzle down, top
+   inward, grip pointing right at the hand, 10° short of vertical so the stock clears the
+   pod and the backpack and the barrel passes right of the bazooka; then tips it back a
+   little (its lower end behind the right calf).
+3. Meanwhile the hand reaches back for it like for a pistol on the hip (modelled on a
+   pilot's own move): upper arm back, elbow out and back, the hand onto the grip from
+   outside; the waist turns 10° and the collarbone goes back and up a little.
+4. At the grab the rifle changes attachment (stow arm → hand) and its mass changes bone.
+   The hand pulls it back past the calf, swings the muzzle out and brings it forward round
+   the outside of the leg to low ready (1.5 s), while the empty gripper backs off and goes
+   straight back in through the door, which shuts.
+
+The arm's poses are solved once per key (two-bone reach; elbow swing and forearm roll
+chosen to keep the arm out of the rifle, the wrist straight and each key close to the one
+before, so it doesn't flail between keys) and played as a spline through the bones'
+rotations. Stowing runs it backwards; a mode change halfway reverses it. Timing: the hand
+has it at 1.8 s, low ready at 3.3 s. While it runs the right rear skirt (the stow arm stands on it) is held still
+(`LimbFollowers.hold_bone`) and the waist is out of AMBAC; the legs stay free for AMBAC and
+the stances, kept only from swinging back into the rifle's path (`drawing_leg_limits`: right
+thigh not behind vertical, its shin back ≤ thigh + knee −5°; left thigh back ≤ 5°, its shin
+≤ −40°), and the calf thrusters don't swing back (`drawing_thruster_swing`: their plates
+would swing into it). The arm and the stow arm show as outlines on the panoramic screen
+(also while stowing in NAV).
+
+Mass: the rifle's 2.6 t ride the skirt bone and move with the stow arm (`LimbReaction.move_part`,
+counted as motion), then the hand (`carry_part` at the hand-off). The whole draw turns the
+hull ≤ 0.4° (peak 3.9°/s). Stowed, AMBAC keeps the legs off it (`stowed_leg_limits`: right
+thigh back ≤ 20°, left ≤ 12°, shin back ≤ thigh + knee −60° / −75°).
+
+Clipping (`draw_clip_probe.gd`: rifle, arm and stow-arm points against convex hulls of every
+part, the backpack equipment included): nothing while stowed (also flying the manoeuvre set,
+AMBAC live), nothing through the draw but the grip entering the fist at the grab and a 3-point
+brush of the right calf guard; drawing and stowing while flying it (`flight draw`), the left
+calf guard grazes it in two manoeuvres (< 1% of its surface).
+
+**Low ready.** Drawn, the rifle is held low (`rifle_low`: muzzle ahead and down past the
+leg) and the arm is free for AMBAC like in NAV. It comes up (`MsWeapon.low_ready`,
+`ready_time` 0.4 s, `rifle_ready` + aim) on a lock, or on the trigger with nothing locked
+(onto the boresight); it stays up while locked and for `raise_hold_time` (3 s) after the last
+trigger. The spool runs while it comes up and the shot leaves once it is up: a pull from low
+ready fires in 0.4 s (0.3 s spool). The HUD says DRAW / LOW / RDY.
+
 ## Aiming
 
 **Masked.** Every tick a weapon that is up casts one ray 40 m from its muzzle along its aim;
@@ -130,7 +189,7 @@ aim moves 25–70° off the boresight (`MsWeapon.elbow_*`), for reach at the env
 
 | Weapon | Azimuth | Elevation | Slew | Notes |
 |---|---|---|---|---|
-| Beam rifle | −55 … +90 | −60 … +65 | 80°/s | right arm, held low; the elbow straightens toward the edges; across the chest it stops short of its own shield |
+| Beam rifle | −55 … +90 | −60 … +65 | 80°/s | right arm, at low ready until a lock or the trigger; up, held at chest height, the elbow straightens toward the edges; across the chest it stops short of its own shield |
 | Vulcans | ±55 | −25 … +40 | 200°/s | head; ready whenever a weapons mode is on |
 | Shield missiles | −60 … +25 | −40 … +45 | 70°/s | left arm raised, shield tip forward |
 
@@ -245,6 +304,14 @@ Probe: `Tools/Weapons/fair_fight_probe.gd -- [parts=arc,ecap,damage]`.
 
 - `F4` in the test range: spawn static / drifting / jinking / turret targets at a chosen range,
   clear them, rearm.
+- `godot-double --headless --path . -s Tools/Weapons/draw_probe.gd`: rifle stow / draw / low
+  ready / raise on trigger and lock / NAV stow / DGFT SOI, and how far the draw turns the suit.
+- `godot-double --headless --path . -s Tools/Weapons/draw_clip_probe.gd -- [step=0.05] [raised]
+  [legs [sweep|thighs]] [flight]`: rifle, arm and stow-arm points inside the suit's parts along
+  the draw; `legs`: the stowed rifle against posed legs (stances, joint ends, sweeps);
+  `flight`: against the suit flying a manoeuvre set.
+- `Tools/Godot/draw_snapshot.sh <out_dir> [p=0,0.5,1,…] [views=back,right,top,grip,…] [raised]
+  [nofunnels]`: the draw frozen at chosen progress (0 stowed, 1 the grab, 2 held), tiled.
 - `godot-double --headless --path . -s Tools/Weapons/weapons_probe.gd`: scripted check of modes,
   hat, lock, SAFE, the beam (on the barrel, flying free, its range), lead on a crossing
   target, vulcans, missiles, block.
@@ -257,4 +324,6 @@ Probe: `Tools/Weapons/fair_fight_probe.gd -- [parts=arc,ecap,damage]`.
 ## Not done yet
 
 Part destruction on the model (parts stay on), holes in structures, recoil and missile mass,
+drawing the bazooka / sabers (only the rifle has a stow and draw), the hand's fingers (a
+closed fist: the grip passes into it at the grab),
 E-pack reloads, the pod-opening animation, funnels, bazooka, sabers, BVR, lock line-of-sight.

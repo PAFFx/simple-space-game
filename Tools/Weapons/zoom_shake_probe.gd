@@ -52,6 +52,8 @@ func _run() -> void:
 	_head = vehicle.get_sensor_head()
 	_input.cmd.master_mode = FireControl.MasterMode.DGFT
 	await process_frame
+	await physics_frame
+	_fcs.draw_now()   # skip the rifle draw
 	var drone := TargetDrone.new()
 	drone.behaviour = TargetDrone.Behaviour.DRIFT
 	drone.quarry = _suit
