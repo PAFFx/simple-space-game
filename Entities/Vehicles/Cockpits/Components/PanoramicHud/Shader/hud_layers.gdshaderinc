@@ -38,6 +38,9 @@ uniform vec4 hud_fpm_accent_color : source_color, color_conversion_disabled = ve
 uniform vec4 hud_fpm_halo_color : source_color, color_conversion_disabled = vec4(0.0, 0.0, 0.0, 0.55);
 // As drawn: x = bar start, y = bar length, z = stripe lean (signed), w = stripe half height (deg).
 uniform vec4 hud_fpm_bar = vec4(3.0, 24.0, 0.75, 0.45);
+// As shown now: x = bar length, y = stripe lean (signed), deg. Boost / brake stretch and
+// squeeze the bars and hard brake flips the lean here, without redrawing the layer.
+uniform vec2 hud_fpm_shape = vec2(24.0, 0.75);
 // x = stripe count, y = spacing power, z = base alpha, w = highlight width (fraction of bar).
 uniform vec4 hud_fpm_stripes = vec4(16.0, 1.7, 0.3, 0.12);
 // x = grow (0 = hidden), y = highlight head, z = full boost, w = kick.
@@ -224,6 +227,24 @@ float hud_fpm_stripe_u(vec2 p) {
 }
 
 
+// Where the point p (deg) on the bars as shown (hud_fpm_shape) lies on the bars as drawn
+// (hud_fpm_bar): the stripes scale out from the bar start and their lean is swapped. Only
+// the bars' band is remapped; the reticle and the marker are left as they are.
+vec2 hud_fpm_drawn(vec2 p) {
+	float h = hud_fpm_bar.w;
+	float ax = abs(p.x);
+	if (abs(p.y) > h * 2.5 || ax < hud_fpm_bar.x - 0.5
+			|| ax > hud_fpm_bar.x + max(hud_fpm_shape.x, hud_fpm_bar.y) + 2.0) {
+		return p;
+	}
+	float k = clamp(p.y / h, -1.0, 1.0);
+	float u = pow(clamp((ax - hud_fpm_bar.x) / hud_fpm_shape.x, 0.0, 1.0), 1.0 / hud_fpm_stripes.y);
+	float slant = (0.7 + 0.3 * u) * k;
+	float t = (ax - hud_fpm_shape.y * slant - hud_fpm_bar.x) / hud_fpm_shape.x;
+	return vec2(sign(p.x) * (hud_fpm_bar.x + t * hud_fpm_bar.y + hud_fpm_bar.z * slant), p.y);
+}
+
+
 // The marker at the middle: prograde a filled triangle pointing down with a solid core and
 // wings; retrograde its empty counterpart pointing up, only the rim's three corners and a
 // hollow core. `m` in marker units.
@@ -264,7 +285,14 @@ vec3 hud_fpm(vec3 color, vec3 local_dir, float brightness, float aa) {
 	vec2 p = degrees(vec2(atan(pro ? -d.z : d.z, depth), atan(d.y, depth)));
 	float unit = hud_fpm_marker * grow;
 	bool at_marker = depth > 0.5 && max(abs(p.x), abs(p.y)) < unit * 2.8;
-	vec4 cov = hud_sample(hud_fpm_texture, hud_fpm_frame, local_dir);
+	vec2 pd = hud_fpm_drawn(p);
+	vec3 sample_dir = local_dir;
+	if (pd != p) {
+		vec2 r = radians(pd);
+		vec3 dd = normalize(vec3(pro ? -1.0 : 1.0, tan(r.y), pro ? -tan(r.x) : tan(r.x)));
+		sample_dir = transpose(hud_fpm_frame) * dd;
+	}
+	vec4 cov = hud_sample(hud_fpm_texture, hud_fpm_frame, sample_dir);
 	if (cov.r + cov.g + cov.b < 0.002 && !at_marker) {
 		return color;
 	}
@@ -273,7 +301,7 @@ vec3 hud_fpm(vec3 color, vec3 local_dir, float brightness, float aa) {
 	float stripe_a = 0.0;
 	vec3 stripe_rgb = mix(c.rgb, hud_fpm_accent_color.rgb, hud_fpm_anim.z * 0.7);
 	if (cov.r > 0.002) {
-		float u = hud_fpm_stripe_u(p);
+		float u = hud_fpm_stripe_u(pd);
 		float shown = clamp((grow * 1.15 - u) / 0.15, 0.0, 1.0);
 		float head = pro ? hud_fpm_anim.y : 1.0 - hud_fpm_anim.y;
 		float width = hud_fpm_stripes.w;

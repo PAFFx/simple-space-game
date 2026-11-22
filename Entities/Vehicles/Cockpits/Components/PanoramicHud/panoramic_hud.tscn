@@ -14,7 +14,6 @@
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/control_centre_widget.gd" id="11_ctl"]
 
-[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/thrust_cue_widget.gd" id="12_cue"]
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/Widgets/weapons_widget.gd" id="13_wpn"]
 
@@ -41,9 +40,6 @@ script = ExtResource("11_ctl")
 
 [node name="FlightPath" type="Node2D" parent="HudViewport"]
 script = ExtResource("4_fpm")
-
-[node name="ThrustCue" type="Node2D" parent="HudViewport"]
-script = ExtResource("12_cue")
 
 [node name="FlightData" type="Node2D" parent="HudViewport"]
 script = ExtResource("5_data")
