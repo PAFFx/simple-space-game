@@ -43,8 +43,16 @@ func _run(shots: PackedStringArray) -> void:
 			look.set("capture_on_ready", false)
 	if _cockpit_scene != "":
 		_swap_cockpit(stage)
+	# The suit's own input reads the real sticks: make it inert, so it holds still.
+	for n in stage.find_children("*", "", true, false):
+		if n is PilotInputSource:
+			n.set_script(PilotInputSource)
 	root.add_child(stage)
 	await _frames(20)
+	# The look controller pans with the real mini-stick: the views set the look themselves.
+	for look in stage.find_children("*", "MouseLookController", true, false):
+		look.set_process(false)
+		look.set_process_input(false)
 	var vehicle: VehicleBase
 	for n in stage.find_children("*", "", true, false):
 		if n is VehicleBase:
@@ -103,10 +111,14 @@ func _run(shots: PackedStringArray) -> void:
 		for pose in [["slide_fwd", Vector3(0, 0, -1), Vector3.ZERO], ["slide_back", Vector3(0, 0, 1), Vector3.ZERO],
 				["yaw_left", Vector3.ZERO, Vector3(0, 1, 0)], ["pitch_up", Vector3.ZERO, Vector3(1, 0, 0)],
 				["pitch_down", Vector3.ZERO, Vector3(-1, 0, 0)], ["roll_right", Vector3.ZERO, Vector3(0, 0, -1)],
-				["strafe_right", Vector3(1, 0, 0), Vector3.ZERO], ["up", Vector3(0, 1, 0), Vector3.ZERO]]:
+				["strafe_right", Vector3(1, 0, 0), Vector3.ZERO], ["up", Vector3(0, 1, 0), Vector3.ZERO],
+				["down", Vector3(0, -1, 0), Vector3.ZERO], ["brake", Vector3.ZERO, Vector3.ZERO, 1],
+				["brake_full", Vector3.ZERO, Vector3.ZERO, 2]]:
 			var cmd := PilotCommand.new()
 			cmd.translation = pose[1]
 			cmd.rotation = pose[2]
+			cmd.brake = pose.size() > 3
+			cmd.brake_full = pose.size() > 3 and pose[3] == 2
 			_input.last_command = cmd
 			await _frames(40)
 			await _rail_views(pose[0])
@@ -199,8 +211,10 @@ func _rail_views(tag: String) -> void:
 	_debug_cam.make_current()
 	var seat := _pilot.transform if _pilot != null else Transform3D.IDENTITY
 	var at := Vector3(0.3, -0.34, -0.22)
-	for view in [["side", Vector3(0.75, -0.3, -0.24)], ["front", Vector3(0.42, -0.2, -0.65)], ["top", Vector3(0.3, 0.1, -0.2)]]:
-		_debug_cam.transform = seat * Transform3D(Basis.IDENTITY, view[1]).looking_at(at, Vector3.UP if view[0] != "top" else Vector3.FORWARD)
+	for view in [["side", Vector3(0.75, -0.3, -0.24)], ["front", Vector3(0.42, -0.2, -0.65)], ["top", Vector3(0.3, 0.1, -0.2)],
+			["feet", Vector3(0.55, -0.7, -0.45)]]:
+		var look_at := at if view[0] != "feet" else Vector3(0, -0.8, -0.5)
+		_debug_cam.transform = seat * Transform3D(Basis.IDENTITY, view[1]).looking_at(look_at, Vector3.UP if view[0] != "top" else Vector3.FORWARD)
 		await _shot("rail_%s_%s" % [tag, view[0]])
 	_fp_cam.make_current()
 

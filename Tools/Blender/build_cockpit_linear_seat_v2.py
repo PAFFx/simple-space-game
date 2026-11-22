@@ -126,6 +126,7 @@ def materials():
         "strip": mk.make_material("CP_LightStrip", (0.1, 0.3, 0.5), emission=(0.3, 0.75, 1.0), strength=3.0),
         "screen": mk.make_material("CP_Screen", (0.01, 0.03, 0.05), emission=(0.04, 0.18, 0.32), strength=1.0),
         "label": mk.make_material("CP_Label", (0.86, 0.87, 0.84), roughness=0.6),
+        "rail_light": mk.make_material("CP_RailLight", (0.08, 0.01, 0.01), emission=(1.0, 0.0, 0.01), strength=1.2),
     }
 
 
@@ -536,7 +537,10 @@ def build_rail_grip(side, s, m):
     the upright, origin on the hinge pin, rolls about local y like a stick deflected left /
     right), which carries Bar<side> (the crossbar grip, origin on its axis, twists about
     local x). The bar runs in from the upright, the hand over it palm down, thumb on the
-    inner end cap with its buttons. Godot moves the three; returns (unit, bar)."""
+    inner end cap with its buttons. Godot moves the three; returns (unit, bar).
+    RailLamps<side> (fixed, origin at the carriage's rest point) is one mesh of every lamp
+    on the plate either side of the slot, every 6 mm from its rear end: Godot's lamp shader
+    lights those behind the carriage and leaves the rest black."""
     origin = Vector((GRIP_PIVOT.x * s, RAIL_REST_Y, DECK_TOP))
     y0, y1 = RAIL_Y[0] - RAIL_REST_Y, RAIL_Y[1] - RAIL_REST_Y
     unit = Part(f"Grip{side}", m)
@@ -549,6 +553,13 @@ def build_rail_grip(side, s, m):
     for i in range(-3, 4):                                                     # travel scale, outboard
         unit.box((0.034 * s, 0.02 * i, RAIL_PLATE + 0.0002), (0.006 if i else 0.01, 0.0015, 0.0008), "yellow" if i == 0 else "label")
     unit_obj = unit.to_object(location=origin, chamfer=0.001, local=True)
+    lamps = Part(f"RailLamps{side}", m)
+    y = y0 + 0.014
+    while y < y1 - 0.012:                          # either side of the slot, between the side rails
+        for k in (1.0, -1.0):
+            lamps.rbox((0.0165 * k, y, 0), (0.0135, 0.0038, 0.0009), "rail_light", r=0.0003)
+        y += 0.006
+    parent_keep(lamps.to_object(location=origin + Vector((0, 0, RAIL_PLATE + 0.00045)), chamfer=0.0, local=True), unit_obj)
 
     slide = Part(f"Slide{side}", m)
     slide.rbox((0, 0, 0.002), (0.024, 0.07, 0.006), "frame", r=0.002)                # shoe in the slot

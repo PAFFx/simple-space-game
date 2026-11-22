@@ -95,6 +95,7 @@ animator wiring and the pilot's finger curl (62°, 70°, 40°, thumb 30°, to wr
 
 ```
 GripL / GripR            rail plate on the armrest deck, a slot down its middle, travel scale
+├── RailLampsL / R       lamps either side of the slot, every 6 mm: one mesh per rail
 └── SlideL / SlideR      carriage in the slot, base and the clevis of a fore-aft hinge:
     │                    slides fore / aft, ±6 cm
     └── RollL / RollR    hinge knuckle and the upright on its outboard side: rolls ±20°
@@ -111,10 +112,20 @@ hands move as the player's do; the animator honours that input's invert flags.
 | Grip motion | Stick axis | Together | Against each other |
 |-------------|------------|----------|--------------------|
 | Slide fore / aft | fore / aft | forward / back | yaw: right forward = left |
-| Bar twist, knuckles up | twist, clockwise | up / down | pitch: right up, left down = nose up |
+| Bar twist, knuckles up | twist, clockwise | (none: up / down is on the pedals) | pitch: right up, left down = nose up |
 | Roll, top right | left / right, right | strafe | roll: right right, left left = roll right |
 
-The pedals stay put: up / down is on the twist, as on the sticks.
+On the sticks up / down is the twist's average (no pedals there); in the cockpit it is on the
+pedals, linked like a fighter's rudder pedals: up slides the right pedal forward on its rail and
+the left back by as much (3 cm at full demand), down the other way, the whole foot riding them.
+Braking tips both pedals toes forward together about their heel hinges, by 70% of 16° for a
+brake and all of it for a hard brake.
+
+The lamps (red, bright enough to glow) are lit from the rail's rear end up to the
+carriage, so each rail shows how far its grip is pushed; ahead of it they are black. Each rail's
+lamps are one mesh drawn with `rail_lamp.gdshader`, no shadow: the animator sets its instance
+uniform `lit_from` to the carriage's z. (As 64 separate lamps they cost 0.57 ms a frame in
+draw submission; as two meshes, 0.08 ms, within noise.)
 
 The wrist rides on the bar, so all three motions carry the hand with them. The cockpit
 snapshot tool's `rail` shot renders each motion, and its third argument puts this cockpit in

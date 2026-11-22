@@ -15,6 +15,10 @@
 [ext_resource type="PackedScene" path="res://Entities/Characters/AmateYuzuriha/amate_yuzuriha.tscn" id="15_character"]
 
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/BeamGlow/cockpit_beam_glow.gd" id="20_glow"]
+[ext_resource type="Shader" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2Rail/rail_lamp.gdshader" id="21_lamp"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_lamp"]
+shader = ExtResource("21_lamp")
 
 [node name="CockpitLinearSeatV2Rail" type="Node3D"]
 script = ExtResource("1_script")
@@ -53,10 +57,13 @@ omni_range = 2.4
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.25)
 script = ExtResource("20_glow")
 
-[node name="ControlsAnimator" type="Node" parent="." node_paths=PackedStringArray("left_slide", "right_slide", "left_roll", "right_roll", "left_bar", "right_bar")]
+[node name="ControlsAnimator" type="Node" parent="." node_paths=PackedStringArray("left_pedal", "right_pedal", "left_slide", "right_slide", "left_roll", "right_roll", "left_bar", "right_bar", "left_rail_lamps", "right_rail_lamps")]
 script = ExtResource("6_anim")
 scheme = 2
+left_pedal = NodePath("../Model/SeatSwing/PedalL")
+right_pedal = NodePath("../Model/SeatSwing/PedalR")
 twist_travel_deg = 28.0
+pedal_stroke = 0.03
 smoothing = 0.05
 left_slide = NodePath("../Model/GripL/SlideL")
 right_slide = NodePath("../Model/SeatSwing/GripR/SlideR")
@@ -66,6 +73,11 @@ left_bar = NodePath("../Model/GripL/SlideL/RollL/BarL")
 right_bar = NodePath("../Model/SeatSwing/GripR/SlideR/RollR/BarR")
 slide_travel = 0.06
 roll_travel_deg = 20.0
+left_rail_lamps = NodePath("../Model/GripL/RailLampsL")
+right_rail_lamps = NodePath("../Model/SeatSwing/GripR/RailLampsR")
+rail_lamp_material = SubResource("ShaderMaterial_lamp")
+brake_travel_deg = 16.0
+pedal_rail_rise = 0.1176
 
 [node name="PanoramicHud" parent="." instance=ExtResource("5_hud")]
 
