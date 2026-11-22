@@ -85,6 +85,12 @@ uniform int hud_contact_locked = -1;
 const vec2 HUD_CONTACT_LABEL_DEG = vec2(10.0, 5.0);
 uniform float hud_control_scale = 1.0;
 
+// Overhead attitude indicator's horizon line, in the zenith patch (display frame, right
+// = +X, up = +Z, gnomonic degrees): xy one end, zw the other; its colour and half width.
+uniform vec4 hud_aux_line = vec4(0.0);
+uniform vec4 hud_aux_color : source_color, color_conversion_disabled = vec4(0.0);
+uniform float hud_aux_half_width = 0.1;
+
 
 vec2 hud_layer_uv(mat3 frame, vec3 local_dir) {
 	vec3 d = frame * local_dir;
@@ -159,6 +165,27 @@ float hud_triangle(vec2 p, float r) {
 	}
 	p.x -= clamp(p.x, -2.0 * r, 0.0);
 	return -length(p) * sign(p.y);
+}
+
+
+// The overhead horizon line: a straight stroke with square ends and a halo, as the canvas
+// drew it (AttitudeWidget._draw_aux_horizon_line sets the ends every frame).
+vec3 hud_aux(vec3 color, vec3 local_dir, float brightness, float aa) {
+	vec2 ab = hud_aux_line.zw - hud_aux_line.xy;
+	float len = length(ab);
+	if (hud_aux_color.a <= 0.0 || local_dir.y < 0.9 || len < 1e-4) {
+		return color;
+	}
+	vec2 p = degrees(vec2(atan(local_dir.x, local_dir.y), atan(local_dir.z, local_dir.y)));
+	vec2 dir = ab / len;
+	vec2 r = p - hud_aux_line.xy;
+	float along = dot(r, dir);
+	float across = abs(dot(r, vec2(-dir.y, dir.x)));
+	float ends = max(-along, along - len);
+	vec4 acc = vec4(0.0);
+	hud_ink(acc, hud_symbol_halo_color, hud_fill(max(across - hud_aux_half_width - hud_symbol_halo_deg, ends), aa));
+	hud_ink(acc, hud_aux_color, hud_fill(max(across - hud_aux_half_width, ends), aa));
+	return hud_compose(color, acc, brightness);
 }
 
 
@@ -497,6 +524,7 @@ vec3 hud_layers(vec3 color, vec3 local_dir, float brightness) {
 	color = hud_over(color, hud_sample(hud_heading_texture, hud_heading_frame, local_dir), brightness);
 	color = hud_ladder(color, local_dir, brightness);
 	color = hud_over(color, hud_sample(hud_suit_texture, hud_suit_frame, local_dir), brightness);
+	color = hud_aux(color, local_dir, brightness, aa);
 	color = hud_control(color, local_dir, brightness, aa);
 	color = hud_fpm(color, local_dir, brightness, aa);
 	color = hud_contacts(color, local_dir, brightness, aa);

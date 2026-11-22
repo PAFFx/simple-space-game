@@ -26,6 +26,11 @@ func draw_widget() -> void:
 		var pts := sil.get_world_outline()
 		if pts.size() < 2:
 			continue
+		if not sil.draw_outline:
+			# Label only (the outline is the sensor image's): just find where it goes.
+			if sil.label != "":
+				_label_tab(_outline_top(pts, sil.closed, origin) + label_offset, sil.label, color)
+			continue
 		var canvas := PackedVector2Array()
 		var edges := pts.size() if sil.closed else pts.size() - 1
 		for i in edges:
@@ -54,6 +59,29 @@ func draw_widget() -> void:
 				if p.y < top.y:
 					top = p
 			_label_tab(top + label_offset, sil.label, color)
+
+
+## The outline's highest canvas point, as the subdivided outline would give it, without
+## projecting every edge: the corners, then the edges either side of the highest one (a
+## straight 3D edge bows on the canvas, so its top can sit between the corners).
+func _outline_top(pts: PackedVector3Array, closed: bool, origin: Vector3) -> Vector2:
+	var top_i := 0
+	var top := hud.world_dir_to_canvas(pts[0] - origin)
+	for i in range(1, pts.size()):
+		var p := hud.world_dir_to_canvas(pts[i] - origin)
+		if p.y < top.y:
+			top = p
+			top_i = i
+	for e in [top_i - 1, top_i]:
+		if not closed and (e < 0 or e >= pts.size() - 1):
+			continue
+		var a := pts[posmod(e, pts.size())]
+		var b := pts[posmod(e + 1, pts.size())]
+		for k in range(1, subdivisions):
+			var p := hud.world_dir_to_canvas(a.lerp(b, float(k) / subdivisions) - origin)
+			if p.y < top.y:
+				top = p
+	return top
 
 
 ## The label over a short underline with a slanted lead back toward the outline.
