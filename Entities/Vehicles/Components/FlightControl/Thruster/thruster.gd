@@ -91,6 +91,8 @@ var throttle: float = 0.0                         ## Actual spooled throttle [0,
 
 ## _limit_planes(), kept until a gimbal setting changes (their setters clear it).
 var _planes_local: Array[Vector3] = []
+var _gimbal_dir := Vector3(NAN, NAN, NAN)       ## The aim and pivot the gimbal node was last set to
+var _gimbal_pivot := Vector3.ZERO
 var _cmd_throttle: float = 0.0
 var _cmd_dir := Vector3.FORWARD                   ## Commanded thrust dir, local to this node
 var _dir := Vector3.FORWARD                       ## Actual thrust dir, local to this node
@@ -296,9 +298,14 @@ func step(delta: float, body: RigidBody3D, has_propellant: bool) -> void:
 		throttle = 0.0
 
 	_dir = _slewed(delta)
-	_gimbal.basis = Basis.looking_at(_dir, _pick_up(_dir))
-	if swing_pivot != Vector3.ZERO:
-		_gimbal.position = swing_pivot + Quaternion(Vector3.FORWARD, _dir) * -swing_pivot
+	# Only when the aim moved: re-setting the same transform still notifies the nozzle's
+	# subtree (plume, glow, light), for every parked thruster every tick.
+	if _dir != _gimbal_dir or swing_pivot != _gimbal_pivot:
+		_gimbal_dir = _dir
+		_gimbal_pivot = swing_pivot
+		_gimbal.basis = Basis.looking_at(_dir, _pick_up(_dir))
+		if swing_pivot != Vector3.ZERO:
+			_gimbal.position = swing_pivot + Quaternion(Vector3.FORWARD, _dir) * -swing_pivot
 
 	var thrust := get_thrust()
 	if thrust > 0.0:
