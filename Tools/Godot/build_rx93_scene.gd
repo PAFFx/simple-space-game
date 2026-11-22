@@ -76,6 +76,15 @@ const SWING_2D := {
 	ShUpR = [Vector3.UP, -10.0, 45.0], ShUpL = [Vector3.UP, -10.0, 45.0],
 }
 const SOLE_3D := [30.0, 90.0, 90.0]
+# The feet carry the sole nozzles and ease after their aim (ThrusterGuard follow_aim), within
+# the ankle travel that clears the shin (Tools/Flight/foot_clip_probe.gd): toe down 40°, up
+# 30°, tilt ±15°. They follow part of the swing, slowly, so the nozzle does the fast work.
+const ANKLE_TOE_DOWN := -40.0
+const ANKLE_TOE_UP := 30.0
+const ANKLE_TILT := 15.0
+const FOOT_FOLLOW := 0.6
+const FOOT_SMOOTHING := 0.4
+const FOOT_RATE_DEG := 60.0
 const FORE_AFT := [25.0, 25.0, 0.0]      # 2D: swings fore/aft (about the port's sideways axis)
 const UP_DOWN := [20.0, 20.0, 0.0]       # 2D, for forward-facing ports
 const SIDE_SIDE := [20.0, 0.0, 20.0]     # 2D: swings left/right only
@@ -92,7 +101,7 @@ const THRUSTERS := [
 	["MainRL", "backpack", Vector3(1.25, 15.71, 3.53), MAIN_EXHAUST, 1000.0, MAIN_CONE, 16.0, 1.30, false],
 	["MainLU", "backpack", Vector3(-1.23, 16.75, 3.85), MAIN_EXHAUST, 1000.0, MAIN_CONE, 16.0, 1.30, false],
 	["MainLL", "backpack", Vector3(-1.23, 15.71, 3.53), MAIN_EXHAUST, 1000.0, MAIN_CONE, 16.0, 1.30, false],
-	# Soles (the "toe" thrusters).
+	# Soles (the "toe" thrusters); the feet ease after their aim.
 	["SoleR", "foot.R", Vector3(4.25, 0.26, 0.37), Vector3(0, -1, 0), 400.0, SOLE_3D, 2.0, 0.60, false],
 	["SoleL", "foot.L", Vector3(-4.24, 0.26, 0.37), Vector3(0, -1, 0), 400.0, SOLE_3D, 2.0, 0.60, false],
 	# Behind each calf, mostly down and a little back; its guard plate moves with it.
@@ -165,12 +174,10 @@ const AMBAC := [
 	["thigh.R", Vector3.BACK, &"leg_r", 1.6e5, -3.0, 15.0, 0.4],
 	["thigh.R", Vector3.UP, &"leg_r", 2.0e4, -15.0, 15.0, 0.5],
 	["shin.R", Vector3.RIGHT, &"leg_r", 4.5e4, -110.0, 5.0, 0.9],
-	["foot.R", Vector3.RIGHT, &"leg_r", 6.0e3, -40.0, 30.0, 0.5],
 	["thigh.L", Vector3.RIGHT, &"leg_l", 1.6e5, -30.0, 85.0, 1.0],
 	["thigh.L", Vector3.BACK, &"leg_l", 1.6e5, -15.0, 3.0, 0.4],
 	["thigh.L", Vector3.UP, &"leg_l", 2.0e4, -15.0, 15.0, 0.5],
 	["shin.L", Vector3.RIGHT, &"leg_l", 4.5e4, -110.0, 5.0, 0.9],
-	["foot.L", Vector3.RIGHT, &"leg_l", 6.0e3, -40.0, 30.0, 0.5],
 	["spine", Vector3.UP, &"torso", 1.2e5, -12.0, 12.0, 0.8],
 	["spine", Vector3.RIGHT, &"torso", 1.5e5, -10.0, 6.0, 0.5],
 	# Side bend: its own group, so an arm weapon can hold the waist's twist. Hardly used
@@ -218,9 +225,9 @@ const STANCES := [
 	# Raise the leg on the side you're moving to, knee tucked (not kicked out): its swing
 	# rolls the suit that way, and dropping it back helps roll it level.
 	["strafe_right", Vector3.RIGHT, 50.0, [["thigh.R", Vector3.RIGHT, 70.0], ["shin.R", Vector3.RIGHT, -95.0],
-			["foot.R", Vector3.RIGHT, -30.0], ["thigh.R", Vector3.BACK, 6.0], ["thigh.L", Vector3.RIGHT, 10.0], ["shin.L", Vector3.RIGHT, -15.0]]],
+			["thigh.R", Vector3.BACK, 6.0], ["thigh.L", Vector3.RIGHT, 10.0], ["shin.L", Vector3.RIGHT, -15.0]]],
 	["strafe_left", Vector3.LEFT, 50.0, [["thigh.L", Vector3.RIGHT, 70.0], ["shin.L", Vector3.RIGHT, -95.0],
-			["foot.L", Vector3.RIGHT, -30.0], ["thigh.L", Vector3.BACK, -6.0], ["thigh.R", Vector3.RIGHT, 10.0], ["shin.R", Vector3.RIGHT, -15.0]]],
+			["thigh.L", Vector3.BACK, -6.0], ["thigh.R", Vector3.RIGHT, 10.0], ["shin.R", Vector3.RIGHT, -15.0]]],
 	# Legs trail back when driving forward, forward when braking or backing off.
 	["forward", Vector3.FORWARD, 45.0, [["thigh.R", Vector3.RIGHT, -15.0], ["shin.R", Vector3.RIGHT, -25.0],
 			["thigh.L", Vector3.RIGHT, -15.0], ["shin.L", Vector3.RIGHT, -25.0]]],
@@ -650,7 +657,7 @@ static func _swing_basis(exhaust: Vector3, toward: Vector3) -> Basis:
 
 ## The backpack pods and the calf plates (each carrying its nozzle) turn with their
 ## thrusters about their hinges; each main nozzle cup swings sideways in its pod with its
-## thruster's own sideways gimbal.
+## thruster's own sideways gimbal; each foot eases after its sole nozzle's aim.
 func _build_thruster_guards(root: Node3D) -> void:
 	var node := ThrusterGuards.new()
 	node.name = "ThrusterGuards"
@@ -675,6 +682,19 @@ func _build_thruster_guards(root: Node3D) -> void:
 			guard.min_angle_deg = 0.0
 			guard.max_angle_deg = 40.0
 		guards.append(guard)
+	# Each foot eases after its sole nozzle's aim.
+	for n in [["foot.R", "SoleR"], ["foot.L", "SoleL"]]:
+		var foot := ThrusterGuard.new()
+		foot.bone_name = n[0]
+		foot.thrusters = PackedStringArray([n[1]])
+		foot.follow_aim = true
+		foot.follow = FOOT_FOLLOW
+		foot.smoothing_time = FOOT_SMOOTHING
+		foot.max_rate_deg = FOOT_RATE_DEG
+		foot.min_angle_deg = ANKLE_TOE_DOWN
+		foot.max_angle_deg = ANKLE_TOE_UP
+		foot.side_limit_deg = ANKLE_TILT
+		guards.append(foot)
 	# Turning about this tips the cup's exhaust toward −X: what +yaw (thrust to +X) does.
 	var cup_axis := -MAIN_MODEL_EXHAUST.normalized().cross(Vector3.RIGHT).normalized()
 	for n in [["main_nozzle_up.R", "MainRU"], ["main_nozzle_low.R", "MainRL"],
@@ -707,8 +727,7 @@ func _build_ambac(root: Node3D) -> void:
 		j.min_angle_deg = a[4]
 		j.max_angle_deg = a[5]
 		j.priority = a[6]
-		if j.bone_name.begins_with("thigh") or j.bone_name.begins_with("shin") \
-				or j.bone_name.begins_with("foot"):
+		if j.bone_name.begins_with("thigh") or j.bone_name.begins_with("shin"):
 			j.max_rate_deg = 150.0   # legs swing well beyond balancing travel for stances
 			j.max_accel_deg = 600.0
 		# Legs and waist are rated for the torque they were tuned with (table inertia × max

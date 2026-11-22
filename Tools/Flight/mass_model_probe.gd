@@ -111,7 +111,7 @@ func _drive_limbs(dt: float) -> void:
 				["thigh.L", Vector3.RIGHT, 25.0], ["shin.L", Vector3.RIGHT, -35.0]]
 	elif t >= 3.5 and t < 6.0:
 		poses = [["thigh.R", Vector3.RIGHT, 70.0], ["shin.R", Vector3.RIGHT, -95.0],
-				["foot.R", Vector3.RIGHT, -30.0], ["thigh.L", Vector3.RIGHT, 10.0], ["shin.L", Vector3.RIGHT, -15.0]]
+				["thigh.L", Vector3.RIGHT, 10.0], ["shin.L", Vector3.RIGHT, -15.0]]
 	for i in ambac.joints.size():
 		ambac.set_target(i, 0.0)
 	for p in poses:

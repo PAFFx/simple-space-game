@@ -327,7 +327,7 @@ the stance. Releasing the stick returns to neutral; the limb swinging back helps
 Only free limbs move: groups occupied by active equipment or hard-locked
 (`AmbacController.lock_group`) are skipped and held at their target. ν stances (legs only):
 **climb** (legs forward, knees bent), **strafe left/right** (raise the leg on that side high,
-hip ~70°, knee tucked ~95°, toe pointed), **forward** (legs trail), **back** (legs forward). There's no descend stance: bending the
+hip ~70°, knee tucked ~95°), **forward** (legs trail), **back** (legs forward). There's no descend stance: bending the
 legs made descents worse. Capability-map rebuilds per stance are available but off (too costly).
 Without boost a stance uses 40% of its angles (`normal_scale`; normal moves barely tilt the
 suit), with boost (Shift) the full pose; pressing or releasing Shift mid-move eases between them.
@@ -383,13 +383,13 @@ so it saved propellant but never made the suit turn faster.
 |---|---|---|
 | Hip | flex −30…+85°, side −3…+6° (outward), twist ±15° | 1.6e5 (leg), 2e4 twist |
 | Knee | bend back up to 110°, straighten 5° | 4.5e4 |
-| Ankle | toe down 40°, up 30° | 6e3 |
 | Shoulder | flex −35…+45°, out −8…+35°, twist ±25° | 6e4, 1e4 twist |
 | Elbow | bend up to 50°, straighten 5° | 2.5e4 |
 | Forearm | twist ±30° about the bone (also the roll the rifle draw uses), priority 0.3 | 4e3 |
 | Waist | twist ±12°, bend −10…+6° | 1.2e5 / 1.5e5 |
 
-Legs and ankles move at up to 150°/s (600°/s²) for stances; the side hip swing is kept small. Twists move little mass; they mostly add natural motion.
+Legs move at up to 150°/s (600°/s²) for stances; the side hip swing is kept small. Twists move little mass; they mostly add natural motion.
+The ankles aren't AMBAC joints on the ν: the feet follow their sole nozzles (below).
 
 **Rate loop.** Steering and stops were limited by a gentle rate loop (2.5 /s), not by torque, so
 `rate_gain` is now 5 /s and `stop_gain_multiplier` 2.5. Auto-rotation keeps its own gentler gain
@@ -624,7 +624,7 @@ texture), and most can't aim far, so limbs have to move to point them:
 | Thrusters | Where | Fires | Vectoring |
 |---|---|---|---|
 | 4 × 1588 kN mains (the model's own nozzles, in two pods that pivot with them) | backpack, 2 per side, stacked | down, back | pod 2D fore/aft, 8°–78° back (nearly straight down for a climb, short of horizontal so the suit pitches nose-down to drive forward), swings at 90°/s; each nozzle also swings up to 10° sideways on its own, at 240°/s (`Thruster.gimbal_yaw_rate_deg`), outward only (`gimbal_yaw_bias_deg`; the hyper bazooka sits between the pods): the cups nearly fill their channel in the pod (0.88 m in 0.90 m) |
-| 2 × 635 kN | soles | down | 3D, 30° cone |
+| 2 × 635 kN | soles | down | 3D, 30° cone; the foot eases after it |
 | 2 × 635 kN (the model's own nozzles, in their calf plates) | behind each calf | down, a little back | 2D with the plate, 0…40° back only (never into the leg) |
 | 4 × 762 kN | shoulder armor, 2 per side (same nozzle) | up-and-out / out-and-down | top: 2D from 10° below rest to 45° up (nearly straight up); outer: 2D fore/aft ±25° |
 | 2 × 1048 kN (with the mains, nearest the generator) | chest vents | forward (brakes) | 2D up/down ±20° |
@@ -643,6 +643,13 @@ the armor, and the main and calf nozzles are the model's own, moved by `Thruster
   pod, pivoting at its throat, and turns with its thruster's own sideways swing
   (`ThrusterGuard.follow_yaw`, reading `Thruster.get_yaw()`), so the 10° outward swing shows on
   the mesh, not just in the plume.
+- **Feet** (`foot.*`, `ThrusterGuard.follow_aim`): each foot carries its sole nozzle, which keeps
+  its own 30° gimbal (240°/s), and eases after the nozzle's aim: 60% of it, low-passed (0.4 s),
+  at most 60°/s, only while the sole fires (full from 30% throttle), within the ankle travel
+  that clears the shin (toe down 40°, up 30°, tilt ±15°; `Tools/Flight/foot_clip_probe.gd`).
+  Following the aim exactly (the foot as the nozzle) looked jittery: ~50°/s rms, peaks over
+  100°/s; eased, ~10°/s rms, peaks ~30°/s. The foot's turn adds to the nozzle's reach; flight
+  results are the same as without it (strafe t90 0.98 → 0.90 s).
 - **Plumes**: backpack 16 m (the biggest), chest 10, calves 4.5, shoulders and soles 3, small
   ports 1–1.6. Slot-shaped ports (chest, rear skirts, shins) get a flat plume along the slot
   (`Thruster.plume_slot`).

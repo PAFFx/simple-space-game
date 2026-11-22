@@ -10,6 +10,16 @@ extends Resource
 @export var thrusters: PackedStringArray = []
 ## Follow the nozzle's full aim (a nozzle on a ball joint) instead of one hinge axis.
 @export var full_rotation: bool = false
+## The bone carries its thruster (a foot with its sole port) and eases toward where the
+## nozzle aims, `follow` of the way, within min/max_angle_deg (fore/aft, + toward the
+## thruster's local +Y) and ±side_limit_deg (sideways), only while the thruster fires.
+## Low-passed by smoothing_time and held under max_rate_deg. The nozzle keeps its own
+## gimbal on top, so the thrust never waits for the limb.
+@export var follow_aim: bool = false
+@export var side_limit_deg: float = 15.0
+@export var max_rate_deg: float = 60.0
+## Throttle over which the limb follows fully; below it the target fades back to neutral.
+@export var full_follow_throttle: float = 0.3
 ## Thrust direction the modelled nozzle points at rest (skeleton space), if it differs
 ## from its thruster's nominal direction. Zero = the same.
 @export var rest_thrust := Vector3.ZERO
