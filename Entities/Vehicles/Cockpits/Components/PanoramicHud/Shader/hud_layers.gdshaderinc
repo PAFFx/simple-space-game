@@ -76,9 +76,8 @@ uniform vec4 hud_contact_hostile_color : source_color, color_conversion_disabled
 // down) far finer than the HUD canvas, shown beside the triangle's lower right side.
 uniform sampler2D hud_contact_labels : source_color, hint_default_transparent, filter_linear;
 const vec2 HUD_CONTACT_SLOTS = vec2(2.0, 8.0);
-// x = the slot whose text moves right (the locked target's, -1 = none), y = to this many
-// degrees from its middle: outside the gun solution circle.
-uniform vec2 hud_contact_label_shift = vec2(-1.0, 0.0);
+// The locked target's slot (-1 = none): drawn on its own, over the per-frame canvas.
+uniform int hud_contact_locked = -1;
 // Size of a slot on the screen, deg.
 const vec2 HUD_CONTACT_LABEL_DEG = vec2(10.0, 5.0);
 uniform float hud_control_scale = 1.0;
@@ -336,102 +335,130 @@ float hud_triangle_corner(vec2 p, float r) {
 }
 
 
-// Every contact: three bars along the triangle's sides, short of its corners. Hostile adds
+// `d` from a contact's middle, deg, y up.
+vec2 hud_contact_offset(vec3 d, vec3 c) {
+	vec3 up = vec3(0.0, 1.0, 0.0) - c * c.y;
+	up = dot(up, up) < 1e-6 ? vec3(0.0, 0.0, 1.0) - c * c.z : up;
+	up = normalize(up);
+	vec3 right = cross(c, up);
+	return degrees(atan(vec2(dot(d, right), dot(d, up)) / dot(d, c)));
+}
+
+
+// Where `offset` falls in a contact's text block (0-1 across and down inside it). Its top
+// left corner as ContactsWidget._label_rect has it.
+vec2 hud_contact_label_uv(vec2 offset, vec4 at, vec4 state) {
+	vec2 label_at = state.w > 0.5 ? vec2(at.w + 0.6, at.w) : vec2(at.w * 0.62 + 0.5, 1.0 - at.w * 0.3);
+	vec2 uv = (offset - label_at) / HUD_CONTACT_LABEL_DEG;
+	return vec2(uv.x, -uv.y);
+}
+
+
+// One contact: three bars along the triangle's sides, short of its corners. Hostile adds
 // the corners of a smaller triangle inside; the locked one one or two strokes across each
 // corner outside.
+vec3 hud_contact(vec3 color, vec3 d, float brightness, float aa, int i) {
+	vec4 at = hud_contact_at[i];
+	vec4 state = hud_contact_state[i];
+	if (at.w <= 0.0 || dot(d, at.xyz) < state.z) {
+		return color;
+	}
+	vec2 offset = hud_contact_offset(d, at.xyz);
+	// Triangle units (1 = half a side), y up; `t` is the same turned point-up.
+	vec2 m = offset / at.w;
+	vec2 t = vec2(m.x, -m.y);
+	float unit_aa = aa / at.w;
+
+	// The text block: four taps across the pixel, as the atlas is finer than the screen.
+	bool box = state.w > 0.5;
+	vec2 label_uv = hud_contact_label_uv(offset, at, state);
+	if (label_uv.x > 0.0 && label_uv.x < 1.0 && label_uv.y > 0.0 && label_uv.y < 1.0) {
+		vec2 slot = vec2(mod(float(i), HUD_CONTACT_SLOTS.x), floor(float(i) / HUD_CONTACT_SLOTS.x));
+		vec2 uv = (slot + label_uv) / HUD_CONTACT_SLOTS;
+		vec2 spread = aa / 0.7 / HUD_CONTACT_LABEL_DEG / HUD_CONTACT_SLOTS * 0.25;
+		vec4 label = texture(hud_contact_labels, uv + spread) + texture(hud_contact_labels, uv - spread)
+				+ texture(hud_contact_labels, uv + vec2(spread.x, -spread.y))
+				+ texture(hud_contact_labels, uv + vec2(-spread.x, spread.y));
+		label *= 0.25;
+		color = mix(color, label.rgb * brightness, label.a);
+	}
+
+	// Strokes keep a least width however small the triangle is drawn.
+	float thin = 0.05 / at.w;
+
+	float marks = floor(state.y + 0.001);
+	float solid = step(0.5, fract(state.y + 0.001));
+	float bars;
+	float hostile = 1e9;
+	float lock = 1e9;
+	if (box) {
+		// A big contact: a bracket at each corner of a square, laid out in degrees.
+		vec2 pd = abs(m) * at.w;
+		float len = clamp(at.w * 0.3, 1.5, 5.0);
+		float edge = max(pd.x, pd.y) - at.w;
+		float from_corner = max(at.w - pd.x, at.w - pd.y);
+		bars = max(abs(edge + 0.3) - 0.22, from_corner - len) / at.w;
+		if (state.x > 0.5) {
+			hostile = max(abs(edge + 1.3) - 0.07, from_corner - 1.3 - len * 0.55) / at.w;
+		}
+		if (marks > 0.5) {
+			// Strokes outside the middle of each side.
+			vec2 out_d = pd - at.w;
+			vec2 lines = (marks > 1.5 ? min(abs(out_d - 0.7), abs(out_d - 1.25)) : abs(out_d - 0.7)) - 0.07;
+			vec2 caps = max(lines, pd.yx - len * 0.6);
+			lock = min(caps.x, caps.y) / at.w;
+		}
+	} else {
+		float tri = hud_triangle(t, 1.0);
+		bars = max(abs(tri + 0.08) - max(0.05, thin), 0.5 - hud_triangle_corner(t, 1.0));
+		if (state.x > 0.5) {
+			float inner = hud_triangle(t, 0.6);
+			hostile = max(abs(inner + 0.03) - max(0.024, thin * 0.6), hud_triangle_corner(t, 0.6) - 0.36);
+		}
+		if (marks > 0.5) {
+			// Across each corner: along its bisector, mirrored in x.
+			vec2 q = vec2(abs(t.x), t.y);
+			vec2 along = vec2(dot(q, vec2(0.0, 1.0)), dot(q, vec2(0.866, -0.5)));
+			vec2 across = abs(vec2(q.x, dot(q, vec2(0.5, 0.866))));
+			vec2 lines = (marks > 1.5 ? min(abs(along - 1.36), abs(along - 1.52)) : abs(along - 1.36))
+					- max(0.028, thin * 0.6);
+			vec2 caps = max(lines, across - 0.3);
+			lock = min(caps.x, caps.y);
+		}
+	}
+	// The bars are a faint fill inside a fine border, so what's behind shows through.
+	float border_width = box ? 0.045 / at.w : max(0.012, thin * 0.4);
+	float border = abs(bars + border_width) - border_width;
+	float strokes = min(min(border, hostile), lock);
+
+	vec4 acc = vec4(0.0);
+	hud_ink(acc, hud_symbol_halo_color, hud_fill(strokes - hud_symbol_halo_deg / at.w, unit_aa));
+	hud_ink(acc, vec4(hud_contact_color.rgb, hud_contact_color.a * mix(hud_contact_fill, 1.0, solid)), hud_fill(bars, unit_aa));
+	hud_ink(acc, hud_contact_color, hud_fill(border, unit_aa));
+	hud_ink(acc, hud_contact_hostile_color, hud_fill(hostile, unit_aa));
+	hud_ink(acc, hud_contact_hostile_color, hud_fill(lock, unit_aa));
+	color = hud_compose(color, acc, brightness);
+	return color;
+}
+
+
+// Every contact but the locked one (hud_locked_contact draws it later, on top).
 vec3 hud_contacts(vec3 color, vec3 d, float brightness, float aa) {
 	for (int i = 0; i < HUD_CONTACT_MAX; i++) {
-		vec4 at = hud_contact_at[i];
-		vec4 state = hud_contact_state[i];
-		if (at.w <= 0.0 || dot(d, at.xyz) < state.z) {
-			continue;
+		if (i != hud_contact_locked) {
+			color = hud_contact(color, d, brightness, aa, i);
 		}
-		vec3 c = at.xyz;
-		vec3 up = vec3(0.0, 1.0, 0.0) - c * c.y;
-		up = dot(up, up) < 1e-6 ? vec3(0.0, 0.0, 1.0) - c * c.z : up;
-		up = normalize(up);
-		vec3 right = cross(c, up);
-		// Triangle units (1 = half a side), y up; `t` is the same turned point-up.
-		vec2 m = degrees(atan(vec2(dot(d, right), dot(d, up)) / dot(d, c))) / at.w;
-		vec2 t = vec2(m.x, -m.y);
-		float unit_aa = aa / at.w;
-
-		// The text block: four taps across the pixel, as the atlas is finer than the screen.
-		bool box = state.w > 0.5;
-		vec2 label_at = box ? vec2(at.w + 0.6, at.w) : vec2(at.w * 0.62 + 0.5, 1.0 - at.w * 0.3);
-		if (abs(float(i) - hud_contact_label_shift.x) < 0.5) {
-			label_at.x = max(label_at.x, hud_contact_label_shift.y);
-		}
-		vec2 label_uv = (m * at.w - label_at) / HUD_CONTACT_LABEL_DEG;
-		label_uv.y = -label_uv.y;
-		if (label_uv.x > 0.0 && label_uv.x < 1.0 && label_uv.y > 0.0 && label_uv.y < 1.0) {
-			vec2 slot = vec2(mod(float(i), HUD_CONTACT_SLOTS.x), floor(float(i) / HUD_CONTACT_SLOTS.x));
-			vec2 uv = (slot + label_uv) / HUD_CONTACT_SLOTS;
-			vec2 spread = aa / 0.7 / HUD_CONTACT_LABEL_DEG / HUD_CONTACT_SLOTS * 0.25;
-			vec4 label = texture(hud_contact_labels, uv + spread) + texture(hud_contact_labels, uv - spread)
-					+ texture(hud_contact_labels, uv + vec2(spread.x, -spread.y))
-					+ texture(hud_contact_labels, uv + vec2(-spread.x, spread.y));
-			label *= 0.25;
-			color = mix(color, label.rgb * brightness, label.a);
-		}
-
-		// Strokes keep a least width however small the triangle is drawn.
-		float thin = 0.05 / at.w;
-
-		float marks = floor(state.y + 0.001);
-		float solid = step(0.5, fract(state.y + 0.001));
-		float bars;
-		float hostile = 1e9;
-		float lock = 1e9;
-		if (box) {
-			// A big contact: a bracket at each corner of a square, laid out in degrees.
-			vec2 pd = abs(m) * at.w;
-			float len = clamp(at.w * 0.3, 1.5, 5.0);
-			float edge = max(pd.x, pd.y) - at.w;
-			float from_corner = max(at.w - pd.x, at.w - pd.y);
-			bars = max(abs(edge + 0.3) - 0.22, from_corner - len) / at.w;
-			if (state.x > 0.5) {
-				hostile = max(abs(edge + 1.3) - 0.07, from_corner - 1.3 - len * 0.55) / at.w;
-			}
-			if (marks > 0.5) {
-				// Strokes outside the middle of each side.
-				vec2 out_d = pd - at.w;
-				vec2 lines = (marks > 1.5 ? min(abs(out_d - 0.7), abs(out_d - 1.25)) : abs(out_d - 0.7)) - 0.07;
-				vec2 caps = max(lines, pd.yx - len * 0.6);
-				lock = min(caps.x, caps.y) / at.w;
-			}
-		} else {
-			float tri = hud_triangle(t, 1.0);
-			bars = max(abs(tri + 0.08) - max(0.05, thin), 0.5 - hud_triangle_corner(t, 1.0));
-			if (state.x > 0.5) {
-				float inner = hud_triangle(t, 0.6);
-				hostile = max(abs(inner + 0.03) - max(0.024, thin * 0.6), hud_triangle_corner(t, 0.6) - 0.36);
-			}
-			if (marks > 0.5) {
-				// Across each corner: along its bisector, mirrored in x.
-				vec2 q = vec2(abs(t.x), t.y);
-				vec2 along = vec2(dot(q, vec2(0.0, 1.0)), dot(q, vec2(0.866, -0.5)));
-				vec2 across = abs(vec2(q.x, dot(q, vec2(0.5, 0.866))));
-				vec2 lines = (marks > 1.5 ? min(abs(along - 1.36), abs(along - 1.52)) : abs(along - 1.36))
-						- max(0.028, thin * 0.6);
-				vec2 caps = max(lines, across - 0.3);
-				lock = min(caps.x, caps.y);
-			}
-		}
-		// The bars are a faint fill inside a fine border, so what's behind shows through.
-		float border_width = box ? 0.045 / at.w : max(0.012, thin * 0.4);
-		float border = abs(bars + border_width) - border_width;
-		float strokes = min(min(border, hostile), lock);
-
-		vec4 acc = vec4(0.0);
-		hud_ink(acc, hud_symbol_halo_color, hud_fill(strokes - hud_symbol_halo_deg / at.w, unit_aa));
-		hud_ink(acc, vec4(hud_contact_color.rgb, hud_contact_color.a * mix(hud_contact_fill, 1.0, solid)), hud_fill(bars, unit_aa));
-		hud_ink(acc, hud_contact_color, hud_fill(border, unit_aa));
-		hud_ink(acc, hud_contact_hostile_color, hud_fill(hostile, unit_aa));
-		hud_ink(acc, hud_contact_hostile_color, hud_fill(lock, unit_aa));
-		color = hud_compose(color, acc, brightness);
 	}
 	return color;
+}
+
+
+vec3 hud_locked_contact(vec3 color, vec3 d, float brightness) {
+	float aa = degrees(length(fwidth(d))) * 0.7;
+	if (hud_contact_locked < 0) {
+		return color;
+	}
+	return hud_contact(color, d, brightness, aa, hud_contact_locked);
 }
 
 

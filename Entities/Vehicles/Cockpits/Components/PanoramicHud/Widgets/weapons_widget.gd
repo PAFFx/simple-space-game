@@ -94,8 +94,6 @@ func draw_widget() -> void:
 			return
 		hud.set_hud_parameter(&"zoom_frame_color", hud.primary_color)
 	_body = hud.vehicle.get_global_transform_interpolated().basis.orthonormalized()
-	if _contacts != null:
-		_contacts.locked_label_x = 0.0
 	_draw_status()
 	if _fcs.is_cursor_shown():
 		_draw_cursor()
@@ -296,9 +294,6 @@ func _draw_gun_circle(weapon: MsWeapon) -> void:
 	var ready := weapon.state == MsWeapon.State.READY and not weapon.masked
 	var c := hud.primary_color if ready else PanoramicHud.dimmed(hud.primary_color)
 	var at := patch(centre, Vector3.UP)
-	var off := _in_patch(patch(hud.world_to_display(target).normalized(), Vector3.UP), centre)
-	if _contacts != null:
-		_contacts.locked_label_x = radius + maxf(off.x, 0.0) + 0.5
 	# Outer ring broken in four, an inner ring broken in two, offset.
 	var gap := deg_to_rad(9.0)
 	for k in 4:

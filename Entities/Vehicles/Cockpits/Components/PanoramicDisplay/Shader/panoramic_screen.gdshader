@@ -303,6 +303,7 @@ void fragment() {
 		vec2 hud_uv = vec2(fract(UV2.x + 0.5), 1.0 - UV2.y);
 		vec4 hud = texture(hud_texture, hud_uv);
 		color = mix(color, hud.rgb * hud_brightness, hud.a);
+		color = hud_locked_contact(color, local_dir, hud_brightness);
 		color = mix(color, mix(under_hud, color, zoom_hud_alpha), zoom_inside(local_dir) * zoom_reveal);
 		color = composite_zoom_frame(color, local_dir, hud_brightness, degrees(length(fwidth(local_dir))) * 0.7);
 	}
