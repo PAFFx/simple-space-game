@@ -91,6 +91,12 @@ uniform vec4 hud_aux_line = vec4(0.0);
 uniform vec4 hud_aux_color : source_color, color_conversion_disabled = vec4(0.0);
 uniform float hud_aux_half_width = 0.1;
 
+// Gun circle (WeaponsWidget): its patch frame (display → right, up, centre), the outer and
+// inner ring radii and line half widths, deg; its colour (alpha 0 = hidden).
+uniform mat3 hud_gun_frame = mat3(1.0);
+uniform vec4 hud_gun_ring = vec4(0.0);
+uniform vec4 hud_gun_color : source_color, color_conversion_disabled = vec4(0.0);
+
 
 vec2 hud_layer_uv(mat3 frame, vec3 local_dir) {
 	vec3 d = frame * local_dir;
@@ -185,6 +191,41 @@ vec3 hud_aux(vec3 color, vec3 local_dir, float brightness, float aa) {
 	vec4 acc = vec4(0.0);
 	hud_ink(acc, hud_symbol_halo_color, hud_fill(max(across - hud_aux_half_width - hud_symbol_halo_deg, ends), aa));
 	hud_ink(acc, hud_aux_color, hud_fill(max(across - hud_aux_half_width, ends), aa));
+	return hud_compose(color, acc, brightness);
+}
+
+
+// The gun circle: an outer ring broken in four (arcs from 20° + gap each quarter) and an
+// inner ring broken in two (from 65° + 2 gaps each half), as WeaponsWidget drew them with
+// patch_arc, the inner one at 45% opacity, both with a halo.
+vec3 hud_gun(vec3 color, vec3 local_dir, float brightness, float aa) {
+	if (hud_gun_color.a <= 0.0) {
+		return color;
+	}
+	vec3 d = hud_gun_frame * local_dir;
+	if (d.z < 0.5) {
+		return color;
+	}
+	vec2 p = degrees(vec2(atan(d.x, d.z), atan(d.y, d.z)));
+	float rr = length(p);
+	float halo = hud_symbol_halo_deg;
+	float reach = halo + aa * 2.0;
+	if (abs(rr - hud_gun_ring.x) > hud_gun_ring.z + reach && abs(rr - hud_gun_ring.y) > hud_gun_ring.w + reach) {
+		return color;
+	}
+	float th = atan(p.y, p.x);
+	const float GAP = 0.15707963;   // 9°
+	float to = mod(th - 0.34906585, 1.5707963);   // from 20°, per quarter
+	float outer_cut = max(GAP - to, to - (1.5707963 - GAP)) * hud_gun_ring.x;
+	float ti = mod(th - 1.1344640, 3.1415927);    // from 65°, per half
+	float inner_cut = max(2.0 * GAP - ti, ti - (3.1415927 - 2.0 * GAP)) * hud_gun_ring.y;
+	float outer = abs(rr - hud_gun_ring.x);
+	float inner = abs(rr - hud_gun_ring.y);
+	vec4 acc = vec4(0.0);
+	hud_ink(acc, hud_symbol_halo_color, hud_fill(max(outer - hud_gun_ring.z - halo, outer_cut), aa));
+	hud_ink(acc, hud_gun_color, hud_fill(max(outer - hud_gun_ring.z, outer_cut), aa));
+	hud_ink(acc, hud_symbol_halo_color, hud_fill(max(inner - hud_gun_ring.w - halo, inner_cut), aa));
+	hud_ink(acc, vec4(hud_gun_color.rgb, hud_gun_color.a * 0.45), hud_fill(max(inner - hud_gun_ring.w, inner_cut), aa));
 	return hud_compose(color, acc, brightness);
 }
 
@@ -528,5 +569,6 @@ vec3 hud_layers(vec3 color, vec3 local_dir, float brightness) {
 	color = hud_control(color, local_dir, brightness, aa);
 	color = hud_fpm(color, local_dir, brightness, aa);
 	color = hud_contacts(color, local_dir, brightness, aa);
+	color = hud_gun(color, local_dir, brightness, aa);
 	return color;
 }
