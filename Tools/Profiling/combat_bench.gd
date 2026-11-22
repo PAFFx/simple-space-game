@@ -6,12 +6,13 @@ extends SceneTree
 #
 #   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off state=floating
 #   godot-double --path . --resolution 1280x720 -s Tools/Profiling/combat_bench.gd -- \
-#       [drones=6] [lock=1] [seconds=8] [silence=<path>]
+#       [drones=6] [lock=1] [seconds=8] [silence=<path>] [viewports=1]
 #
 # silence: a node path under the suit (e.g. FireControl, CockpitMount, or a HUD widget as
 # CockpitMount/<cockpit>/PanoramicHud/HudViewport/Contacts), Stage/<child> or drones; that subtree's
 # process and physics processing are turned off for the measurement, so its cost is the
-# difference to a run without it. Prints one BENCH line.
+# difference to a run without it. Prints one BENCH line; viewports=1 adds each viewport's
+# measured render time (CPU submission and GPU), the busiest first.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 
@@ -28,6 +29,9 @@ var _drones := 6
 var _lock := true
 var _seconds := 8.0
 var _silence := ""
+var _viewports := false
+var _vps: Array[Viewport] = []
+var _vp_time := {}
 var _suit: RigidBody3D
 var _input := ScriptedInput.new()
 var _measuring := false
@@ -47,6 +51,7 @@ func _initialize() -> void:
 			"lock": _lock = value != "0"
 			"seconds": _seconds = float(value)
 			"silence": _silence = value
+			"viewports": _viewports = value != "0"
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
 	_run.call_deferred()
@@ -120,6 +125,12 @@ func _run() -> void:
 			n.set_process_internal(false)
 			n.set_physics_process_internal(false)
 	await _frames(120)
+	if _viewports:
+		_vps.append(root)
+		for n in root.find_children("*", "SubViewport", true, false):
+			_vps.append(n)
+		for vp in _vps:
+			RenderingServer.viewport_set_measure_render_time(vp.get_viewport_rid(), true)
 	process_frame.connect(_on_process)
 	physics_frame.connect(_on_physics)
 	RenderingServer.frame_pre_draw.connect(func() -> void: _t.pre = Time.get_ticks_usec())
@@ -134,6 +145,16 @@ func _run() -> void:
 	print("BENCH %-40s frame %.2f ms (%.0f fps)  physics %.2f ms/step (%.2f steps/frame)  process %.2f  draw %.2f" % [
 			_silence if _silence != "" else "baseline", _acc.frame / 1000.0 / f, 1000000.0 * f / _acc.frame,
 			_acc.physics / 1000.0 / s, s / f, _acc.process / 1000.0 / f, _acc.draw / 1000.0 / f])
+	if _viewports:
+		var rows := []
+		for vp in _vps:
+			var v: Vector2 = _vp_time.get(vp, Vector2.ZERO) / f
+			rows.append([vp, v])
+		rows.sort_custom(func(a: Array, b: Array) -> bool: return a[1].x + a[1].y > b[1].x + b[1].y)
+		for r in rows:
+			var vp: Viewport = r[0]
+			var size := (vp as SubViewport).size if vp is SubViewport else Vector2i(vp.get_visible_rect().size)
+			print("VIEWPORT %-34s %4dx%-4d cpu %.3f ms  gpu %.3f ms" % [String(vp.name), size.x, size.y, r[1].x, r[1].y])
 	quit()
 
 
@@ -164,6 +185,11 @@ func _on_post() -> void:
 		if _last_post > 0:
 			_acc.frame += now - _last_post
 		_acc.frames += 1
+		for vp in _vps:
+			var rid := vp.get_viewport_rid()
+			_vp_time[vp] = _vp_time.get(vp, Vector2.ZERO) + Vector2(
+					RenderingServer.viewport_get_measured_render_time_cpu(rid),
+					RenderingServer.viewport_get_measured_render_time_gpu(rid))
 	_last_post = now
 
 
