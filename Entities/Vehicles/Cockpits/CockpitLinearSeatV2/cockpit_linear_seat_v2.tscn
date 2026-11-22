@@ -63,7 +63,7 @@ right_ball = NodePath("../Model/SeatSwing/GripR/BallR")
 left_pedal = NodePath("../Model/SeatSwing/PedalL")
 right_pedal = NodePath("../Model/SeatSwing/PedalR")
 pedal_travel_deg = 26.0
-pedal_stroke = 0.06
+pedal_stroke = 0.03
 smoothing = 0.05
 
 [node name="PanoramicHud" parent="." instance=ExtResource("5_hud")]

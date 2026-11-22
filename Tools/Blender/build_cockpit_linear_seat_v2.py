@@ -83,7 +83,9 @@ GRIP_PIVOT = Vector((0.305, 0.275, DECK_TOP))   # right; the ball centre is BALL
 BALL_R = 0.042
 BASE_H = 0.03
 BALL_UP = BASE_H + BALL_R + 0.004
-PEDAL_PIVOT = Vector((0.085, 0.4, -0.975))      # right heel hinge
+# Set forward and up for the short pilot: her knees stop short of the cushion's front edge,
+# so her shins slope forward to clear it.
+PEDAL_PIVOT = Vector((0.085, 0.52, -0.835))     # right heel hinge
 PEDAL_TILT = math.radians(24.0)
 RAIL_SLOPE = 0.0494 / 0.42                       # the pedal rail's rise per metre forward
 
