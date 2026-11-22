@@ -3,6 +3,7 @@ linear-seat boom, ball controllers on the
 armrest decks, a three-panel monitor array and sliding foot pedals.
 
 Run:  blender -b -P Tools/Blender/build_cockpit_linear_seat_v2.py -- <output.glb> [--aperture EL,HALF_AZ,HALF_EL]
+          [--controller ball|rail]
 
 Origin = centre of the panoramic sphere; the pilot's eye is 8 cm in front of it. The seat
 is a normal adult seat; what is fitted to the pilot is where it stands and how its
@@ -19,6 +20,11 @@ Node names are the contract with the Godot components (same as the linear seat):
   GripL / GripR        ball controller units (base, cradle, lever arm)
   BallL / BallR        the balls (children of the units), origin at their centre: the
                        part Godot turns
+  --controller rail: GripL / GripR are rail plates instead, carrying
+  SlideL/R             the carriage (Godot slides it along local y), which carries
+  RollL/R              the hinge knuckle and upright, origin on the fore-aft hinge pin
+                       (Godot rolls it about local y), which carries
+  BarL/R               the crossbar grip, origin on its axis (Godot twists it about local x)
   PedalL / PedalR      origin on the heel hinge (Godot slides and tilts them)
   ScreenCentre/Left/Right, InnerDoorL/R
   HatchLock            the hatch lock handle, origin on its hinge (Godot lifts it)
@@ -85,6 +91,16 @@ BASE_H = 0.03
 BALL_UP = BASE_H + BALL_R + 0.004
 # Set forward and up for the short pilot: her knees stop short of the cushion's front edge,
 # so her shins slope forward to clear it.
+# Controller: "ball" (the ball controllers) or "rail" (after the RX-0's: a crossbar grip on a
+# turntable whose carriage slides fore and aft on a rail along the armrest), --controller.
+CONTROLLER = ["ball"]
+RAIL_Y = (0.12, 0.338)       # the rail plate's span on the deck
+RAIL_REST_Y = 0.235          # the turntable's axis at rest (it slides ±0.06 from here)
+RAIL_PLATE = 0.008
+ROLL_PIVOT = 0.03            # the roll hinge's pin above the plate
+BAR_UP = 0.075               # the bar's axis above the deck
+BAR_R = 0.0155
+BAR_OUT, BAR_IN = 0.039, 0.046   # the grip's span either side of the axis (out to the upright)
 PEDAL_PIVOT = Vector((0.085, 0.52, -0.835))     # right heel hinge
 PEDAL_TILT = math.radians(24.0)
 RAIL_SLOPE = 0.0494 / 0.42                       # the pedal rail's rise per metre forward
@@ -110,6 +126,7 @@ def materials():
         "strip": mk.make_material("CP_LightStrip", (0.1, 0.3, 0.5), emission=(0.3, 0.75, 1.0), strength=3.0),
         "screen": mk.make_material("CP_Screen", (0.01, 0.03, 0.05), emission=(0.04, 0.18, 0.32), strength=1.0),
         "label": mk.make_material("CP_Label", (0.86, 0.87, 0.84), roughness=0.6),
+        "rail_light": mk.make_material("CP_RailLight", (0.08, 0.01, 0.01), emission=(1.0, 0.0, 0.01), strength=1.2),
     }
 
 
@@ -513,8 +530,77 @@ def build_ball(side, s, m):
     return unit_obj, ball
 
 
+def build_rail_grip(side, s, m):
+    """Rail controller, after the RX-0's: the unit (Grip<side>) is a plate on the deck with
+    a slot down its middle; in it rides Slide<side> (carriage, base and the clevis of a
+    fore-aft hinge; slides along local y), which carries Roll<side> (the hinge knuckle and
+    the upright, origin on the hinge pin, rolls about local y like a stick deflected left /
+    right), which carries Bar<side> (the crossbar grip, origin on its axis, twists about
+    local x). The bar runs in from the upright, the hand over it palm down, thumb on the
+    inner end cap with its buttons. Godot moves the three; returns (unit, bar).
+    RailLamps<side> (fixed, origin at the carriage's rest point) is one mesh of every lamp
+    on the plate either side of the slot, every 6 mm from its rear end: Godot's lamp shader
+    lights those behind the carriage and leaves the rest black."""
+    origin = Vector((GRIP_PIVOT.x * s, RAIL_REST_Y, DECK_TOP))
+    y0, y1 = RAIL_Y[0] - RAIL_REST_Y, RAIL_Y[1] - RAIL_REST_Y
+    unit = Part(f"Grip{side}", m)
+    unit.rbox((0, (y0 + y1) * 0.5, RAIL_PLATE * 0.5), (0.074, y1 - y0, RAIL_PLATE), "dark", r=0.003)
+    unit.box((0, (y0 + y1) * 0.5, RAIL_PLATE + 0.0004), (0.016, y1 - y0 - 0.03, 0.001), "grip")   # slot
+    for k in (1.0, -1.0):
+        unit.rbox((0.029 * k, (y0 + y1) * 0.5, RAIL_PLATE + 0.002), (0.008, y1 - y0 - 0.012, 0.005), "tube", r=0.0015)
+    for y in (y0 + 0.006, y1 - 0.006):                                         # end stops
+        unit.rbox((0, y, RAIL_PLATE + 0.004), (0.05, 0.008, 0.009), "frame", r=0.002)
+    for i in range(-3, 4):                                                     # travel scale, outboard
+        unit.box((0.034 * s, 0.02 * i, RAIL_PLATE + 0.0002), (0.006 if i else 0.01, 0.0015, 0.0008), "yellow" if i == 0 else "label")
+    unit_obj = unit.to_object(location=origin, chamfer=0.001, local=True)
+    lamps = Part(f"RailLamps{side}", m)
+    y = y0 + 0.014
+    while y < y1 - 0.012:                          # either side of the slot, between the side rails
+        for k in (1.0, -1.0):
+            lamps.rbox((0.0165 * k, y, 0), (0.0135, 0.0038, 0.0009), "rail_light", r=0.0003)
+        y += 0.006
+    parent_keep(lamps.to_object(location=origin + Vector((0, 0, RAIL_PLATE + 0.00045)), chamfer=0.0, local=True), unit_obj)
+
+    slide = Part(f"Slide{side}", m)
+    slide.rbox((0, 0, 0.002), (0.024, 0.07, 0.006), "frame", r=0.002)                # shoe in the slot
+    slide.cylinder((0, 0, 0.007), 0.028, 0.008, "dark", segments=32)
+    for k in (1.0, -1.0):                                                     # clevis cheeks
+        slide.rbox((0, 0.017 * k, (0.011 + ROLL_PIVOT + 0.008) * 0.5), (0.026, 0.006, ROLL_PIVOT - 0.003), "dark", r=0.002)
+    slide.rod((0, -0.021, ROLL_PIVOT), (0, 0.021, ROLL_PIVOT), 0.005, "tube", 12)   # hinge pin
+    slide_obj = slide.to_object(location=origin + Vector((0, 0, RAIL_PLATE)), chamfer=0.001, local=True)
+    parent_keep(slide_obj, unit_obj)
+
+    bar_z = BAR_UP - RAIL_PLATE - ROLL_PIVOT                                  # the bar above the pin
+    upright_x = (BAR_OUT + 0.011) * s
+    roll = Part(f"Roll{side}", m)
+    roll.rod((0, -0.0135, 0), (0, 0.0135, 0), 0.011, "frame", 20)                 # hinge knuckle
+    roll.rbox((0, 0.0138, 0.0075), (0.003, 0.0012, 0.006), "yellow", r=0.0004)    # roll index
+    roll.rbox((upright_x * 0.55, 0, 0.006), (abs(upright_x) + 0.02, 0.026, 0.012), "dark", r=0.005)
+    roll.rbox((upright_x, 0, (-0.004 + bar_z + 0.016) * 0.5), (0.022, 0.034, bar_z + 0.02), "dark", r=0.008)
+    roll.rod((upright_x - 0.012 * s, 0, bar_z), (upright_x + 0.013 * s, 0, bar_z), 0.017, "tube", 20)   # bearing
+    roll_obj = roll.to_object(location=origin + Vector((0, 0, RAIL_PLATE + ROLL_PIVOT)), chamfer=0.0012, local=True)
+    parent_keep(roll_obj, slide_obj)
+
+    bar = Part(f"Bar{side}", m)
+    bar.rod((BAR_OUT * s, 0, 0), (-BAR_IN * s, 0, 0), BAR_R, "grip", 24)
+    for i in range(1, 4):                                                     # finger ridges
+        x = (BAR_OUT - (BAR_OUT + BAR_IN) * i / 4) * s
+        bar.rod((x - 0.002, 0, 0), (x + 0.002, 0, 0), BAR_R + 0.0012, "grip", 24)
+    bar.rod((BAR_OUT * s, 0, 0), ((BAR_OUT - 0.006) * s, 0, 0), BAR_R + 0.003, "frame", 24)   # collar
+    bar.rbox(((BAR_OUT - 0.003) * s, 0, BAR_R + 0.0028), (0.003, 0.005, 0.0012), "yellow", r=0.0004)   # twist index
+    cap = -(BAR_IN + 0.011) * s
+    bar.rbox((cap, -0.002, 0.004), (0.022, 0.042, 0.04), "dark", r=0.007)
+    bar.rod((cap, 0.004, 0.024 - 0.002), (cap, 0.004, 0.024 + 0.003), 0.0075, "red", 14)        # top: trigger
+    for by, bz, mat in ((-0.0235, 0.012, "tube"), (-0.0235, -0.004, "tube")):                     # rear: thumb
+        bar.rod((cap, by + 0.002, bz), (cap, by - 0.003, bz), 0.0055, mat, 12)
+    bar_obj = bar.to_object(location=origin + Vector((0, 0, BAR_UP)), chamfer=0.0012, local=True)
+    parent_keep(bar_obj, roll_obj)
+    return unit_obj, bar_obj
+
+
 def build_arms(m):
     parts = []
+    rail = CONTROLLER[0] == "rail"
     for side, s in (("R", 1.0), ("L", -1.0)):
         arm = Part(f"Armrest{side}", m)
         # The forearm lies along it with the controller at its front.
@@ -523,8 +609,11 @@ def build_arms(m):
         y0, y1 = DECK_Y
         arm.rbox((cx, (y0 + y1) * 0.5, DECK_TOP - 0.024), (w, y1 - y0, 0.048), "frame", r=0.014)
         arm.rbox((cx, (y0 + y1) * 0.5 - 0.01, DECK_TOP - 0.058), (w - 0.06, y1 - y0 - 0.08, 0.03), "dark", r=0.01)
-        arm.rbox((GRIP_PIVOT.x * s, y0 + 0.14, DECK_TOP + 0.003), (0.085, 0.24, 0.014), "pad", r=0.006)     # forearm pad
-        arm.rbox((GRIP_PIVOT.x * s, GRIP_PIVOT.y - 0.045, DECK_TOP + 0.001), (0.094, 0.3, 0.004), "dark", r=0.0015)  # lever track
+        if rail:
+            arm.rbox((GRIP_PIVOT.x * s, y0 + 0.11, DECK_TOP + 0.003), (0.085, 0.18, 0.014), "pad", r=0.006)  # forearm pad
+        else:
+            arm.rbox((GRIP_PIVOT.x * s, y0 + 0.14, DECK_TOP + 0.003), (0.085, 0.24, 0.014), "pad", r=0.006)
+            arm.rbox((GRIP_PIVOT.x * s, GRIP_PIVOT.y - 0.045, DECK_TOP + 0.001), (0.094, 0.3, 0.004), "dark", r=0.0015)  # lever track
         arm.rbox((x1 * s - 0.004 * s, (y0 + y1) * 0.5, DECK_TOP - 0.02), (0.006, y1 - y0 - 0.06, 0.012), "strip", r=0.002)
         for i in range(2):                                 # hazard ticks along the front edge
             arm.rbox(((x0 + 0.03 + 0.04 * i) * s, y1 - 0.006, DECK_TOP - 0.022), (0.02, 0.004, 0.03), "yellow", r=0.001)
@@ -544,6 +633,18 @@ def build_arms(m):
         side_parts = parts if s > 0 else FIXED
         side_parts.append(arm.to_object())
 
+        if rail:
+            grip, bar = build_rail_grip(side, s, m)
+            side_parts.append(grip)
+            # Wrist target, riding on the bar: behind it and above, the palm lying on the
+            # bar, fingers forward over it and turned a little inward (they curl down round
+            # its front). Local +Y = fingers, +Z = back of the hand.
+            dip, turn = math.radians(6), math.radians(8)
+            fingers = Vector((-s * math.sin(turn) * math.cos(dip), math.cos(turn) * math.cos(dip), -math.sin(dip)))
+            back = (Vector((0, 0, 1)) - fingers * fingers.z).normalized()
+            wrist = Vector((GRIP_PIVOT.x * s + 0.004 * s, RAIL_REST_Y - 0.062, DECK_TOP + BAR_UP + 0.03))
+            empty(f"Hand{side}", frame_matrix(wrist, fingers.cross(back), fingers, back), bar)
+            continue
         grip, ball = build_ball(side, s, m)
         side_parts.append(grip)
         # Wrist target, riding on the ball: behind it and a little above its centre, the
@@ -791,6 +892,8 @@ def main():
     out = argv[0] if argv else "cockpit_linear_seat_v2.glb"
     if "--aperture" in argv:
         APERTURE[:] = [float(v) for v in argv[argv.index("--aperture") + 1].split(",")]
+    if "--controller" in argv:
+        CONTROLLER[0] = argv[argv.index("--controller") + 1]
 
     mk.reset_scene()
     m = materials()

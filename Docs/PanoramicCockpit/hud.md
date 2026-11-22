@@ -31,8 +31,6 @@ PanoramicHud (Node)
                         BOOST: faster, wider highlight, bars stretch; FULL: second highlight,
                         accent tint, a kick flash outward on engaging. BRAKE: highlight turns
                         inward, bars squeeze; HARD: stripes' lean flips, bars pulse
-    ├── ThrustCue       chevron columns inside both ladder columns while boosting (^ lit upward)
-                        or braking (v lit downward); doubled, faster, accent at FULL / HARD
     ├── FlightData      left column: G MS / G PLT / ROT / AMBAC over boxed SPD and Mach (dim);
                         non-default modes just inside the right ladder column; cautions
     ├── ThrusterStatus  mains row + vernier rows, bar height ∝ rated thrust, gimbal dot
@@ -77,7 +75,7 @@ turns it into place per pixel with a `hud_<layer>_frame` uniform (display direct
 | `heading` | `Basis(UP, heading − 15°)⁻¹` | course marks and numbers, drawn for heading 15° so none sits on the layer's back seam |
 | `ladder` | `Basis(RIGHT, pitch)` | the pitch ladder drawn level, as coverage (R stroke, G halo, B stroke × tick strength); the shader applies fade and climb highlight from `hud_pitch_deg` / `hud_climb`, blending as the 2D canvas would |
 | `suit` | `(display⁻¹ · body)⁻¹` | suit line and arrowheads, drawn with the body level |
-| `fpm` | layer −X onto the velocity, up as `patch()` makes it | flight path bars and reticles as coverage (R stripe, G halo, B the reticle × its fade), prograde at −X and retrograde at +X, off the back seam; the shader finds each stripe from its position and runs the highlight, tint, fade-in and pulse. Redrawn only while the shape changes (growing in/out, boost stretch, brake squeeze, hard-brake lean) |
+| `fpm` | layer −X onto the velocity, up as `patch()` makes it | flight path bars and reticles as coverage (R stripe, G halo, B the reticle × its fade), prograde at −X and retrograde at +X, off the back seam; drawn once at full size and normal length; the shader finds each stripe from its position and runs the highlight, tint, fade-in and pulse, and also the grow in / out and, through `hud_fpm_shape`, the boost stretch, brake squeeze and hard-brake lean flip, by remapping the bars' band onto the layer as drawn (`hud_fpm_drawn`). Never redrawn: redrawing it each frame while the shape eased cost ~1–2 ms a frame, a visible drop whenever speed or boost changed |
 
 **Shader symbols.** The control centre, the flight path's middle marker and the contact
 triangles aren't in any

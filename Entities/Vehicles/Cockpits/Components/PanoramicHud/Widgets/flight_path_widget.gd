@@ -15,8 +15,9 @@ extends HudWidget
 ##
 ## The markers are drawn into the HUD's fpm layer and turned onto the velocity by the
 ## screen shader, which also runs the highlight, tint, fade-in and pulse
-## (hud_layers.gdshaderinc). The layer is redrawn only while the shape changes: growing in
-## or out, boost / brake stretching the bars, hard brake flipping the lean.
+## (hud_layers.gdshaderinc). The layer is drawn once, at full size and normal length: the
+## shader also grows the markers in and out, stretches / squeezes the bars and flips their
+## lean (hud_fpm_shape), so changing speed never redraws it.
 
 @export var show_speed: float = 2.0   ## m/s
 @export var hide_speed: float = 1.0   ## m/s
@@ -66,12 +67,9 @@ var _brake := 0.0
 var _kick := 0.0
 var _was_full := false
 var _last_ms := -1
-# Shape the layer was drawn in: grow, bar end (deg), lean sign.
-var _drawn := Vector3(0.0, 0.0, 1.0)
 
 
 func setup_layers() -> void:
-	_drawn.y = bar_to_deg
 	hud.add_layer_drawer(&"fpm", _draw_markers, true)
 	hud.set_hud_parameter(&"hud_fpm_color", hud.primary_color)
 	hud.set_hud_parameter(&"hud_fpm_retro_color", PanoramicHud.dimmed(hud.primary_color))
@@ -111,12 +109,9 @@ func draw_widget() -> void:
 
 	var grow := ease(_reveal, -2.0)  # ease in-out
 	var hard := clampf(_brake - 1.0, 0.0, 1.0)
-	var shape := Vector3(grow, bar_to_deg + boost_stretch_deg * minf(_boost, 1.0)
-			- brake_squeeze_deg * minf(_brake, 1.0), lerpf(1.0, -1.0, hard))
-	if shape != _drawn:
-		_drawn = shape
-		hud.redraw_layer(&"fpm")
-		_push_shape()
+	var bar_end := bar_to_deg + boost_stretch_deg * minf(_boost, 1.0) - brake_squeeze_deg * minf(_brake, 1.0)
+	hud.set_hud_parameter(&"hud_fpm_shape", Vector2(bar_end - bar_from_deg,
+			stripe_lean_deg * lerpf(1.0, -1.0, hard)))
 
 	var boost := minf(_boost, 1.0)
 	# Hard brake: the bars pulse.
@@ -141,8 +136,8 @@ func _update_modes(fc: FlightComputer, dt: float) -> void:
 
 
 func _push_shape() -> void:
-	hud.set_hud_parameter(&"hud_fpm_bar", Vector4(bar_from_deg, _drawn.y - bar_from_deg,
-			stripe_lean_deg * _drawn.z, stripe_half_height_deg))
+	hud.set_hud_parameter(&"hud_fpm_bar", Vector4(bar_from_deg, bar_to_deg - bar_from_deg,
+			stripe_lean_deg, stripe_half_height_deg))
 
 
 ## Display → layer: the layer's -X (where the prograde marker is drawn) onto `dir`, with
@@ -170,19 +165,16 @@ func _draw_markers(w: HudWidget) -> void:
 
 
 func _marker_strokes(p: Patch, out: Array) -> void:
-	var grow := _drawn.x
-	_reticle(p, grow, out)
+	_reticle(p, out)
 
-	var span := _drawn.y - bar_from_deg
+	var span := bar_to_deg - bar_from_deg
 	var h := stripe_half_height_deg
 	for side in [-1.0, 1.0]:
 		for i in stripe_count:
+			# All drawn: the shader fades them in from the inside out as the markers grow.
 			var u := float(i) / (stripe_count - 1)
-			# Stripes fade in from the inside out; the shader does the fade.
-			if grow * 1.15 - u <= 0.0:
-				continue
 			var x := bar_from_deg + span * pow(u, spacing_power)
-			var lean := stripe_lean_deg * (0.7 + 0.3 * u) * _drawn.z
+			var lean := stripe_lean_deg * (0.7 + 0.3 * u)
 			out.append([_points(p, _line(Vector2((x + lean) * side, h),
 					Vector2((x - lean) * side, -h))), Color(1, 0, 0)])
 
@@ -200,9 +192,9 @@ func _points(p: Patch, deg: PackedVector2Array) -> PackedVector2Array:
 
 ## Radial dashes on a wide circle around the marker, only in the left and right quarters
 ## (within 45° of the bars' line, leaving a narrow gap at the bars); the top and bottom
-## quarters stay open. Grows out with the bars.
-func _reticle(p: Patch, grow: float, out: Array) -> void:
-	var radius := deg_to_rad(reticle_radius_deg * lerpf(0.6, 1.0, grow))
+## quarters stay open. Fades in as the markers grow (the shader).
+func _reticle(p: Patch, out: Array) -> void:
+	var radius := deg_to_rad(reticle_radius_deg)
 	var half := deg_to_rad(reticle_dash_deg) * 0.5
 	var from := deg_to_rad(reticle_arc_deg.x)
 	var to := deg_to_rad(reticle_arc_deg.y)

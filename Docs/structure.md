@@ -70,6 +70,7 @@ simple-space-game/
 │       │   │
 │       │   ├── CockpitLinearSeat/ Late-UC linear seat cockpit (extends CockpitBase)
 │       │   ├── CockpitLinearSeatV2/  RX-93 cockpit: contoured seat, seated pilot (CockpitLinearSeat script)
+│       │   ├── CockpitLinearSeatV2Rail/  the same with RX-0 style rail grips (slide, twist, roll)
 │       │   └── CockpitRX0/        RX-0 specific cockpit interior
 │       │       ├── cockpit_rx_0.gd    extends CockpitBase
 │       │       ├── cockpit_rx_0.tscn
@@ -279,7 +280,7 @@ types. Any cockpit that extends `CockpitBase` and has a `PanoramicDisplayMount` 
 | `Docs/FlightControl/summary.md` | Input → FBW → allocator → thruster pipeline, swapping stages, controls, HOTAS |
 | `Docs/FlightControl/thrust_sizing.md` | Thruster ratings vs Raptor, nozzle size vs chamber pressure, jet power and Isp, the ×1.5 thrust change |
 | `Docs/MobileSuit/prototype.md` | Prototype suit scene tree, rig, render layers, regenerating models |
-| `Docs/MobileSuit/linear_seat_v2_cockpit.md` | RX-93 linear seat v2 cockpit, seated pilot (IK, G lean), sensor outlines |
+| `Docs/MobileSuit/linear_seat_v2_cockpit.md` | RX-93 linear seat v2 cockpit and its rail grip variant, seated pilot (IK, G lean), sensor outlines |
 | `Docs/Weapons/summary.md` | Fire control, envelopes and aiming, projectiles, beam look, controls, test tools |
 | `Docs/Audio/summary.md` | External bus, shot fire sounds, the SFX lab and its recipes |
 | `Docs/Audio/todo.md` | Sounds still to make; parked enemy / pass-by / cockpit-warning work |

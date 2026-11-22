@@ -29,7 +29,7 @@ const SENSOR_SCENE := \
 		"res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn"
 # The ν's own cockpit variant: its hatch opening faces down the tunnel to the red chest door
 # (the door is 40° below the sphere's centre, which can't move lower and stay in the chest).
-const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2/cockpit_linear_seat_v2.tscn"
+const COCKPIT_SCENE := "res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2Rail/cockpit_linear_seat_v2_rail.tscn"
 const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn"
 
 # name, bone, position, exhaust direction, thrust kN, gimbal: [cone, fore/aft, sideways] deg,

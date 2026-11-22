@@ -157,12 +157,34 @@ func trim(state: FlightState, wrench: Wrench, dirs: PackedVector3Array,
 
 
 ## FISTA on u (in place) toward a target force/torque, with a propellant price per
-## newton of thrust.
+## newton of thrust. The hot loop: the gimbal projection (project_to_gimbal) is inlined
+## with each thruster's cone trig worked out once per solve, same arithmetic in the same
+## order, so the result is identical; it runs ~670 times a tick (28 thrusters × 24).
 func _solve(state: FlightState, u: PackedVector3Array, force_target: Vector3, torque_target: Vector3,
 		count: int, step: float, wf2: float, wt2: Vector3, lam: float, price: float) -> void:
 	var n := u.size()
 	var r := state.thruster_positions
 	var t := state.thruster_max
+	var axes := state.thruster_axes
+	var planes := state.thruster_planes
+	var np := Thruster.PLANES
+	var tan_c := PackedFloat64Array()
+	var cos_c := PackedFloat64Array()
+	var sin_c := PackedFloat64Array()
+	var damping := PackedFloat64Array()   # 2λT², the squared-thrust penalty's gradient factor
+	var shrink := PackedFloat64Array()
+	tan_c.resize(n)
+	cos_c.resize(n)
+	sin_c.resize(n)
+	damping.resize(n)
+	shrink.resize(n)
+	for i in n:
+		var cone: float = state.thruster_cone[i]
+		tan_c[i] = tan(cone)
+		cos_c[i] = cos(cone)
+		sin_c[i] = sin(cone)
+		damping[i] = 2.0 * lam * t[i] * t[i]
+		shrink[i] = step * price * t[i]
 	var y := u.duplicate()
 	var momentum := 1.0
 	for _k in count:
@@ -178,18 +200,45 @@ func _solve(state: FlightState, u: PackedVector3Array, force_target: Vector3, to
 		var next_momentum := (1.0 + sqrt(1.0 + 4.0 * momentum * momentum)) * 0.5
 		var beta := (momentum - 1.0) / next_momentum
 		for i in n:
-			if t[i] <= 0.0:
+			var ti: float = t[i]
+			if ti <= 0.0:
 				u[i] = Vector3.ZERO
 				y[i] = Vector3.ZERO
 				continue
-			var grad := (g_force + g_torque.cross(r[i])) * t[i] + y[i] * (2.0 * lam * t[i] * t[i])
-			var u_new := project_to_gimbal(y[i] - grad * step, state, i)
-			var shrink := step * price * t[i]
-			if shrink > 0.0:
-				var length := u_new.length()
-				u_new = u_new * (maxf(length - shrink, 0.0) / length) if length > 1e-12 else Vector3.ZERO
-			y[i] = u_new + (u_new - u[i]) * beta
-			u[i] = u_new
+			var yi := y[i]
+			var grad := (g_force + g_torque.cross(r[i])) * ti + yi * damping[i]
+			var w := yi - grad * step
+			# Onto the gimbal cone (project_to_cone)...
+			var axis := axes[i]
+			var a := w.dot(axis)
+			var perp := w - axis * a
+			var s := perp.length()
+			var v: Vector3
+			if s <= a * tan_c[i]:
+				v = w
+			elif s * tan_c[i] <= -a:
+				v = Vector3.ZERO
+			elif s < 1e-9:
+				v = axis * maxf(a, 0.0)
+			else:
+				var edge := axis * cos_c[i] + perp / s * sin_c[i]
+				v = edge * (a * cos_c[i] + s * sin_c[i])
+			var v_len := v.length()
+			if v_len > 1.0:
+				v = v / v_len
+			# ...then inside its swing-limit planes.
+			if planes.size() >= np * (i + 1):
+				for k in np:
+					var m := planes[np * i + k]
+					var over := m.dot(v)
+					if over > 0.0:
+						v -= m * over
+			var sh := shrink[i]
+			if sh > 0.0:
+				var length := v.length()
+				v = v * (maxf(length - sh, 0.0) / length) if length > 1e-12 else Vector3.ZERO
+			y[i] = v + (v - u[i]) * beta
+			u[i] = v
 		momentum = next_momentum
 
 

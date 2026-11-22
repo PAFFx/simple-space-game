@@ -17,6 +17,9 @@ blender -b -P Tools/Blender/build_shield.py -- Entities/Equipment/Shield/Arts/sh
 # RX-93 cockpit (linear seat v2); the aperture is the ν's hatch corridor.
 blender -b -P Tools/Blender/build_cockpit_linear_seat_v2.py -- \
     Entities/Vehicles/Cockpits/CockpitLinearSeatV2/Arts/cockpit_linear_seat_v2.glb --aperture -37.3,20.5,25.3
+# The same cockpit with RX-0 style rail grips instead of the ball controllers.
+blender -b -P Tools/Blender/build_cockpit_linear_seat_v2.py -- \
+    Entities/Vehicles/Cockpits/CockpitLinearSeatV2Rail/Arts/cockpit_linear_seat_v2_rail.glb --aperture -37.3,20.5,25.3 --controller rail
 
 # After rebuilding the MSP-02 GLB, regenerate its scene + animations:
 godot-mono --headless --path . -s Tools/Godot/build_msp02_scene.gd
