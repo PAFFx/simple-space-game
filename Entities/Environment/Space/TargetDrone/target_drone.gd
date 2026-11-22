@@ -12,6 +12,13 @@ extends AnimatableBody3D
 ##   TURRET   jinks gently and shoots back at `quarry` with slow beams, to practise
 ##            dodging and the shield
 ##
+## A turret fights like a suit with a rifle arm: its body turns at a limited rate, its gun
+## arm points only within `arm_cone_deg` of where the body faces and slews at a limited
+## rate, and it spools only once the barrel is on the lead. Circling it faster than it
+## turns gets you out of its arc. Its E-cap holds `magazine` shots; empty, it ejects the
+## pack (you see it fly off), drops the arm and reloads for `reload_time`. Each shot holds
+## the barrel where it left for the pour and `recover_time` after (recoil): the punish window.
+##
 ## Higher specs, for testing both sides of a fight:
 ##   dodge     with a `threat` (the shooter's FireControl), it watches the barrel: when the
 ##             selected weapon spools while locked on it, it thrusts hard across the line of
@@ -40,9 +47,26 @@ signal destroyed(drone: TargetDrone)
 @export var fire_interval := Vector2(1.6, 3.2)
 @export var fire_range: float = 6000.0
 @export var aim_error_deg: float = 0.25
-## How fast its barrel follows the lead while a beam pours out, deg/s (0: the beam holds
-## the direction it left in, riding along with the drone).
-@export var beam_slew_deg: float = 0.0
+@export_group("Gun arm")
+## Body turn: rate deg/s and its acceleration deg/s² (0 rate = turns at once).
+@export var turn_rate_deg: float = 20.0
+@export var turn_accel_deg: float = 60.0
+## The arm reaches this far off the body's facing, deg.
+@export var arm_cone_deg: float = 45.0
+@export var arm_slew_deg: float = 60.0
+@export var arm_accel_deg: float = 400.0
+## Extra aim error per deg/s the barrel is slewing when the shot leaves, deg.
+@export var slew_error: float = 0.02
+## The barrel must be this close to the lead to start a spool, deg (plus the quarry's size).
+@export var aim_tolerance_deg: float = 1.0
+## Shots in one E-cap, and the time to swap it (arm down, pack ejected). 0 = unlimited.
+@export var magazine: int = 6:
+	set(value):
+		magazine = value
+		rounds = value
+@export var reload_time: float = 4.0
+## After a beam has poured out the barrel stays put this long (recoil), s.
+@export var recover_time: float = 0.5
 @export_group("Dodge")
 ## The shooter whose barrel it watches; empty = no dodging.
 @export var threat: FireControl
@@ -68,10 +92,20 @@ var _flash := 0.0
 var _spool := -1.0
 ## Where the shot leaves: on the hull, facing the quarry.
 var _muzzle: Marker3D
-## The beam pouring out: its barrel direction and this shot's aim error.
+## The beam pouring out, along the barrel held where it left.
 var _beam: ProjectileManager.Shot
 var _beam_dir := Vector3.ZERO
-var _beam_error := Vector3.ZERO
+## Gun arm: barrel in the body frame, its slew speed (deg/s), the body's turn speed.
+var _barrel_local := Vector3.FORWARD
+var _arm_speed := 0.0
+var _turn_speed := 0.0
+var _gun: Node3D
+var _pack: MeshInstance3D
+var rounds := 0
+var _reload_left := 0.0
+## Barrel held (pour and recoil), s.
+var _hold_left := 0.0
+var reloads := 0
 ## Shots fired and dodges started (probes).
 var shots_fired := 0
 var dodges := 0
@@ -97,8 +131,11 @@ func _ready() -> void:
 	add_child(_muzzle)
 	_anchor = global_position
 	_base_velocity = velocity
-	if behaviour == Behaviour.TURRET and shot == null:
-		shot = load("res://Entities/Projectiles/Specs/drone_shot.tres")
+	if behaviour == Behaviour.TURRET:
+		if shot == null:
+			shot = load("res://Entities/Projectiles/Specs/drone_shot.tres")
+		_build_gun()
+		_face_quarry.call_deferred()
 
 
 func get_velocity() -> Vector3:
@@ -165,16 +202,46 @@ func _shoot(delta: float) -> void:
 		_spool = -1.0
 		manager.set_charge(self, _muzzle, shot, 0.0)
 		return
-	var dir := _aim()
+	var lead := _lead(0.0)
+	_turn_body(lead, delta)
+	_hold_left = maxf(_hold_left - delta, 0.0)
+	var pouring := _beam != null and _beam.emitting
+	if pouring or _hold_left > 0.0:
+		# Pour and recoil: the barrel stays where the shot left, the arm countering the body.
+		_barrel_local = _clamp_to_cone(global_basis.inverse() * _beam_dir)
+		_arm_speed = 0.0
+		_place_gun()
+		return
+	if _reload_left > 0.0:
+		_reload_left -= delta
+		_slew_arm(Vector3(0.0, -0.8, -0.6).normalized(), delta)
+		if _reload_left <= 0.0:
+			rounds = magazine
+			_pack.visible = true
+		_place_gun()
+		return
+	if magazine > 0 and rounds <= 0:
+		_start_reload()
+		_place_gun()
+		return
+	var want := global_basis.inverse() * lead if lead != Vector3.ZERO else Vector3.FORWARD
+	_slew_arm(_clamp_to_cone(want), delta)
+	_place_gun()
+	var barrel := get_barrel_direction()
+	var in_arc := lead != Vector3.ZERO and _in_cone(want)
 	if _spool < 0.0:
 		_fire_due -= delta
-		if _fire_due > 0.0 or dir == Vector3.ZERO:
+		var tolerance := aim_tolerance_deg + rad_to_deg(atan(_quarry_radius() / maxf(_range_to_quarry(), 1.0)))
+		if _fire_due > 0.0 or not in_arc or rad_to_deg(barrel.angle_to(lead)) > tolerance:
 			return
 		_fire_due = randf_range(fire_interval.x, fire_interval.y)
 		_spool = 0.0
-	# The muzzle glows on the side facing the quarry while it spools: the dodge cue.
-	if dir != Vector3.ZERO:
-		_muzzle.global_position = global_position + dir * (radius + 1.0)
+	elif not in_arc:
+		# Out of its arc mid-spool: it lets go and waits for a new chance.
+		_spool = -1.0
+		_fire_due = 0.3
+		manager.set_charge(self, _muzzle, shot, 0.0)
+		return
 	_spool += delta
 	var level := _spool / maxf(shot.spool_time, 0.01)
 	if level < 1.0:
@@ -182,53 +249,152 @@ func _shoot(delta: float) -> void:
 		return
 	_spool = -1.0
 	manager.set_charge(self, _muzzle, shot, 0.0)
-	if dir == Vector3.ZERO:
-		return
-	var muzzle := global_position + dir * (radius + 1.0)
-	_muzzle.global_position = muzzle
+	var error := deg_to_rad(aim_error_deg + slew_error * _arm_speed)
+	var dir := (barrel + Vector3(randfn(0.0, error), randfn(0.0, error), randfn(0.0, error))).normalized()
+	_beam_dir = dir
+	_barrel_local = global_basis.inverse() * dir
+	_place_gun()
+	var muzzle := _muzzle.global_position
 	shots_fired += 1
+	rounds -= 1
 	var fired := manager.spawn(shot, muzzle, velocity + dir * shot.speed, dir, [get_rid()], self)
 	if shot.kind == ProjectileSpec.Kind.BEAM:
 		_beam = fired
-		_beam_dir = dir
-		_beam_error = dir - _lead(0.0)
 		manager.stream_from(fired, _muzzle, _beam_state)
+		_hold_left = shot.emit_time + recover_time
+	else:
+		_hold_left = recover_time
 	manager.muzzle_flash(shot, muzzle, velocity, _muzzle)
 
 
-## Where the beam leaves the hull this tick: [position, velocity, direction].
+## Where the barrel points, world.
+func get_barrel_direction() -> Vector3:
+	return (global_basis * _barrel_local).normalized()
+
+
+## Out of shots: the pack flies off, the arm drops, a new one goes in.
+func is_reloading() -> bool:
+	return _reload_left > 0.0
+
+
+func _start_reload() -> void:
+	_reload_left = reload_time
+	reloads += 1
+	_pack.visible = false
+	var spent := MeshInstance3D.new()
+	spent.mesh = _pack.mesh
+	get_parent().add_child(spent)
+	spent.global_transform = _pack.global_transform
+	var from := spent.global_transform
+	var drift := velocity + (global_basis * Vector3(1.0, 0.4, 0.3)).normalized() * 18.0
+	var spin := Vector3(randf_range(-3, 3), randf_range(-3, 3), randf_range(-3, 3))
+	var tween := spent.create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	tween.tween_method(func(t: float) -> void:
+		spent.global_transform = Transform3D(from.basis.rotated(spin.normalized(), spin.length() * t), from.origin + drift * t),
+		0.0, 6.0, 6.0)
+	tween.tween_callback(spent.queue_free)
+
+
+## Turns the body toward `lead` (or the quarry) at turn_rate_deg, easing in and out.
+func _turn_body(lead: Vector3, delta: float) -> void:
+	var want := lead if lead != Vector3.ZERO else (_quarry_centre() - global_position).normalized()
+	var forward := -global_basis.z
+	var angle := forward.angle_to(want)
+	if turn_rate_deg <= 0.0:
+		_turn_speed = 0.0
+		_rotate_toward(forward, want, angle)
+		return
+	var target := minf(deg_to_rad(turn_rate_deg), sqrt(2.0 * deg_to_rad(turn_accel_deg) * angle))
+	_turn_speed = move_toward(_turn_speed, target, deg_to_rad(turn_accel_deg) * delta)
+	_rotate_toward(forward, want, minf(_turn_speed * delta, angle))
+
+
+func _rotate_toward(from: Vector3, to: Vector3, step: float) -> void:
+	if step < 1e-6:
+		return
+	var axis := from.cross(to)
+	if axis.length_squared() < 1e-10:
+		axis = global_basis.y
+	global_basis = Basis(axis.normalized(), step) * global_basis.orthonormalized()
+
+
+## Moves the barrel (body frame) toward `want` at arm_slew_deg, easing in and out.
+func _slew_arm(want: Vector3, delta: float) -> void:
+	var angle := _barrel_local.angle_to(want)
+	var target := minf(arm_slew_deg, sqrt(2.0 * arm_accel_deg * rad_to_deg(angle)))
+	_arm_speed = move_toward(_arm_speed, target, arm_accel_deg * delta)
+	var step := minf(deg_to_rad(_arm_speed) * delta, angle)
+	if angle < 1e-6:
+		_arm_speed = minf(_arm_speed, arm_accel_deg * delta)
+		return
+	var axis := _barrel_local.cross(want)
+	if axis.length_squared() < 1e-10:
+		return
+	_barrel_local = _barrel_local.rotated(axis.normalized(), step).normalized()
+
+
+func _in_cone(local_dir: Vector3) -> bool:
+	return rad_to_deg(Vector3.FORWARD.angle_to(local_dir)) <= arm_cone_deg
+
+
+func _clamp_to_cone(local_dir: Vector3) -> Vector3:
+	var angle := Vector3.FORWARD.angle_to(local_dir)
+	var cone := deg_to_rad(arm_cone_deg)
+	if angle <= cone:
+		return local_dir.normalized()
+	var axis := Vector3.FORWARD.cross(local_dir)
+	if axis.length_squared() < 1e-10:
+		axis = Vector3.UP
+	return Vector3.FORWARD.rotated(axis.normalized(), cone)
+
+
+## The arm's shoulder on the hull's front right; the muzzle at the end of the barrel.
+const GUN_LENGTH := 5.0
+func _gun_pivot_local() -> Vector3:
+	return Vector3(0.55, 0.0, -0.83).normalized() * radius
+
+
+func _place_gun() -> void:
+	if _gun == null:
+		return
+	var dir := get_barrel_direction()
+	var pivot := global_transform * _gun_pivot_local()
+	var up := global_basis.y if absf(dir.dot(global_basis.y)) < 0.98 else global_basis.x
+	_gun.global_transform = Transform3D(Basis.looking_at(dir, up), pivot)
+	_muzzle.global_position = pivot + dir * GUN_LENGTH
+
+
+func _face_quarry() -> void:
+	if quarry != null and is_instance_valid(quarry):
+		var to := _quarry_centre() - global_position
+		if to.length() > 1.0:
+			var up := Vector3.UP if absf(to.normalized().y) < 0.98 else Vector3.RIGHT
+			global_basis = Basis.looking_at(to.normalized(), up)
+	_barrel_local = Vector3.FORWARD
+	_place_gun()
+
+
+func _quarry_radius() -> float:
+	return quarry.get_meta(&"hud_radius", 8.0) if quarry != null else 8.0
+
+
+func _range_to_quarry() -> float:
+	return _quarry_centre().distance_to(global_position)
+
+
+## Where the beam leaves the barrel this tick: [position, velocity, direction].
 func _beam_state() -> Array:
-	if beam_slew_deg > 0.0 and quarry != null and is_instance_valid(quarry):
-		var lead := _lead(_beam.reach)
-		if lead != Vector3.ZERO:
-			var want := (lead + _beam_error).normalized()
-			var step := deg_to_rad(beam_slew_deg) * get_physics_process_delta_time()
-			var angle := _beam_dir.angle_to(want)
-			if angle > 1e-6:
-				_beam_dir = _beam_dir.slerp(want, minf(step / angle, 1.0)).normalized()
-	_muzzle.global_position = global_position + _beam_dir * (radius + 1.0)
 	return [_muzzle.global_position, velocity + _beam_dir * shot.speed, _beam_dir]
 
 
-## Lead direction on the quarry (with the aim error), or zero if out of reach.
-func _aim() -> Vector3:
-	var dir := _lead(0.0)
-	if dir == Vector3.ZERO:
-		return dir
-	var error := deg_to_rad(aim_error_deg)
-	return (dir + Vector3(randfn(0.0, error), randfn(0.0, error), randfn(0.0, error))).normalized()
-
-
-## Lead direction on the quarry, or zero if out of reach. `reach`: how far a beam already
-## out has got.
+## Lead direction on the quarry from the muzzle, or zero if out of reach. `reach`: how far
+## a beam already out has got.
 func _lead(reach: float) -> Vector3:
 	if use_track:
 		return _lead_from_track(reach)
 	var quarry_velocity := (quarry as RigidBody3D).linear_velocity if quarry is RigidBody3D else Vector3.ZERO
-	var quarry_centre := quarry.global_position
-	if quarry is RigidBody3D:
-		quarry_centre = quarry.global_transform * (quarry as RigidBody3D).center_of_mass
-	var rel_pos := quarry_centre - global_position
+	var rel_pos := _quarry_centre() - _muzzle.global_position
 	if rel_pos.length() > fire_range:
 		return Vector3.ZERO
 	var rel_vel := quarry_velocity - velocity
@@ -301,7 +467,7 @@ func _lead_from_track(reach: float) -> Vector3:
 	if _track == null or not _track.has_solution():
 		return Vector3.ZERO
 	var est := _track.get_estimate(_time)
-	var rel_pos: Vector3 = est[0] - global_position
+	var rel_pos: Vector3 = est[0] - _muzzle.global_position
 	if rel_pos.length() > fire_range:
 		return Vector3.ZERO
 	var rel_vel: Vector3 = est[1] - velocity
@@ -320,6 +486,34 @@ func _quarry_centre() -> Vector3:
 	if quarry is RigidBody3D:
 		return quarry.global_transform * (quarry as RigidBody3D).center_of_mass
 	return quarry.global_position
+
+
+## The gun arm: a barrel on a shoulder at the front right, with its E-cap pack on it.
+func _build_gun() -> void:
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color(0.14, 0.14, 0.16)
+	dark.roughness = 0.7
+	_gun = Node3D.new()
+	_gun.name = "Gun"
+	add_child(_gun)
+	var barrel := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(1.0, 1.0, GUN_LENGTH)
+	box.material = dark
+	barrel.mesh = box
+	barrel.position = Vector3(0.0, 0.0, -GUN_LENGTH * 0.5)
+	_gun.add_child(barrel)
+	_pack = MeshInstance3D.new()
+	var pack_mesh := BoxMesh.new()
+	pack_mesh.size = Vector3(1.4, 1.6, 1.8)
+	var pack_mat := StandardMaterial3D.new()
+	pack_mat.albedo_color = Color(0.5, 0.48, 0.42)
+	pack_mat.roughness = 0.6
+	pack_mesh.material = pack_mat
+	_pack.mesh = pack_mesh
+	_pack.position = Vector3(0.0, -1.1, -GUN_LENGTH * 0.35)
+	_gun.add_child(_pack)
+	_place_gun()
 
 
 func _build() -> void:

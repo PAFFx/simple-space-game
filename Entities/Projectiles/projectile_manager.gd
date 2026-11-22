@@ -529,7 +529,7 @@ func _beam_hit(shot: Shot, collider: Node, point: Vector3, dir: Vector3) -> bool
 	if shot.hit_ids.has(id):
 		return false
 	shot.hit_ids[id] = true
-	_damage(collider, shot.spec.damage, point, dir, shot.source)
+	_damage(collider, shot.spec.damage, point, dir, shot.source if is_instance_valid(shot.source) else null)
 	impact(shot.spec, point, _velocity_of(collider))
 	shot_hit.emit(shot.spec, point, collider)
 	return true
@@ -706,7 +706,7 @@ func _land(shot: Shot, at: Vector3, collider: Node) -> void:
 	if shot.spec.blast_radius > 0.0:
 		_burst(shot, at, velocity)
 	else:
-		_damage(collider, shot.spec.damage, at, shot.velocity.normalized(), shot.source)
+		_damage(collider, shot.spec.damage, at, shot.velocity.normalized(), shot.source if is_instance_valid(shot.source) else null)
 		impact(shot.spec, at, velocity)
 	shot_hit.emit(shot.spec, at, collider)
 
@@ -742,7 +742,7 @@ func _burst(shot: Shot, at: Vector3, velocity: Vector3) -> void:
 		var d := maxf(target.global_position.distance_to(at) - radius, 0.0)
 		if d < spec.blast_radius:
 			_damage(target, spec.damage * (1.0 - d / spec.blast_radius), at,
-					(target.global_position - at).normalized(), shot.source)
+					(target.global_position - at).normalized(), shot.source if is_instance_valid(shot.source) else null)
 	explode(at, velocity, spec.blast_radius, spec.color)
 
 

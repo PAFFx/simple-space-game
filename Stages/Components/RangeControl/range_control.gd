@@ -8,6 +8,7 @@ extends CanvasLayer
 ##   1 static · 2 drifting · 3 jinking · 4 hard jinking · 5 evasive (dodges your shots)
 ##   6 ace (hard jinking and dodging) · 7 turret · 8 hunter turret · 9 clear all · 0 rearm
 ##   - / + nearer / farther
+## Rearm also repairs the suit (SuitDamage); the panel lists each part's armour.
 
 const TOGGLE := &"debug_toggle_range_control"
 ## Panels in this group close each other: they share the number keys.
@@ -127,6 +128,9 @@ func rearm() -> void:
 	var fcs := suit.find_component(FireControl) as FireControl if suit != null else null
 	if fcs != null:
 		fcs.rearm()
+	var damage := suit.find_component(SuitDamage) as SuitDamage if suit != null else null
+	if damage != null:
+		damage.repair()
 	hits_taken = 0
 	hits_blocked = 0
 
@@ -167,8 +171,12 @@ func spawn_preset(index: int, distance: float) -> TargetDrone:
 	if p[7]:
 		drone.use_track = true
 		drone.fire_interval = Vector2(1.0, 2.0)
-		# Its barrel follows you while the beam pours out.
-		drone.beam_slew_deg = 20.0
+		# A quicker suit: turns and swings its arm faster, a bigger E-cap.
+		drone.turn_rate_deg = 30.0
+		drone.turn_accel_deg = 90.0
+		drone.arm_slew_deg = 80.0
+		drone.arm_cone_deg = 55.0
+		drone.magazine = 8
 	return drone
 
 
@@ -223,5 +231,16 @@ func _refresh() -> void:
 			alive += 1
 	lines.append("targets  %d" % alive)
 	lines.append("hits taken  %d   blocked  %d" % [hits_taken, hits_blocked])
+	var suit := _vehicle()
+	var damage := suit.find_component(SuitDamage) as SuitDamage if suit != null else null
+	if damage != null:
+		var parts := PackedStringArray()
+		for part: StringName in damage.max_hit_points:
+			parts.append("%s %3d%%" % [String(part).to_upper(), roundi(damage.get_fraction(part) * 100.0)])
+		parts.append("SHIELD %3d%%" % roundi(damage.get_shield_fraction() * 100.0))
+		lines.append("")
+		lines.append("ARMOUR%s" % ("  ** SUIT DOWN: 0 rearms **" if damage.destroyed else ""))
+		for i in range(0, parts.size(), 3):
+			lines.append("  " + "   ".join(parts.slice(i, i + 3)))
 	_label.text = "\n".join(lines)
 	_panel.reset_size()

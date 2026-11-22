@@ -45,11 +45,14 @@ func _sync_solid() -> void:
 
 
 ## A shot stopped on the shield. The suit's own (a vulcan burst into its own shield) just
-## ends there; anyone else's counts as a blocked hit.
-func apply_hit(_damage: float, _at: Vector3, _direction: Vector3, source: Node) -> void:
+## ends there; anyone else's counts as a blocked hit and wears the shield (SuitDamage).
+func apply_hit(damage: float, _at: Vector3, _direction: Vector3, source: Node) -> void:
 	var vehicle := VehicleBase.find_vehicle(self)
 	if vehicle == null or source == vehicle:
 		return
+	var model := vehicle.find_component(SuitDamage) as SuitDamage
+	if model != null:
+		model.apply_shield_hit(damage, self)
 	var fcs := vehicle.find_component(FireControl) as FireControl
 	if fcs != null:
 		fcs.register_hit(true)

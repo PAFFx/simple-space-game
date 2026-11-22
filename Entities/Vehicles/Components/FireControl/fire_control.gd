@@ -521,7 +521,10 @@ func _physics_process(delta: float) -> void:
 	blocking = cmd.shield_block
 	var guard := get_weapon(guard_weapon)
 	for weapon: MsWeapon in weapons.values():
-		if weapon == guard:
+		if weapon.broken:
+			weapon.wanted = false
+			weapon.triggered = false
+		elif weapon == guard:
 			weapon.wanted = blocking
 		elif weapon.always_on:
 			weapon.wanted = is_weapons_mode() and cmd.vulcan_ready
