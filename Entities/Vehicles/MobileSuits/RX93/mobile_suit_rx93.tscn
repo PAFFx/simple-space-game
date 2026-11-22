@@ -5,7 +5,7 @@
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_outline.gd" id="3_5dwnv"]
 [ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.tscn" id="4_xasfn"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/sensor_head.gd" id="5_wm7ti"]
-[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2/cockpit_linear_seat_v2.tscn" id="6_evfqv"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2Rail/cockpit_linear_seat_v2_rail.tscn" id="6_evfqv"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat.gd" id="7_mkw31"]
 [ext_resource type="PackedScene" path="res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.tscn" id="8_olg5y"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/FlightControl/Thruster/thruster.gd" id="9_yc2j0"]
@@ -902,7 +902,7 @@ script = ExtResource("5_wm7ti")
 [node name="CockpitMount" type="Marker3D" parent="." unique_id=1597718908]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16.6, -0.2)
 
-[node name="CockpitLinearSeatV2" type="Node3D" parent="CockpitMount" unique_id=2064618370 instance=ExtResource("6_evfqv")]
+[node name="CockpitLinearSeatV2Rail" type="Node3D" parent="CockpitMount" unique_id=2064618370 instance=ExtResource("6_evfqv")]
 script = ExtResource("7_mkw31")
 
 [node name="Thrusters" type="Node3D" parent="." unique_id=771679420]

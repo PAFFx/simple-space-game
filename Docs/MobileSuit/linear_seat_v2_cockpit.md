@@ -85,6 +85,42 @@ the keyboard moves the controls too:
 Only the balls move (`BallL/R`, turning in their cradles about their centres); the units and
 their lever arms stay put on the decks.
 
+## Rail grip variant (`Cockpits/CockpitLinearSeatV2Rail`)
+
+The ν's cockpit now (`build_rx93_scene.gd` `COCKPIT_SCENE`; v2 stays as the ball controller
+version). The same cockpit with the ball controllers swapped for crossbar grips on rails, after the
+RX-0's: everything else (seat, pedals, monitors, hatch, pilot) is v2's. The model is the same
+build script with `--controller rail`; the scene differs from v2's only in the model, the
+animator wiring and the pilot's finger curl (62°, 70°, 40°, thumb 30°, to wrap the bar).
+
+```
+GripL / GripR            rail plate on the armrest deck, a slot down its middle, travel scale
+└── SlideL / SlideR      carriage in the slot, base and the clevis of a fore-aft hinge:
+    │                    slides fore / aft, ±6 cm
+    └── RollL / RollR    hinge knuckle and the upright on its outboard side: rolls ±20°
+        └── BarL / BarR  crossbar grip running in from the upright, button cap on its inner
+            │            end (red trigger on top, two thumb buttons behind): twists ±28°
+            └── HandL / HandR    wrist target: palm down over the bar, fingers round its front
+```
+
+The rails give the fore / aft motion a long stroke (12 cm end to end), where the balls only
+tilt. Animation (`CockpitControlsAnimator`, scheme RAIL): each grip does what the matching VKB
+stick does in `TwinStickPilotInput` (average = translate, difference = turn), so the pilot's
+hands move as the player's do; the animator honours that input's invert flags.
+
+| Grip motion | Stick axis | Together | Against each other |
+|-------------|------------|----------|--------------------|
+| Slide fore / aft | fore / aft | forward / back | yaw: right forward = left |
+| Bar twist, knuckles up | twist, clockwise | up / down | pitch: right up, left down = nose up |
+| Roll, top right | left / right, right | strafe | roll: right right, left left = roll right |
+
+The pedals stay put: up / down is on the twist, as on the sticks.
+
+The wrist rides on the bar, so all three motions carry the hand with them. The cockpit
+snapshot tool's `rail` shot renders each motion, and its third argument puts this cockpit in
+the ν in place of v2:
+`... -s Tools/Godot/cockpit_snapshot.gd -- <out> rail res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2Rail/cockpit_linear_seat_v2_rail.tscn`
+
 ## Seated pilot (`Cockpits/Components/SeatedPilot`)
 
 `SeatedPilot` (the `Pilot` node, which is the seat frame) seats the character scene under it and

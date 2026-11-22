@@ -25,6 +25,11 @@ extends Node3D
 ## Mesh names hidden from the pilot's own eye (it sits inside the head).
 @export var head_meshes: PackedStringArray = ["eyebrows", "eyelashes", "eyes", "face", "hair", "scalp"]
 
+@export_group("Hands")
+## Curl of each finger joint after the knuckle, deg, and of the thumb: set for the grip.
+@export var finger_curl_deg := Vector3(40.0, 48.0, 30.0)
+@export var thumb_curl_deg: float = 18.0
+
 @export_group("Hatch")
 ## A hand whose control stays behind when the seat turns for the hatch comes to rest
 ## here instead (in this node's frame, x for the right side), by this point of the
@@ -78,6 +83,8 @@ func _ready() -> void:
 		_pose = SeatedPilotPose.new()
 		_pose.name = "SeatedPilotPose"
 		_pose.pilot = self
+		_pose.finger_curl_deg = finger_curl_deg
+		_pose.thumb_curl_deg = thumb_curl_deg
 		_pose.find_targets(cockpit_model if cockpit_model != null else get_parent())
 		skeleton.add_child(_pose)
 	var vehicle := VehicleBase.find_vehicle(self)

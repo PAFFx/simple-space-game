@@ -4,14 +4,16 @@ extends SceneTree
 ## and saves PNGs: a visual check for cockpit model / pilot pose changes.
 ##
 ##   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off
-##   godot --path . --resolution 1280x720 -s Tools/Godot/cockpit_snapshot.gd -- <out_dir> [shots]
+##   godot --path . --resolution 1280x720 -s Tools/Godot/cockpit_snapshot.gd -- <out_dir> [shots] [cockpit.tscn]
 ##
 ## shots: comma list of rest,input,lean,hatch (default all); also look, outline, external,
-## markers, handles (the hatch lock / override handles and their interlock).
+## markers, handles (the hatch lock / override handles and their interlock), rail (the rail
+## grips through each of their motions). cockpit.tscn replaces the suit's cockpit.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 
 var _out := "user://cockpit_snapshot"
+var _cockpit_scene := ""
 var _cockpit: CockpitBase
 var _pilot: SeatedPilot
 var _animator: CockpitControlsAnimator
@@ -27,6 +29,8 @@ func _initialize() -> void:
 	var shots := PackedStringArray(["rest", "input", "lean", "hatch"])
 	if args.size() > 1:
 		shots = args[1].split(",")
+	if args.size() > 2:
+		_cockpit_scene = args[2]
 	DirAccess.make_dir_recursive_absolute(_out)
 	_run.call_deferred(shots)
 
@@ -37,6 +41,8 @@ func _run(shots: PackedStringArray) -> void:
 	for look in stage.find_children("*", "", true, false):
 		if "capture_on_ready" in look:
 			look.set("capture_on_ready", false)
+	if _cockpit_scene != "":
+		_swap_cockpit(stage)
 	root.add_child(stage)
 	await _frames(20)
 	var vehicle: VehicleBase
@@ -93,6 +99,20 @@ func _run(shots: PackedStringArray) -> void:
 		await _frames(30)
 		await _views("yaw_pitch_down")
 		_input.last_command = PilotCommand.new()
+	if "rail" in shots:
+		for pose in [["slide_fwd", Vector3(0, 0, -1), Vector3.ZERO], ["slide_back", Vector3(0, 0, 1), Vector3.ZERO],
+				["yaw_left", Vector3.ZERO, Vector3(0, 1, 0)], ["pitch_up", Vector3.ZERO, Vector3(1, 0, 0)],
+				["pitch_down", Vector3.ZERO, Vector3(-1, 0, 0)], ["roll_right", Vector3.ZERO, Vector3(0, 0, -1)],
+				["strafe_right", Vector3(1, 0, 0), Vector3.ZERO], ["up", Vector3(0, 1, 0), Vector3.ZERO]]:
+			var cmd := PilotCommand.new()
+			cmd.translation = pose[1]
+			cmd.rotation = pose[2]
+			_input.last_command = cmd
+			await _frames(40)
+			await _rail_views(pose[0])
+		_input.last_command = PilotCommand.new()
+		await _frames(40)
+		await _rail_views("rest")
 	if "lean" in shots and _pilot != null:
 		_pilot.set_physics_process(false)
 		_pilot.lean = Vector2(_pilot.max_lean_deg, _pilot.max_lean_deg)
@@ -152,6 +172,37 @@ func _run(shots: PackedStringArray) -> void:
 			await _frames(int(hatch.duration * 60.0) + 40)
 			await _views("hatch")
 	quit()
+
+
+## Puts `_cockpit_scene` in place of the suit's cockpit, under the same name.
+func _swap_cockpit(stage: Node) -> void:
+	for n in stage.find_children("*", "", true, false):
+		if n is CockpitBase:
+			var replacement := (load(_cockpit_scene) as PackedScene).instantiate()
+			var parent := n.get_parent()
+			replacement.name = n.name
+			replacement.transform = (n as Node3D).transform
+			parent.remove_child(n)
+			n.free()
+			parent.add_child(replacement)
+			replacement.owner = stage
+			return
+
+
+## The right grip and hand close by, and both from the pilot's eye looking down.
+func _rail_views(tag: String) -> void:
+	_fp_cam.make_current()
+	_fp_cam.set_look_rotation(Basis(Vector3.RIGHT, deg_to_rad(-55)))
+	await _shot("rail_%s_fp" % tag)
+	_fp_cam.set_look_rotation(Basis.IDENTITY)
+	await _frames(20)
+	_debug_cam.make_current()
+	var seat := _pilot.transform if _pilot != null else Transform3D.IDENTITY
+	var at := Vector3(0.3, -0.34, -0.22)
+	for view in [["side", Vector3(0.75, -0.3, -0.24)], ["front", Vector3(0.42, -0.2, -0.65)], ["top", Vector3(0.3, 0.1, -0.2)]]:
+		_debug_cam.transform = seat * Transform3D(Basis.IDENTITY, view[1]).looking_at(at, Vector3.UP if view[0] != "top" else Vector3.FORWARD)
+		await _shot("rail_%s_%s" % [tag, view[0]])
+	_fp_cam.make_current()
 
 
 ## Debug: a green ball on every Hand*/Foot* marker and a red one on the bone that should

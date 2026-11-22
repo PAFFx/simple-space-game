@@ -1,0 +1,96 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeat/cockpit_linear_seat.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/CockpitLinearSeatV2Rail/Arts/cockpit_linear_seat_v2_rail.glb" id="2_model"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/panoramic_screen.tscn" id="3_screen"]
+[ext_resource type="PackedScene" path="res://Common/Controls/MouseLookController/mouse_look_controller.tscn" id="4_mlc"]
+[ext_resource type="PackedScene" path="res://Entities/Vehicles/Cockpits/Components/PanoramicHud/panoramic_hud.tscn" id="5_hud"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/ControlsAnimator/cockpit_controls_animator.gd" id="6_anim"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/SeatGimbal/cockpit_gimbal.gd" id="7_gimbal"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/PilotCamera/pilot_camera.gd" id="9_cam"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/CockpitDisplays/cockpit_displays.gd" id="10_disp"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/HatchCockpitParts/hatch_cockpit_parts.gd" id="11_hatchparts"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/CockpitControls/cockpit_click_mode.gd" id="13_click"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/SeatedPilot/seated_pilot.gd" id="14_pilot"]
+[ext_resource type="PackedScene" path="res://Entities/Characters/AmateYuzuriha/amate_yuzuriha.tscn" id="15_character"]
+
+[ext_resource type="Script" path="res://Entities/Vehicles/Cockpits/Components/BeamGlow/cockpit_beam_glow.gd" id="20_glow"]
+
+[node name="CockpitLinearSeatV2Rail" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Model" parent="." instance=ExtResource("2_model")]
+
+[node name="PanoramicDisplayMount" type="Marker3D" parent="."]
+
+[node name="PanoramicScreen" parent="PanoramicDisplayMount" instance=ExtResource("3_screen")]
+screen_radius = 1.25
+aperture_center_deg = Vector2(0, -37.3)
+aperture_half_size_deg = Vector2(19, 23.8)
+
+[node name="CameraMount" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.08)
+
+[node name="PlayerCamera3D" type="Camera3D" parent="CameraMount"]
+script = ExtResource("9_cam")
+cull_mask = 125
+near = 0.03
+fov = 80.0
+lean_enabled = true
+
+[node name="MouseLookController" parent="CameraMount/PlayerCamera3D" instance=ExtResource("4_mlc")]
+pitch_limit = 75.0
+yaw_limit = 150.0
+
+[node name="CockpitLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, -0.2)
+light_color = Color(0.65, 0.82, 1, 1)
+light_energy = 0.7
+light_cull_mask = 24
+omni_range = 2.4
+
+[node name="BeamGlow" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.25)
+script = ExtResource("20_glow")
+
+[node name="ControlsAnimator" type="Node" parent="." node_paths=PackedStringArray("left_slide", "right_slide", "left_roll", "right_roll", "left_bar", "right_bar")]
+script = ExtResource("6_anim")
+scheme = 2
+twist_travel_deg = 28.0
+smoothing = 0.05
+left_slide = NodePath("../Model/GripL/SlideL")
+right_slide = NodePath("../Model/SeatSwing/GripR/SlideR")
+left_roll = NodePath("../Model/GripL/SlideL/RollL")
+right_roll = NodePath("../Model/SeatSwing/GripR/SlideR/RollR")
+left_bar = NodePath("../Model/GripL/SlideL/RollL/BarL")
+right_bar = NodePath("../Model/SeatSwing/GripR/SlideR/RollR/BarR")
+slide_travel = 0.06
+roll_travel_deg = 20.0
+
+[node name="PanoramicHud" parent="." instance=ExtResource("5_hud")]
+
+[node name="CockpitGimbal" type="Node" parent="."]
+script = ExtResource("7_gimbal")
+
+[node name="CockpitDisplays" type="Node" parent="." node_paths=PackedStringArray("model_root")]
+script = ExtResource("10_disp")
+model_root = NodePath("../Model")
+
+[node name="Pilot" type="Node3D" parent="." node_paths=PackedStringArray("cockpit_model")]
+script = ExtResource("14_pilot")
+cockpit_model = NodePath("../Model")
+hip_position = Vector3(0, -0.52, -0.09)
+recline_deg = 12.0
+finger_curl_deg = Vector3(62, 70, 40)
+thumb_curl_deg = 30.0
+
+[node name="AmateYuzuriha" parent="Pilot" instance=ExtResource("15_character")]
+
+[node name="HatchCockpitParts" type="Node" parent="." node_paths=PackedStringArray("model_root", "seat_riders")]
+script = ExtResource("11_hatchparts")
+model_root = NodePath("../Model")
+seat_turn_deg = -40.0
+seat_riders = [NodePath("../CameraMount"), NodePath("../Pilot")]
+
+[node name="CockpitClickMode" type="Node" parent="."]
+script = ExtResource("13_click")
