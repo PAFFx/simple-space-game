@@ -94,6 +94,7 @@ func _run(shots: PackedStringArray) -> void:
 
 	_input.cmd.master_mode = FireControl.MasterMode.DGFT
 	await _frames(60)
+	_fcs.draw_now()   # skip the rifle draw
 	if "rifle" in shots:
 		var rifle := _fcs.get_weapon(&"beam_rifle")
 		for aim: Vector2 in RIFLE_AIMS:

@@ -14,6 +14,10 @@ extends Node3D
 ##
 ## A beam (projectile.spool_time > 0) fires once per pull: the trigger is held while the
 ## barrel spools up, the shot leaves when it is spooled, and letting go early drops it.
+##
+## A `low_ready` weapon is held low (its equipment's held_pose, the arm free) until it is
+## wanted on a target: a lock, the trigger (it comes up on the boresight), or a shot in the
+## last raise_hold_time. Its spool runs while it comes up; the shot leaves once it is up.
 ## A BEAM keeps pouring out of the barrel for its emit_time, the line following the aim.
 ## Two weapons can draw on one magazine (`ammo_from`), sharing it and its cooldown.
 
@@ -43,6 +47,10 @@ enum State { STOWED, READYING, READY, STOWING }
 @export_group("Readying")
 ## Seconds to bring it to bear (raising the arm, spinning up the barrels).
 @export var ready_time: float = 0.8
+## Held low while nothing calls for it (see above), instead of always up.
+@export var low_ready: bool = false
+## A low_ready weapon stays up this long after the trigger, s.
+@export var raise_hold_time: float = 3.0
 ## Pose the carrying equipment takes while this weapon is wanted (MsPoseAnimator layer).
 @export var pose: StringName = &""
 ## Bone it rides when it isn't under an MsEquipment, and where on that bone (body frame
@@ -110,6 +118,11 @@ var spool := 0.0
 ## FireControl sets these each tick.
 var wanted := false
 var triggered := false
+## Its equipment is in the hand (drawn).
+var held := true
+## It is being brought up (or is up): wanted, held and, if low_ready, called for.
+var raise_wanted := false
+var _raise_hold := 0.0
 ## Point at this instead of the lead direction (azimuth / elevation, deg), or null.
 var aim_override: Variant = null
 ## The suit holds its shield up (set by FireControl): the guard envelope applies.
@@ -173,6 +186,16 @@ func get_hud_name() -> String:
 	return hud_name if hud_name != "" else display_name
 
 
+## Being drawn (its equipment on the way to the hand) or held low: short HUD words, ""
+## otherwise.
+func get_carry_label() -> String:
+	if wanted and not held:
+		return "DRAW"
+	if low_ready and wanted and not raise_wanted and readiness <= 0.0:
+		return "LOW"
+	return ""
+
+
 func is_gun() -> bool:
 	return projectile != null and max_ammo > 0
 
@@ -208,6 +231,7 @@ func take_over(other: MsWeapon) -> void:
 	aim_rate = other.aim_rate
 	aim_weight = other.aim_weight
 	torso_yaw = other.torso_yaw
+	_raise_hold = other._raise_hold
 	other.readiness = 0.0
 	other.state = State.STOWED
 	other.aim_weight = 0.0
@@ -277,7 +301,14 @@ func get_envelope_outline(step := 4.0) -> PackedVector2Array:
 
 ## Advances readying, the fire solution and the aim. Called by FireControl every tick.
 func update(delta: float, fcs: FireControl) -> void:
-	readiness = move_toward(readiness, 1.0 if wanted else 0.0, delta / maxf(ready_time, 0.01))
+	var streaming_now := _stream != null and _stream.emitting
+	if low_ready:
+		_raise_hold = raise_hold_time if triggered and wanted else maxf(_raise_hold - delta, 0.0)
+		raise_wanted = wanted and held and (fcs.locked != null or triggered or _raise_hold > 0.0 \
+				or streaming_now or aim_override != null)
+	else:
+		raise_wanted = wanted and held
+	readiness = move_toward(readiness, 1.0 if raise_wanted else 0.0, delta / maxf(ready_time, 0.01))
 	if readiness >= 1.0:
 		state = State.READY
 	elif readiness <= 0.0:
@@ -287,6 +318,8 @@ func update(delta: float, fcs: FireControl) -> void:
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	if not triggered:
 		_awaiting_release = false
+	if not held:
+		_hold_left = 0.0
 
 	_solve(fcs)
 	var desired := boresight
@@ -297,7 +330,7 @@ func update(delta: float, fcs: FireControl) -> void:
 		desired = clamp_to_envelope(_smooth_lead(lead_angles, delta))
 		_held_aim = desired
 		_hold_left = lock_loss_hold
-	elif _hold_left > 0.0 or streaming:
+	elif held and (_hold_left > 0.0 or streaming):
 		desired = _held_aim
 		_hold_left = maxf(_hold_left - delta, 0.0)
 	if not solution_valid:
@@ -323,9 +356,10 @@ func update(delta: float, fcs: FireControl) -> void:
 
 
 func _update_spool(delta: float, fcs: FireControl) -> void:
-	if triggered and not _awaiting_release and can_fire():
-		spool += delta
-		if spool >= projectile.spool_time:
+	if triggered and not _awaiting_release and _can_spool():
+		# Coming up from low ready: spooled, it holds the charge until it is up.
+		spool = minf(spool + delta, projectile.spool_time)
+		if spool >= projectile.spool_time and can_fire():
 			spool = 0.0
 			_awaiting_release = true
 			_fire(fcs)
@@ -376,7 +410,12 @@ func _slew(desired: Vector2, delta: float) -> void:
 
 
 func can_fire() -> bool:
-	return state == State.READY and not masked and not broken and _magazine()._cooldown <= 0.0 \
+	return state == State.READY and _can_spool()
+
+
+## Everything but being up: the spool may run while it comes up.
+func _can_spool() -> bool:
+	return raise_wanted and not masked and not broken and _magazine()._cooldown <= 0.0 \
 			and ammo >= ammo_cost and projectile != null
 
 

@@ -2,6 +2,8 @@ extends SceneTree
 
 ## FBW response probe (RX-93, scripted input):
 ##   godot-double --headless --path . -s Tools/Flight/fbw_probe.gd -- <scenario> [series] [no_funnels] [law_property=value ...]
+## Mass-layout switches: rifle_in_hand (held in NAV, as before it had a stow), rifle_massless,
+## no_forearm_twist (the forearm twist AMBAC joints out of balancing).
 ## Tools/Flight/run_fbw_probe.sh runs every scenario.
 
 class Scripted extends PilotInputSource:
@@ -136,6 +138,21 @@ func _tick() -> void:
 	if fc.body == null: return
 	if not applied:
 		applied = true
+		if "rifle_massless" in overrides:
+			var lr := (fc.body as Node as VehicleBase).find_component(LimbReaction) as LimbReaction
+			lr.set_part_mass(&"BeamRifle", 0.0)
+		var vehicle := fc.body as Node as VehicleBase
+		if "rifle_in_hand" in overrides:
+			# The rifle held in NAV (as before it had a stow): its mass on the free arm.
+			var loadout := vehicle.find_component(MsLoadout) as MsLoadout
+			for eq in loadout.equipment:
+				if eq.draw_motion != null:
+					loadout.snap_draw(eq, true)
+			loadout.draw_frozen = true
+		if "no_forearm_twist" in overrides:
+			for j in fc.ambac.joints:
+				if j.bone_name.begins_with("forearm") and absf(j.axis.dot(Vector3.RIGHT)) < 0.9:
+					j.priority = 0.0
 		for o in overrides:
 			if "=" in o:  # control law property override, e.g. rate_gain=9
 				var key := o.get_slice("=", 0)
@@ -311,3 +328,4 @@ func _report() -> void:
 	s += "  | off-demand force: alloc max %.2fg avg %.2fg, real max %.2fg avg %.2fg" % [
 		alloc_perp, sum_alloc / maxi(n_perp, 1), real_perp, sum_real / maxi(n_perp, 1)]
 	print(s)
+

@@ -7,6 +7,10 @@ extends Node3D
 ## the suit mounts it on a skeleton bone and toggles it with `input_action`.
 ## While active it plays `active_pose` on the suit and occupies `ambac_group`,
 ## so that limb is not used for AMBAC balancing.
+##
+## With a `draw_motion` it lives on its stow point (rifle on the rear skirt) until drawn:
+## MsLoadout moves it there and back with the arm. In the hand and not in use it takes
+## `held_pose`, which leaves the limb free for AMBAC.
 
 signal active_changed(is_active: bool)
 
@@ -24,10 +28,18 @@ signal active_changed(is_active: bool)
 ## AMBAC joint group this equipment occupies while active.
 @export var ambac_group: StringName = &""
 @export var start_active: bool = false
+## Pose while in the hand and not in use (rifle held low). Its limb stays free for AMBAC.
+@export var held_pose: StringName = &""
+## How it is stowed on the suit and drawn from there. Null: always in the hand.
+@export var draw_motion: MsDrawMotion
 
 var active: bool = false
 ## False while stowed off the suit (MsLoadout.set_equipped): hidden, massless, unusable.
 var equipped: bool = true
+## Draw progress (MsLoadout): 0 = stowed, 1 = the hand takes it, 2 = held.
+var draw_progress := 0.0
+## Wanted in the hand (FireControl sets it); MsLoadout draws or stows it to match.
+var hand_wanted := false
 
 
 func _ready() -> void:
@@ -48,6 +60,28 @@ func set_active(value: bool) -> void:
 
 func toggle() -> void:
 	set_active(not active)
+
+
+## In the hand (also halfway through a draw or stow), or always for equipment without a
+## stow point.
+func is_in_hand() -> bool:
+	return draw_motion == null or draw_progress >= 1.0
+
+
+## Fully drawn: usable.
+func is_drawn() -> bool:
+	return draw_motion == null or draw_progress >= 2.0
+
+
+func is_drawing() -> bool:
+	return draw_motion != null and draw_progress > 0.0 and draw_progress < 2.0
+
+
+## Whether it holds its limb (out of AMBAC): in use, or on its way in or out.
+func occupies_limb() -> bool:
+	if is_drawing():
+		return true
+	return active and (held_pose == &"" or active_pose != held_pose)
 
 
 func get_display_name() -> String:

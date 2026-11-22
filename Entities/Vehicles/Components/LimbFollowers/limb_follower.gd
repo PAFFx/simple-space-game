@@ -19,5 +19,7 @@ extends Resource
 ## Follow only from here: the share followed eases in over |source angle| from x to y deg
 ## (shoulder armour keeps still for a low-held weapon, tracks a raised arm). Zero = always.
 @export var ease_in_deg := Vector2.ZERO
+## Ease in only on the positive side (a forward swing): the other way it follows from 0°.
+@export var ease_in_positive_only: bool = false
 @export var min_angle_deg: float = -90.0
 @export var max_angle_deg: float = 90.0

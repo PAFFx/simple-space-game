@@ -34,6 +34,9 @@ extends Node
 ## much lower and they sit at their stops in big turns.
 @export var centering_frequency: float = 0.8
 @export var centering_damping: float = 1.0
+## The same for a held group (in use: a raised weapon arm, a leaning waist): its limbs go
+## back to their pose promptly instead of drifting home over seconds.
+@export var held_centering_frequency: float = 3.0
 ## How fast the share blends to the new master mode's value (fraction per second).
 @export var nav_blend_rate: float = 2.0
 ## Regularisation of the allocation (keeps it sane when no joint can help).
@@ -45,6 +48,8 @@ var targets := PackedFloat32Array()  ## Pose each joint is held at, rad (0 = neu
 var target_rates := PackedFloat32Array()
 var target_accels := PackedFloat32Array()
 var _locked := {}                    ## Group → true: hard-locked (no balancing)
+## Coupled limits (add_coupled_limit): key → [a, b, twist joint or -1, min sum rad, twist gain].
+var _coupled := {}
 var last_torque := Vector3.ZERO      ## Achieved body torque, body frame
 ## Part of last_torque from measured joints: LimbReaction applies their real reaction.
 var last_measured_torque := Vector3.ZERO
@@ -98,6 +103,31 @@ func lock_group(group: StringName) -> void:
 
 func unlock_group(group: StringName) -> void:
 	_locked.erase(group)
+
+
+## Keeps joint a + joint b ≥ min_sum_deg (e.g. thigh + knee: the shin points no further
+## back than that), raised by twist_gain per degree joint `twist` turns negative. Joint b
+## yields; a = -1 limits b alone. `key` names it for remove_coupled_limit. Joints by index
+## (find_joint), a and twist before b in the list.
+func add_coupled_limit(key: StringName, a: int, b: int, twist: int, min_sum_deg: float, twist_gain := 0.0) -> void:
+	if b >= 0:
+		_coupled[key] = [a, b, twist, deg_to_rad(min_sum_deg), twist_gain]
+
+
+func remove_coupled_limit(key: StringName) -> void:
+	_coupled.erase(key)
+
+
+## Lowest angle joint i may take under the coupled limits, given the joints before it.
+func _coupled_floor(i: int) -> float:
+	var floor := -INF
+	for c: Array in _coupled.values():
+		if c[1] != i:
+			continue
+		var twist: float = angles[c[2]] if c[2] >= 0 else 0.0
+		var other: float = angles[c[0]] if c[0] >= 0 else 0.0
+		floor = maxf(floor, c[3] + c[4] * maxf(-twist, 0.0) - other)
+	return floor
 
 
 ## Index of the joint on `bone` about `axis` (skeleton space), or -1.
@@ -195,8 +225,9 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 			alpha *= clampf((hi - angles[i]) / maxf(hi, 1e-4), 0.0, 1.0)
 		elif alpha < 0.0:
 			alpha *= clampf((angles[i] - lo) / maxf(-lo, 1e-4), 0.0, 1.0)
-		alpha += target_accels[i] - w0 * w0 * (angles[i] - targets[i]) \
-				- 2.0 * centering_damping * w0 * (rates[i] - target_rates[i])
+		var wi := w0 if weights[i] > 0.0 or j.priority <= 0.0 else held_centering_frequency
+		alpha += target_accels[i] - wi * wi * (angles[i] - targets[i]) \
+				- 2.0 * centering_damping * wi * (rates[i] - target_rates[i])
 		var max_accel := j.get_max_accel()
 		alpha = clampf(alpha, -max_accel, max_accel)
 
@@ -206,6 +237,12 @@ func step(torque_request: Vector3, delta: float) -> Vector3:
 		if new_angle > hi or new_angle < lo:
 			new_angle = clampf(new_angle, lo, hi)
 			new_rate = 0.0
+		if not _coupled.is_empty():
+			# Pushed up by a coupled limit (joints a and twist come earlier in the list).
+			var floor := minf(_coupled_floor(i), hi)
+			if new_angle < floor:
+				new_rate = clampf((floor - angles[i]) / delta, -max_rate, max_rate)
+				new_angle = angles[i] + new_rate * delta
 		var actual_alpha := (new_rate - rates[i]) / delta
 		rates[i] = new_rate
 		angles[i] = new_angle

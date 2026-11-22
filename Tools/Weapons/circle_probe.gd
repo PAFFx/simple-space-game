@@ -44,6 +44,7 @@ func _run() -> void:
 	_fcs = vehicle.find_component(FireControl) as FireControl
 	_input.cmd.master_mode = FireControl.MasterMode.DGFT
 	await _ticks(2)
+	_fcs.draw_now()   # skip the rifle draw
 	for case in [["drift", TargetDrone.Behaviour.DRIFT, 0.0], ["jink 3 G", TargetDrone.Behaviour.JINK, 3.0],
 			["jink 6 G", TargetDrone.Behaviour.JINK, 6.0]]:
 		for distance in [800.0, 2000.0]:

@@ -68,6 +68,7 @@ func _run() -> void:
 	_input.cmd.master_mode = FireControl.MasterMode.DGFT
 	_input.cmd.master_arm = 1
 	await _ticks(60)
+	_fcs.draw_now()   # skip the rifle draw
 	var rifle := _fcs.get_weapon(&"beam_rifle")
 	var spec: ProjectileSpec = rifle.projectile.duplicate()
 	spec.speed = _speed

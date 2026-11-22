@@ -96,6 +96,30 @@ tracks/0/enabled = true
 tracks/0/path = NodePath("Armature/Skeleton3D:upper_arm.R")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
+tracks/0/keys = PackedFloat64Array(0, 1, -0.42028996840624133, -0.47902690576308027, 0.38973980993496493, 0.6648251247989858)
+tracks/1/type = "rotation_3d"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Armature/Skeleton3D:forearm.R")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = PackedFloat64Array(0, 1, 0.15512146435682514, 0.02547359761188268, 0.024310993830594187, 0.9872676449167522)
+tracks/2/type = "rotation_3d"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Armature/Skeleton3D:hand.R")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = PackedFloat64Array(0, 1, 0.05098789993983369, -0.021358968956626315, 0.041270353415137614, 0.9976175551952888)
+
+[sub_resource type="Animation" id="Animation_i4w13"]
+length = 0.1
+tracks/0/type = "rotation_3d"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Armature/Skeleton3D:upper_arm.R")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
 tracks/0/keys = PackedFloat64Array(0, 1, -0.35511872366988473, -0.1900359300991482, 0.5572459964372806, 0.7261225356818541)
 tracks/1/type = "rotation_3d"
 tracks/1/imported = false
@@ -112,7 +136,7 @@ tracks/2/interp = 1
 tracks/2/loop_wrap = true
 tracks/2/keys = PackedFloat64Array(0, 1, 0.05098789993983369, -0.021358968956626315, 0.041270353415137614, 0.9976175551952888)
 
-[sub_resource type="Animation" id="Animation_i4w13"]
+[sub_resource type="Animation" id="Animation_pgp2k"]
 length = 0.1
 tracks/0/type = "rotation_3d"
 tracks/0/imported = false
@@ -136,7 +160,7 @@ tracks/2/interp = 1
 tracks/2/loop_wrap = true
 tracks/2/keys = PackedFloat64Array(0, 1, 0.05098789993983369, 0.021358968956626315, -0.041270353415137614, 0.9976175551952888)
 
-[sub_resource type="Animation" id="Animation_pgp2k"]
+[sub_resource type="Animation" id="Animation_phgtg"]
 length = 0.1
 tracks/0/type = "rotation_3d"
 tracks/0/imported = false
@@ -177,7 +201,8 @@ tracks/4/keys = PackedFloat64Array(0, 1, -0.019009999330807048, 0.17201307875126
 [resource]
 _data = {
 &"idle": SubResource("Animation_xxw6n"),
-&"rifle_ready": SubResource("Animation_ossuj"),
-&"shield_fire": SubResource("Animation_i4w13"),
-&"shield_guard": SubResource("Animation_pgp2k")
+&"rifle_low": SubResource("Animation_ossuj"),
+&"rifle_ready": SubResource("Animation_i4w13"),
+&"shield_fire": SubResource("Animation_pgp2k"),
+&"shield_guard": SubResource("Animation_phgtg")
 }

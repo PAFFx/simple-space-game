@@ -91,6 +91,9 @@ var _used_pos: Array[Vector3] = []
 var _used_rot: Array[Basis] = []
 var _used_twist := 0.0
 var _stage := 0                     ## 0: no pose yet, 1: one pose, 2: momentum known
+## Part index → 1: moved to another bone, 2: sampled there since (its next motion is the
+## move itself, not counted).
+var _rebase := {}
 var _warmup := 0.0
 
 
@@ -136,6 +139,10 @@ func _measure(dt: float) -> void:
 	var momentum := Vector3.ZERO
 	if _stage > 0:
 		for i in _bones.size():
+			if _rebase.get(i, 0) == 2:
+				_rebase.erase(i)
+				_used_pos[i] = _snap_pos[i]
+				_used_rot[i] = _snap_rot[i]
 			var m := _part_mass(i)
 			var v := (_snap_pos[i] - _used_pos[i]) / dt
 			var dq := (_snap_rot[i] * _used_rot[i].transposed()).get_rotation_quaternion()
@@ -167,6 +174,41 @@ func set_part_mass(part: StringName, kg: float) -> void:
 		return
 	_mass[i] = kg
 	_fill_joints = -1.0
+
+
+## Moves a part to another bone (equipment changing hands): `placement` is the part's frame
+## in the bone's, `box` its solid in its own frame. Taken where it is, so the change itself
+## isn't motion; the AMBAC joints are re-measured.
+func carry_part(part: StringName, bone_name: StringName, placement: Transform3D, box: AABB) -> void:
+	var i := _names.find(part)
+	var idx := skeleton.find_bone(bone_name) if skeleton != null else -1
+	if i < 0 or idx < 0:
+		return
+	_bones[i] = idx
+	_com[i] = placement * box.get_center()
+	var size := box.size * _body_from_skeleton().basis.get_scale()   # body units
+	var own := Basis(Vector3((size.y * size.y + size.z * size.z) / 12.0, 0, 0),
+			Vector3(0, (size.x * size.x + size.z * size.z) / 12.0, 0),
+			Vector3(0, 0, (size.x * size.x + size.y * size.y) / 12.0))
+	var rot := placement.basis.orthonormalized()
+	_inertia[i] = rot * own * rot.transposed()
+	_rebase[i] = 1
+	_fill_joints = -1.0
+
+
+## Moves a part on its bone (equipment carried by a stow arm): unlike carry_part, the move
+## is motion, its reaction pushes the suit.
+func move_part(part: StringName, placement: Transform3D, box: AABB) -> void:
+	var i := _names.find(part)
+	if i < 0:
+		return
+	_com[i] = placement * box.get_center()
+	var rot := placement.basis.orthonormalized()
+	var size := box.size * _body_from_skeleton().basis.get_scale()
+	var own := Basis(Vector3((size.y * size.y + size.z * size.z) / 12.0, 0, 0),
+			Vector3(0, (size.x * size.x + size.z * size.z) / 12.0, 0),
+			Vector3(0, 0, (size.x * size.x + size.y * size.y) / 12.0))
+	_inertia[i] = rot * own * rot.transposed()
 
 
 func _part_mass(i: int) -> float:
@@ -321,6 +363,15 @@ func _setup() -> void:
 		if not loadout.equipment_fitted.is_connected(_on_equipment_fitted):
 			loadout.equipment_fitted.connect(_on_equipment_fitted)
 		for eq in loadout.equipment:
+			if eq.draw_motion != null:
+				# Placed by the loadout (it may start on its stow point).
+				var carry := loadout.get_carry(eq)
+				var at := skeleton.find_bone(carry[0])
+				if at >= 0:
+					_add(at, eq.name, eq.mass, 0.0, AABB(), skeleton.get_bone_global_rest(at), bs)
+					carry_part(eq.name, carry[0], carry[1], MsLoadout.local_box(eq))
+					_rebase.erase(_names.size() - 1)
+				continue
 			var idx := skeleton.find_bone(eq.mount_bone)
 			if idx < 0 or not _bones.has(idx):
 				continue
@@ -393,6 +444,8 @@ func sample(_skeleton: Skeleton3D, dt: float) -> void:
 		var pose := bs * skeleton.get_bone_global_pose(_bones[i])
 		_snap_pos[i] = to_ref * (pose * _com[i] - ref.origin)
 		_snap_rot[i] = to_ref * pose.basis.orthonormalized()
+	for i: int in _rebase:
+		_rebase[i] = 2
 	_snap_twist = deg_to_rad(_fire_control.get_torso_yaw()) if _fire_control != null else 0.0
 	_fresh = true
 	_posed = true

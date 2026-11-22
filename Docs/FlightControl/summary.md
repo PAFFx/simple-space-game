@@ -189,7 +189,11 @@ in 48 directions, for the largest force it can make with less than 6% leaking si
 torque (bisection, warm-started probes, about 0.5 s once). An estimate from per-axis limits is far
 too optimistic: e.g. gimballed downward mains *can* push sideways, but only by also pushing up,
 which used to show up as vertical drift during strafes. Call `rebuild_capability_map()` after
-changing thrusters. It's a pattern search warm-started from {current, zero, each body axis aimed at
+changing thrusters. In flight (stance changes, the resting centre of mass moving: propellant,
+the rifle stowed or drawn, a lost part) `rebuild_capability_map_async()` builds it on a worker
+thread from a snapshot of the state (`FlightState.snapshot()`) and swaps it in when done: on the
+main thread it cost ~30 ms a tick for ~0.4 s and a ~340 ms tick at the end
+(`capability_rebuild_threaded` off: the old per-tick build, same tick every run). It's a pattern search warm-started from {current, zero, each body axis aimed at
 F}, about a dozen cost evaluations per tick. The offset is hard-limited to `max_offset_deg` (70°)
 and slewed at `slew_rate_deg` after a short low-pass (`smoothing_time`).
 
@@ -361,9 +365,17 @@ so it saved propellant but never made the suit turn faster.
 
 1. Weighted least squares: `α_i = −w_i J_i a_i·λ`, `M λ = τ_request`, `M = Σ w_i J_i² a_i a_iᵀ + εI`.
    `w_i` = joint priority, zero for groups occupied by active equipment (rifle raised → right arm,
-   shield guard → left arm).
-2. Each joint backs off as it nears its stop, and a centering spring pulls it back to neutral.
+   shield guard → left arm; the rifle at low ready leaves the arm free; a draw or stow holds the
+   arm and the waist).
+2. Each joint backs off as it nears its stop, and a centering spring pulls it back to neutral
+   (`centering_frequency` 0.8 rad/s; a held group's joints return at `held_centering_frequency`
+   3 rad/s, so a limb taken out of balancing, the rifle arm coming up, is back on its pose fast).
 3. The **achieved** reaction torque is applied to the body; the thrusters get `τ − τ_ambac`.
+4. Coupled limits (`add_coupled_limit`) keep a joint, or a pair's sum, above a floor, the
+   later joint yielding: with the rifle stowed on the rear skirt the legs keep off it
+   (thigh back ≤ 20° right / 12° left, shin back ≤ thigh + knee −60° / −75°), and while it
+   is drawn or stowed off its path (right thigh not behind vertical, shin ≤ −5°; left thigh
+   ≤ 5° back, shin ≤ −40°). The calf thrusters don't swing back meanwhile (3.3 s).
 
 **Joints** (offsets from the animated pose, human-like ranges):
 
@@ -374,6 +386,7 @@ so it saved propellant but never made the suit turn faster.
 | Ankle | toe down 40°, up 30° | 6e3 |
 | Shoulder | flex −35…+45°, out −8…+35°, twist ±25° | 6e4, 1e4 twist |
 | Elbow | bend up to 50°, straighten 5° | 2.5e4 |
+| Forearm | twist ±30° about the bone (also the roll the rifle draw uses), priority 0.3 | 4e3 |
 | Waist | twist ±12°, bend −10…+6° | 1.2e5 / 1.5e5 |
 
 Legs and ankles move at up to 150°/s (600°/s²) for stances; the side hip swing is kept small. Twists move little mass; they mostly add natural motion.
@@ -603,7 +616,7 @@ in the Output panel, add the bindings, then enable `joystick_enabled`.
 ## RX-93 ν Gundam (`Stages/RX93TestRange`, the main scene for now)
 
 Built from a downloaded model (`Tools/Blender/build_mobile_suit_nu.py`, `Tools/Godot/build_rx93_scene.gd`),
-with MSP-02's bone names and components. Weapons are separate equipment (rifle on `hand.R`, shield
+with MSP-02's bone names and components. Weapons are separate equipment (rifle on `hand.R`, stowed on `skirt_rear.R` outside a weapons mode, so in NAV its 2.6 t sit on the back: braking turns pitch further than with it in the hand, `fbw_probe brake_yaw` body dev 44° → 60°, turned 40° → 29–32° in 1 s, the same as with a massless rifle; shield
 on `forearm.L`, hyper bazooka, beam saber and fin funnels on `backpack`, 15.9 t in all). Mass, centre
 of mass and inertia come from the mass model (`Docs/PhysicsAndSensors/mass_model.md`). Thrusters sit on the model's yellow thruster ports (found by sampling its
 texture), and most can't aim far, so limbs have to move to point them:

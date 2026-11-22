@@ -164,7 +164,12 @@ func _run() -> void:
 	_input.cmd.lock_commit = true
 	await _ticks(2)
 	var rifle := _fcs.get_weapon(&"beam_rifle")
-	await _ticks(90)
+	# Drawn from the rear skirt first (Tools/Weapons/draw_probe.gd), then up on the lock.
+	for i in 300:
+		if rifle.state == MsWeapon.State.READY:
+			break
+		await _ticks(1)
+	await _ticks(60)
 	print("rifle state %d readiness %.2f aim %s lead %s on_target %s tof %.3f range %.0f" % [rifle.state, rifle.readiness,
 			rifle.aim, rifle.lead_angles, rifle.on_target, rifle.time_of_flight, rifle.target_range])
 	_check("rifle ready and on target", rifle.state == MsWeapon.State.READY and rifle.on_target)

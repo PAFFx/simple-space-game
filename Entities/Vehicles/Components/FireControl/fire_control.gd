@@ -6,8 +6,10 @@ extends Node
 ## tick, and drives the MsWeapons found anywhere under the vehicle.
 ##
 ##   master arm   SAFE keeps every trigger dead; symbology stays live.
-##   master mode  NAV: weapons stowed. DGFT: weapons out, the beam rifle selected on
-##                entry (never the last weapon, which might have been a saber).
+##   master mode  NAV: weapons stowed (the rifle goes back on its rear skirt). DGFT:
+##                weapons out (the rifle drawn, held low), the beam rifle selected on entry
+##                (never the last weapon, which might have been a saber), and the SOI on the
+##                panoramic screen's cursor unless it is already there or on the HMCS.
 ##                BVR: reserved; selecting a weapon there doesn't drop to DGFT.
 ##   two channels the vulcans on their own trigger (always available in a weapons
 ##                mode), and the selected weapon on weapon release.
@@ -139,6 +141,7 @@ var _aimed: Array[MsWeapon] = []
 var _stowed := {}                     ## MsEquipment taken off → its weapons
 var _ambac: AmbacController
 var _torso_held := false
+var _drawing := false
 var _target_velocity := Vector3.ZERO
 var _target_last := Vector3.ZERO
 var _target_tracked := false
@@ -443,6 +446,15 @@ func set_mode(value: MasterMode) -> void:
 	_apply_mode()
 
 
+## Puts stowable equipment where the mode wants it at once, skipping the draw (tools).
+func draw_now() -> void:
+	if loadout == null:
+		return
+	for eq in loadout.equipment:
+		if eq.draw_motion != null:
+			loadout.snap_draw(eq, is_weapons_mode())
+
+
 func select(weapon: MsWeapon) -> void:
 	if weapon == selected:
 		return
@@ -520,7 +532,16 @@ func _physics_process(delta: float) -> void:
 
 	blocking = cmd.shield_block
 	var guard := get_weapon(guard_weapon)
+	if loadout != null:
+		for eq in loadout.equipment:
+			if eq.draw_motion != null:
+				eq.hand_wanted = is_weapons_mode()
+		# The arm and the stow arm show on the panoramic screen while a draw or stow runs.
+		if loadout.is_drawing() != _drawing:
+			_drawing = not _drawing
+			_show_body_on_screen()
 	for weapon: MsWeapon in weapons.values():
+		weapon.held = weapon.equipment == null or weapon.equipment.is_drawn()
 		if weapon.broken:
 			weapon.wanted = false
 			weapon.triggered = false
@@ -563,7 +584,15 @@ func _apply_mode() -> void:
 	if mode == MasterMode.NAV:
 		select(null)
 	elif mode == MasterMode.DGFT:
+		_dgft_soi()
 		select(get_weapon(dgft_weapon))
+
+
+## Entering DGFT: the panoramic screen's cursor takes the SOI from a display (the HUD
+## cursor or the HMCS keep it).
+func _dgft_soi() -> void:
+	if soi == Soi.MFD:
+		_set_soi(Soi.HUD_CURSOR, null)
 
 
 ## In a weapons mode the panoramic screen outlines the arms and the gun, so a shot is seen
@@ -573,13 +602,14 @@ func _show_body_on_screen() -> void:
 	var sensor := vehicle.get_sensor_head() if vehicle.get_sensor_head_mount() != null else null
 	if sensor != null:
 		var layers := 0
-		if is_weapons_mode():
+		if is_weapons_mode() or _drawing:
 			layers = Layers.SENSOR_BODY_PARTS if show_body_in_weapons_mode else Layers.SENSOR_COMBAT
 		# Resolves in (and breaks up) as blue blocks: see SensorHead.set_overlay.
 		sensor.set_overlay(layers)
 
 
-## Each equipment takes the pose of the weapon that wants it; the guard comes first.
+## Each equipment takes the pose of the weapon that wants it, the guard first; one in
+## the hand that nothing wants up (or a low_ready weapon held low) takes its held_pose.
 func _apply_poses(guard: MsWeapon) -> void:
 	var poses := {}
 	var carriers := {}
@@ -587,9 +617,12 @@ func _apply_poses(guard: MsWeapon) -> void:
 		if weapon.equipment == null:
 			continue
 		carriers[weapon.equipment] = true
-		if weapon.wanted and (weapon == guard or not poses.has(weapon.equipment)):
+		var up := weapon.wanted and (not weapon.low_ready or weapon.raise_wanted or weapon.readiness > 0.0)
+		if up and (weapon == guard or not poses.has(weapon.equipment)):
 			poses[weapon.equipment] = weapon.pose
 	for eq: MsEquipment in carriers:
+		if not poses.has(eq) and eq.held_pose != &"" and eq.draw_motion != null and eq.is_in_hand():
+			poses[eq] = eq.held_pose
 		if poses.has(eq):
 			eq.active_pose = poses[eq]
 		eq.set_active(poses.has(eq))
@@ -608,6 +641,7 @@ func _press_hat(direction: int) -> void:
 		if mode == MasterMode.NAV:
 			mode = MasterMode.DGFT
 			_show_body_on_screen()
+			_dgft_soi()
 		select(pick)
 	hat_pressed.emit(direction)
 
