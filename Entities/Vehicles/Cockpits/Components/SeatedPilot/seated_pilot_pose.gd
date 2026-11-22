@@ -13,6 +13,9 @@ extends SkeletonModifier3D
 ## "hand" is the forearm, "foot" the shin.
 
 @export var spine_bones: Array[StringName] = [&"spine_02", &"neck_03"]
+## Share of the G lean each spine bone takes: mostly low, so the whole torso swings from
+## the hips (as PilotCamera moves the eye) rather than bending at the shoulders.
+@export var lean_weights: PackedFloat32Array = [0.8, 0.2]
 @export var head_bone: StringName = &"head_04"
 ## Per side (L, R): upper bone (at the shoulder / hip), lower bone (its head is the elbow /
 ## knee), end bone (its head is the wrist / ankle). Bones between them stay rigid.
@@ -142,15 +145,17 @@ func _process_modification() -> void:
 func _lean_and_look(sk: Skeleton3D, seat: Basis) -> void:
 	var lean := pilot.lean
 	var share := 1.0 / maxi(spine_bones.size(), 1)
-	# Lean right = roll about the seat's forward axis, lean forward = pitch down.
-	var sway := Basis(seat.z, deg_to_rad(-lean.x) * share) * Basis(seat.x, deg_to_rad(-lean.y) * share)
 	# The torso's turn for the look, shared out along the spine.
 	var torso := seat * pilot.torso * seat.inverse()
 	var step := Basis(Quaternion.IDENTITY.slerp(Quaternion(torso.orthonormalized()), share))
-	for bone_name in spine_bones:
-		var b := sk.find_bone(bone_name)
-		if b >= 0:
-			_set_global_basis(sk, b, step * sway * _global_basis(sk, b))
+	for i in spine_bones.size():
+		var b := sk.find_bone(spine_bones[i])
+		if b < 0:
+			continue
+		var w := lean_weights[i] if i < lean_weights.size() else share
+		# Lean right = roll about the seat's forward axis, lean forward = pitch down.
+		var sway := Basis(seat.z, deg_to_rad(-lean.x) * w) * Basis(seat.x, deg_to_rad(-lean.y) * w)
+		_set_global_basis(sk, b, step * sway * _global_basis(sk, b))
 	var head := sk.find_bone(head_bone)
 	if head < 0:
 		return
