@@ -186,13 +186,13 @@ func get_hud_name() -> String:
 	return hud_name if hud_name != "" else display_name
 
 
-## Being drawn (its equipment on the way to the hand) or held low: short HUD words, ""
+## Being drawn (its equipment on the way to the hand), or held low (shown as ready): short HUD words, ""
 ## otherwise.
 func get_carry_label() -> String:
 	if wanted and not held:
 		return "DRAW"
 	if low_ready and wanted and not raise_wanted and readiness <= 0.0:
-		return "LOW"
+		return "RDY"
 	return ""
 
 

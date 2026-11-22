@@ -158,7 +158,7 @@ func _state_label(weapon: MsWeapon) -> String:
 func _state_color(weapon: MsWeapon) -> Color:
 	if weapon.ammo <= 0:
 		return hud.warning_color
-	if weapon.state == MsWeapon.State.READY or weapon.get_carry_label() == "LOW":
+	if weapon.state == MsWeapon.State.READY or weapon.get_carry_label() == "RDY":
 		return hud.primary_color
 	return hud.caution_color
 
