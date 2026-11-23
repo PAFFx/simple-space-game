@@ -26,9 +26,10 @@ extends ControlLaw
 ##   direction; a double-tapped Shift (or an analog stick at its stops) unlocks the
 ##   solver's full range. Precision (toggle) turns auto-rotation off and gentles thrust
 ##   and turn rates.
-## Dodge — a press with a direction kicks that way for dodge_time: the pintles open
-##   (FlightComputer burst) and the suit pushes with everything it has from the attitude
-##   it is in, no swing.
+## Dodge — a press with a direction kicks that way for dodge_time, and on for as long
+##   as the button is held, until the kick tank is dry: the pintles open (FlightComputer
+##   burst) and the suit pushes with everything it has from the attitude it is in, no
+##   swing. While held, the stick steers it.
 ## Horizon lock — (toggle) yaw turns about a stored "up" and roll is held level to
 ##   it, so pitch + yaw never bank the view. Rolling by hand sets a new horizon.
 ##   It fades out looking straight up or down, so loops still work.
@@ -164,7 +165,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var stop_accel_g: float = 6.0
 
 @export_group("Dodge")
-## How long a kick pushes, s.
+## How long a kick pushes at least, s (held, it goes on until the kick tank is dry).
 @export var dodge_time: float = 0.3
 ## Acceleration cap of a kick, G (the pilot's limit). 0 = everything the thrusters give.
 @export var dodge_accel_g: float = 0.0
@@ -205,6 +206,7 @@ var _full_share := 0.0               ## ...and this far (0..1) into full boost
 var _dodge_wait := 0.0               ## A dodge press waiting for a direction, s left
 var _dodge_left := 0.0               ## Kick in progress, s left
 var _dodge_dir := Vector3.ZERO       ## Its direction (global)
+var _dodge_holding := false          ## Its button is still held since the press
 var _last_boost := false             ## For the HUD label
 var _last_boost_full := false
 var _last_brake := false
@@ -351,18 +353,31 @@ func is_dodging() -> bool:
 	return _dodge_left > 0.0
 
 
-## A press starts a kick along the stick (pilot frame at the press) once the stick gives
-## a direction, within dodge_buffer_time, and only with the kick tank ready.
+## A press starts a kick along the stick (pilot frame) once the stick gives a direction,
+## within dodge_buffer_time, and only with the kick tank ready. It lasts dodge_time, and
+## past that for as long as the button stays held, ending when the kick tank runs dry.
+## While held the stick steers it; let go, it keeps its last direction.
 func _update_dodge(state: FlightState, command: PilotCommand) -> void:
 	if command.dodge:
 		_dodge_wait = dodge_buffer_time
-	_dodge_left = maxf(_dodge_left - state.delta, 0.0)
-	if _dodge_wait <= 0.0 or _dodge_left > 0.0:
-		return
 	var stick := command.translation
+	if _dodge_left > 0.0:
+		_dodge_holding = _dodge_holding and command.dodge_held
+		_dodge_left = maxf(_dodge_left - state.delta, 0.0)
+		if _dodge_holding:
+			_dodge_left = maxf(_dodge_left, state.delta)
+			if stick.length() >= dodge_min_stick:
+				_dodge_dir = (_pilot * stick).normalized()
+		if state.burst_reserve <= 0.0:
+			_dodge_left = 0.0
+		if _dodge_left > 0.0:
+			return
+	if _dodge_wait <= 0.0:
+		return
 	if stick.length() >= dodge_min_stick and state.burst_ready:
 		_dodge_dir = (_pilot * stick).normalized()
 		_dodge_left = dodge_time
+		_dodge_holding = command.dodge_held
 		_dodge_wait = 0.0
 	else:
 		_dodge_wait -= state.delta

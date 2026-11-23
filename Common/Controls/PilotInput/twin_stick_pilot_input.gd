@@ -148,6 +148,7 @@ func poll_command() -> PilotCommand:
 	cmd.translation = (cmd.translation + _stick_translation).clamp(-Vector3.ONE, Vector3.ONE)
 	cmd.rotation = (cmd.rotation + _stick_rotation).clamp(-Vector3.ONE, Vector3.ONE)
 	cmd.dodge = cmd.dodge or _pressed(_right, dodge_button)
+	cmd.dodge_held = cmd.dodge_held or _button(_right, dodge_button)
 	var brake_held := _button(_left, brake_button)
 	if brake_held and not _brake_held:
 		var now := Time.get_ticks_msec() / 1000.0

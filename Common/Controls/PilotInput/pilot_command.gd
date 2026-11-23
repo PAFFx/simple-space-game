@@ -24,6 +24,8 @@ var analog_thrust := false
 ## One-shot: kick (pintle burst) along the translation. Needs a direction: a press with
 ## the stick centred waits briefly for one, then is dropped.
 var dodge := false
+## The dodge button is held: the kick carries on until it is let go or the kick tank is dry.
+var dodge_held := false
 
 ## Brake the motion on the axes the translation doesn't hold, or holds against the
 ## current motion (Ctrl held). Released keys

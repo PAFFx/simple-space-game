@@ -7,14 +7,15 @@ extends SceneTree
 ##
 ##   godot-double --headless --path . --fixed-fps 60 -s Tools/Flight/kick_probe.gd -- \
 ##       [dirs=right,up,left,down,fwd,back,diag] [modes=kick,slam] [factor=4] [accel=0]
-##       [time=0.3] [reserve=300] [refill=40] [after=1.5]
+##       [time=0.3] [reserve=300] [refill=40] [after=1.5] [hold=0] [times=0.1,0.2,0.3,0.4,0.5]
 ##
 ## factor / accel / time / reserve / refill override burst_thrust_factor, dodge_accel_g,
 ## dodge_time, burst_reserve_capacity and burst_refill_flow. after: seconds to watch the
-## kick tank refill afterwards (0 = don't).
+## kick tank refill afterwards (0 = don't). hold: seconds the dodge button (and the stick)
+## stay held after the press; the kick goes on until then or until the kick tank is dry.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
-const TIMES := [0.1, 0.2, 0.3, 0.4, 0.5]
+var TIMES := [0.1, 0.2, 0.3, 0.4, 0.5]
 const DIRS := {
 	"right": Vector3.RIGHT, "left": Vector3.LEFT, "up": Vector3.UP, "down": Vector3.DOWN,
 	"fwd": Vector3.FORWARD, "back": Vector3.BACK, "diag": Vector3(1, 1, 0),
@@ -33,6 +34,7 @@ var _dirs := PackedStringArray(["right", "up", "left", "down", "fwd", "back", "d
 var _modes := PackedStringArray(["kick", "slam"])
 var _overrides := {}
 var _after := 1.5
+var _hold := 0.0
 
 
 func _initialize() -> void:
@@ -48,6 +50,11 @@ func _initialize() -> void:
 			"accel": _overrides["dodge_accel_g"] = float(value)
 			"time": _overrides["dodge_time"] = float(value)
 			"after": _after = float(value)
+			"hold": _hold = float(value)
+			"times":
+				TIMES = []
+				for part in value.split(","):
+					TIMES.append(float(part))
 	_run.call_deferred()
 
 
@@ -116,13 +123,15 @@ func _case(mode: String, name: String) -> void:
 	var next := 0
 	var t := 0.0
 	var kick_time := _law.dodge_time
+	var kick_end := -1.0
 	while next < TIMES.size():
 		_input.cmd = PilotCommand.new()
 		if mode == "kick":
 			# The press with the stick half out, then hands off: only the kick pushes.
-			if t < dt * 0.5:
+			if t < dt * 0.5 or t < _hold:
 				_input.cmd.translation = DIRS[name] as Vector3 * 0.5
-				_input.cmd.dodge = true
+				_input.cmd.dodge = t < dt * 0.5
+				_input.cmd.dodge_held = t < _hold
 		else:
 			_input.cmd.translation = (DIRS[name] as Vector3).normalized()
 			_input.cmd.analog_thrust = true
@@ -132,7 +141,9 @@ func _case(mode: String, name: String) -> void:
 		var a := (v - v_prev).length() / dt / FlightComputer.G0
 		v_prev = v
 		peak = maxf(peak, a)
-		if t <= kick_time + 1e-6:
+		if _law.is_dodging():
+			kick_end = t
+		if t <= maxf(kick_time, kick_end) + 1e-6:
 			accel_sum += a
 			accel_n += 1
 		var d := _com() - p0
@@ -145,6 +156,8 @@ func _case(mode: String, name: String) -> void:
 	line += " | %5.2f  %6.1f  %6.1f | %5.1f | %6.1f | %5.0f (%3.0f)" % [stray, peak, accel_sum / maxi(accel_n, 1),
 			turn, _suit.linear_velocity.dot(dir), used, tank0 - _fc.burst_reserve]
 	print(line)
+	if mode == "kick" and _hold > 0.0:
+		print("      held %.2f s: kicked %.2f s" % [_hold, kick_end])
 	if mode == "kick" and _after > 0.0:
 		var low := _fc.burst_reserve
 		_input.cmd = PilotCommand.new()

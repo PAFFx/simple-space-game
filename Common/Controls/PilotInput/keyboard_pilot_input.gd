@@ -10,7 +10,7 @@ extends PilotInputSource
 ## springs back when the mouse stops.
 ## Shift boosts; double-tap Shift (and hold) to boost with full auto-rotation. Released
 ## keys coast; Ctrl brakes the axes not being pushed on, double-tapped (and held) harder.
-## Caps Lock kicks (dodges) along the movement keys held.
+## Caps Lock kicks (dodges) along the movement keys held, for as long as it is held.
 ##
 ## Weapons: left mouse fires the selected weapon (while the mouse is captured), X the
 ## vulcans, T shows the lock candidate and G locks it, B holds the shield up, 1-5 are the
@@ -116,6 +116,7 @@ func poll_command() -> PilotCommand:
 	cmd.brake = Input.is_action_pressed(a.BRAKE)
 	cmd.brake_full = _held_after_double_tap(a.BRAKE)
 	cmd.dodge = _dodge
+	cmd.dodge_held = Input.is_action_pressed(a.DODGE)
 	_dodge = false
 	# Rotation mode, precision and horizon lock are cockpit switches (CockpitSwitchPanel).
 	_poll_weapons(cmd)

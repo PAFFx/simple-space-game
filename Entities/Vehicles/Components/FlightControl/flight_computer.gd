@@ -461,6 +461,7 @@ func _build_state(delta: float) -> void:
 	var to_body_basis := body.global_basis.inverse()
 	s.burst_factor = burst_factor
 	s.burst_ready = burst_thrust_factor > 1.0 and burst_reserve >= burst_min_reserve
+	s.burst_reserve = burst_reserve if burst_thrust_factor > 1.0 else 0.0
 	for t in thrusters:
 		t.throat_factor = burst_factor
 		t.throat_factor_max = burst_thrust_factor

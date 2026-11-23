@@ -32,6 +32,8 @@ var thruster_max := PackedFloat32Array()         ## Available thrust, N (0 = una
 var burst_factor: float = 1.0
 ## The kick tank holds enough for a kick.
 var burst_ready: bool = false
+## Propellant in the kick tank, kg (a held kick runs until it is gone).
+var burst_reserve: float = 0.0
 
 ## Rough authority estimates derived from the geometry above.
 var max_force_pos := Vector3.ZERO  ## Max force along +x/+y/+z (positive numbers)

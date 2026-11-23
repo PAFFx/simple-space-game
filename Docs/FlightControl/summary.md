@@ -136,7 +136,9 @@ While boosting, the swing itself is torque-limited (the body lags the target by 
 run at ~20°/s), because auto-rotation yields to force (`auto_rotate_torque_priority`).
 
 **Dodge (kick).** A press of the dodge button (right stick button 4, Caps Lock) with a
-direction kicks along it for `dodge_time` (0.3 s): the pintles open (see *Burst* below) and the
+direction kicks along it for `dodge_time` (0.3 s), and on for as long as the button stays held
+until the kick tank is dry (the stick steers a held kick; let go, it keeps its last direction): the
+pintles open (see *Burst* below) and the
 suit pushes with all it has, up to `dodge_accel_g` (ν: 20 G, what a strapped-in pilot takes for a
 fraction of a second), from the attitude it is in. The offset is frozen during the kick, since a
 swing couldn't finish in time anyway. The direction is the stick at the press (in the pilot
@@ -175,7 +177,9 @@ From rest (`Tools/Flight/kick_probe.gd`, ν full, 20 G cap), distance along the 
 | back | 0.4 | 2.1 | 5.5 | 14.8 | 18.4 / 14 | 46 | 83 |
 | stick slammed to full boost, right | 0.1 | 0.6 | 1.5 | 4.8 | 6 / 3.7 | 22 | — |
 
-Uncapped it peaks at 50 G up (Δv 110 m/s). The first 0.1 s is slow: idle thrusters still spool
+Held (`kick_probe.gd hold=2`): sideways the tank is dry after 0.83 s (Δv 148 m/s, 222 m in
+2 s); up it lasts the whole 2 s at 20 G (Δv 384 m/s), since the mains carry most of it within
+their rating and the tank barely drains. Uncapped it peaks at 50 G up (Δv 110 m/s). The first 0.1 s is slow: idle thrusters still spool
 (verniers 0.06 s, mains 0.12 s); keeping them lit ("hot standby") would remove that and is left
 for later. Total propellant per sideways kick ~125 kg, 0.5% of the tank (~205 kg when every
 pintle opened together); the up kick is cheap because the mains carry most of it within their
