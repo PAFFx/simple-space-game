@@ -100,6 +100,7 @@ loaded_torque_share = Vector3(0.6, 1, 0.6)
 cruise_accel_g = 1.2
 boost_accel_g = 10.5
 stop_accel_g = 9.0
+dodge_accel_g = 20.0
 
 [sub_resource type="Resource" id="Resource_ghowf"]
 script = ExtResource("15_cu47t")
@@ -1459,6 +1460,8 @@ dry_mass = 27900.0
 propellant_capacity = 25200.0
 propellant = 25200.0
 specific_impulse = 12000.0
+burst_thrust_factor = 4.0
+burst_reserve_capacity = 300.0
 
 [node name="PilotInput" type="Node" parent="FlightComputer" unique_id=1101994692]
 script = ExtResource("16_her5p")

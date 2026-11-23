@@ -11,9 +11,10 @@ extends KeyboardPilotInput
 ##                stick left = roll right)
 ## invert_heave / invert_pitch flip the twist mixes, invert_roll the left/right one.
 ##
-## Stick travel is the throttle (PilotCommand.analog_thrust), so there is no boost
-## button, only full boost. The stick demand adds onto the keyboard's; with a stick
-## missing this is plain keyboard input.
+## Stick travel is the throttle (PilotCommand.analog_thrust): cruise, then boost, then
+## full boost at the stops, so there is no boost button. The dodge button kicks along the
+## stick. The stick demand adds onto the keyboard's; with a stick missing this is plain
+## keyboard input.
 ##
 ## Weapons (both sticks number their buttons alike). Right: trigger first detent opens the
 ## vulcans, second fires them (the first stays pressed under the second); weapon release
@@ -40,7 +41,7 @@ extends KeyboardPilotInput
 @export var invert_roll: bool = false
 
 @export_group("Buttons")
-@export var full_boost_button: int = 4   ## Right stick, hold
+@export var dodge_button: int = 4        ## Right stick, press (with a direction)
 @export var brake_button: int = 21       ## Left stick, hold; double-tap and hold = hard brake
 @export var coupled_button: int = 20     ## Left stick, toggles
 @export var precision_button: int = 3    ## Left stick, toggles
@@ -146,7 +147,7 @@ func poll_command() -> PilotCommand:
 	cmd.analog_thrust = _stick_translation != Vector3.ZERO and cmd.translation == Vector3.ZERO
 	cmd.translation = (cmd.translation + _stick_translation).clamp(-Vector3.ONE, Vector3.ONE)
 	cmd.rotation = (cmd.rotation + _stick_rotation).clamp(-Vector3.ONE, Vector3.ONE)
-	cmd.boost_full = cmd.boost_full or _button(_right, full_boost_button)
+	cmd.dodge = cmd.dodge or _pressed(_right, dodge_button)
 	var brake_held := _button(_left, brake_button)
 	if brake_held and not _brake_held:
 		var now := Time.get_ticks_msec() / 1000.0

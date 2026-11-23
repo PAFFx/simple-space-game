@@ -550,6 +550,8 @@ func _build_flight_computer(root: Node3D) -> void:
 	law.cruise_accel_g = 1.2
 	law.boost_accel_g = 10.5
 	law.stop_accel_g = 9.0
+	# Kicks (pintle burst) stop at what a strapped-in pilot takes for a fraction of a second.
+	law.dodge_accel_g = 20.0
 	fc.set("control_law", law)
 	var alloc := ConeProjectedAllocator.new()
 	# The tight step goes ~2.3x further an iteration than the per-thruster bound: 40 of
@@ -565,6 +567,11 @@ func _build_flight_computer(root: Node3D) -> void:
 	fc.set("propellant_capacity", PROPELLANT)
 	fc.set("propellant", PROPELLANT)
 	fc.set("specific_impulse", 12000.0)
+	# Pintle throats ×4 (Isp 12,000 → 3,000 s, Docs/FlightControl/thrust_sizing.md); the kick
+	# tank holds about one and a half sideways kicks and refills in ~8 s coasting.
+	fc.set("burst_thrust_factor", 4.0)
+	fc.set("burst_reserve_capacity", 300.0)
+	fc.set("burst_refill_flow", 40.0)
 
 	var input := Node.new()
 	input.name = "PilotInput"

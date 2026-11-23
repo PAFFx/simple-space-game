@@ -65,7 +65,15 @@ At fixed power, halving the Isp doubles the thrust, and the propellant flow
 (`ṁ = F / v_e`) goes up 4×. A **variable-Isp boost** follows from it (like VASIMR, run on
 fusion): cruise at high Isp, and boost by injecting extra reaction mass. For example,
 Isp 12,000 → 3,000 gives 4× the thrust for 16× the propellant flow, so boosting visibly
-drains the tank. Not implemented.
+drains the tank.
+
+Implemented for short kicks (dodges) as **pintle throats** (`FlightComputer` burst,
+`Docs/FlightControl/summary.md`): just pushing harder through the same throat would need 4× the
+chamber pressure, so instead a pintle pulls back and opens the throat 4× in area (2× in diameter),
+at the same chamber pressure and the same reactor power (F·v_e/2 is unchanged). The gas comes out
+cooler (the same power heats 16× the mass), so heat is not the limit; feeding the flow is. The
+pumps are rated for the normal flow, and the rest comes from a small pressurised kick tank that
+they refill; its size sets how long a kick lasts and the refill sets how often one is possible.
 
 ## G-loads
 

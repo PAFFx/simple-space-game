@@ -23,8 +23,12 @@ extends ControlLaw
 ##   force demand. The cockpit counter-rotates, so the pilot's view stays put.
 ## Movement modes — how far auto-rotation may commit: normal flight and Shift
 ##   are capped (cruise/boost_max_offset_deg) so the suit stays quick to change
-##   direction; a double-tapped Shift unlocks the solver's full range. Precision
-##   (toggle) turns auto-rotation off and gentles thrust and turn rates.
+##   direction; a double-tapped Shift (or an analog stick at its stops) unlocks the
+##   solver's full range. Precision (toggle) turns auto-rotation off and gentles thrust
+##   and turn rates.
+## Dodge — a press with a direction kicks that way for dodge_time: the pintles open
+##   (FlightComputer burst) and the suit pushes with everything it has from the attitude
+##   it is in, no swing.
 ## Horizon lock — (toggle) yaw turns about a stored "up" and roll is held level to
 ##   it, so pitch + yaw never bank the view. Rolling by hand sets a new horizon.
 ##   It fades out looking straight up or down, so loops still work.
@@ -147,7 +151,10 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Analog sticks (PilotCommand.analog_thrust): travel up to this spans the cruise limit,
 ## the rest eases up to boost_accel_g and counts as boosting. Precision uses the whole
 ## travel for its own limit.
-@export_range(0.1, 0.95) var analog_boost_onset: float = 0.6
+@export_range(0.1, 0.95) var analog_boost_onset: float = 0.55
+## Past this travel the stick eases from boost into full boost (no acceleration cap,
+## auto-rotation opening to the solver's full range), reached at the stops.
+@export_range(0.1, 1.0) var analog_full_boost_onset: float = 0.85
 ## Precision mode's speed loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
 ## Braking: (m/s²) per (m/s) of the motion being stopped, up to stop_accel_g (a combat
@@ -155,6 +162,16 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## at precision_accel_g.
 @export var brake_gain: float = 2.5
 @export var stop_accel_g: float = 6.0
+
+@export_group("Dodge")
+## How long a kick pushes, s.
+@export var dodge_time: float = 0.3
+## Acceleration cap of a kick, G (the pilot's limit). 0 = everything the thrusters give.
+@export var dodge_accel_g: float = 0.0
+## Stick deflection that gives a kick its direction.
+@export_range(0.0, 1.0) var dodge_min_stick: float = 0.3
+## A press without a direction waits this long for the stick, then is dropped, s.
+@export var dodge_buffer_time: float = 0.15
 
 @export_group("Drift hold")
 ## Cancels motion the pilot didn't ask for (force spilled by hard turns, thruster lag)
@@ -184,6 +201,10 @@ var _release_timer := Vector3.ZERO
 var _turn_sign := Vector3.ZERO       ## Direction each steered axis was turning
 var _analog := false                 ## Stick travel sets the acceleration this tick
 var _analog_boost := false           ## ...and is past the boost onset
+var _full_share := 0.0               ## ...and this far (0..1) into full boost
+var _dodge_wait := 0.0               ## A dodge press waiting for a direction, s left
+var _dodge_left := 0.0               ## Kick in progress, s left
+var _dodge_dir := Vector3.ZERO       ## Its direction (global)
 var _last_boost := false             ## For the HUD label
 var _last_boost_full := false
 var _last_brake := false
@@ -257,10 +278,14 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	_analog = command.analog_thrust and not (precision or command.boost or command.boost_full)
 	# A little hysteresis, so a stick resting at the onset doesn't flicker the boost.
 	var onset := analog_boost_onset - (0.05 if _analog_boost else 0.0)
-	_analog_boost = _analog and command.translation.length() > onset
+	var amount := minf(command.translation.length(), 1.0)
+	_analog_boost = _analog and amount > onset
+	_full_share = clampf((amount - analog_full_boost_onset) / maxf(1.0 - analog_full_boost_onset, 0.01),
+			0.0, 1.0) if _analog_boost else 0.0
 	command.boost = command.boost or command.boost_full or _analog_boost
-	_last_boost = command.boost
-	_last_boost_full = command.boost_full
+	_update_dodge(state, command)
+	_last_boost = command.boost or _dodge_left > 0.0
+	_last_boost_full = command.boost_full or _full_share > 0.0 or _dodge_left > 0.0
 	command.brake = command.brake or command.brake_full
 	_last_brake = command.brake   # the HUD's brake cue shows the pilot's own braking
 	command.brake = command.brake or coupled
@@ -271,6 +296,8 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	_level_horizon(state.delta)
 	var force_world := _translation_force_world(state, command)
 	var drift_force := _drift_correction(state, command, force_world)
+	if _dodge_left > 0.0:
+		drift_force = Vector3.ZERO
 	_update_offset(state, force_world, command)
 	var wanted := state.to_local(force_world + drift_force)
 	_force_load = 0.0
@@ -281,10 +308,13 @@ func compute(state: FlightState, command: PilotCommand) -> Wrench:
 	# to turn with, so the force gives way while the pilot steers or a turn is stopping.
 	var reserve := stop_force_reserve if _is_stopping() \
 			else (steer_force_reserve if _locked != Vector3.ZERO else 0.0)
+	if _dodge_left > 0.0:
+		reserve = 0.0
 	var force_body := clamp_to_capability(state.to_local(force_world + drift_force), state,
 			1.0 - reserve)
 	var wrench := Wrench.new(force_body, torque)
 	wrench.thruster_torque_limit = _thruster_limit
+	wrench.burst = _dodge_left > 0.0
 	# Stopping a turn or braking into a target always wins: it matters more than a clean push.
 	if _is_stopping():
 		wrench.torque_priority = recover_torque_priority
@@ -316,6 +346,28 @@ func get_boost_level() -> int:
 	return 2 if _last_boost_full else (1 if _last_boost else 0)
 
 
+## A kick in progress.
+func is_dodging() -> bool:
+	return _dodge_left > 0.0
+
+
+## A press starts a kick along the stick (pilot frame at the press) once the stick gives
+## a direction, within dodge_buffer_time, and only with the kick tank ready.
+func _update_dodge(state: FlightState, command: PilotCommand) -> void:
+	if command.dodge:
+		_dodge_wait = dodge_buffer_time
+	_dodge_left = maxf(_dodge_left - state.delta, 0.0)
+	if _dodge_wait <= 0.0 or _dodge_left > 0.0:
+		return
+	var stick := command.translation
+	if stick.length() >= dodge_min_stick and state.burst_ready:
+		_dodge_dir = (_pilot * stick).normalized()
+		_dodge_left = dodge_time
+		_dodge_wait = 0.0
+	else:
+		_dodge_wait -= state.delta
+
+
 func get_brake_level() -> int:
 	return 2 if _last_brake_full else (1 if _last_brake else 0)
 
@@ -325,7 +377,7 @@ func _offset_limit_deg(command: PilotCommand) -> float:
 	if command.boost_full or (command.brake_full and not precision):
 		return attitude_solver.max_offset_deg
 	if command.boost:
-		return boost_max_offset_deg
+		return lerpf(boost_max_offset_deg, attitude_solver.max_offset_deg, _full_share)
 	return 0.0 if precision else cruise_max_offset_deg
 
 
@@ -479,6 +531,11 @@ func _update_offset(state: FlightState, force_world: Vector3, command: PilotComm
 	if rotation_mode != RotationMode.ATTITUDE_HOLD:
 		return
 	var r_cur := AttitudeOffsetSolver.to_rotation_vector(_offset)
+	if _dodge_left > 0.0:
+		# A kick is over before a swing could help: it pushes from the attitude it found.
+		_offset_target_r = r_cur
+		_offset_vel = Vector3.ZERO
+		return
 	var share := steer_auto_rotate_share
 	if _locked == Vector3.ONE and share <= 0.0:
 		_offset_target_r = r_cur
@@ -749,19 +806,30 @@ func _drift_correction(state: FlightState, command: PilotCommand, intent_world: 
 
 
 ## Acceleration for a stick deflection of `amount` (0..1). Keys and buttons scale the
-## mode's limit; an analog stick spans cruise up to the boost onset and eases into
-## boost beyond it, the same curve whichever side of the onset's hysteresis it is on.
-func _push_accel(amount: float, accel_limit: float) -> float:
+## mode's limit; an analog stick spans cruise up to the boost onset, eases into boost
+## beyond it and into full boost (`full`, everything) past the full-boost onset, the same
+## curve whichever side of the onset's hysteresis it is on.
+func _push_accel(amount: float, accel_limit: float, full: float) -> float:
 	if not _analog:
 		return amount * accel_limit
 	var cruise := cruise_accel_g * FlightComputer.G0
 	if amount <= analog_boost_onset:
 		return amount / analog_boost_onset * cruise
-	var t := (amount - analog_boost_onset) / (1.0 - analog_boost_onset)
-	return lerpf(cruise, maxf(boost_accel_g * FlightComputer.G0, cruise), t * t)
+	var boost := maxf(boost_accel_g * FlightComputer.G0, cruise)
+	var full_onset := maxf(analog_full_boost_onset, analog_boost_onset)
+	if amount <= full_onset:
+		var t := (amount - analog_boost_onset) / maxf(full_onset - analog_boost_onset, 0.01)
+		return lerpf(cruise, boost, t * t)
+	var t := (amount - full_onset) / maxf(1.0 - full_onset, 0.01)
+	return lerpf(boost, maxf(full, boost), t)
 
 
 func _translation_force_world(state: FlightState, command: PilotCommand) -> Vector3:
+	if _dodge_left > 0.0:
+		var kick := _total_thrust(state) / state.mass
+		if dodge_accel_g > 0.0:
+			kick = minf(kick, dodge_accel_g * FlightComputer.G0)
+		return _dodge_dir * kick * state.mass
 	var stick_world := _pilot * command.translation
 	var gentle := precision and not command.boost
 	var accel_g := boost_accel_g if command.boost else (precision_accel_g if gentle else cruise_accel_g)
@@ -773,7 +841,7 @@ func _translation_force_world(state: FlightState, command: PilotCommand) -> Vect
 	var amount := stick_world.length()
 	if amount > stick_deadzone:
 		var dir := stick_world / amount
-		var push_accel := _push_accel(minf(amount, 1.0), accel_limit)
+		var push_accel := _push_accel(minf(amount, 1.0), accel_limit, _total_thrust(state) / state.mass)
 		if gentle:
 			push_accel = clampf((precision_speed * minf(amount, 1.0) - v.dot(dir)) * velocity_gain,
 					0.0, push_accel)

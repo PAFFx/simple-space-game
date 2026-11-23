@@ -88,6 +88,9 @@ const DIAMOND_SPACING := 1.7
 const FX_CORE_LENGTH := 0.6
 
 var throttle: float = 0.0                         ## Actual spooled throttle [0, 1]
+## Pintle throat factor (FlightComputer, burst): thrust ×this at the same throttle and
+## chamber pressure, Isp ÷this. 1 = rated throat.
+var throat_factor: float = 1.0
 
 ## _limit_planes(), kept until a gimbal setting changes (their setters clear it).
 var _planes_local: Array[Vector3] = []
@@ -149,7 +152,7 @@ func _setup_fx() -> void:
 
 ## Current thrust in Newtons.
 func get_thrust() -> float:
-	return throttle * max_thrust if enabled else 0.0
+	return throttle * max_thrust * throat_factor if enabled else 0.0
 
 
 ## Actual nozzle deflection, each axis in [-1, 1] of the gimbal limit.
@@ -176,7 +179,7 @@ func get_hud_label() -> String:
 
 ## Available thrust for the allocator (0 when disabled).
 func get_available_thrust() -> float:
-	return max_thrust if enabled else 0.0
+	return max_thrust * throat_factor if enabled else 0.0
 
 
 func get_cone_rad() -> float:

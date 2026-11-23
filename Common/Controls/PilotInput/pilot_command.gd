@@ -17,8 +17,13 @@ var boost := false
 var boost_full := false
 
 ## The translation comes from an analog stick, whose travel is the throttle: past the
-## control law's onset it ramps from the cruise limit into boost, with no boost button.
+## control law's onsets it ramps from the cruise limit into boost, then full boost at the
+## stops, with no boost button.
 var analog_thrust := false
+
+## One-shot: kick (pintle burst) along the translation. Needs a direction: a press with
+## the stick centred waits briefly for one, then is dropped.
+var dodge := false
 
 ## Brake the motion on the axes the translation doesn't hold, or holds against the
 ## current motion (Ctrl held). Released keys

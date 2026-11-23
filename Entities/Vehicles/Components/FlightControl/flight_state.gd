@@ -27,6 +27,11 @@ var thruster_cone := PackedFloat32Array()        ## Gimbal half-angle, radians
 ## Gimbal swing limits, Thruster.PLANES (4) plane normals per thruster (zero = none).
 var thruster_planes := PackedVector3Array()
 var thruster_max := PackedFloat32Array()         ## Available thrust, N (0 = unavailable)
+## Throat factor of the pintles this tick (1 = closed): thruster_max includes it, the
+## capability map doesn't (force_capability scales it).
+var burst_factor: float = 1.0
+## The kick tank holds enough for a kick.
+var burst_ready: bool = false
 
 ## Rough authority estimates derived from the geometry above.
 var max_force_pos := Vector3.ZERO  ## Max force along +x/+y/+z (positive numbers)
@@ -70,7 +75,7 @@ func to_global(local_vector: Vector3) -> Vector3:
 ## (optimistic: it counts force that only comes with side effects).
 func force_capability(dir: Vector3) -> float:
 	if capability_map != null:
-		return capability_map.lookup(dir)
+		return capability_map.lookup(dir) * burst_factor
 	var s := 0.0
 	for k in 3:
 		var limit := max_force_pos[k] if dir[k] >= 0.0 else max_force_neg[k]
