@@ -27,6 +27,11 @@ func draw_page() -> void:
 		tiers[0 if share >= main_fraction else (1 if share >= big_fraction else 2)].append(t)
 
 	label(Vector2(20, 34), "ENG", INFO, 22)
+	if fc.burst_reserve_capacity > 0.0:
+		# Kick tank: green while it holds a kick, amber while it refills.
+		var ready := fc.burst_reserve >= fc.burst_min_reserve
+		label(Vector2(90, 34), "KICK %3d%%" % roundi(fc.get_burst_reserve_fraction() * 100.0),
+				GOOD if ready else CAUTION, 18)
 	var thr_frac := thrust / maxf(total, 1.0)
 	label(Vector2(470, 34), "THR %3d%%   %.2f MN" % [roundi(thr_frac * 100.0), thrust / 1e6], TEXT, 18,
 			HORIZONTAL_ALIGNMENT_RIGHT)
@@ -88,10 +93,7 @@ func _fuel(rect: Rect2) -> void:
 	var tx := rect.end.x - 14.0
 	label(Vector2(tx, rect.position.y + 58), "%.1f t" % (fc.propellant / 1000.0), TEXT, 30, HORIZONTAL_ALIGNMENT_RIGHT)
 	label(Vector2(tx, rect.position.y + 84), "%d%%" % roundi(frac * 100.0), color, 20, HORIZONTAL_ALIGNMENT_RIGHT)
-	var thrust := 0.0
-	for t in fc.thrusters:
-		thrust += t.get_thrust()
-	var flow := thrust / (fc.specific_impulse * FlightComputer.G0)
+	var flow := fc.mass_flow
 	label(Vector2(tx, rect.position.y + 150), "FLOW", DIM, 14, HORIZONTAL_ALIGNMENT_RIGHT)
 	label(Vector2(tx, rect.position.y + 176), "%.0f kg/s" % flow, TEXT, 20, HORIZONTAL_ALIGNMENT_RIGHT)
 	label(Vector2(tx, rect.position.y + 226), "TIME", DIM, 14, HORIZONTAL_ALIGNMENT_RIGHT)
@@ -101,6 +103,7 @@ func _fuel(rect: Rect2) -> void:
 		time = "%d:%02d" % [sec / 60, sec % 60] if sec < 6000 else "99:59"
 	label(Vector2(tx, rect.position.y + 252), time, TEXT, 20, HORIZONTAL_ALIGNMENT_RIGHT)
 	label(Vector2(tx, rect.position.y + 302), "ISP", DIM, 14, HORIZONTAL_ALIGNMENT_RIGHT)
-	label(Vector2(tx, rect.position.y + 328), "%d s" % roundi(fc.specific_impulse), TEXT, 20, HORIZONTAL_ALIGNMENT_RIGHT)
+	var isp_color := CAUTION if fc.burst_factor > 1.0 else TEXT
+	label(Vector2(tx, rect.position.y + 328), "%d s" % roundi(fc.get_effective_isp()), isp_color, 20, HORIZONTAL_ALIGNMENT_RIGHT)
 	if status != "":
 		label(Vector2(rect.get_center().x + 20, rect.end.y - 14), status, color, 22, HORIZONTAL_ALIGNMENT_CENTER)
