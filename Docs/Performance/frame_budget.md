@@ -147,8 +147,9 @@ tick on one thread.
   thread). A crash, garbled text, or a HUD symbol trailing what it marks: try `Safe` (1)
   first. With it on, the phase split above (process / draw) no longer adds up to the frame:
   draw runs beside the main thread.
-- ~~**Allocator step size.**~~ Done 2026-11-24: `ConeProjectedAllocator.tight_step`, the ν at 30
-  iterations (Docs/FlightControl/summary.md). Physics 4.25 → 3.84 ms a step on its own.
+- ~~**Allocator step size.**~~ Done 2026-11-24: `ConeProjectedAllocator.tight_step`, the ν at 40
+  iterations, the old accuracy (Docs/FlightControl/summary.md; tried at 30 first: physics
+  4.25 → 3.84 ms a step in GDScript, but a little soft in the hard directions).
 - ~~**Native code for the flight computer.**~~ Done 2026-11-24: `Native/` (C++ GDExtension,
   bit-identical to the GDScript, which stays as the fallback): the allocator solve and trim,
   the sensor track's predict / update, the capability map lookup. Physics 3.84 → 2.5 ms a

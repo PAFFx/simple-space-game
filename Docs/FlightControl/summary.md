@@ -486,8 +486,9 @@ minimisation alone never removes those.
 **Step and cost.** FISTA's step is 1/L, L the steepest the cost can curve. The per-thruster bound
 `Σ 2Tᵢ²(Wf² + Wt²|rᵢ|²)` is ~2.3× the true value on the RX-93, so each iteration crawled;
 `tight_step` finds the true L (the largest eigenvalue of the weighted 6×6 thrust-to-wrench map,
-power iteration warm-started from last tick, +5%) and the ν runs 30 iterations instead of 60 for a
-mean force miss of 0.154 against 0.151 of total thrust (fully converged: 0.147). The solve and the
+power iteration warm-started from last tick, +5%) and the ν runs 40 iterations instead of 60 for the
+same accuracy: mean force miss 0.151 of total thrust, torque 0.022, as the bound did at 60 (fully
+converged: 0.147 / 0.020; 30 iterations, 0.154 / 0.023, felt a little soft in the hard directions). The solve and the
 trim run in C++ (`Native/`, bit-identical to the GDScript fallback): allocate + trim 0.07 ms a tick
 for the ν's 28 thrusters, against 1.6 ms in GDScript at 60 iterations.
 
