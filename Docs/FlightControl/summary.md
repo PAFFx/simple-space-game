@@ -177,9 +177,12 @@ From rest (`Tools/Flight/kick_probe.gd`, ν full, 20 G cap), distance along the 
 | back | 0.4 | 2.1 | 5.5 | 14.8 | 18.4 / 14 | 46 | 83 |
 | stick slammed to full boost, right | 0.1 | 0.6 | 1.5 | 4.8 | 6 / 3.7 | 22 | — |
 
-Held (`kick_probe.gd hold=2`): sideways the tank is dry after 0.83 s (Δv 148 m/s, 222 m in
-2 s); up it lasts the whole 2 s at 20 G (Δv 384 m/s), since the mains carry most of it within
-their rating and the tank barely drains. Uncapped it peaks at 50 G up (Δv 110 m/s). The first 0.1 s is slow: idle thrusters still spool
+Held (`kick_probe.gd hold=4 pintles=0.5`): sideways the tank is dry after 0.87 s (Δv 166 m/s),
+up after 1.9 s at 20 G (Δv 380 m/s). Up is the suit's strong direction (13.5 G at rated
+thrust), so 20 G needs only ~1.5× overall: the foot soles run at ×3.8 (143 of the 216 kg/s the
+tank gives at 0.5 s), the lower mains at ×1.5–2 and one chest port at ×1.6, while the upper mains
+stay under their rating (torque balance). Sideways (5.5 G rated) needs ~3.6×: nearly every
+side-facing nozzle runs at ×3.4–3.95 and the tank gives 445 kg/s. Uncapped it peaks at 50 G up (Δv 110 m/s). The first 0.1 s is slow: idle thrusters still spool
 (verniers 0.06 s, mains 0.12 s); keeping them lit ("hot standby") would remove that and is left
 for later. Total propellant per sideways kick ~125 kg, 0.5% of the tank (~205 kg when every
 pintle opened together); the up kick is cheap because the mains carry most of it within their

@@ -35,6 +35,8 @@ var _modes := PackedStringArray(["kick", "slam"])
 var _overrides := {}
 var _after := 1.5
 var _hold := 0.0
+## Print each thruster whose pintle is open at this time into the kick, s (0 = don't).
+var _pintles_at := 0.0
 
 
 func _initialize() -> void:
@@ -51,6 +53,7 @@ func _initialize() -> void:
 			"time": _overrides["dodge_time"] = float(value)
 			"after": _after = float(value)
 			"hold": _hold = float(value)
+			"pintles": _pintles_at = float(value)
 			"times":
 				TIMES = []
 				for part in value.split(","):
@@ -149,6 +152,8 @@ func _case(mode: String, name: String) -> void:
 		var d := _com() - p0
 		stray = maxf(stray, (d - dir * d.dot(dir)).length())
 		turn = maxf(turn, rad_to_deg(basis0.get_rotation_quaternion().angle_to(_suit.global_basis.get_rotation_quaternion())))
+		if _pintles_at > 0.0 and absf(t - _pintles_at) < dt * 0.5:
+			_print_pintles(name, t)
 		if t >= TIMES[next] - 1e-6:
 			line += " %5.1f" % d.dot(dir)
 			next += 1
@@ -166,6 +171,23 @@ func _case(mode: String, name: String) -> void:
 	_suit.global_transform = start
 	_suit.linear_velocity = Vector3.ZERO
 	_suit.angular_velocity = Vector3.ZERO
+
+
+## Thrust, rated thrust and pintle opening of every firing thruster, and the kick tank's draw.
+func _print_pintles(name: String, t: float) -> void:
+	var c := _fc.specific_impulse * FlightComputer.G0
+	var lines := PackedStringArray()
+	var draw := 0.0
+	for th in _fc.thrusters:
+		var thrust := th.get_thrust()
+		if thrust < 1000.0:
+			continue
+		var k := th.get_pintle_factor()
+		var excess := maxf(thrust * k / c - th.max_thrust / c, 0.0)
+		draw += excess
+		lines.append("%s %.0f/%.0f kN ×%.2f%s" % [th.get_hud_label(), thrust / 1000.0, th.max_thrust / 1000.0, k,
+				" (+%.0f kg/s)" % excess if excess > 0.5 else ""])
+	print("      %s at %.2f s: tank draw %.0f kg/s | %s" % [name, t, draw, " | ".join(lines)])
 
 
 func _com() -> Vector3:
