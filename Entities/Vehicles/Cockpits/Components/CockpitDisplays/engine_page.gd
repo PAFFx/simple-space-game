@@ -5,7 +5,7 @@ extends MfdPage
 ## biggest: the mains (what you watch in a fight), the other big thrusters, then the
 ## small verniers (for troubleshooting). Each bar fills with its spooled throttle; the
 ## mains also show where their gimbal points. Fuel on the right: remaining, flow, and
-## time left at the current burn.
+## time left at the current burn, with the kick tank as a thin bar beside the main one.
 
 ## Rating (share of the largest thruster) a thruster needs for the top / middle tier.
 @export var main_fraction: float = 0.5
@@ -27,11 +27,6 @@ func draw_page() -> void:
 		tiers[0 if share >= main_fraction else (1 if share >= big_fraction else 2)].append(t)
 
 	label(Vector2(20, 34), "ENG", INFO, 22)
-	if fc.burst_reserve_capacity > 0.0:
-		# Kick tank: green while it holds a kick, amber while it refills.
-		var ready := fc.burst_reserve >= fc.burst_min_reserve
-		label(Vector2(90, 34), "KICK %3d%%" % roundi(fc.get_burst_reserve_fraction() * 100.0),
-				GOOD if ready else CAUTION, 18)
 	var thr_frac := thrust / maxf(total, 1.0)
 	label(Vector2(470, 34), "THR %3d%%   %.2f MN" % [roundi(thr_frac * 100.0), thrust / 1e6], TEXT, 18,
 			HORIZONTAL_ALIGNMENT_RIGHT)
@@ -42,6 +37,15 @@ func draw_page() -> void:
 	_tier(tiers[1], Rect2(20, 300, 450, 104), "BIG", 0.5, false)
 	_tier(tiers[2], Rect2(20, 428, 450, 64), "SMALL", 0.28, false)
 	_fuel(Rect2(492, 84, 192, 408))
+
+
+## Kick tank fill, red (empty) through amber to green (full); a tick marks the least a
+## kick needs.
+func _kick_tank(rect: Rect2) -> void:
+	var frac := fc.get_burst_reserve_fraction()
+	vbar(rect, frac, Color.from_hsv(0.33 * frac, 0.75, 1.0))
+	var ready := rect.end.y - rect.size.y * fc.burst_min_reserve / fc.burst_reserve_capacity
+	draw_line(Vector2(rect.position.x - 3, ready), Vector2(rect.end.x + 3, ready), TEXT, 1.5)
 
 
 ## One tier: bars spread across the window, sized by `scale`.
@@ -86,7 +90,10 @@ func _fuel(rect: Rect2) -> void:
 		color = CAUTION
 		status = "BINGO"
 	var x := rect.position.x
-	vbar(Rect2(x + 20, rect.position.y + 30, 44, rect.size.y - 60), frac, color)
+	var bar := Rect2(x + 28, rect.position.y + 30, 36, rect.size.y - 60)
+	vbar(bar, frac, color)
+	if fc.burst_reserve_capacity > 0.0:
+		_kick_tank(Rect2(x + 14, bar.position.y, 8, bar.size.y))
 	for k in 5:
 		var y := rect.position.y + 30 + (rect.size.y - 60) * k / 4.0
 		draw_line(Vector2(x + 64, y), Vector2(x + 74, y), FRAME, 1.5)
@@ -103,7 +110,7 @@ func _fuel(rect: Rect2) -> void:
 		time = "%d:%02d" % [sec / 60, sec % 60] if sec < 6000 else "99:59"
 	label(Vector2(tx, rect.position.y + 252), time, TEXT, 20, HORIZONTAL_ALIGNMENT_RIGHT)
 	label(Vector2(tx, rect.position.y + 302), "ISP", DIM, 14, HORIZONTAL_ALIGNMENT_RIGHT)
-	var isp_color := CAUTION if fc.burst_factor > 1.0 else TEXT
+	var isp_color := CAUTION if fc.get_effective_isp() < fc.specific_impulse * 0.99 else TEXT
 	label(Vector2(tx, rect.position.y + 328), "%d s" % roundi(fc.get_effective_isp()), isp_color, 20, HORIZONTAL_ALIGNMENT_RIGHT)
 	if status != "":
 		label(Vector2(rect.get_center().x + 20, rect.end.y - 14), status, color, 22, HORIZONTAL_ALIGNMENT_CENTER)

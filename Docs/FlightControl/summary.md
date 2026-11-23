@@ -146,30 +146,40 @@ the speed it leaves is kept (the HUD shows full boost meanwhile).
 
 **Burst (pintle throats).** `FlightComputer.burst_thrust_factor` k (ν: 4): pintles pull back and
 the throats open k× in area at the same chamber pressure and reactor power, with extra reaction
-mass injected. Thrust ×k, Isp ÷k (ν 12,000 → 3,000 s), flow ×k² (`Thruster.throat_factor`, the
-allocator sees thruster_max × k; the capability map is measured closed and scaled by k). The
-pintles travel in `pintle_time` (0.03 s). The pumps feed up to each thruster's rated flow; the rest
+mass injected. Thrust ×k, Isp ÷k (ν 12,000 → 3,000 s), flow ×k². During a kick every thruster
+*may* open to k (`Thruster.throat_factor`, ramped in `pintle_time` 0.03 s; the allocator sees
+thruster_max × k; the capability map is measured closed and scaled by k), but each one opens its
+own pintle only for the thrust beyond its rating (`Thruster.get_pintle_factor`: the rated throat
+until the valve is full open, then just as far as needed). Thrusters balancing torque or pushing
+below their rating stay at 12,000 s and keep their normal plume. The pumps feed up to each thruster's rated flow; the rest
 comes from a **kick tank** (`burst_reserve_capacity`, ν 300 kg, part of the propellant), which the
 pumps' spare capacity refills at up to `burst_refill_flow` (40 kg/s coasting, less the harder the
 thrusters draw, none at full rated flow). A kick needs `burst_min_reserve` (60 kg); an empty tank
-closes the pintles. The engine page shows KICK % (green: a kick is ready), the effective Isp and the
-real flow.
+closes the pintles. The engine page shows the kick tank as a thin bar beside the fuel bar (red
+empty → green full, a tick at the least a kick needs), the effective Isp and the real flow.
+
+The plume shows the burst (`plume.gdshader` `burst`, `Thruster.burst_*`): the wider throat at the
+same exit leaves the jet under-expanded, so it swells just past the lip, runs 1.7× longer and
+1.25× wider, denser and whiter-warm (16× the mass on the same power: cooler), with shock diamonds
+1.8× further apart, and the nozzle flares as the pintles open (`burst_pop_time` 0.15 s).
+`Tools/Flight/kick_fx_snapshot.gd` renders a kick against a full-boost strafe, and the engine page.
 
 From rest (`Tools/Flight/kick_probe.gd`, ν full, 20 G cap), distance along the kick:
 
 | Direction | 0.1 s | 0.2 s | 0.3 s | 0.5 s | peak / mean G | Δv | kick tank used |
 |---|---|---|---|---|---|---|---|
-| right / left | 0.3 m | 1.9 m | 5.2 m | 14.2 m | 18 / 13.5 | 45 m/s | 155 kg |
-| up | 0.5 | 2.7 | 6.8 | 17.9 | 20 / 16.5 | 56 | 133 |
-| down | 0.1 | 0.9 | 2.4 | 6.7 | 9 / 6.5 | 21 | 51 |
-| forward | 0.4 | 2.0 | 5.4 | 14.8 | 18.5 / 14 | 47 | 121 |
-| back | 0.4 | 2.1 | 5.6 | 15.1 | 18.7 / 14.5 | 48 | 135 |
+| right / left | 0.3 m | 1.9 m | 5.2 m | 14.2 m | 18 / 13.5 | 45 m/s | 85 kg |
+| up | 0.5 | 2.7 | 6.8 | 18.0 | 20 / 16.5 | 56 | 32 |
+| down | 0.1 | 0.9 | 2.4 | 6.7 | 9 / 6.5 | 21 | 18 |
+| forward | 0.5 | 2.6 | 6.5 | 17.0 | 19.3 / 16 | 52 | 49 |
+| back | 0.4 | 2.1 | 5.5 | 14.8 | 18.4 / 14 | 46 | 83 |
 | stick slammed to full boost, right | 0.1 | 0.6 | 1.5 | 4.8 | 6 / 3.7 | 22 | — |
 
 Uncapped it peaks at 50 G up (Δv 110 m/s). The first 0.1 s is slow: idle thrusters still spool
 (verniers 0.06 s, mains 0.12 s); keeping them lit ("hot standby") would remove that and is left
-for later. Total propellant per sideways kick ~200 kg (the allocator's cosine losses), about 1% of
-the tank.
+for later. Total propellant per sideways kick ~125 kg, 0.5% of the tank (~205 kg when every
+pintle opened together); the up kick is cheap because the mains carry most of it within their
+rating.
 
 Against a beam (`Tools/Weapons/dodge_probe.gd kick`, 3000 m/s, 0.3 s spool, turret leading from
 its sensor track, acceleration included): reacting to the glow after a human 0.25 s, the kick

@@ -86,6 +86,7 @@ var burst_reserve: float = 0.0
 var burst_factor: float = 1.0
 ## Propellant flow last tick, kg/s.
 var mass_flow: float = 0.0
+var _isp_now := 0.0
 
 var _prev_velocity := Vector3.ZERO
 var _ref_prev_position := Vector3.ZERO
@@ -335,9 +336,9 @@ func get_burst_reserve_fraction() -> float:
 	return burst_reserve / burst_reserve_capacity if burst_reserve_capacity > 0.0 else 0.0
 
 
-## Isp the thrusters run at now (lower while the pintles are open).
+## Isp of the whole burn last tick (lower while pintles are open).
 func get_effective_isp() -> float:
-	return specific_impulse / burst_factor
+	return _isp_now if _isp_now > 0.0 else specific_impulse
 
 func get_propellant_fraction() -> float:
 	return propellant / propellant_capacity if propellant_capacity > 0.0 else 0.0
@@ -462,6 +463,7 @@ func _build_state(delta: float) -> void:
 	s.burst_ready = burst_thrust_factor > 1.0 and burst_reserve >= burst_min_reserve
 	for t in thrusters:
 		t.throat_factor = burst_factor
+		t.throat_factor_max = burst_thrust_factor
 		s.thruster_positions.append(t.get_position_in_inverse(to_body) - com_local)
 		s.thruster_axes.append(t.get_axis_in_inverse(to_body_basis))
 		s.thruster_cone.append(t.get_cone_rad())
@@ -492,24 +494,28 @@ func _reference_velocity(delta: float) -> Vector3:
 	return _ref_velocity
 
 
-## Each thruster burns thrust / (Isp / k · g0). The pumps give up to its rated flow
-## (rated thrust at the rated Isp); the kick tank gives the rest, and the pumps' spare
-## capacity refills it.
+## Each thruster burns thrust / (Isp / k · g0), k its own pintle opening (1 until it needs
+## more than its rating). The pumps give up to its rated flow (rated thrust at the rated
+## Isp); the kick tank gives the rest, and the pumps' spare capacity refills it.
 func _consume_propellant(delta: float) -> void:
 	if propellant <= 0.0:
 		mass_flow = 0.0
 		return
 	var c := specific_impulse * G0
 	var flow := 0.0
+	var thrust_now := 0.0
 	var pumped := 0.0
 	var rated := 0.0
 	for t in thrusters:
-		var f := t.get_thrust() * t.throat_factor / c
+		var thrust := t.get_thrust()
+		thrust_now += thrust
+		var f := thrust * t.get_pintle_factor() / c
 		var r := t.max_thrust / c if t.enabled else 0.0
 		flow += f
 		pumped += minf(f, r)
 		rated += r
 	mass_flow = flow
+	_isp_now = thrust_now / (flow * G0) if flow > 0.0 else specific_impulse
 	var spare := 1.0 - pumped / rated if rated > 0.0 else 0.0
 	burst_reserve -= (flow - pumped) * delta
 	burst_reserve += burst_refill_flow * spare * delta

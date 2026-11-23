@@ -3,6 +3,8 @@ render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabl
 
 // Exhaust plume on the thruster's cone mesh (axis +Y, nozzle at y = -0.5, tip at +0.5).
 // Hot near the nozzle, cooling and breaking up downstream, with standing shock diamonds.
+// Burst (pintles open): 4x the throat at the same exit, so the jet leaves under-expanded and
+// balloons past the lip; 16x the mass on the same power runs denser and cooler.
 
 uniform vec3 hot_color : source_color = vec3(1.0, 0.96, 0.9);
 uniform vec3 mid_color : source_color = vec3(0.52, 0.8, 1.0);
@@ -21,11 +23,19 @@ uniform float diamond_dip = 0.15;
 uniform float turbulence = 0.55;
 uniform float noise_scale = 2.2;
 uniform float scroll_speed = 9.0;    // turbulence downstream speed, plume lengths/s-ish
+// Burst look: extra radius past the lip (fraction), how much fuller the body reads
+// (edge_power multiplier), extra brightness, and the cooler, denser colours.
+uniform float burst_spread = 0.7;
+uniform float burst_edge = 0.45;
+uniform float burst_energy = 0.7;
+uniform vec3 burst_hot_color : source_color = vec3(1.0, 0.94, 0.84);
+uniform vec3 burst_mid_color : source_color = vec3(0.86, 0.9, 1.0);
 
 instance uniform float throttle = 1.0;
 instance uniform float length_m = 5.0;     // plume length now, m
 instance uniform float diamonds = 4.0;     // shock diamonds over the plume's length
 instance uniform float seed = 0.0;
+instance uniform float burst = 0.0;        // 0 = pintles closed, 1 = fully open
 
 varying float s;
 varying vec3 ring;
@@ -50,13 +60,15 @@ void vertex() {
 	s = clamp(VERTEX.y + 0.5, 0.0, 1.0);
 	float linear_r = mix(base_radius, tip_radius, s);
 	float shaped_r = mix(tip_radius, base_radius, pow(1.0 - s, taper_power));
+	// Under-expanded: the lip stays the nozzle's size, the jet swells just past it.
+	shaped_r *= 1.0 + burst * burst_spread * smoothstep(0.0, 0.2, s) * (1.0 - 0.5 * s);
 	VERTEX.xz *= shaped_r / max(linear_r, 1e-4);
 	ring = vec3(normalize(VERTEX.xz + vec2(1e-5)), 0.0);
 }
 
 void fragment() {
 	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
-	float body = pow(facing, edge_power);
+	float body = pow(facing, edge_power * mix(1.0, burst_edge, burst));
 
 	// Turbulence scrolls downstream and grows with distance from the nozzle.
 	float t = TIME * scroll_speed;
@@ -67,17 +79,19 @@ void fragment() {
 	// Standing shock diamonds in the hot inner part, stronger at full throttle.
 	float wave = 0.5 + 0.5 * cos((s * diamonds - 0.15) * TAU);
 	float shocks = smoothstep(0.75, 0.05, s) * smoothstep(0.3, 1.0, throttle);
-	float diamond = pow(wave, 6.0) * shocks * diamond_strength * facing;
+	float diamond = pow(wave, 6.0) * shocks * diamond_strength * (1.0 + 0.5 * burst) * facing;
 	turb *= 1.0 - diamond_dip * shocks * (1.0 - wave);
 
 	float fade = pow(1.0 - s, 1.1) * smoothstep(0.0, 0.04, s + 0.02);
 	float intensity = body * fade * turb + diamond * fade;
 
-	vec3 col = mix(hot_color, mid_color, smoothstep(0.0, 0.35, s));
+	vec3 hot = mix(hot_color, burst_hot_color, burst);
+	vec3 mid = mix(mid_color, burst_mid_color, burst);
+	vec3 col = mix(hot, mid, smoothstep(0.0, 0.35 + 0.2 * burst, s));
 	col = mix(col, tail_color, smoothstep(0.3, 1.0, s));
 	col = mix(tail_color, col, body);
-	col = mix(col, hot_color, clamp(diamond, 0.0, 1.0));
+	col = mix(col, hot, clamp(diamond, 0.0, 1.0));
 
-	ALBEDO = col * energy * mix(0.6, 1.0, throttle);
+	ALBEDO = col * energy * mix(0.6, 1.0, throttle) * (1.0 + burst * burst_energy);
 	ALPHA = clamp(intensity, 0.0, 1.0);
 }
