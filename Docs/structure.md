@@ -107,7 +107,11 @@ simple-space-game/
 │   └── Weapons/                   Weapons, sensors and combat HUD probes (weapons, search
 │                                  tracks, gun circle, HUD steadiness, hit rate) and snapshots
 │
-└── addons/                        Editor plugins (gdshader, plugin_refresher, gdLinter)
+├── Native/                        C++ source of the flight kernels GDExtension, godot-cpp
+│                                  submodule, the double build's API (ignored by Godot)
+│
+└── addons/                        Editor plugins (gdshader, plugin_refresher, gdLinter);
+                                   flight_kernels/ is the built GDExtension (Native/README.md)
 ```
 
 ---

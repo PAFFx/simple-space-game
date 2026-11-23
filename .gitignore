@@ -4,3 +4,8 @@
 
 # Python bytecode from Tools/Blender scripts
 __pycache__/
+
+# Native extension build intermediates
+Native/src/*.os
+Native/src/*.o
+Native/.sconsign*.dblite

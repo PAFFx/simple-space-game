@@ -1,0 +1,27 @@
+#!/usr/bin/env python
+# Builds the flight kernels GDExtension (C++ for the flight computer's and sensors' hot
+# loops) into addons/flight_kernels/bin. The engine here is built with precision=double,
+# so the extension must be too:
+#
+#   ~/pkgs/scons-venv/bin/scons -C Native precision=double target=template_release custom_api_file=api/extension_api.json
+#
+# api/extension_api.json is dumped from the double build (godot-double --headless --dump-extension-api):
+# godot-cpp's bundled one is single precision.
+#
+# See Native/README.md.
+
+env = SConscript("godot-cpp/SConstruct")
+
+env.Append(CPPPATH=["src/"])
+# No fused multiply-add: the kernels must give the same bits as the GDScript they replace
+# (the engine does each multiply and add on its own). MSVC only contracts under /fp:fast.
+if not env.get("is_msvc", False):
+    env.Append(CCFLAGS=["-ffp-contract=off"])
+
+sources = Glob("src/*.cpp")
+library = env.SharedLibrary(
+    "../addons/flight_kernels/bin/libflight_kernels{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+    source=sources,
+)
+env.NoCache(library)
+Default(library)
