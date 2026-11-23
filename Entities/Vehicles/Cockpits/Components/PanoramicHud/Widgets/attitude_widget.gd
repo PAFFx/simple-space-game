@@ -78,6 +78,8 @@ func setup_layers() -> void:
 	hud.set_hud_parameter(&"hud_ladder_halo_color", hud.halo_color)
 	hud.set_hud_parameter(&"hud_ladder_fade",
 			Vector3(ladder_focus_deg, ladder_fade_deg, ladder_fade_floor))
+	hud.set_hud_parameter(&"hud_aux_color", hud.primary_color)
+	hud.set_hud_parameter(&"hud_aux_half_width", hud.line_width * 0.5 / hud.projector.px_per_deg)
 
 
 func draw_widget() -> void:
@@ -213,14 +215,17 @@ func _draw_aux_frame(w: HudWidget) -> void:
 
 
 ## The indicator's horizon line, shifted by pitch and turned by bank.
+## In the zenith patch (patch(Vector3.UP, Vector3.BACK)), drawn by the screen shader
+## (hud_aux): as a canvas stroke at the zenith it took ~0.35 ms a frame.
 func _draw_aux_horizon_line(pitch: float, bank: float) -> void:
-	var p := patch(Vector3.UP, Vector3.BACK, true)
 	var r := aux_radius_deg
 	var a := deg_to_rad(-bank)
 	var along := Vector2(cos(a), sin(a))
 	var shift := Vector2(-along.y, along.x) * (-clampf(pitch, -90.0, 90.0) / 90.0 * r)
 	var half := sqrt(maxf(r * r - shift.length_squared(), 0.0))
-	patch_line(p, shift - along * half, shift + along * half, hud.primary_color, 0.0, 6)
+	var from := shift - along * half
+	var to := shift + along * half
+	hud.set_hud_parameter(&"hud_aux_line", Vector4(from.x, from.y, to.x, to.y))
 
 
 # --- Course marks (heading layer, drawn for _MARKS_HEADING) ---

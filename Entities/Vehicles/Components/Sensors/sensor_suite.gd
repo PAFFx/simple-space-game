@@ -127,6 +127,9 @@ class SearchTrack:
 	var at := 0.0
 
 
+var _ray: PhysicsRayQueryParameters3D
+var _ray_exclude: Array[RID] = []
+
 func _ready() -> void:
 	_vehicle = VehicleBase.find_vehicle(self)
 	_body = _vehicle as Node as RigidBody3D
@@ -327,13 +330,18 @@ func _body_camera_sees(at: Vector3, node: Node3D = null) -> bool:
 ## The suit's own shield does block (its head can't see through it while dug in behind it).
 func _line_clear(from: Vector3, to: Vector3, node: Node3D = null) -> bool:
 	var space := _body.get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(from, to)
-	var exclude: Array[RID] = [_body.get_rid()]
+	# One query reused: a look can cast several rays (head, then each body camera).
+	if _ray == null:
+		_ray = PhysicsRayQueryParameters3D.new()
+	_ray.from = from
+	_ray.to = to
 	var seen := node if node != null else target
+	_ray_exclude.clear()
+	_ray_exclude.append(_body.get_rid())
 	if seen is CollisionObject3D:
-		exclude.append((seen as CollisionObject3D).get_rid())
-	query.exclude = exclude
-	var hit := space.intersect_ray(query)
+		_ray_exclude.append((seen as CollisionObject3D).get_rid())
+	_ray.exclude = _ray_exclude
+	var hit := space.intersect_ray(_ray)
 	if hit.is_empty():
 		return true
 	# Part of the contact itself (a station's structure, a drone's own body).

@@ -56,6 +56,11 @@ var _bias := Vector3.ZERO        ## Running mean of the whitened innovation (1 �
 
 var _x := PackedFloat64Array()
 var _p := PackedFloat64Array()   ## N×N, row-major
+## The last get_estimate: the HUD, fire control and sensors ask for the same `now` several
+## times a frame. Keyed by now, the state's version and the process noise in force.
+var _version := 0
+var _est_key := Vector4(NAN, NAN, NAN, NAN)
+var _est: Array = []
 
 
 func _init() -> void:
@@ -79,6 +84,7 @@ func add_measurement(t: float, pos: Vector3, cov: Basis) -> void:
 		return
 	if t < time:
 		return   # older than the state (another sensor's slower pipeline): skip
+	_version += 1
 	var dt := t - time
 	_predict(dt)
 	time = t
@@ -121,9 +127,12 @@ func add_measurement(t: float, pos: Vector3, cov: Basis) -> void:
 		_x[r] += k[r * 3] * y.x + k[r * 3 + 1] * y.y + k[r * 3 + 2] * y.z
 	var p_new := _p.duplicate()
 	for r in N:
+		var k0 := k[r * 3]
+		var k1 := k[r * 3 + 1]
+		var k2 := k[r * 3 + 2]
 		for c in N:
 			# (K H P)[r][c] = Σ_m K[r][m] · P[pos m][c]
-			p_new[r * N + c] -= k[r * 3] * _p[c] + k[r * 3 + 1] * _p[3 * N + c] + k[r * 3 + 2] * _p[6 * N + c]
+			p_new[r * N + c] -= k0 * _p[c] + k1 * _p[3 * N + c] + k2 * _p[6 * N + c]
 	_p = p_new
 	_symmetrize()
 	hits += 1
@@ -149,6 +158,9 @@ func tick(now: float) -> void:
 func get_estimate(now: float) -> Array:
 	if not is_started():
 		return [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Basis()]
+	var key := Vector4(now, _version, _accel_sigma(), maneuver_time)
+	if key == _est_key:
+		return _est.duplicate()
 	var x := _x
 	var p := _p
 	var dt := maxf(now - time, 0.0)
@@ -162,7 +174,9 @@ func get_estimate(now: float) -> Array:
 		_p = saved_p
 	var cov := Basis(Vector3(p[0], p[3 * N], p[6 * N]), Vector3(p[3], p[3 * N + 3], p[6 * N + 3]),
 			Vector3(p[6], p[3 * N + 6], p[6 * N + 6]))
-	return [Vector3(x[0], x[3], x[6]), Vector3(x[1], x[4], x[7]), Vector3(x[2], x[5], x[8]), cov]
+	_est = [Vector3(x[0], x[3], x[6]), Vector3(x[1], x[4], x[7]), Vector3(x[2], x[5], x[8]), cov]
+	_est_key = key
+	return _est.duplicate()
 
 
 ## Covariance (m²) of where the target will be `ahead` s after `now`: what a shot that
@@ -181,6 +195,7 @@ func get_position_covariance_ahead(now: float, ahead: float) -> Basis:
 
 
 func _start(t: float, pos: Vector3, cov: Basis) -> void:
+	_version += 1
 	time = t
 	last_update = t
 	hits = 1
@@ -202,42 +217,60 @@ func _start(t: float, pos: Vector3, cov: Basis) -> void:
 		_p[(a * 3 + 2) * N + a * 3 + 2] = maneuver_accel * maneuver_accel
 
 
-## Singer transition and process noise over dt, the same for each axis block.
+## Singer transition and process noise over dt, the same for each axis block. Runs for
+## every look at every contact, so it is written for GDScript speed: flat typed arrays and
+## the innermost sum unrolled (same terms, same order as Σ_m Σ_n Fim·Pmn·Fjn).
 func _predict(dt: float) -> void:
 	if dt <= 0.0:
 		return
 	var b := 1.0 / maneuver_time
 	var e := exp(-b * dt)
-	var f := [[1.0, dt, (b * dt - 1.0 + e) / (b * b)], [0.0, 1.0, (1.0 - e) / b], [0.0, 0.0, e]]
+	# F and Qm row-major, 3×3.
+	var f := PackedFloat64Array([1.0, dt, (b * dt - 1.0 + e) / (b * b), 0.0, 1.0, (1.0 - e) / b, 0.0, 0.0, e])
 	var sigma := _accel_sigma()
 	var q := 2.0 * b * sigma * sigma
 	var t2 := dt * dt
 	var t3 := t2 * dt
-	var qm := [[t3 * t2 / 20.0, t2 * t2 / 8.0, t3 / 6.0], [t2 * t2 / 8.0, t3 / 3.0, t2 / 2.0], [t3 / 6.0, t2 / 2.0, dt]]
+	var qm := PackedFloat64Array([t3 * t2 / 20.0, t2 * t2 / 8.0, t3 / 6.0, t2 * t2 / 8.0, t3 / 3.0, t2 / 2.0,
+			t3 / 6.0, t2 / 2.0, dt])
 	for a in 3:
 		var o := a * 3
 		var x0 := _x[o]
 		var x1 := _x[o + 1]
 		var x2 := _x[o + 2]
-		_x[o] = f[0][0] * x0 + f[0][1] * x1 + f[0][2] * x2
-		_x[o + 1] = f[1][1] * x1 + f[1][2] * x2
-		_x[o + 2] = f[2][2] * x2
+		_x[o] = f[0] * x0 + f[1] * x1 + f[2] * x2
+		_x[o + 1] = f[4] * x1 + f[5] * x2
+		_x[o + 2] = f[8] * x2
 	# P = F P Fᵀ + Q with F block-diagonal: each 3×3 block (a, b) becomes Fa Pab Faᵀ.
 	var p_new := PackedFloat64Array()
 	p_new.resize(N * N)
 	for ba in 3:
 		for bb in 3:
-			var blk := []
+			var r0 := (ba * 3) * N + bb * 3
+			var r1 := r0 + N
+			var r2 := r1 + N
+			var b0 := _p[r0]
+			var b1 := _p[r0 + 1]
+			var b2 := _p[r0 + 2]
+			var b3 := _p[r1]
+			var b4 := _p[r1 + 1]
+			var b5 := _p[r1 + 2]
+			var b6 := _p[r2]
+			var b7 := _p[r2 + 1]
+			var b8 := _p[r2 + 2]
 			for i in 3:
-				blk.append([_p[(ba * 3 + i) * N + bb * 3], _p[(ba * 3 + i) * N + bb * 3 + 1], _p[(ba * 3 + i) * N + bb * 3 + 2]])
-			for i in 3:
+				var fi0 := f[i * 3]
+				var fi1 := f[i * 3 + 1]
+				var fi2 := f[i * 3 + 2]
 				for j in 3:
-					var sum := 0.0
-					for m in 3:
-						for n in 3:
-							sum += f[i][m] * blk[m][n] * f[j][n]
+					var fj0 := f[j * 3]
+					var fj1 := f[j * 3 + 1]
+					var fj2 := f[j * 3 + 2]
+					var sum := 0.0 + fi0 * b0 * fj0 + fi0 * b1 * fj1 + fi0 * b2 * fj2 \
+							+ fi1 * b3 * fj0 + fi1 * b4 * fj1 + fi1 * b5 * fj2 \
+							+ fi2 * b6 * fj0 + fi2 * b7 * fj1 + fi2 * b8 * fj2
 					if ba == bb:
-						sum += q * qm[i][j]
+						sum += q * qm[i * 3 + j]
 					p_new[(ba * 3 + i) * N + bb * 3 + j] = sum
 	_p = p_new
 

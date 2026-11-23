@@ -89,17 +89,18 @@ func compute_authority() -> void:
 		var r := thruster_positions[i]
 		var t := thruster_max[i]
 		var cone := thruster_cone[i]
+		# _best_alignment inlined (336 calls a tick for 28 thrusters), same arithmetic.
 		for k in 3:
 			var a := axes[k]
-			max_force_pos[k] += t * _best_alignment(d, a, cone)
-			max_force_neg[k] += t * _best_alignment(d, -a, cone)
+			max_force_pos[k] += t * maxf(0.0, cos(maxf(0.0, d.angle_to(a) - cone)))
+			max_force_neg[k] += t * maxf(0.0, cos(maxf(0.0, d.angle_to(-a) - cone)))
 			# Torque about axis a from force u at r is u · (a × r).
 			var lever := a.cross(r)
 			var arm := lever.length()
 			if arm > 1e-4:
 				var l := lever / arm
-				torque_pos[k] += t * arm * _best_alignment(d, l, cone)
-				torque_neg[k] += t * arm * _best_alignment(d, -l, cone)
+				torque_pos[k] += t * arm * maxf(0.0, cos(maxf(0.0, d.angle_to(l) - cone)))
+				torque_neg[k] += t * arm * maxf(0.0, cos(maxf(0.0, d.angle_to(-l) - cone)))
 	for k in 3:
 		max_torque[k] = minf(torque_pos[k], torque_neg[k])
 	max_torque_ideal = max_torque

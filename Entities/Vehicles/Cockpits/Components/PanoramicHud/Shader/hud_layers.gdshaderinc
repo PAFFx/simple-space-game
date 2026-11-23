@@ -85,6 +85,18 @@ uniform int hud_contact_locked = -1;
 const vec2 HUD_CONTACT_LABEL_DEG = vec2(10.0, 5.0);
 uniform float hud_control_scale = 1.0;
 
+// Overhead attitude indicator's horizon line, in the zenith patch (display frame, right
+// = +X, up = +Z, gnomonic degrees): xy one end, zw the other; its colour and half width.
+uniform vec4 hud_aux_line = vec4(0.0);
+uniform vec4 hud_aux_color : source_color, color_conversion_disabled = vec4(0.0);
+uniform float hud_aux_half_width = 0.1;
+
+// Gun circle (WeaponsWidget): its patch frame (display → right, up, centre), the outer and
+// inner ring radii and line half widths, deg; its colour (alpha 0 = hidden).
+uniform mat3 hud_gun_frame = mat3(1.0);
+uniform vec4 hud_gun_ring = vec4(0.0);
+uniform vec4 hud_gun_color : source_color, color_conversion_disabled = vec4(0.0);
+
 
 vec2 hud_layer_uv(mat3 frame, vec3 local_dir) {
 	vec3 d = frame * local_dir;
@@ -159,6 +171,62 @@ float hud_triangle(vec2 p, float r) {
 	}
 	p.x -= clamp(p.x, -2.0 * r, 0.0);
 	return -length(p) * sign(p.y);
+}
+
+
+// The overhead horizon line: a straight stroke with square ends and a halo, as the canvas
+// drew it (AttitudeWidget._draw_aux_horizon_line sets the ends every frame).
+vec3 hud_aux(vec3 color, vec3 local_dir, float brightness, float aa) {
+	vec2 ab = hud_aux_line.zw - hud_aux_line.xy;
+	float len = length(ab);
+	if (hud_aux_color.a <= 0.0 || local_dir.y < 0.9 || len < 1e-4) {
+		return color;
+	}
+	vec2 p = degrees(vec2(atan(local_dir.x, local_dir.y), atan(local_dir.z, local_dir.y)));
+	vec2 dir = ab / len;
+	vec2 r = p - hud_aux_line.xy;
+	float along = dot(r, dir);
+	float across = abs(dot(r, vec2(-dir.y, dir.x)));
+	float ends = max(-along, along - len);
+	vec4 acc = vec4(0.0);
+	hud_ink(acc, hud_symbol_halo_color, hud_fill(max(across - hud_aux_half_width - hud_symbol_halo_deg, ends), aa));
+	hud_ink(acc, hud_aux_color, hud_fill(max(across - hud_aux_half_width, ends), aa));
+	return hud_compose(color, acc, brightness);
+}
+
+
+// The gun circle: an outer ring broken in four (arcs from 20° + gap each quarter) and an
+// inner ring broken in two (from 65° + 2 gaps each half), as WeaponsWidget drew them with
+// patch_arc, the inner one at 45% opacity, both with a halo.
+vec3 hud_gun(vec3 color, vec3 local_dir, float brightness, float aa) {
+	if (hud_gun_color.a <= 0.0) {
+		return color;
+	}
+	vec3 d = hud_gun_frame * local_dir;
+	if (d.z < 0.5) {
+		return color;
+	}
+	vec2 p = degrees(vec2(atan(d.x, d.z), atan(d.y, d.z)));
+	float rr = length(p);
+	float halo = hud_symbol_halo_deg;
+	float reach = halo + aa * 2.0;
+	if (abs(rr - hud_gun_ring.x) > hud_gun_ring.z + reach && abs(rr - hud_gun_ring.y) > hud_gun_ring.w + reach) {
+		return color;
+	}
+	float th = atan(p.y, p.x);
+	const float GAP = 0.15707963;   // 9°
+	float to = mod(th - 0.34906585, 1.5707963);   // from 20°, per quarter
+	float outer_cut = max(GAP - to, to - (1.5707963 - GAP)) * hud_gun_ring.x;
+	float ti = mod(th - 1.1344640, 3.1415927);    // from 65°, per half
+	float inner_cut = max(2.0 * GAP - ti, ti - (3.1415927 - 2.0 * GAP)) * hud_gun_ring.y;
+	float outer = abs(rr - hud_gun_ring.x);
+	float inner = abs(rr - hud_gun_ring.y);
+	vec4 acc = vec4(0.0);
+	hud_ink(acc, hud_symbol_halo_color, hud_fill(max(outer - hud_gun_ring.z - halo, outer_cut), aa));
+	hud_ink(acc, hud_gun_color, hud_fill(max(outer - hud_gun_ring.z, outer_cut), aa));
+	hud_ink(acc, hud_symbol_halo_color, hud_fill(max(inner - hud_gun_ring.w - halo, inner_cut), aa));
+	hud_ink(acc, vec4(hud_gun_color.rgb, hud_gun_color.a * 0.45), hud_fill(max(inner - hud_gun_ring.w, inner_cut), aa));
+	return hud_compose(color, acc, brightness);
 }
 
 
@@ -497,8 +565,10 @@ vec3 hud_layers(vec3 color, vec3 local_dir, float brightness) {
 	color = hud_over(color, hud_sample(hud_heading_texture, hud_heading_frame, local_dir), brightness);
 	color = hud_ladder(color, local_dir, brightness);
 	color = hud_over(color, hud_sample(hud_suit_texture, hud_suit_frame, local_dir), brightness);
+	color = hud_aux(color, local_dir, brightness, aa);
 	color = hud_control(color, local_dir, brightness, aa);
 	color = hud_fpm(color, local_dir, brightness, aa);
 	color = hud_contacts(color, local_dir, brightness, aa);
+	color = hud_gun(color, local_dir, brightness, aa);
 	return color;
 }

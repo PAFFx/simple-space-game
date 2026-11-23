@@ -11,20 +11,35 @@ extends Node3D
 ## actuator lag is part of the simulation rather than hidden from the solver.
 
 @export var max_thrust: float = 150000.0          ## N
-@export_range(0.0, 60.0) var gimbal_limit_deg: float = 20.0
+@export_range(0.0, 60.0) var gimbal_limit_deg: float = 20.0:
+	set(value):
+		gimbal_limit_deg = value
+		_planes_local.clear()
 ## Tighter limit on the fore/aft swing (about the node's local X axis), deg. At or
 ## above gimbal_limit_deg it adds nothing. Lets a nozzle swing wide sideways but only
 ## a little fore and aft.
-@export_range(0.0, 90.0) var gimbal_pitch_limit_deg: float = 90.0
+@export_range(0.0, 90.0) var gimbal_pitch_limit_deg: float = 90.0:
+	set(value):
+		gimbal_pitch_limit_deg = value
+		_planes_local.clear()
 ## Centre of the fore/aft range, deg: the swing runs bias ± pitch limit, so a nozzle can
 ## rest at one end of its range (e.g. a calf plate that only swings back, away from the leg).
-@export_range(-60.0, 60.0) var gimbal_pitch_bias_deg: float = 0.0
+@export_range(-60.0, 60.0) var gimbal_pitch_bias_deg: float = 0.0:
+	set(value):
+		gimbal_pitch_bias_deg = value
+		_planes_local.clear()
 ## Same for the sideways swing (about local Y). 0 = the nozzle only swings fore/aft
 ## (one-plane, "2D" vectoring); gimbal_limit_deg 0 = fixed nozzle.
-@export_range(0.0, 90.0) var gimbal_yaw_limit_deg: float = 90.0
+@export_range(0.0, 90.0) var gimbal_yaw_limit_deg: float = 90.0:
+	set(value):
+		gimbal_yaw_limit_deg = value
+		_planes_local.clear()
 ## Centre of the sideways range, deg (bias ± yaw limit), e.g. a nozzle that can only swing
 ## outward because something sits on its inner side.
-@export_range(-60.0, 60.0) var gimbal_yaw_bias_deg: float = 0.0
+@export_range(-60.0, 60.0) var gimbal_yaw_bias_deg: float = 0.0:
+	set(value):
+		gimbal_yaw_bias_deg = value
+		_planes_local.clear()
 ## For a nozzle in a pod that swings about a hinge away from the nozzle (e.g. a backpack
 ## pod hanging from the top): that hinge, local to this node. The nozzle (where the force
 ## acts and the plume starts) then swings around it with the gimbal. Zero = gimbal in place.
@@ -74,6 +89,10 @@ const FX_CORE_LENGTH := 0.6
 
 var throttle: float = 0.0                         ## Actual spooled throttle [0, 1]
 
+## _limit_planes(), kept until a gimbal setting changes (their setters clear it).
+var _planes_local: Array[Vector3] = []
+var _gimbal_dir := Vector3(NAN, NAN, NAN)       ## The aim and pivot the gimbal node was last set to
+var _gimbal_pivot := Vector3.ZERO
 var _cmd_throttle: float = 0.0
 var _cmd_dir := Vector3.FORWARD                   ## Commanded thrust dir, local to this node
 var _dir := Vector3.FORWARD                       ## Actual thrust dir, local to this node
@@ -175,6 +194,25 @@ func get_limit_planes_in(frame: Node3D) -> PackedVector3Array:
 	return out
 
 
+## get_position_in, get_axis_in and get_limit_planes_in (appended to `planes`) for a
+## frame given by its inverse (global → frame): the flight computer inverts the body once
+## a tick instead of once per thruster per call. Same arithmetic, same results.
+func get_position_in_inverse(to_frame: Transform3D) -> Vector3:
+	return to_frame * _gimbal.global_position
+
+
+func get_axis_in_inverse(to_frame: Basis) -> Vector3:
+	return (to_frame * -global_basis.z).normalized()
+
+
+func append_limit_planes_in_inverse(to_frame: Basis, planes: PackedVector3Array) -> void:
+	var b := to_frame * global_basis
+	if _planes_local.is_empty():
+		_planes_local = _limit_planes()
+	for m in _planes_local:
+		planes.append((b * m).normalized() if m != Vector3.ZERO else Vector3.ZERO)
+
+
 ## Local plane normals: pitch atan2(d.y, −d.z) and yaw atan2(d.x, −d.z) stay within
 ## their limits (two planes each, zero when that limit adds nothing).
 func _limit_planes() -> Array[Vector3]:
@@ -260,9 +298,14 @@ func step(delta: float, body: RigidBody3D, has_propellant: bool) -> void:
 		throttle = 0.0
 
 	_dir = _slewed(delta)
-	_gimbal.basis = Basis.looking_at(_dir, _pick_up(_dir))
-	if swing_pivot != Vector3.ZERO:
-		_gimbal.position = swing_pivot + Quaternion(Vector3.FORWARD, _dir) * -swing_pivot
+	# Only when the aim moved: re-setting the same transform still notifies the nozzle's
+	# subtree (plume, glow, light), for every parked thruster every tick.
+	if _dir != _gimbal_dir or swing_pivot != _gimbal_pivot:
+		_gimbal_dir = _dir
+		_gimbal_pivot = swing_pivot
+		_gimbal.basis = Basis.looking_at(_dir, _pick_up(_dir))
+		if swing_pivot != Vector3.ZERO:
+			_gimbal.position = swing_pivot + Quaternion(Vector3.FORWARD, _dir) * -swing_pivot
 
 	var thrust := get_thrust()
 	if thrust > 0.0:

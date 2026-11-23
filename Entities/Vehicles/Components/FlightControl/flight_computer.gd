@@ -404,11 +404,13 @@ func _build_state(delta: float) -> void:
 
 	var com_local := body.to_local(s.com_position)
 	var has_propellant := propellant > 0.0
+	var to_body := body.global_transform.affine_inverse()
+	var to_body_basis := body.global_basis.inverse()
 	for t in thrusters:
-		s.thruster_positions.append(t.get_position_in(body) - com_local)
-		s.thruster_axes.append(t.get_axis_in(body))
+		s.thruster_positions.append(t.get_position_in_inverse(to_body) - com_local)
+		s.thruster_axes.append(t.get_axis_in_inverse(to_body_basis))
 		s.thruster_cone.append(t.get_cone_rad())
-		s.thruster_planes.append_array(t.get_limit_planes_in(body))
+		t.append_limit_planes_in_inverse(to_body_basis, s.thruster_planes)
 		s.thruster_max.append(t.get_available_thrust() if has_propellant else 0.0)
 	s.compute_authority()
 	if _capability_map != null:

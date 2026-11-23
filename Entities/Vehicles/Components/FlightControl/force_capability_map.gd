@@ -20,6 +20,9 @@ const FLOOR := 0.02
 
 var dirs := PackedVector3Array()
 var values := PackedFloat32Array()
+## lookup()'s floor (FLOOR of the strongest sample), kept until values change (−1 = stale):
+## the attitude solver looks up ~44 directions a tick.
+var _floor := -1.0
 ## Clean torque per body axis, N·m: what the thrusters can turn with before they start
 ## borrowing off-centre thrust, which shoves the suit sideways. Measured like the force.
 var clean_torque := Vector3.ZERO
@@ -77,6 +80,7 @@ func step(count: int) -> bool:
 			lo = minf(lo, _aimed_thrust(_state, dir, _min_alignment))
 		dirs.append(dir)
 		values.append(lo)
+		_floor = -1.0
 	_next = end
 	if _next >= COUNT:
 		clean_torque = _measure_torque(_state, _allocator)
@@ -94,9 +98,11 @@ func step(count: int) -> bool:
 func lookup(dir: Vector3) -> float:
 	var inv_sum := 0.0
 	var weight := 0.0
-	var floor_value := 1.0
-	for v in values:
-		floor_value = maxf(floor_value, v * FLOOR)
+	if _floor < 0.0:
+		_floor = 1.0
+		for v in values:
+			_floor = maxf(_floor, v * FLOOR)
+	var floor_value := _floor
 	for i in dirs.size():
 		var d := dirs[i].dot(dir)
 		if d <= 0.0:

@@ -71,6 +71,7 @@ extends HudWidget
 @export var circle_max_deg: float = 25.0
 @export var circle_follow_hz: float = 3.0
 
+var _gun_shown := false
 var _fcs: FireControl
 var _contacts: ContactsWidget
 var _body := Basis.IDENTITY
@@ -100,6 +101,8 @@ func draw_widget() -> void:
 	var locked := _fcs.locked != null and is_instance_valid(_fcs.locked)
 	if not locked:
 		_circle_radius = 0.0
+	var gun_was_shown := _gun_shown
+	_gun_shown = false
 	if show_hit_cue:
 		_draw_hit_cue()
 	if _fcs.is_weapons_mode():
@@ -110,6 +113,8 @@ func draw_widget() -> void:
 		if weapon != null:
 			if locked and weapon.solution_valid:
 				_draw_gun_circle(weapon)
+	if gun_was_shown and not _gun_shown:
+		hud.set_hud_parameter(&"hud_gun_color", Color(0, 0, 0, 0))
 	if locked:
 		_draw_tail()
 	_update_zoom(locked)
@@ -294,16 +299,14 @@ func _draw_gun_circle(weapon: MsWeapon) -> void:
 	var ready := weapon.state == MsWeapon.State.READY and not weapon.masked
 	var c := hud.primary_color if ready else PanoramicHud.dimmed(hud.primary_color)
 	var at := patch(centre, Vector3.UP)
-	# Outer ring broken in four, an inner ring broken in two, offset.
-	var gap := deg_to_rad(9.0)
-	for k in 4:
-		var a := k * TAU / 4.0 + deg_to_rad(20.0)
-		patch_arc(at, Vector2.ZERO, radius, a + gap, a + TAU / 4.0 - gap, c, 1.5, 16)
-	var inner := Color(c, c.a * 0.45)
+	# Outer ring broken in four, an inner ring broken in two, offset: drawn by the screen
+	# shader (hud_gun) from these; as canvas arcs they took ~0.45 ms a frame.
 	var r2 := radius - minf(0.6, radius * 0.08)
-	for k in 2:
-		var a := k * PI + deg_to_rad(65.0)
-		patch_arc(at, Vector2.ZERO, r2, a + gap * 2.0, a + PI - gap * 2.0, inner, 1.0, 24)
+	var per_px := 1.0 / hud.projector.px_per_deg
+	hud.set_hud_parameter(&"hud_gun_frame", Basis(at.right, at.up, at.centre).transposed())
+	hud.set_hud_parameter(&"hud_gun_ring", Vector4(radius, r2, 1.5 * 0.5 * per_px, 1.0 * 0.5 * per_px))
+	hud.set_hud_parameter(&"hud_gun_color", c)
+	_gun_shown = true
 	var cue := ""
 	if weapon.masked:
 		cue = "MASKED"
