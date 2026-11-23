@@ -481,7 +481,15 @@ min  |Wf (Σ Tᵢuᵢ − F)|² + |Wt (Σ rᵢ × Tᵢuᵢ − τ)|² + λ Σ |T
 with accelerated projected gradient descent (FISTA). Projection onto "cone ∩ unit ball" is closed
 form (`ThrustAllocator.project_to_cone`). It's warm-started from the previous tick with a leak
 (`warm_start_decay`), which bleeds off pairs of thrusters cancelling each other out — residual
-minimisation alone never removes those. Around 0.2 ms per tick for 10 thrusters in GDScript.
+minimisation alone never removes those.
+
+**Step and cost.** FISTA's step is 1/L, L the steepest the cost can curve. The per-thruster bound
+`Σ 2Tᵢ²(Wf² + Wt²|rᵢ|²)` is ~2.3× the true value on the RX-93, so each iteration crawled;
+`tight_step` finds the true L (the largest eigenvalue of the weighted 6×6 thrust-to-wrench map,
+power iteration warm-started from last tick, +5%) and the ν runs 30 iterations instead of 60 for a
+mean force miss of 0.154 against 0.151 of total thrust (fully converged: 0.147). The solve and the
+trim run in C++ (`Native/`, bit-identical to the GDScript fallback): allocate + trim 0.07 ms a tick
+for the ν's 28 thrusters, against 1.6 ms in GDScript at 60 iterations.
 
 **Propellant.** Least squares alone fires every thruster that helps even a little (e.g. the
 down-firing shoulder tops while climbing). A price proportional to thrust, `μ Σ|Tᵢuᵢ|` (what fuel

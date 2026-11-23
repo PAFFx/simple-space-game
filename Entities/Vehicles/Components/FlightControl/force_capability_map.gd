@@ -103,6 +103,9 @@ func lookup(dir: Vector3) -> float:
 		for v in values:
 			_floor = maxf(_floor, v * FLOOR)
 	var floor_value := _floor
+	var native := FlightNative.kernels()
+	if native != null:
+		return native.capability_lookup(dirs, values, floor_value, dir)
 	for i in dirs.size():
 		var d := dirs[i].dot(dir)
 		if d <= 0.0:

@@ -109,6 +109,21 @@ func add_measurement(t: float, pos: Vector3, cov: Basis) -> void:
 			_start(t, pos, cov)
 		return
 	rejected_in_a_row = 0
+	var native := FlightNative.kernels()
+	if native != null:
+		var xp: PackedFloat64Array = native.track_update(_x, _p, y, s_inv)
+		_x = xp.slice(0, N)
+		_p = xp.slice(N)
+	else:
+		_update_gdscript(y, s_inv)
+	hits += 1
+	last_update = t
+	if hits >= firm_hits:
+		state = State.FIRM
+
+
+## The gain and update in GDScript (FlightKernels.track_update is the same in C++).
+func _update_gdscript(y: Vector3, s_inv: Basis) -> void:
 	# K = P Hᵀ S⁻¹ (H picks the positions), x += K y, P −= K H P.
 	var ph := PackedFloat64Array()   # N×3: P's position columns
 	ph.resize(N * 3)
@@ -135,10 +150,6 @@ func add_measurement(t: float, pos: Vector3, cov: Basis) -> void:
 			p_new[r * N + c] -= k0 * _p[c] + k1 * _p[3 * N + c] + k2 * _p[6 * N + c]
 	_p = p_new
 	_symmetrize()
-	hits += 1
-	last_update = t
-	if hits >= firm_hits:
-		state = State.FIRM
 
 
 ## Updates the state machine for the current time (no measurement needed).
@@ -222,6 +233,12 @@ func _start(t: float, pos: Vector3, cov: Basis) -> void:
 ## the innermost sum unrolled (same terms, same order as Σ_m Σ_n Fim·Pmn·Fjn).
 func _predict(dt: float) -> void:
 	if dt <= 0.0:
+		return
+	var native := FlightNative.kernels()
+	if native != null:
+		var xp: PackedFloat64Array = native.track_predict(_x, _p, dt, maneuver_time, _accel_sigma())
+		_x = xp.slice(0, N)
+		_p = xp.slice(N)
 		return
 	var b := 1.0 / maneuver_time
 	var e := exp(-b * dt)

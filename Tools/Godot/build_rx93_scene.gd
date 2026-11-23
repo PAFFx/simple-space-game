@@ -552,7 +552,10 @@ func _build_flight_computer(root: Node3D) -> void:
 	law.stop_accel_g = 9.0
 	fc.set("control_law", law)
 	var alloc := ConeProjectedAllocator.new()
-	alloc.iterations = 60
+	# The tight step goes ~2.3x further an iteration than the per-thruster bound: 30 of
+	# them miss the demand by about what 60 did (Docs/Performance/frame_budget.md).
+	alloc.tight_step = true
+	alloc.iterations = 30
 	fc.set("allocator", alloc)
 	# Official empty weight 27.9 t; equipment ~15.9 t with the fin funnels (the flight tuning
 	# predates their 6 t); propellant fills the rest of the

@@ -147,15 +147,14 @@ tick on one thread.
   thread). A crash, garbled text, or a HUD symbol trailing what it marks: try `Safe` (1)
   first. With it on, the phase split above (process / draw) no longer adds up to the frame:
   draw runs beside the main thread.
-- **Allocator step size.** Its step is 1/L with L a bound 2.3× the true Lipschitz constant
-  on the ν. With the tight constant, 30 iterations miss the demand by about what 60 do now
-  (mean force miss 0.152 against 0.150 of total thrust, torque 0.027 against 0.026; fully
-  converged: 0.147 / 0.024), at half the cost (0.68 against 1.44 ms). A change in how
-  thrust is split, so it wants a flight test.
-- **Native code for the flight computer.** The allocator and sensor filter are tight
-  numeric loops; in GDScript each inner step costs ~0.8 µs. A GDExtension (C++, built
-  `precision=double`) would make them one to two orders faster and is the way to many
-  simulated suits.
+- ~~**Allocator step size.**~~ Done 2026-11-24: `ConeProjectedAllocator.tight_step`, the ν at 30
+  iterations (Docs/FlightControl/summary.md). Physics 4.25 → 3.84 ms a step on its own.
+- ~~**Native code for the flight computer.**~~ Done 2026-11-24: `Native/` (C++ GDExtension,
+  bit-identical to the GDScript, which stays as the fallback): the allocator solve and trim,
+  the sensor track's predict / update, the capability map lookup. Physics 3.84 → 2.5 ms a
+  step; one ν's flight computer and fire control 3.3 → ~1.55 ms. What is left there is spread
+  thin (state build 0.26, control law 0.23 of which the attitude solver ~0.2, thruster step
+  0.15, limb reaction 0.14, AMBAC 0.1; fire control 0.45), mostly engine calls.
 - **Cockpit screen rates.** The engine page (1.1 ms a draw) at 10 Hz and the SA page at
   20 Hz would halve their cost and their per-frame spikes.
 

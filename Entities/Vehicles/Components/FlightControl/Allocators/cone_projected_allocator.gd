@@ -40,6 +40,12 @@ extends ThrustAllocator
 ## never removes.
 @export_range(0.0, 1.0) var warm_start_decay: float = 0.85
 
+## Step from the true Lipschitz constant (the largest eigenvalue of the weighted
+## thrust-to-wrench map, by a power iteration warm-started from last tick, plus 5%)
+## instead of the per-thruster bound, which is ~2.3x larger on the RX-93: each iteration
+## goes about twice as far, so about half the iterations reach the same answer.
+@export var tight_step: bool = false
+
 ## Iterations of the actuator trim (throttles only, nozzle directions as they really are).
 @export_range(0, 200) var trim_iterations: int = 24
 ## In the trim, force error across the demand counts this much more than a shortfall
@@ -51,6 +57,11 @@ extends ThrustAllocator
 
 var _u := PackedVector3Array()
 var _wt2 := Vector3.ZERO   ## Last allocate()'s weights, reused by trim()
+## The tight step's eigenvector (force and torque halves), carried over between ticks.
+var _eig_f := Vector3.ONE
+var _eig_t := Vector3.ONE
+const _POWER_ITERATIONS := 12
+const _TIGHT_MARGIN := 1.05
 var _wf2 := 0.0
 
 
@@ -84,8 +95,11 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 	var wt2_max := maxf(wt2.x, maxf(wt2.y, wt2.z))
 	var lam := fuel_weight * wf2
 	var lipschitz := 2.0 * lam * t_max * t_max
-	for i in n:
-		lipschitz += 2.0 * t[i] * t[i] * (wf2 + wt2_max * r[i].length_squared())
+	if tight_step:
+		lipschitz = _tight_lipschitz(r, t, n, wf2, wt2, lam, t_max)
+	else:
+		for i in n:
+			lipschitz += 2.0 * t[i] * t[i] * (wf2 + wt2_max * r[i].length_squared())
 	var step := 1.0 / lipschitz
 
 	var u := _u
@@ -96,10 +110,15 @@ func allocate(state: FlightState, wrench: Wrench) -> PackedVector3Array:
 	var per_pass := ceili(float(iterations) / passes)
 	var target_f := wrench.force
 	var target_t := wrench.torque
+	var native := FlightNative.kernels()
 	for p in passes:
-		_solve(state, u, target_f, target_t, per_pass, step, wf2, wt2, lam, price)
+		if native != null:
+			u = native.allocator_solve(u, r, t, state.thruster_axes, state.thruster_cone, state.thruster_planes,
+					Thruster.PLANES, target_f, target_t, per_pass, step, wf2, wt2, lam, price)
+		else:
+			_solve(state, u, target_f, target_t, per_pass, step, wf2, wt2, lam, price)
 		if p < passes - 1:
-			var achieved := _wrench_of(state, u)
+			var achieved: Variant = native.allocator_wrench_of(u, r, t) if native != null else _wrench_of(state, u)
 			target_f += wrench.force - achieved[0]
 			target_t += wrench.torque - achieved[1]
 	_u = u
@@ -134,6 +153,10 @@ func trim(state: FlightState, wrench: Wrench, dirs: PackedVector3Array,
 	if lipschitz <= 0.0:
 		return x
 	var step := 1.0 / lipschitz
+	var native := FlightNative.kernels()
+	if native != null:
+		return native.allocator_trim(x, lo, hi, fcol, tcol, f_dir, side, _wf2, _wt2, wrench.force, wrench.torque,
+				step, trim_iterations)
 	var y := x.duplicate()
 	var momentum := 1.0
 	for _k in trim_iterations:
@@ -240,6 +263,44 @@ func _solve(state: FlightState, u: PackedVector3Array, force_target: Vector3, to
 			y[i] = v + (v - u[i]) * beta
 			u[i] = v
 		momentum = next_momentum
+
+
+## 2 λmax(W½ (Σ Tᵢ² Bᵢ Bᵢᵀ) W½) + 2 λ Tmax², Bᵢ = [I; [rᵢ]×] (force and torque of a unit
+## push from thruster i, weighted as the cost weighs them): the steepest the cost can curve,
+## so 1/L is the largest step FISTA can safely take. Power iteration on the 6×6 matrix,
+## kept as its three sums (Σ T², Σ T² r, Σ T² (|r|² I − r rᵀ)).
+func _tight_lipschitz(r: PackedVector3Array, t: PackedFloat32Array, n: int, wf2: float, wt2: Vector3,
+		lam: float, t_max: float) -> float:
+	var s0 := 0.0
+	var sr := Vector3.ZERO
+	var srr := Basis(Vector3.ZERO, Vector3.ZERO, Vector3.ZERO)
+	for i in n:
+		var ti: float = t[i]
+		var t2 := ti * ti
+		var ri := r[i]
+		var l2 := ri.length_squared()
+		s0 += t2
+		sr += ri * t2
+		srr.x += (Vector3(l2, 0.0, 0.0) - ri * ri.x) * t2
+		srr.y += (Vector3(0.0, l2, 0.0) - ri * ri.y) * t2
+		srr.z += (Vector3(0.0, 0.0, l2) - ri * ri.z) * t2
+	var sf := sqrt(wf2)
+	var wt := Vector3(sqrt(wt2.x), sqrt(wt2.y), sqrt(wt2.z))
+	var vf := _eig_f
+	var vt := _eig_t
+	var eig := 0.0
+	for _k in _POWER_ITERATIONS:
+		var a := vt * wt
+		var mf := vf * (wf2 * s0) + a.cross(sr) * sf
+		var mt := (sr.cross(vf) * sf + srr * a) * wt
+		eig = sqrt(mf.length_squared() + mt.length_squared())
+		if eig <= 0.0:
+			break
+		vf = mf / eig
+		vt = mt / eig
+	_eig_f = vf
+	_eig_t = vt
+	return 2.0 * eig * _TIGHT_MARGIN + 2.0 * lam * t_max * t_max
 
 
 ## Price per newton: fuel_cost × the force-residual gradient at u = 0 (so it scales

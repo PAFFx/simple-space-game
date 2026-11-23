@@ -1,0 +1,14 @@
+; The flight computer's and sensors' hot loops in C++ (Native/, see Native/README.md).
+; Without a library for this platform the game runs the same GDScript instead (FlightNative).
+[configuration]
+
+entry_symbol = "flight_kernels_init"
+compatibility_minimum = "4.5"
+reloadable = true
+
+[libraries]
+
+linux.debug.x86_64 = "res://addons/flight_kernels/bin/libflight_kernels.linux.template_release.double.x86_64.so"
+linux.release.x86_64 = "res://addons/flight_kernels/bin/libflight_kernels.linux.template_release.double.x86_64.so"
+windows.debug.x86_64 = "res://addons/flight_kernels/bin/libflight_kernels.windows.template_release.double.x86_64.dll"
+windows.release.x86_64 = "res://addons/flight_kernels/bin/libflight_kernels.windows.template_release.double.x86_64.dll"
