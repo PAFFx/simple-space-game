@@ -140,11 +140,13 @@ tick on one thread.
 
 ### Open decisions
 
-- **Separate render thread** (`rendering/driver/threads/thread_model = 2`, or try it with
-  `--render-thread separate`): the combat bench ran at 3.4 ms a frame (290 fps) against
-  6.8 ms, and the HUD, ladder, flight path and cockpit screens rendered right. It logs five
-  errors at startup (`_texture_2d_update` on an empty image, `finalize` off the render
-  thread) and every timing tool would need re-checking, so it wants a play test first.
+- ~~**Separate render thread.**~~ On since 2026-11-24 (`rendering/driver/threads/thread_model
+  = 2`), after a play test: the combat bench ran at 3.4 ms a frame (290 fps) against 6.8 ms.
+  Godot calls the mode experimental ("can lead to project crashes or instability") and logs
+  five errors at startup (`_texture_2d_update` on an empty image, `finalize` off the render
+  thread). A crash, garbled text, or a HUD symbol trailing what it marks: try `Safe` (1)
+  first. With it on, the phase split above (process / draw) no longer adds up to the frame:
+  draw runs beside the main thread.
 - **Allocator step size.** Its step is 1/L with L a bound 2.3× the true Lipschitz constant
   on the ν. With the tight constant, 30 iterations miss the demand by about what 60 do now
   (mean force miss 0.152 against 0.150 of total thrust, torque 0.027 against 0.026; fully
