@@ -102,10 +102,13 @@ Fly each and tick it off, or note what to change.
       - [ ] Optional: a higher roll cap for a sustained sideways sprint, not for dodging
             (the 30° cap now holds a Shift strafe to ~8.6 G of the 10.5 G limit).
 
-- [ ] Physics cost: one RX-93 is ~8 ms of physics per tick (mostly the thrust allocator),
-      half a 60 Hz frame. Fixed today: the capability map was rebuilt on every limb swing
-      that moved the centre of mass 0.1 m (72 ms per tick in a fight, `Tools/Profiling/
-      tick_cost_probe.gd`); now only when the rest-pose centre moves (propellant, jettison).
+- [x] Physics cost: one RX-93 was ~8 ms of physics per tick (mostly the thrust allocator),
+      half a 60 Hz frame; the capability map had been rebuilt on every limb swing that moved
+      the centre of mass 0.1 m (72 ms per tick in a fight, `Tools/Profiling/
+      tick_cost_probe.gd`), now only when the rest-pose centre moves (propellant, jettison).
+      2026-11-24: the allocator's tight step (40 iterations) and the C++ flight kernels
+      (`Native/`) bring the ν's flight computer and fire control to ~1.55 ms a tick in combat,
+      2.5 ms of physics in all with the test range (Docs/Performance/frame_budget.md).
 
 ## 2. Sensors (DGFT)
 

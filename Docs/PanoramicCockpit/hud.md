@@ -8,12 +8,14 @@ display, visible from any seat position and from outside through the open hatch.
 ```
 PanoramicHud (Node)
 └── HudViewport (SubViewport, 4096×2048, transparent)   ← equirectangular canvas
-    ├── Silhouettes     outlines of nearby HudSilhouette nodes (e.g. the shield): a fine rim, a
-                        bold bracket at every corner, the label on a tab
+    ├── Silhouettes     outlines of nearby HudSilhouette nodes: a fine rim, a bold bracket at
+                        every corner, the label on a tab. The ν's own shield is outlined in the
+                        sensor image (SensorOutline): for it only the label is placed, at the
+                        outline's top (its corners and the edges beside the highest projected)
     ├── Attitude        pitch ladder (two unnumbered tick columns ±30° off the heading, with
                         a pointer carrying the current pitch, and a highlight running up the
                         ticks while climbing, down while descending); small attitude indicator at
-                        the zenith inside a numbered course ring at 45° elevation (translucent), with the
+                        the zenith (its horizon line drawn by the screen shader) inside a numbered course ring at 45° elevation (translucent), with the
                         HDG box on its pointer (horizon ring off, reserved)
     ├── SuitAttitude    suit vs cockpit: the suit's horizontal plane as one double-rail line
                         all the way round, open ahead between two arrowhead badges (a plate in
@@ -38,7 +40,8 @@ PanoramicHud (Node)
                         railed arms; one dim rail out of SOI) or HMCS ring while nothing is
                         locked; the locked target's tail (where it came from); the gun solution
                         circle (the shoot cue: where a shot goes relative to the target, sized
-                        by the expected miss against the target's size); vulcan ring; the zoom
+                        by the expected miss against the target's size; drawn by the screen
+                        shader from the widget's centre, radius and colour); vulcan ring; the zoom
                         window's level number (its frame and level cells are shader-drawn)
                         (see Docs/Weapons/summary.md)
     └── Contacts        a triangle pointing down around each contact the sensors track: three
@@ -77,17 +80,19 @@ turns it into place per pixel with a `hud_<layer>_frame` uniform (display direct
 | `suit` | `(display⁻¹ · body)⁻¹` | suit line and arrowheads, drawn with the body level |
 | `fpm` | layer −X onto the velocity, up as `patch()` makes it | flight path bars and reticles as coverage (R stripe, G halo, B the reticle × its fade), prograde at −X and retrograde at +X, off the back seam; drawn once at full size and normal length; the shader finds each stripe from its position and runs the highlight, tint, fade-in and pulse, and also the grow in / out and, through `hud_fpm_shape`, the boost stretch, brake squeeze and hard-brake lean flip, by remapping the bars' band onto the layer as drawn (`hud_fpm_drawn`). Never redrawn: redrawing it each frame while the shape eased cost ~1–2 ms a frame, a visible drop whenever speed or boost changed |
 
-**Shader symbols.** The control centre, the flight path's middle marker and the contact
-triangles aren't in any
+**Shader symbols.** The control centre, the flight path's middle marker, the contact
+triangles, the gun circle (`hud_gun`: its rings and gaps) and the overhead horizon line
+(`hud_aux`) aren't in any
 texture: `hud_layers.gdshaderinc` draws them per pixel from distance functions (`hud_chevron`,
-`hud_triangle`), around a frame uniform like a layer's. They stay sharp however far the view
+`hud_triangle`, rings, segments), around a frame uniform like a layer's. On the canvas the gun
+circle cost ~0.45 ms a frame and the horizon line, an exact stroke at the zenith, ~0.35 ms. They stay sharp however far the view
 zooms in (the canvas has ~11 px per degree) and there is nothing to redraw. `hud_ink()` adds a
 stroke the way the canvas blends, so they match canvas-drawn symbols; the dark edge comes from
 `hud_symbol_halo_color` / `hud_symbol_halo_deg`. Use this for small symbols of a few straight
 strokes that only turn or scale; text and anything data-heavy stays on the canvas.
 
-Layers composite under the per-frame canvas, which keeps only what changes: numbers, the overhead
-horizon line, data blocks, contacts. Before this, the ladder alone projected ~1,400
+Layers composite under the per-frame canvas, which keeps only what changes: numbers, data blocks,
+cursors, the lock's tail. Before this, the ladder alone projected ~1,400
 points a frame in GDScript and the HUD cost ~14 ms of CPU; now ~1.5 ms. `PanoramicHud.redraw_layers()`
 draws them again after changing what they show (layers don't follow export edits at runtime).
 Colour uniforms the shader blends as canvas colours need `source_color, color_conversion_disabled`:

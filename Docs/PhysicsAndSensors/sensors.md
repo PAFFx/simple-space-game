@@ -161,7 +161,10 @@ until the table above shows up in practice.
   every tick: the track read it as velocity, and on a still target at 30 m the aim swung at
   ~12°/s and the thrusters fought the arms (`Tools/Weapons/track_jitter_probe.gd`).
 - **Track** (`SensorTrack`): 9-state Singer filter (τm 0.8 s), gate d² 16, three
-  rejections in a row restart it. Adaptive process noise: σm 6 m/s² while the measurements
+  rejections in a row restart it. Its predict and update run in C++ (`FlightKernels`,
+  `Native/`), bit-identical to the GDScript kept as the fallback (0.014 against 0.125 ms per
+  measurement with its estimates), and `get_estimate` keeps its last answer per time and
+  state, since the HUD and fire control ask several times a frame. Adaptive process noise: σm 6 m/s² while the measurements
   fit a steady target, opening at once to 30 m/s² (the acceleration's variance grows with
   it, so the estimate follows from that update) when the smoothed d²/3 climbs toward 2, a
   measurement fails the gate, or the whitened innovations lean one way (running mean,
@@ -179,8 +182,8 @@ until the table above shows up in practice.
   corner dashes.
 - **Search tracks** (2026-11-17): every other contact the head's wide field or a body
   camera sees (line of sight clear; the suit's own shield blocks) gets its own `SensorTrack`,
-  looked at 10 times a second, spread round-robin over the ticks (~0.2 ms a tick for 5
-  contacts, `Tools/Weapons/search_probe.gd`). Angles from that camera; range from stereo
+  looked at 10 times a second, spread round-robin over the ticks (a scan of 5 search
+  tracks costs 0.16 ms with the filter in C++, 0.38 ms in GDScript; `Tools/Weapons/search_probe.gd`). Angles from that camera; range from stereo
   close in, else apparent size: noise 10% a look plus a bias per contact (4%, wandering over
   6 s) the filter can't average out. A new contact starts coarse (angles ×25, range ×3.5,
   settling over 2.5 s). Settled, at 150 m–2 km: range 1–5% off (up to ~12%), angles
