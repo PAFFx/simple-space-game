@@ -11,7 +11,7 @@ extends KeyboardPilotInput
 ##                stick left = roll right)
 ## invert_heave / invert_pitch flip the twist mixes, invert_roll the left/right one.
 ##
-## Stick travel is the throttle (PilotCommand.analog_thrust): cruise, then boost, then
+## Stick travel is the throttle (PilotCommand.analog_thrust): one curve up to boost, then
 ## full boost at the stops, so there is no boost button. The dodge button kicks along the
 ## stick. The stick demand adds onto the keyboard's; with a stick missing this is plain
 ## keyboard input.
@@ -76,7 +76,8 @@ extends KeyboardPilotInput
 
 @export_group("Response")
 ## Expo softens the centre: 0 = linear, 1 = fully cubic. Full travel is always full demand.
-@export_range(0.0, 1.0) var translation_expo: float = 0.3
+## Translation stays linear: the control law's throttle curve shapes it.
+@export_range(0.0, 1.0) var translation_expo: float = 0.0
 @export_range(0.0, 1.0) var rotation_expo: float = 0.4
 @export_range(0.0, 0.5) var deadzone: float = 0.08
 ## Twist springs centre less precisely than the gimbal.
