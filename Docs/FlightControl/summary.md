@@ -749,9 +749,10 @@ part of their pod, which only pivots fore/aft: their sideways swing shows in the
 (per-nozzle bones would fix that).
 
 Thrusts in the table are what the scene has: the design ratings in `THRUSTERS` (1000, 400,
-480, 660, 240, 220 kN) × `THRUST_SCALE` (1.5 × 63.0 / 59.5: the ratio keeps the thrust-to-weight the
-suit was tuned with at 59.5 t on the official 63.0 t max weight, and ×1.5 is for future engine
-tech, see `thrust_sizing.md`). 19.2 MN in all, 28.4 G at 69 t if every nozzle pushed the same way. Ratings follow the port sizes: the backpack mains stay by far the biggest, the shoulder top
+480, 660, 240, 220 kN) × `THRUST_SCALE` (1.2 × 63.0 / 59.5: the ratio keeps the thrust-to-weight the
+suit was tuned with at 59.5 t on the official 63.0 t max weight, and ×1.2 is headroom over the
+control law's G targets; it was ×1.5 for future engine tech, see `thrust_sizing.md`). 15.3 MN in
+all, 22.7 G at 69 t if every nozzle pushed the same way. Ratings follow the port sizes: the backpack mains stay by far the biggest, the shoulder top
 and outer ports share one nozzle size, the shin and rear skirt slots are about as large as a
 calf nozzle, and the side skirt ports are the smallest. Ports under 300 kN
 (`MAIN_RATING_KN`) spool and slew like verniers.
@@ -764,8 +765,9 @@ Clean force capability at full weight (69 t, level, limbs at rest; `Tools/Flight
 | After the side-thrust pass | 9.0 G | 1.6 G | 6.6 G | 3.9 G | 3.5–3.7 G |
 | With the mass model (centre of mass 1.2 m lower, 0.6 m left) | 9.0 G | 1.6 G | 6.1 G | 4.3 G | 3.6–3.7 G |
 | All thrust ×1.5 (Nov 2026, `thrust_sizing.md`) | 13.5 G | 2.4 G | 9.7 G | 6.5 G | 5.4–5.6 G |
+| All thrust ×1.2 (Nov 2026, headroom; current) | 11.1 G | 1.9 G | 7.7 G | 5.2 G | 4.3–4.5 G |
 
-Clean torque 19 / 8 / 20 MN·m (pitch / yaw / roll), about twice what it was before the side-thrust pass (30 / 12 / 30 after the ×1.5). Sideways gains
+Clean torque 19 / 8 / 20 MN·m (pitch / yaw / roll), about twice what it was before the side-thrust pass (30 / 12 / 30 after the ×1.5, 24 / 10 / 24 at the current ×1.2). Sideways gains
 come from the bigger shoulder, skirt and shin ports and the sole's wider cone; the stronger shoulder tops (down) are what let the mains push sideways
 cleanly, cancelling their upward part. Boosted strafe: 3.3 → 6.1 G, 1.4 → 2.3 m in the
 first 0.5 s, 8 → 14 m in 1 s.
