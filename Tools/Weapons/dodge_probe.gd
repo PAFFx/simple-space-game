@@ -7,9 +7,11 @@ extends SceneTree
 ##   godot-double --headless --path . --fixed-fps 60 -s Tools/Weapons/dodge_probe.gd -- \
 ##       [speed=1500] [shots=10] [ranges=500,1000,2000] [policies=none,up,side]
 ##       [aim=track,truth] [reaction=0.25] [jitter=0.15] [hold=0.8] [spool=0.5] [emit=0.3] [no_funnels]
+##       [kick]
 ##
 ## policies: none (sits still), up (the mains' axis, ~9 G), side (left or right at random,
 ## ~3.6 G), diag (up and left or right, 45°), any (up / down / left / right at random).
+## kick: the dodge starts with a kick (dodge press, pintle burst) and holds full boost after.
 ## aim: the turret leads from its own
 ## sensor track of the suit (TargetDrone.use_track) or from the suit's true state.
 
@@ -35,6 +37,7 @@ var _spool := 0.5
 var _emit := -1.0
 var _hits := 0
 var _no_funnels := false
+var _kick := false
 ## The pilot's reaction varies shot to shot: reaction − jitter·0.5 … reaction + jitter.
 ## A fixed reaction made every dodge identical, which a shooter leading the acceleration
 ## could hit every time at one particular range.
@@ -56,6 +59,7 @@ func _initialize() -> void:
 			"spool": _spool = float(value)
 			"emit": _emit = float(value)
 			"no_funnels": _no_funnels = true
+			"kick": _kick = true
 			"jitter": _jitter = float(value)
 	_run.call_deferred()
 
@@ -83,8 +87,9 @@ func _run() -> void:
 	_fcs = vehicle.find_component(FireControl) as FireControl
 	_suit.connect(&"hit_taken", func(_d: float, _p: Vector3, _dir: Vector3) -> void: _hits += 1)
 	await _ticks(60)
-	print("turret beam %.0f m/s, spool %.2f s, %d shots per case; pilot reacts %.2f s after the glow, boosts %.2f s; suit %.1f t%s" % [
-			_speed, _spool, _shots, _reaction, _hold, _suit.mass / 1000.0, " (no funnels)" if _no_funnels else ""])
+	print("turret beam %.0f m/s, spool %.2f s, %d shots per case; pilot reacts %.2f s after the glow, %s %.2f s; suit %.1f t%s" % [
+			_speed, _spool, _shots, _reaction, "kicks then boosts" if _kick else "boosts", _hold,
+			_suit.mass / 1000.0, " (no funnels)" if _no_funnels else ""])
 	for aim in _aims:
 		for policy in _policies:
 			var line := "aim %-5s dodge %-4s |" % [aim, policy]
@@ -128,6 +133,7 @@ func _case(track: bool, policy: String, r: float) -> Array:
 	var dodge_in := -1.0
 	var dodge_left := 0.0
 	var dodge_dir := Vector3.ZERO
+	var kick_now := false
 	var settle := 0.0
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	while resolved < _shots and time_left > 0.0:
@@ -145,12 +151,15 @@ func _case(track: bool, policy: String, r: float) -> Array:
 			if dodge_in < 0.0:
 				dodge_left = _hold
 				dodge_dir = _dodge_direction(policy, drone)
+				kick_now = _kick
 		_input.cmd = PilotCommand.new()
 		if dodge_left > 0.0:
 			dodge_left -= dt
 			_input.cmd.translation = dodge_dir
 			_input.cmd.boost = true
 			_input.cmd.boost_full = true
+			_input.cmd.dodge = kick_now
+			kick_now = false
 		else:
 			_input.cmd.brake = true
 		if settle > 0.0:
@@ -163,6 +172,8 @@ func _case(track: bool, policy: String, r: float) -> Array:
 				_suit.global_transform = start
 				_suit.linear_velocity = Vector3.ZERO
 				_suit.angular_velocity = Vector3.ZERO
+				var fc := (_suit as Node as VehicleBase).find_component(FlightComputer) as FlightComputer
+				fc.burst_reserve = fc.burst_reserve_capacity
 	if resolved < _shots:
 		push_warning("dodge_probe: only %d of %d shots resolved (%s, %.0f m)" % [resolved, _shots, policy, r])
 	drone.queue_free()

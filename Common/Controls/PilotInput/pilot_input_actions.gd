@@ -18,6 +18,8 @@ const ROLL_LEFT := &"ms_roll_left"
 const ROLL_RIGHT := &"ms_roll_right"
 const BOOST := &"ms_boost"
 const BRAKE := &"ms_brake"
+## Kick along the movement keys held (pintle burst).
+const DODGE := &"ms_dodge"
 ## Hold to steer pitch/yaw with the mouse (otherwise the mouse looks around).
 const MOUSE_STEER := &"ms_mouse_steer"
 ## Toggle cockpit click mode: a free cursor for the cockpit's switches (left / right click
@@ -67,6 +69,7 @@ const _DEFAULTS := {
 	ROLL_RIGHT: [KEY_E],
 	BOOST: [KEY_SHIFT],
 	BRAKE: [KEY_CTRL],
+	DODGE: [KEY_CAPSLOCK],
 	TOGGLE_VIEW: [KEY_V],
 	TOGGLE_RIFLE: [KEY_1],
 	TOGGLE_SHIELD: [KEY_2],

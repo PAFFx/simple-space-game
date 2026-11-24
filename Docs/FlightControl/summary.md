@@ -127,13 +127,76 @@ Torque = `I·α + ω × Iω` where `α = rate_gain · (ω_cmd − ω)`.
 | Normal | — | `cruise_accel_g` 0.8 G | no limit | ≤ `cruise_max_offset_deg` 20° |
 | Precision | C (toggle) | `precision_accel_g` 0.15 G | `precision_speed` 20 m/s | off; turn rates × 0.5 |
 | Coupled | Left stick button 20 (toggle) | as the mode above | as the mode above | as the mode above; the brake is always on, so released axes stop instead of coasting (HUD: COUPLED) |
-| Boost | Shift | 4 G | no limit | ≤ `boost_max_offset_deg` 30° |
-| Full boost | Shift double-tap + hold | 4 G | no limit | solver's `max_offset_deg` 60° |
+| Boost | Shift; stick asking more than `cruise_accel_g` | 4 G | no limit | ≤ `boost_max_offset_deg` 30° |
+| Full boost | Shift double-tap + hold; stick past `analog_full_boost_onset` (eased in to the stops) | 4 G | no limit | solver's `max_offset_deg` 60° |
 
 Capped modes keep the suit quick to change direction but give less acceleration in weak
 directions (descending: 0.7 G normal, 0.8 G boost, 1.3 G full). Shift overrides precision.
 While boosting, the swing itself is torque-limited (the body lags the target by ~14°, so swings
 run at ~20°/s), because auto-rotation yields to force (`auto_rotate_torque_priority`).
+
+**Dodge (kick).** A press of the dodge button (right stick button 4, Caps Lock) with a
+direction kicks along it for `dodge_time` (0.3 s), and on for as long as the button stays held
+until the kick tank is dry (the stick steers a held kick; let go, it keeps its last direction): the
+pintles open (see *Burst* below) and the
+suit pushes with all it has, up to `dodge_accel_g` (ν: 20 G, what a strapped-in pilot takes for a
+fraction of a second), from the attitude it is in. The offset is frozen during the kick, since a
+swing couldn't finish in time anyway. The direction is the stick at the press (in the pilot
+frame), fixed in the world for the kick. A press with the stick under `dodge_min_stick` (0.3) waits
+`dodge_buffer_time` (0.15 s) for a direction, then is dropped. Drift hold is off during the kick, and
+the speed it leaves is kept (the HUD shows full boost meanwhile).
+
+**Burst (pintle throats).** `FlightComputer.burst_thrust_factor` k (ν: 4): pintles pull back and
+the throats open k× in area at the same chamber pressure and reactor power, with extra reaction
+mass injected. Thrust ×k, Isp ÷k (ν 12,000 → 3,000 s), flow ×k². During a kick every thruster
+*may* open to k (`Thruster.throat_factor`, ramped in `pintle_time` 0.03 s; the allocator sees
+thruster_max × k; the capability map is measured closed and scaled by k), but each one opens its
+own pintle only for the thrust beyond its rating (`Thruster.get_pintle_factor`: the rated throat
+until the valve is full open, then just as far as needed). Thrusters balancing torque or pushing
+below their rating stay at 12,000 s and keep their normal plume. The pumps feed up to each thruster's rated flow; the rest
+comes from a **kick tank** (`burst_reserve_capacity`, ν 300 kg, part of the propellant), which the
+pumps' spare capacity refills at up to `burst_refill_flow` (40 kg/s coasting, less the harder the
+thrusters draw, none at full rated flow). A kick needs `burst_min_reserve` (60 kg); an empty tank
+closes the pintles. The engine page shows the kick tank as a thin bar beside the fuel bar (red
+empty → green full, a tick at the least a kick needs), the effective Isp and the real flow.
+
+The plume shows the burst (`plume.gdshader` `burst`, `Thruster.burst_*`): the wider throat at the
+same exit leaves the jet under-expanded, so it swells just past the lip, runs 1.7× longer and
+1.25× wider, denser and whiter-warm (16× the mass on the same power: cooler), with shock diamonds
+1.8× further apart, and the nozzle flares as the pintles open (`burst_pop_time` 0.15 s).
+`Tools/Flight/kick_fx_snapshot.gd` renders a kick against a full-boost strafe, and the engine page.
+
+From rest (`Tools/Flight/kick_probe.gd`, ν full, 20 G cap), distance along the kick:
+
+| Direction | 0.1 s | 0.2 s | 0.3 s | 0.5 s | peak / mean G | Δv | kick tank used |
+|---|---|---|---|---|---|---|---|
+| right / left | 0.3 m | 1.9 m | 5.2 m | 14.2 m | 18 / 13.5 | 45 m/s | 85 kg |
+| up | 0.5 | 2.7 | 6.8 | 18.0 | 20 / 16.5 | 56 | 32 |
+| down | 0.1 | 0.9 | 2.4 | 6.7 | 9 / 6.5 | 21 | 18 |
+| forward | 0.5 | 2.6 | 6.5 | 17.0 | 19.3 / 16 | 52 | 49 |
+| back | 0.4 | 2.1 | 5.5 | 14.8 | 18.4 / 14 | 46 | 83 |
+| stick slammed to full boost, right | 0.1 | 0.6 | 1.5 | 4.8 | 6 / 3.7 | 22 | — |
+
+Held (`kick_probe.gd hold=4 pintles=0.5`): sideways the tank is dry after 0.87 s (Δv 166 m/s),
+up after 1.9 s at 20 G (Δv 380 m/s). Up is the suit's strong direction (13.5 G at rated
+thrust), so 20 G needs only ~1.5× overall: the foot soles run at ×3.8 (143 of the 216 kg/s the
+tank gives at 0.5 s), the lower mains at ×1.5–2 and one chest port at ×1.6, while the upper mains
+stay under their rating (torque balance). Sideways (5.5 G rated) needs ~3.6×: nearly every
+side-facing nozzle runs at ×3.4–3.95 and the tank gives 445 kg/s. Uncapped it peaks at 50 G up (Δv 110 m/s). The first 0.1 s is slow: idle thrusters still spool
+(verniers 0.06 s, mains 0.12 s); keeping them lit ("hot standby") would remove that and is left
+for later. Total propellant per sideways kick ~125 kg, 0.5% of the tank (~205 kg when every
+pintle opened together); the up kick is cheap because the mains carry most of it within their
+rating.
+
+Against a beam (`Tools/Weapons/dodge_probe.gd kick`, 3000 m/s, 0.3 s spool, turret leading from
+its sensor track, acceleration included): reacting to the glow after a human 0.25 s, the kick
+changes nothing at 150–600 m (10/10 hits, same as boosting): it starts as the shot leaves, and the
+0.05–0.2 s of flight give it 0.3–2 m. Even a turret leading only the true velocity hits 9–10/10.
+Kicking on the glow itself (no reaction time) and boosting on after it, side kicks dodge from
+300 m out (300 m 1/10, 600 m and 1,200 m 0/10), but kicking on the glow and then coasting is hit
+10/10 again: the misses come from the track's acceleration estimate lagging the change, a few
+metres on a 20 m target, so they're fragile. The kick is the hardware for a dodge; at these ranges
+it has to be started before the cue, not after it.
 
 **Horizon lock** (L, toggle; `horizon_lock`, on by default). Body-axis pitch + yaw bank the view relative to
 the world: a diagonal turn tilts the horizon, and a closed loop of stick motion leaves a roll
@@ -537,6 +600,7 @@ HRZN lock/free, MOVE normal/precision, AMBAC on/off. Right console: the yellow/b
 | Roll left / right | Q / E |
 | Boost (full thrust, auto-rotation ≤ 30°) | Shift |
 | Boost with full auto-rotation (60°) | Shift double-tap, hold |
+| Dodge (kick along the movement keys held) | Caps Lock |
 | Brake (axes not being pushed on; released keys coast) | Ctrl, hold |
 | Hard brake (auto-rotation ≤ 30°) | Ctrl double-tap, hold |
 | Cockpit click mode (free cursor for the switches) | Middle mouse |
@@ -564,7 +628,7 @@ names don't). With either stick missing it is plain keyboard input.
 | Roll | Both sticks left/right, their difference (right stick right against left stick left = roll right; `invert_roll`, `roll_deadzone`) |
 | Up / down | Both sticks' twist (axis 2), their average, clockwise = up |
 | Pitch | Twist difference (right clockwise, left counter-clockwise = nose up) |
-| Full boost (hold) | Right button 4 |
+| Dodge (kick along the stick, needs a direction) | Right button 4 |
 | Brake (hold) / hard brake (double-tap, hold) | Left button 21 |
 | Coupled on / off | Left button 20 |
 | Precision on / off | Left button 3 |
@@ -575,12 +639,21 @@ names don't). With either stick missing it is plain keyboard input.
 `invert_heave` / `invert_pitch` flip the twists. On these sticks pushing forward reads positive
 on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around together).
 
-- **Stick travel is the throttle** (`PilotCommand.analog_thrust`): up to `analog_boost_onset`
-  (0.6 of the shaped demand, ~73% of the travel) spans the cruise limit; beyond it the
-  acceleration eases (quadratic) up to `boost_accel_g` and the suit counts as boosting (rates,
-  auto-rotation cap, HUD), with 0.05 hysteresis. So there is no boost button, only full boost.
-  Precision uses the whole travel for its own limit. Measured on the ν, both sticks forward:
-  50% → 0.48 G, 75% → 0.76 G, 90% → 2.7 G, 100% → 7.2 G.
+- **Stick travel is the throttle** (`PilotCommand.analog_thrust`): one exponential curve,
+  no cruise or boost zones: from 0 up to `analog_accel_g` (7 G) at `analog_full_boost_onset`
+  (0.96 of the demand after deadzone and expo, ~95% of the stick), `G = top · (e^(k·s) − 1) / (e^k − 1)`
+  with `analog_curve` k = 2. Whenever it asks for more
+  than `cruise_accel_g` the suit counts as boosting (rates, auto-rotation cap, HUD), with 0.05
+  travel of hysteresis. Past the onset it eases on (linear) into full boost, reached at the stops:
+  no acceleration cap, and the auto-rotation limit opening from 30° to the solver's full range.
+  So there is no boost button; the button is the dodge. The translation axes' expo runs the
+  other way (`translation_expo` −0.3: `lerp(x, 1 − (1 − x)³, 0.3)`, quick centre, flat near the
+  stops), cancelling the exponential's soft start, so the push grows by a near-even ~0.9 G per
+  10% of travel. Precision uses the whole travel for its speed (through the same expo). Measured
+  on the ν (cruise 1.2 G, so boosting from ~35%), both sticks forward
+  (`Tools/Flight/throttle_probe.gd`): 15% → 0.30 G, 20% → 0.55 G, 30% → 1.10 G, 40% → 1.77 G,
+  50% → 2.51 G, 60% → 3.33 G, 70% → 4.25 G, 80% → 5.26 G, 90% → 6.39 G, 94% → 6.88 G, 96% →
+  8.65 G (all the forward thrust), 100% → 8.75 G.
 - **Shaping:** each raw axis goes through a median of `spike_filter_ticks` (3) samples (the left
   stick's X spikes to 0.07 for a tick or two at rest), then deadzone and expo
   (`rotation_expo` 0.4, `translation_expo` 0.3), then `smoothing` (0.04 s). The fore/aft mix is

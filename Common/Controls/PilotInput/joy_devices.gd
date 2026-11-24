@@ -14,10 +14,14 @@ static func find(name_part: String) -> int:
 	return -1
 
 
-## Deadzone rescaled to start at 0, then expo (0 = linear, 1 = fully cubic).
+## Deadzone rescaled to start at 0, then expo (0 = linear, 1 = fully cubic: soft centre;
+## below 0 the other way, -1 = 1 − (1 − x)³: quick centre, flat near the stops).
 static func shape(raw: float, deadzone: float, expo: float) -> float:
 	var mag := absf(raw)
 	if mag <= deadzone:
 		return 0.0
 	var x := minf((mag - deadzone) / (1.0 - deadzone), 1.0)
+	if expo < 0.0:
+		var r := 1.0 - x
+		return signf(raw) * lerpf(x, 1.0 - r * r * r, -expo)
 	return signf(raw) * lerpf(x, x * x * x, expo)

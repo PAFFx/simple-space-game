@@ -23,7 +23,8 @@ PanoramicHud (Node)
                         ahead of each; the suit's nose is midway); rings 90° left/right with cockpit-level marks
     ├── ControlCentre   wide V above and ^^ below (the lower one in the accent), each a band
                         with a bright border and a fainter fill, around the direction fly-by-wire "forward" pushes (the control
-                        law's pilot frame), empty in the middle; drawn by the screen shader
+                        law's pilot frame), empty in the middle; drawn by the screen shader. The ^^ are the
+                        dodge kick tank (see below)
     ├── FlightPath      prograde ▽ (filled, solid core, wings) / retrograde △ (empty: the rim's
                         three corners and a hollow core) inside a wide reticle (radial dashes 17° out,
                         left and right quarters only), each with two wide bars of slanted stripes
@@ -79,6 +80,19 @@ turns it into place per pixel with a `hud_<layer>_frame` uniform (display direct
 | `ladder` | `Basis(RIGHT, pitch)` | the pitch ladder drawn level, as coverage (R stroke, G halo, B stroke × tick strength); the shader applies fade and climb highlight from `hud_pitch_deg` / `hud_climb`, blending as the 2D canvas would |
 | `suit` | `(display⁻¹ · body)⁻¹` | suit line and arrowheads, drawn with the body level |
 | `fpm` | layer −X onto the velocity, up as `patch()` makes it | flight path bars and reticles as coverage (R stripe, G halo, B the reticle × its fade), prograde at −X and retrograde at +X, off the back seam; drawn once at full size and normal length; the shader finds each stripe from its position and runs the highlight, tint, fade-in and pulse, and also the grow in / out and, through `hud_fpm_shape`, the boost stretch, brake squeeze and hard-brake lean flip, by remapping the bars' band onto the layer as drawn (`hud_fpm_drawn`). Never redrawn: redrawing it each frame while the shape eased cost ~1–2 ms a frame, a visible drop whenever speed or boost changed |
+
+**Kick tank on the control centre.** With a kick tank (`FlightComputer.burst_reserve_capacity` >
+0), the two ^ below the centre are its halves (`burst_reserve / burst_reserve_capacity`): the white
+^ 0–50%, the accent ^ 50–100%. Each band's fill fades with its half, from the usual fill
+(`ControlCentreWidget.fill`) when full to just the bright border (hollow) when spent, so a full
+tank looks as the chevrons always did. While the tank holds less than a kick needs
+(`burst_min_reserve`) the white ^'s border dims too (`not_ready_border` 0.4): no kick ready. A ^
+whose half fills back up brightens toward white for `pop_time` (0.35 s). Nothing marks a kick
+itself (no afterimage, no pulse on the press). Without a kick tank the chevrons stay as they were.
+Uniforms: `hud_control_fill` and `hud_control_border` (x the V above, y the white ^, z the
+accent ^, shares of the colour's alpha), `hud_control_pop` (white, accent); the widget sends them
+only when they change. Render: `Tools/Weapons/weapons_snapshot.gd -- <out> kick` (full, 75%, half,
+not ready, empty, the pop), close in below the centre.
 
 **Shader symbols.** The control centre, the flight path's middle marker, the contact
 triangles, the gun circle (`hud_gun`: its rings and gaps) and the overhead horizon line

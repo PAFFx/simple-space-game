@@ -65,11 +65,20 @@ At fixed power, halving the Isp doubles the thrust, and the propellant flow
 (`ṁ = F / v_e`) goes up 4×. A **variable-Isp boost** follows from it (like VASIMR, run on
 fusion): cruise at high Isp, and boost by injecting extra reaction mass. For example,
 Isp 12,000 → 3,000 gives 4× the thrust for 16× the propellant flow, so boosting visibly
-drains the tank. Not implemented.
+drains the tank.
+
+Implemented for short kicks (dodges) as **pintle throats** (`FlightComputer` burst,
+`Docs/FlightControl/summary.md`): just pushing harder through the same throat would need 4× the
+chamber pressure, so instead a pintle pulls back and opens the throat 4× in area (2× in diameter),
+at the same chamber pressure and the same reactor power (F·v_e/2 is unchanged). The gas comes out
+cooler (the same power heats 16× the mass), so heat is not the limit; feeding the flow is. The
+pumps are rated for the normal flow, and the rest comes from a small pressurised kick tank that
+they refill; its size sets how long a kick lasts and the refill sets how often one is possible.
 
 ## G-loads
 
-At 1.5× thrust, the ν's clean climb is about 13.5 G (2× would be 18 G), well past what a seated human can take
+At ×1 the ν's clean climb is 9 G (13.5 G at the 1.5× it flew with for a while, see *Changes*);
+at 1.5× thrust, its clean climb is about 13.5 G (2× would be 18 G), well past what a seated human can take
 (~9 G for seconds, with a G-suit). Accepted on purpose: a fictional linear-seat cockpit
 mechanic will let the pilot take it (planned). Until then, there is no FBW G-limiter.
 
@@ -108,3 +117,11 @@ to ~8.6 G (reaching 90% of the target in 1.0 s instead of 0.7 s).
 | diagonal | 6.9 G, 26.1 m | 10.4 G, 32.5 m |
 | strafe right | 6.8 G, 23.2 m | 8.6 G, 23.6 m |
 | down | 3.2 G | 3.2 G (thrust-limited) |
+
+- **Nov 2026, later:** back to ×1 (`THRUST_SCALE` 63.0 / 59.5; mains 1,059 kN, 12.8 MN in all),
+  keeping the ×1.5 movement limits (cruise 1.2 G, boost 10.5 G, braking 9 G, dodge 20 G). At ×1.5
+  the rated thrust reached most of a dodge's G by itself, so a held kick going up or forward
+  barely opened the pintles. Now the pintle burst is what reaches it, and a held kick drains the
+  kick tank in every direction. Where the rating falls short of a limit, the push is whatever the
+  thrusters give: boost forward 8.9 G (was 10.5), full-boost strafe 5.8 G (8.7), hard roll 67° in
+  the first second (97°); stopping and stray force unchanged (`run_fbw_probe.sh`).

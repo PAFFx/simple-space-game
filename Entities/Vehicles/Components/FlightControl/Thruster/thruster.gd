@@ -77,6 +77,14 @@ extends Node3D
 ## Energy of a light at the nozzle that lights the suit while firing (exhaust_fx only). 0 = none.
 @export var glow_light_energy: float = 0.0
 @export var glow_light_color := Color(0.6, 0.8, 1.0)
+## Burst (pintles fully open): plume length and width, and nozzle glow, multiplied by these.
+@export var burst_length_scale: float = 1.7
+@export var burst_width_scale: float = 1.25
+@export var burst_glow_scale: float = 1.6
+## Shock diamonds spread this many times further apart (a 2x wider throat, same exit).
+@export var burst_diamond_spacing: float = 1.8
+## Flare when the pintles open on a firing nozzle, s.
+@export var burst_pop_time: float = 0.15
 
 ## Plane normals per thruster in FlightState.thruster_planes (pitch ×2, yaw ×2).
 const PLANES := 4
@@ -88,6 +96,11 @@ const DIAMOND_SPACING := 1.7
 const FX_CORE_LENGTH := 0.6
 
 var throttle: float = 0.0                         ## Actual spooled throttle [0, 1]
+## Throat factor the pintle may open to now (FlightComputer, burst): the thruster can give
+## this many times its rating, and throttle is a share of that. 1 = rated throat only.
+var throat_factor: float = 1.0
+## Throat factor with the pintle fully back (the plume's full burst look).
+var throat_factor_max: float = 1.0
 
 ## _limit_planes(), kept until a gimbal setting changes (their setters clear it).
 var _planes_local: Array[Vector3] = []
@@ -108,6 +121,9 @@ var _fx_core: GeometryInstance3D
 var _glow: GeometryInstance3D
 var _light: OmniLight3D
 var _flicker := 1.0
+var _pop := 0.0                                   ## Pintle-opening flare, 1 → 0
+var _fx_burst := 0.0                              ## burst last sent to the plume shaders
+var _was_burst := false
 
 
 func _ready() -> void:
@@ -149,7 +165,7 @@ func _setup_fx() -> void:
 
 ## Current thrust in Newtons.
 func get_thrust() -> float:
-	return throttle * max_thrust if enabled else 0.0
+	return throttle * max_thrust * throat_factor if enabled else 0.0
 
 
 ## Actual nozzle deflection, each axis in [-1, 1] of the gimbal limit.
@@ -174,9 +190,23 @@ func get_hud_label() -> String:
 	return hud_label if hud_label != "" else String(name)
 
 
+## Throat factor the pintle is actually open to: it stays at the rated throat until the
+## valve is full open at the rated flow, and opens only for the thrust beyond that (Isp ÷
+## this). A thruster asked for its rating or less never opens it.
+func get_pintle_factor() -> float:
+	return clampf(throttle * throat_factor, 1.0, maxf(throat_factor, 1.0))
+
+
+## How far the pintle is open, 0..1 of its full travel.
+func get_pintle_opening() -> float:
+	if throat_factor_max <= 1.0:
+		return 0.0
+	return (get_pintle_factor() - 1.0) / (throat_factor_max - 1.0)
+
+
 ## Available thrust for the allocator (0 when disabled).
 func get_available_thrust() -> float:
-	return max_thrust if enabled else 0.0
+	return max_thrust * throat_factor if enabled else 0.0
 
 
 func get_cone_rad() -> float:
@@ -349,6 +379,11 @@ static func _pick_up(dir: Vector3) -> Vector3:
 
 func _update_visuals() -> void:
 	var t := throttle if enabled else 0.0
+	var b := get_pintle_opening() if t > 0.0 else 0.0
+	if b > 0.0 and not _was_burst:
+		_pop = 1.0
+	_was_burst = b > 0.0
+	_pop = move_toward(_pop, 0.0, get_physics_process_delta_time() / maxf(burst_pop_time, 0.01))
 	_plume.visible = t > 0.0
 	if _glow:
 		_glow.visible = t > 0.0
@@ -356,26 +391,33 @@ func _update_visuals() -> void:
 		_light.visible = t > 0.0
 	if t <= 0.0:
 		return
-	var radius := lerpf(0.6, 1.0, t)
+	var radius := lerpf(0.6, 1.0, t) * lerpf(1.0, burst_width_scale, b)
+	var length := plume_length * t * lerpf(1.0, burst_length_scale, b)
 	if not exhaust_fx:
 		var flicker := 1.0 + randf_range(-0.06, 0.06)
-		_plume.scale = Vector3(radius * _slot_ratio, plume_length * t * flicker / nozzle_scale, radius)
+		_plume.scale = Vector3(radius * _slot_ratio, length * flicker / nozzle_scale, radius)
 		return
 	# The shader adds the turbulence, so the length only wavers gently.
 	_flicker = lerpf(_flicker, 1.0 + randf_range(-0.04, 0.04), 0.35)
-	var plume_len := plume_length * t * _flicker
+	var plume_len := length * _flicker
 	_plume.scale = Vector3(radius * _slot_ratio, plume_len / nozzle_scale, radius)
-	var diamonds := plume_len / (DIAMOND_SPACING * PLUME_BASE_WIDTH * nozzle_scale * radius)
+	var spacing := DIAMOND_SPACING * lerpf(1.0, burst_diamond_spacing, b)
+	var diamonds := plume_len / (spacing * PLUME_BASE_WIDTH * nozzle_scale * radius)
+	if b != _fx_burst:
+		_fx_burst = b
+		_fx_plume.set_instance_shader_parameter("burst", b)
+		_fx_core.set_instance_shader_parameter("burst", b)
 	_fx_plume.set_instance_shader_parameter("throttle", t)
 	_fx_plume.set_instance_shader_parameter("length_m", plume_len)
 	_fx_plume.set_instance_shader_parameter("diamonds", diamonds)
 	_fx_core.set_instance_shader_parameter("throttle", t)
 	_fx_core.set_instance_shader_parameter("length_m", plume_len * FX_CORE_LENGTH)
 	_fx_core.set_instance_shader_parameter("diamonds", diamonds * FX_CORE_LENGTH)
-	_glow.scale = Vector3.ONE * 1.8 * radius * sqrt(_slot_ratio) * _flicker
-	_glow.set_instance_shader_parameter("throttle", t)
+	var flare := lerpf(1.0, burst_glow_scale, b) + _pop
+	_glow.scale = Vector3.ONE * 1.8 * radius * sqrt(_slot_ratio) * _flicker * flare
+	_glow.set_instance_shader_parameter("throttle", minf(t * (1.0 + b + _pop), 1.0))
 	if _light:
-		_light.light_energy = glow_light_energy * t * _flicker
+		_light.light_energy = glow_light_energy * t * _flicker * flare
 
 
 static func _set_layers(node: Node, layers: int) -> void:

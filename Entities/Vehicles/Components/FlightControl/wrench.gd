@@ -10,6 +10,8 @@ var torque := Vector3.ZERO  ## Newton-metres
 var torque_priority: float = -1.0
 ## Part of the torque the thrusters can give; anything beyond it is for AMBAC.
 var thruster_torque_limit := Vector3.INF
+## Open the pintles (burst: more thrust, lower Isp) for this demand.
+var burst := false
 
 
 func _init(p_force := Vector3.ZERO, p_torque := Vector3.ZERO) -> void:

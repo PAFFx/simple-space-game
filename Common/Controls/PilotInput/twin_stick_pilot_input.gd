@@ -11,9 +11,10 @@ extends KeyboardPilotInput
 ##                stick left = roll right)
 ## invert_heave / invert_pitch flip the twist mixes, invert_roll the left/right one.
 ##
-## Stick travel is the throttle (PilotCommand.analog_thrust), so there is no boost
-## button, only full boost. The stick demand adds onto the keyboard's; with a stick
-## missing this is plain keyboard input.
+## Stick travel is the throttle (PilotCommand.analog_thrust): one curve up to boost, then
+## full boost at the stops, so there is no boost button. The dodge button kicks along the
+## stick. The stick demand adds onto the keyboard's; with a stick missing this is plain
+## keyboard input.
 ##
 ## Weapons (both sticks number their buttons alike). Right: trigger first detent opens the
 ## vulcans, second fires them (the first stays pressed under the second); weapon release
@@ -40,7 +41,7 @@ extends KeyboardPilotInput
 @export var invert_roll: bool = false
 
 @export_group("Buttons")
-@export var full_boost_button: int = 4   ## Right stick, hold
+@export var dodge_button: int = 4        ## Right stick, press (with a direction)
 @export var brake_button: int = 21       ## Left stick, hold; double-tap and hold = hard brake
 @export var coupled_button: int = 20     ## Left stick, toggles
 @export var precision_button: int = 3    ## Left stick, toggles
@@ -75,7 +76,9 @@ extends KeyboardPilotInput
 
 @export_group("Response")
 ## Expo softens the centre: 0 = linear, 1 = fully cubic. Full travel is always full demand.
-@export_range(0.0, 1.0) var translation_expo: float = 0.3
+## Translation runs the other way (below 0): it feeds the control law's throttle curve, whose
+## exponential already softens the centre, so this lifts the middle.
+@export_range(-1.0, 1.0) var translation_expo: float = -0.3
 @export_range(0.0, 1.0) var rotation_expo: float = 0.4
 @export_range(0.0, 0.5) var deadzone: float = 0.08
 ## Twist springs centre less precisely than the gimbal.
@@ -146,7 +149,8 @@ func poll_command() -> PilotCommand:
 	cmd.analog_thrust = _stick_translation != Vector3.ZERO and cmd.translation == Vector3.ZERO
 	cmd.translation = (cmd.translation + _stick_translation).clamp(-Vector3.ONE, Vector3.ONE)
 	cmd.rotation = (cmd.rotation + _stick_rotation).clamp(-Vector3.ONE, Vector3.ONE)
-	cmd.boost_full = cmd.boost_full or _button(_right, full_boost_button)
+	cmd.dodge = cmd.dodge or _pressed(_right, dodge_button)
+	cmd.dodge_held = cmd.dodge_held or _button(_right, dodge_button)
 	var brake_held := _button(_left, brake_button)
 	if brake_held and not _brake_held:
 		var now := Time.get_ticks_msec() / 1000.0

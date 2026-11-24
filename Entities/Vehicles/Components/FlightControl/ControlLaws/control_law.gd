@@ -25,6 +25,11 @@ func get_brake_level() -> int:
 	return 0
 
 
+## Override: a kick (pintle burst dodge) is in progress.
+func is_dodging() -> bool:
+	return false
+
+
 ## Body orientation relative to the pilot frame (body = pilot · offset). The
 ## cockpit counter-rotates by this. Identity for laws without auto-rotation.
 func get_pilot_offset() -> Quaternion:

@@ -44,6 +44,22 @@ const G0 := 9.80665
 @export var propellant: float = 9000.0            ## kg
 @export var specific_impulse: float = 3000.0      ## s
 
+@export_group("Burst")
+## Pintle throat for kicks (dodges): the pintles pull back, the throats open this many
+## times in area and the extra reaction mass is injected at the same chamber pressure and
+## reactor power. Thrust ×k, Isp ÷k, propellant flow ×k². 1 = no pintles.
+@export var burst_thrust_factor: float = 1.0
+## Pintle travel, closed to open (and back), s.
+@export var pintle_time: float = 0.03
+## Kick tank: a pressurised accumulator that feeds the flow beyond what the pumps are rated
+## for (the rated thrust at the rated Isp), kg. Part of the propellant, not extra.
+@export var burst_reserve_capacity: float = 0.0
+## Refill from the main tanks with the pumps idle, kg/s. The pumps feed the thrusters
+## first, so it slows as they draw more (none at full rated flow).
+@export var burst_refill_flow: float = 40.0
+## A kick starts only with at least this much in the kick tank, kg.
+@export var burst_min_reserve: float = 60.0
+
 @export_group("Reference Frame")
 ## Velocities are reported and held relative to this node (e.g. a station). Empty = world.
 @export var reference_frame: Node3D
@@ -64,6 +80,13 @@ var limb_disturbance := Vector3.ZERO
 var _ambac_measured := Vector3.ZERO
 var _ambac_measured_smoothed := Vector3.ZERO
 var acceleration_g: float = 0.0
+## Propellant in the kick tank, kg (counted in `propellant` too).
+var burst_reserve: float = 0.0
+## Pintle throat factor now (1 = closed, burst_thrust_factor = open).
+var burst_factor: float = 1.0
+## Propellant flow last tick, kg/s.
+var mass_flow: float = 0.0
+var _isp_now := 0.0
 
 var _prev_velocity := Vector3.ZERO
 var _ref_prev_position := Vector3.ZERO
@@ -104,6 +127,7 @@ func _ready() -> void:
 	set_control_law(control_law if control_law != null else RateCommandControlLaw.new())
 	set_allocator(allocator if allocator != null else ConeProjectedAllocator.new())
 	_collect_thrusters(body)
+	burst_reserve = minf(burst_reserve_capacity, propellant)
 	body.mass = get_total_mass()
 	_prev_velocity = body.linear_velocity
 
@@ -111,7 +135,7 @@ func _ready() -> void:
 ## Re-measures the clean force authority (call after thrusters are added, removed
 ## or disabled). Takes a few hundred ms for ~30 thrusters.
 func rebuild_capability_map() -> void:
-	_capability_map = ForceCapabilityMap.build(state, allocator, min_thrust_alignment)
+	_capability_map = ForceCapabilityMap.build(_rated_state(), allocator, min_thrust_alignment)
 	state.capability_map = _capability_map
 
 
@@ -121,18 +145,35 @@ func rebuild_capability_map_async() -> void:
 	if thrusters.is_empty():
 		return
 	if not capability_rebuild_threaded:
-		_map_build = ForceCapabilityMap.start(state, allocator.duplicate(), min_thrust_alignment)
+		_map_build = ForceCapabilityMap.start(_rated_state(), allocator.duplicate(), min_thrust_alignment)
 		return
 	if _map_task >= 0:
 		_map_again = true
 		return
-	var snap := state.snapshot()
+	var snap := _rated_state(true)
 	var probe := allocator.duplicate()
 	var align := min_thrust_alignment
 	var out: Array = []
 	_map_out = out
 	_map_task = WorkerThreadPool.add_task(func() -> void: out.append(ForceCapabilityMap.build(snap, probe, align)),
 			false, "capability map")
+
+
+## The state with the pintles closed (the capability map is measured at rated thrust and
+## scaled by the burst factor). A copy when they're open or `copy` is asked for.
+func _rated_state(copy := false) -> FlightState:
+	if state.burst_factor == 1.0 and not copy:
+		return state
+	var s := state.snapshot()
+	var k := s.burst_factor
+	s.burst_factor = 1.0
+	s.thruster_max = s.thruster_max.duplicate()   # shared with the live state otherwise
+	for i in s.thruster_max.size():
+		s.thruster_max[i] /= k
+	s.max_force_pos = Vector3.ZERO
+	s.max_force_neg = Vector3.ZERO
+	s.compute_authority()
+	return s
 
 
 ## Drops the capability map so the next tick measures it again at once (e.g. the mass
@@ -233,11 +274,10 @@ func _physics_process(delta: float) -> void:
 			t.set_command(0.0, Vector3.ZERO, body)
 
 	var has_propellant := propellant > 0.0
-	var thrust_sum := 0.0
 	for t in thrusters:
 		t.step(delta, body, has_propellant)
-		thrust_sum += t.get_thrust()
-	_consume_propellant(thrust_sum, delta)
+	_consume_propellant(delta)
+	_move_pintles(fcs_enabled and last_wrench.burst, delta)
 
 	var accel := (body.linear_velocity - _prev_velocity) / delta
 	_prev_velocity = body.linear_velocity
@@ -290,6 +330,15 @@ func _trim_to_actuators(wrench: Wrench, demand: PackedVector3Array, delta: float
 
 
 # --- Telemetry (used by the HUD) ---
+
+## Kick tank fill, 0..1 (0 without one).
+func get_burst_reserve_fraction() -> float:
+	return burst_reserve / burst_reserve_capacity if burst_reserve_capacity > 0.0 else 0.0
+
+
+## Isp of the whole burn last tick (lower while pintles are open).
+func get_effective_isp() -> float:
+	return _isp_now if _isp_now > 0.0 else specific_impulse
 
 func get_propellant_fraction() -> float:
 	return propellant / propellant_capacity if propellant_capacity > 0.0 else 0.0
@@ -385,6 +434,10 @@ func get_brake_level() -> int:
 	return control_law.get_brake_level() if fcs_enabled else 0
 
 
+func is_dodging() -> bool:
+	return fcs_enabled and control_law.is_dodging()
+
+
 # --- Private ---
 
 func _build_state(delta: float) -> void:
@@ -406,7 +459,12 @@ func _build_state(delta: float) -> void:
 	var has_propellant := propellant > 0.0
 	var to_body := body.global_transform.affine_inverse()
 	var to_body_basis := body.global_basis.inverse()
+	s.burst_factor = burst_factor
+	s.burst_ready = burst_thrust_factor > 1.0 and burst_reserve >= burst_min_reserve
+	s.burst_reserve = burst_reserve if burst_thrust_factor > 1.0 else 0.0
 	for t in thrusters:
+		t.throat_factor = burst_factor
+		t.throat_factor_max = burst_thrust_factor
 		s.thruster_positions.append(t.get_position_in_inverse(to_body) - com_local)
 		s.thruster_axes.append(t.get_axis_in_inverse(to_body_basis))
 		s.thruster_cone.append(t.get_cone_rad())
@@ -414,7 +472,7 @@ func _build_state(delta: float) -> void:
 		s.thruster_max.append(t.get_available_thrust() if has_propellant else 0.0)
 	s.compute_authority()
 	if _capability_map != null:
-		s.max_torque = _capability_map.clean_torque.min(s.max_torque_ideal)
+		s.max_torque = (_capability_map.clean_torque * burst_factor).min(s.max_torque_ideal)
 	if ambac != null and ambac.enabled:
 		s.ambac_torque = ambac.get_capacity()
 	# The cockpit must line up with the hull opening while the hatch is unsealed.
@@ -437,16 +495,48 @@ func _reference_velocity(delta: float) -> Vector3:
 	return _ref_velocity
 
 
-func _consume_propellant(thrust_sum: float, delta: float) -> void:
+## Each thruster burns thrust / (Isp / k · g0), k its own pintle opening (1 until it needs
+## more than its rating). The pumps give up to its rated flow (rated thrust at the rated
+## Isp); the kick tank gives the rest, and the pumps' spare capacity refills it.
+func _consume_propellant(delta: float) -> void:
 	if propellant <= 0.0:
+		mass_flow = 0.0
 		return
-	propellant = maxf(0.0, propellant - thrust_sum / (specific_impulse * G0) * delta)
+	var c := specific_impulse * G0
+	var flow := 0.0
+	var thrust_now := 0.0
+	var pumped := 0.0
+	var rated := 0.0
+	for t in thrusters:
+		var thrust := t.get_thrust()
+		thrust_now += thrust
+		var f := thrust * t.get_pintle_factor() / c
+		var r := t.max_thrust / c if t.enabled else 0.0
+		flow += f
+		pumped += minf(f, r)
+		rated += r
+	mass_flow = flow
+	_isp_now = thrust_now / (flow * G0) if flow > 0.0 else specific_impulse
+	var spare := 1.0 - pumped / rated if rated > 0.0 else 0.0
+	burst_reserve -= (flow - pumped) * delta
+	burst_reserve += burst_refill_flow * spare * delta
+	propellant = maxf(0.0, propellant - flow * delta)
+	burst_reserve = clampf(burst_reserve, 0.0, minf(burst_reserve_capacity, propellant))
 	var mass := get_total_mass()
 	if absf(body.mass - mass) > 10.0:
 		body.mass = mass
 	if propellant <= 0.0 and not _depleted_emitted:
 		_depleted_emitted = true
 		propellant_depleted.emit()
+
+
+## Pintles open while a burst is asked for and the kick tank has propellant, close
+## otherwise; they travel at a fixed rate.
+func _move_pintles(open: bool, delta: float) -> void:
+	var k := maxf(burst_thrust_factor, 1.0)
+	var target := k if open and burst_reserve > 0.0 and propellant > 0.0 else 1.0
+	var rate := (k - 1.0) / maxf(pintle_time, 0.001)
+	burst_factor = move_toward(burst_factor, target, rate * delta)
 
 
 func _find_body() -> RigidBody3D:

@@ -10,6 +10,7 @@ extends PilotInputSource
 ## springs back when the mouse stops.
 ## Shift boosts; double-tap Shift (and hold) to boost with full auto-rotation. Released
 ## keys coast; Ctrl brakes the axes not being pushed on, double-tapped (and held) harder.
+## Caps Lock kicks (dodges) along the movement keys held, for as long as it is held.
 ##
 ## Weapons: left mouse fires the selected weapon (while the mouse is captured), X the
 ## vulcans, T shows the lock candidate and G locks it, B holds the shield up, 1-5 are the
@@ -43,6 +44,7 @@ var _target_cycle := 0
 var _zoom := false
 var _scs := -1
 var _lock_nearest := false
+var _dodge := false
 
 
 func _ready() -> void:
@@ -81,6 +83,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_scs = k
 	if event.is_action(a.LOCK_NEAREST):
 		_lock_nearest = true
+	if event.is_action(a.DODGE):
+		_dodge = true
 
 
 func poll_command() -> PilotCommand:
@@ -98,7 +102,8 @@ func poll_command() -> PilotCommand:
 	)
 	var step := delta / maxf(key_travel_time, 0.001)
 	# Boosting or braking, the movement keys are slammed, not eased: a dodge can't wait.
-	var urgent := Input.is_action_pressed(a.BOOST) or Input.is_action_pressed(a.BRAKE)
+	var urgent := Input.is_action_pressed(a.BOOST) or Input.is_action_pressed(a.BRAKE) \
+			or Input.is_action_pressed(a.DODGE)
 	var step_t := delta / maxf(boost_key_travel_time, 0.001) if urgent else step
 	_translation = _translation.move_toward(target_t, step_t)
 	_rotation = _rotation.move_toward(target_r, step)
@@ -110,6 +115,9 @@ func poll_command() -> PilotCommand:
 	cmd.boost_full = _held_after_double_tap(a.BOOST)
 	cmd.brake = Input.is_action_pressed(a.BRAKE)
 	cmd.brake_full = _held_after_double_tap(a.BRAKE)
+	cmd.dodge = _dodge
+	cmd.dodge_held = Input.is_action_pressed(a.DODGE)
+	_dodge = false
 	# Rotation mode, precision and horizon lock are cockpit switches (CockpitSwitchPanel).
 	_poll_weapons(cmd)
 	return cmd

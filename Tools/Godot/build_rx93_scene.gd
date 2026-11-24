@@ -38,8 +38,9 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 # 2D = swings in one plane only, fixed = no gimbal, so the limbs carrying them must move
 # to aim them. Ports built into the armor show only a plume.
 # Ratings below are design ratios (sized by nozzle). THRUST_SCALE: 63.0 / 59.5 keeps the
-# thrust-to-weight the suit was tuned with (at 59.5 t) on the official 63.0 t max weight,
-# ×1.5 for future chamber pressures (~1.6 MN per main; Docs/FlightControl/thrust_sizing.md).
+# thrust-to-weight the suit was tuned with (at 59.5 t) on the official 63.0 t max weight
+# (~1.06 MN per main). It was ×1.5 for future chamber pressures (Docs/FlightControl/
+# thrust_sizing.md); back at ×1 so the pintle burst, not the rating, reaches the dodge's G.
 const CONE_3D := [30.0, 90.0, 90.0]
 # Mains are the model's own nozzles in two backpack pods, made deeper than on the source
 # (see build_mobile_suit_nu.py) so they clear the body. Each pod pivots fore/aft
@@ -92,7 +93,7 @@ const FIXED := [0.0, 0.0, 0.0]
 const MAIN_RATING_KN := 300.0
 # Nozzle light on each main (lights the backpack and legs while boosting).
 const MAIN_GLOW_LIGHT := 1.5
-const THRUST_SCALE := 1.5 * 63.0 / 59.5
+const THRUST_SCALE := 63.0 / 59.5
 const MAIN_DYNAMICS := {spool_up_time = 0.12, spool_down_time = 0.08, gimbal_rate_deg = 240.0}
 const VERNIER_DYNAMICS := {spool_up_time = 0.06, spool_down_time = 0.04, gimbal_rate_deg = 360.0}
 const THRUSTERS := [
@@ -546,10 +547,13 @@ func _build_flight_computer(root: Node3D) -> void:
 	# The ν's clean yaw torque (~8 MN·m) is the same while it pushes at 4 G in any direction
 	# (measured with its allocator): yaw keeps all of it under load, pitch and roll plan with 60%.
 	law.loaded_torque_share = Vector3(0.6, 1.0, 0.6)
-	# Movement limits ×1.5 with the thrust (THRUST_SCALE), so each keeps its share of it.
+	# Movement limits kept from the ×1.5 thrust: where the rating falls short, the push is
+	# whatever the thrusters give.
 	law.cruise_accel_g = 1.2
 	law.boost_accel_g = 10.5
 	law.stop_accel_g = 9.0
+	# Kicks (pintle burst) stop at what a strapped-in pilot takes for a fraction of a second.
+	law.dodge_accel_g = 20.0
 	fc.set("control_law", law)
 	var alloc := ConeProjectedAllocator.new()
 	# The tight step goes ~2.3x further an iteration than the per-thruster bound: 40 of
@@ -565,6 +569,11 @@ func _build_flight_computer(root: Node3D) -> void:
 	fc.set("propellant_capacity", PROPELLANT)
 	fc.set("propellant", PROPELLANT)
 	fc.set("specific_impulse", 12000.0)
+	# Pintle throats ×4 (Isp 12,000 → 3,000 s, Docs/FlightControl/thrust_sizing.md); the kick
+	# tank holds about one and a half sideways kicks and refills in ~8 s coasting.
+	fc.set("burst_thrust_factor", 4.0)
+	fc.set("burst_reserve_capacity", 300.0)
+	fc.set("burst_refill_flow", 40.0)
 
 	var input := Node.new()
 	input.name = "PilotInput"
