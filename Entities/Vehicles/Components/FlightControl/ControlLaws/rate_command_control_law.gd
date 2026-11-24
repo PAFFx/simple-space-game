@@ -158,9 +158,6 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## stick eases from boost into full boost (no acceleration cap, auto-rotation opening to the
 ## solver's full range), reached at the stops.
 @export_range(0.1, 1.0) var analog_full_boost_onset: float = 0.92
-## Precision uses the whole travel for its speed, softened in the centre like this
-## (0 = linear, 1 = cubic).
-@export_range(0.0, 1.0) var analog_precision_expo: float = 0.3
 ## Precision mode's speed loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
 ## Braking: (m/s²) per (m/s) of the motion being stopped, up to stop_accel_g (a combat
@@ -865,10 +862,7 @@ func _translation_force_world(state: FlightState, command: PilotCommand) -> Vect
 		var dir := stick_world / amount
 		var push_accel := _push_accel(minf(amount, 1.0), accel_limit, _total_thrust(state) / state.mass)
 		if gentle:
-			var a := minf(amount, 1.0)
-			if command.analog_thrust:
-				a = lerpf(a, a * a * a, analog_precision_expo)
-			push_accel = clampf((precision_speed * a - v.dot(dir)) * velocity_gain,
+			push_accel = clampf((precision_speed * minf(amount, 1.0) - v.dot(dir)) * velocity_gain,
 					0.0, push_accel)
 		push = dir * push_accel
 	if not command.brake:

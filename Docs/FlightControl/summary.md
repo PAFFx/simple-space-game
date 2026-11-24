@@ -648,7 +648,7 @@ on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around to
   no acceleration cap, and the auto-rotation limit opening from 30° to the solver's full range.
   So there is no boost button; the button is the dodge. The curve sits on top of the
   translation axes' expo (`translation_expo` 0.3), which softens the centre further. Precision
-  uses the whole travel for its speed, softened by `analog_precision_expo` (0.3) on top. Measured
+  uses the whole travel for its speed. Measured
   on the ν (cruise 1.2 G, so boosting from ~58%), both sticks forward
   (`Tools/Flight/throttle_probe.gd`): 20% → 0.12 G, 30% → 0.27 G, 40% → 0.47 G, 50% → 0.77 G,
   60% → 1.23 G, 70% → 1.94 G, 80% → 3.13 G, 90% → 5.23 G, 95% → 6.86 G, 96% → 8.4 G (all the
