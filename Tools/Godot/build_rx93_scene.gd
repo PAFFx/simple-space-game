@@ -39,8 +39,9 @@ const THRUSTER_SCENE := "res://Entities/Vehicles/Components/FlightControl/Thrust
 # to aim them. Ports built into the armor show only a plume.
 # Ratings below are design ratios (sized by nozzle). THRUST_SCALE: 63.0 / 59.5 keeps the
 # thrust-to-weight the suit was tuned with (at 59.5 t) on the official 63.0 t max weight
-# (~1.06 MN per main). It was ×1.5 for future chamber pressures (Docs/FlightControl/
-# thrust_sizing.md); back at ×1 so the pintle burst, not the rating, reaches the dodge's G.
+# (~1.06 MN per main), ×1.2 for headroom over the control law's G targets (~1.27 MN per
+# main). It was ×1.5 for future chamber pressures (Docs/FlightControl/thrust_sizing.md);
+# kept low so the pintle burst, not the rating, reaches the dodge's G.
 const CONE_3D := [30.0, 90.0, 90.0]
 # Mains are the model's own nozzles in two backpack pods, made deeper than on the source
 # (see build_mobile_suit_nu.py) so they clear the body. Each pod pivots fore/aft
@@ -93,7 +94,7 @@ const FIXED := [0.0, 0.0, 0.0]
 const MAIN_RATING_KN := 300.0
 # Nozzle light on each main (lights the backpack and legs while boosting).
 const MAIN_GLOW_LIGHT := 1.5
-const THRUST_SCALE := 63.0 / 59.5
+const THRUST_SCALE := 1.2 * 63.0 / 59.5
 const MAIN_DYNAMICS := {spool_up_time = 0.12, spool_down_time = 0.08, gimbal_rate_deg = 240.0}
 const VERNIER_DYNAMICS := {spool_up_time = 0.06, spool_down_time = 0.04, gimbal_rate_deg = 360.0}
 const THRUSTERS := [

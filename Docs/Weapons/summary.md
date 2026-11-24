@@ -43,7 +43,7 @@ Both sticks number their buttons alike. Exports on `TwinStickPilotInput`; keys i
 | Master arm on / off | right 24 / 25 | M (toggle) |
 | Sensor Control Switch (SCS): fwd TMS cursor ↔ HMCS; aft / left / right centre / left / right MFD | right 10 / 11 / 12 / 13 | Tab / numpad 9 / 5 / 7 |
 | Cursor slew (the SOI's) | right axes 3, 4 | numpad 4 6 8 2 |
-| Lock (contact under the cursor) | left 0 or 1 (either detent) | G |
+| Lock (contact under the cursor) | right 30 (TMS cursor depress) | G |
 | TMS switch (left 5-way hat): depress = lock the nearest contact | left 19 | H |
 | TMS aft: unlock (closes the zoom window first) | left 17 | T |
 | TMS right / left: next target by azimuth | left 16 / 18 | `]` / `[` |
