@@ -5,10 +5,10 @@ extends SceneTree
 ## control law reports (0 cruise, 1 boost, 2 full).
 ##
 ##   godot-double --headless --path . --fixed-fps 60 -s Tools/Flight/throttle_probe.gd -- \
-##       [travel=10,20,30,40,50,60,70,80,90,95,100] [deadzone=0.08]
+##       [travel=10,20,30,40,50,60,70,80,90,95,100] [deadzone=0.08] [expo=<TwinStickPilotInput's>]
 ##
-## travel is the physical stick travel in %; deadzone the twin-stick input's (the law sees
-## the travel past it).
+## travel is the physical stick travel in %; deadzone and expo the twin-stick input's
+## translation shaping (the law sees the travel past the deadzone, through the expo).
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 
@@ -26,6 +26,7 @@ var _fc: FlightComputer
 var _input := ScriptedInput.new()
 var _travel := PackedFloat32Array([10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100])
 var _deadzone := 0.08
+var _expo := -1.0
 
 
 func _initialize() -> void:
@@ -35,6 +36,11 @@ func _initialize() -> void:
 		match key:
 			"travel": _travel = PackedFloat32Array(Array(value.split(",")).map(func(s): return float(s)))
 			"deadzone": _deadzone = float(value)
+			"expo": _expo = float(value)
+	if _expo < 0.0:
+		var stick := TwinStickPilotInput.new()
+		_expo = stick.translation_expo
+		stick.free()
 	_run.call_deferred()
 
 
@@ -54,6 +60,7 @@ func _run() -> void:
 	_fc.add_child(_input)
 	_fc.input_source = _input
 	await _ticks(90)
+	print("expo %.2f, deadzone %.2f" % [_expo, _deadzone])
 	print("%6s | %6s | %7s | %s" % ["travel", "law", "accel G", "boost"])
 	for p in _travel:
 		await _case(p)
@@ -70,6 +77,7 @@ func _case(percent: float) -> void:
 	_suit.angular_velocity = Vector3.ZERO
 	await _ticks(30)
 	var u := clampf((percent / 100.0 - _deadzone) / (1.0 - _deadzone), 0.0, 1.0)
+	u = lerpf(u, u * u * u, _expo)
 	var c := PilotCommand.new()
 	c.translation = Vector3.FORWARD * u
 	c.analog_thrust = true

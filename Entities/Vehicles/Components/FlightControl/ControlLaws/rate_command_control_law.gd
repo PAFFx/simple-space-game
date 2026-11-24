@@ -154,10 +154,10 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export var analog_accel_g: float = 7.0
 ## How bent the curve is: 0 = straight, 3 = half travel gives ~1/6 of analog_accel_g.
 @export_range(0.0, 8.0) var analog_curve: float = 3.0
-## Past this travel (of the stick's travel past its deadzone) the stick eases from
-## boost into full boost (no acceleration cap, auto-rotation opening to the solver's full
-## range), reached at the stops.
-@export_range(0.1, 1.0) var analog_full_boost_onset: float = 0.95
+## Past this demand (after the stick's deadzone and expo: 0.92 is ~95% of the travel) the
+## stick eases from boost into full boost (no acceleration cap, auto-rotation opening to the
+## solver's full range), reached at the stops.
+@export_range(0.1, 1.0) var analog_full_boost_onset: float = 0.92
 ## Precision uses the whole travel for its speed, softened in the centre like this
 ## (0 = linear, 1 = cubic).
 @export_range(0.0, 1.0) var analog_precision_expo: float = 0.3

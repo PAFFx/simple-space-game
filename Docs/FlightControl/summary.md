@@ -641,17 +641,18 @@ on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around to
 
 - **Stick travel is the throttle** (`PilotCommand.analog_thrust`): one exponential curve,
   no cruise or boost zones: from 0 up to `analog_accel_g` (7 G) at `analog_full_boost_onset`
-  (0.95 of the travel past the deadzone, ~95% of the stick), `G = top · (e^(k·s) − 1) / (e^k − 1)`
+  (0.92 of the demand after deadzone and expo, ~95% of the stick), `G = top · (e^(k·s) − 1) / (e^k − 1)`
   with `analog_curve` k = 3 (each 10% of travel ×1.3–1.5 at the top). Whenever it asks for more
   than `cruise_accel_g` the suit counts as boosting (rates, auto-rotation cap, HUD), with 0.05
   travel of hysteresis. Past the onset it eases on (linear) into full boost, reached at the stops:
   no acceleration cap, and the auto-rotation limit opening from 30° to the solver's full range.
-  So there is no boost button; the button is the dodge. The translation axes have no expo
-  (`translation_expo` 0): the curve shapes them. Precision uses the whole travel for its speed,
-  softened by `analog_precision_expo` (0.3). Measured on the ν (cruise 1.2 G, so boosting from
-  ~52%), both sticks forward (`Tools/Flight/throttle_probe.gd`): 20% → 0.18 G, 30% → 0.41 G,
-  40% → 0.73 G, 50% → 1.18 G, 60% → 1.82 G, 70% → 2.71 G, 80% → 3.97 G, 90% → 5.74 G,
-  95% → 6.87 G, 97% → 8.6 G (all the forward thrust), 100% → 8.7 G.
+  So there is no boost button; the button is the dodge. The curve sits on top of the
+  translation axes' expo (`translation_expo` 0.3), which softens the centre further. Precision
+  uses the whole travel for its speed, softened by `analog_precision_expo` (0.3) on top. Measured
+  on the ν (cruise 1.2 G, so boosting from ~58%), both sticks forward
+  (`Tools/Flight/throttle_probe.gd`): 20% → 0.12 G, 30% → 0.27 G, 40% → 0.47 G, 50% → 0.77 G,
+  60% → 1.23 G, 70% → 1.94 G, 80% → 3.13 G, 90% → 5.23 G, 95% → 6.86 G, 96% → 8.4 G (all the
+  forward thrust), 100% → 8.7 G.
 - **Shaping:** each raw axis goes through a median of `spike_filter_ticks` (3) samples (the left
   stick's X spikes to 0.07 for a tick or two at rest), then deadzone and expo
   (`rotation_expo` 0.4, `translation_expo` 0.3), then `smoothing` (0.04 s). The fore/aft mix is
