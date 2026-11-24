@@ -76,7 +76,9 @@ extends KeyboardPilotInput
 
 @export_group("Response")
 ## Expo softens the centre: 0 = linear, 1 = fully cubic. Full travel is always full demand.
-@export_range(0.0, 1.0) var translation_expo: float = 0.3
+## Translation runs the other way (below 0): it feeds the control law's throttle curve, whose
+## exponential already softens the centre, so this lifts the middle.
+@export_range(-1.0, 1.0) var translation_expo: float = -0.3
 @export_range(0.0, 1.0) var rotation_expo: float = 0.4
 @export_range(0.0, 0.5) var deadzone: float = 0.08
 ## Twist springs centre less precisely than the gimbal.

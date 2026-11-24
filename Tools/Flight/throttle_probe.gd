@@ -77,7 +77,7 @@ func _case(percent: float) -> void:
 	_suit.angular_velocity = Vector3.ZERO
 	await _ticks(30)
 	var u := clampf((percent / 100.0 - _deadzone) / (1.0 - _deadzone), 0.0, 1.0)
-	u = lerpf(u, u * u * u, _expo)
+	u = JoyDevices.shape(u, 0.0, _expo)
 	var c := PilotCommand.new()
 	c.translation = Vector3.FORWARD * u
 	c.analog_thrust = true

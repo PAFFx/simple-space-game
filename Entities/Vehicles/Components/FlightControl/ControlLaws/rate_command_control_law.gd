@@ -152,12 +152,12 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 ## Analog sticks (PilotCommand.analog_thrust): one exponential curve from 0 up to
 ## analog_accel_g at analog_full_boost_onset; above cruise_accel_g it counts as boosting.
 @export var analog_accel_g: float = 7.0
-## How bent the curve is: 0 = straight, 3 = half travel gives ~1/6 of analog_accel_g.
-@export_range(0.0, 8.0) var analog_curve: float = 3.0
-## Past this demand (after the stick's deadzone and expo: 0.92 is ~95% of the travel) the
+## How bent the curve is: 0 = straight, 2 = half travel gives ~1/4 of analog_accel_g.
+@export_range(0.0, 8.0) var analog_curve: float = 2.0
+## Past this demand (after the stick's deadzone and expo: 0.96 is ~95% of the travel) the
 ## stick eases from boost into full boost (no acceleration cap, auto-rotation opening to the
 ## solver's full range), reached at the stops.
-@export_range(0.1, 1.0) var analog_full_boost_onset: float = 0.92
+@export_range(0.1, 1.0) var analog_full_boost_onset: float = 0.96
 ## Precision mode's speed loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
 ## Braking: (m/s²) per (m/s) of the motion being stopped, up to stop_accel_g (a combat
