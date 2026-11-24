@@ -116,3 +116,22 @@ The range's rearm (F4) restores cameras, screen, holes and the pilot. Probes (`t
 (`cockpit_snapshot.gd` style, on desktop 7); `cockpit_hit_probe.gd` fires through the chest along
 a grid of lines and reports which ones kill the pilot, which hole the screen, which miss the
 cockpit.
+
+## As built (2026-11-25)
+
+- **Cameras** (`DamageModel.get_camera_cones`): the head's main camera (105° half field, the head
+  turns), a rear head camera (75°), the six SensorSuite body cameras (65–70°), and new ones on
+  the rear skirts (65°), feet (70°) and forearms (60°). All alive they cover the whole sphere;
+  without the head's eyes 99.4% (the rest no signal), without the eyes and the rear head
+  camera 94.4%. Each is a damage component on its part; a severed part takes its camera.
+- **Screen**: per pixel, the best live camera covering its direction. Main camera: the full
+  picture. Body cameras only: sampled in 320×180 blocks, a little desaturated. None: dark with
+  shifting block static and a thin blue edge. Checked from the seat (`damage_snapshot.gd screen`).
+- **Opaque parts**: `Layers.SENSOR_OPAQUE` is in the sensor camera's mask; a part whose camera is
+  gone gets the bit and is drawn on the screen (`DamageModel.set_opaque`). The shield's camera
+  dies with a through-hole (60%); broken equipment turns opaque. Rearm clears it.
+- **Screen holes**: where a beam's line crosses the cockpit sphere (1.6 m), up to 8 holes in the
+  screen's frame: burned open (ragged, molten rim), dead panels to ~1.1–1.7 radii, flickering
+  panels to ~3 radii, cracks. The cockpit shell behind is not holed yet, so the hole shows the
+  shell, not outside.
+- **Pilot**: killed when the drilled cylinder reaches the capsule: GAME OVER (range panel).

@@ -145,3 +145,23 @@ streams molten metal opposite to its thrust, on its own.
   path and what it hit, War Thunder-style.
 - `penetration_probe.gd`: fire the rifle at each part from several directions; print column mass,
   burn-through time, energy left, components hit (the table in `physics.md` §1, measured).
+
+## As built (2026-11-25)
+
+Checked frame by frame with `Tools/Damage/damage_snapshot.gd` (`hole`, `cool`, `sever`, …).
+
+- **Cooling** `T = 290 + (T0 − 290)·(1 + age/4 s)^(−1/3)·e^(−age/28 s)`: white-yellow at 3 s,
+  orange at 8–15 s, a dark pit with a red rim by 45 s. Peak 2300 K at the rim.
+- **Glow** capped (`hole_glow` ≤ 5): uncapped, the bloom hid the hole's shape for half a
+  second. The contact flash from `ProjectileManager.impact` is at 0.18 scale on drilling
+  targets; the hole's own glow and `DamageFx` carry the moment.
+- **Bore wall**: textured in its own coordinates (angle around the axis, depth) with broad
+  melt runs along the axis, dimmer the deeper the view ray goes into it (`exp(−depth/1.6 m)`),
+  so it reads as a hole, not a glowing plug. UV-based noise gave concentric banding; strong
+  anisotropic noise looked like wood grain.
+- **Around the mouth**: molten lip (beaded, glossy), glow fading in ~0.4 radii, a narrow heat
+  tint, soot to ~1.6 radii. Patchy noise there read as camouflage: kept soft.
+- **Spray**: 45 streaks in (blow-back), 90 out (blow-out), 60–240 m/s, 0.15–0.8 s, thin and
+  stretched along their velocity. Brighter and slower ones read as floating bokeh balls.
+- **Vapour / steam**: thin, swelling fast, 0.6–1.6 s; ice glints 5 cm.
+- The exit side through several meshes (shin and calf guard) shows the bore crossing each.

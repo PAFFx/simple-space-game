@@ -1,7 +1,7 @@
 # Damage and destruction: design
 
-Status: **design, nothing built yet** (2026-11-25). `Entities/Vehicles/Components/Damage/suit_damage.gd`
-is a mock (hit points per box) and is replaced, not extended. Numbers and their derivations are in
+Status: **first pass built** (2026-11-25, branch `feat/damage-design`; see *As built* at the end).
+The old `SuitDamage` mock (hit points per box) is gone. Numbers and their derivations are in
 `physics.md`, the beam's look in `beam_effects.md`, parts and limbs coming off in
 `dismemberment.md`, the panoramic screen and cockpit in `cockpit_and_cameras.md`, the build order
 in `todo.md`.
@@ -233,3 +233,59 @@ Tools/Damage/              probes and snapshots (todo.md)
 - **Cost**: traversal runs only on hits (GDScript is fine; C++ in `Native/` if a hit storm
   shows up in `Tools/Profiling`). The hole shader costs only on damaged meshes: undamaged ones
   keep their original material.
+
+## As built (first pass, 2026-11-25)
+
+| File | What it does |
+|---|---|
+| `Entities/Vehicles/Components/Damage/damage_model.gd` | `DamageModel`: parts (a convex hull per part mesh, an `Area3D` on `Layers.PHYS_DAMAGE` riding its bone), components, beam drilling, bursts, the reactor, severing, cameras, repair |
+| `.../Damage/hole_set.gd` | `HoleSet`: hole records per mesh, the material swap on the first hole, per-frame upload |
+| `.../Damage/Shader/beam_hole.gdshaderinc`, `damage_surface.gdshader` | the holes as drawn (`beam_effects.md`) |
+| `.../Damage/damage_fx.gd` | `DamageFx`: spray, vapour, ice glints, arcs, hole lights, stumps, the I-field and reactor flashes |
+| `Entities/Projectiles/projectile_manager.gd` | `BeamContact`, `_drill`: energy per tick to targets with `beam_contact`; `apply_impact` for bullets and bursts |
+| `Entities/Equipment/Shield/shield.gd` | I-field charges, plate drilling, its camera, breaking off |
+| `Entities/Environment/Space/TargetDrone/target_drone.gd` | the drone drills too: shell, interior, core (breach), gun arm, loss of control |
+| `.../PanoramicDisplay/panoramic_screen.gd` + shader | camera coverage, screen holes |
+| `Stages/Components/RangeControl/range_control.gd` | F4 panel: parts left, thrusters and cameras out, I-field charges, last event; GAME OVER screen; 0 rearms (repairs everything) |
+| `Tools/Damage/penetration_probe.gd` | headless checks: shots at each part (timings, holes, events), shield, drone, vulcan impulse, sever + repair |
+| `Tools/Damage/damage_snapshot.gd` | windowed renders: `hole,cool,forearm,shin,chest,thigh,sever,shield,bareshield,drone,reactor,screen` |
+
+Measured (`penetration_probe.gd`, rifle 4 GJ front-loaded, 300 m):
+
+| Shot | Burn-through | What happened |
+|---|---|---|
+| Head | 33 ms, through | head 60% left, backpack holed behind it, main camera and vulcans out |
+| Cockpit | stops in the chest's water cells behind the cockpit | pilot killed (GAME OVER), the cells' steam burst takes the chest vents and mains |
+| Waist | 67 ms, through | reactor breached: 200 m flash, the suit comes apart |
+| Right forearm | 17 ms, through | forearm severed (29% left), the stowed rifle behind it hit, its E-pac goes off |
+| Thigh / shin | stopped in their water cells | steam burst, the leg severed at the thigh / knee with all its thrusters |
+| Shield, charged | field up 2.5 m out | beam taken, a charge used, a dull scorch |
+| Shield, no charge | through | plate 70% left, the beam goes on into what is behind |
+| Drone core / off-centre | 33 / 17 ms | breach and gone / holed, 40% chance its control is cut |
+| 1 s of both vulcans on the head | | 0.84 m/s, 10.8°/s on 69 t (FCS off) |
+| Sever a thigh, repair | | 28 → 23 thrusters, 69.0 → 60.7 t; repair puts all back |
+
+Differences from the design above:
+
+- **Hulls are convex** (from each part's mesh): concave parts (the chest's cockpit tunnel)
+  are filled. Section loss uses the hull's footprint across the bone (×0.785); limbs break below
+  35% left, blocky parts (head, backpack, shoulders, skirts) only at 0%.
+- **Tank cells** are boxes generated in each part (4 per tank): the chest's behind the cockpit,
+  the pelvis's below the reactor. Water stops beams; a cell that takes a beam steam-bursts ~30 ms
+  later with the energy it absorbed (blow-off radius 0.0025·E^⅓ m).
+- **Severing** is at the part's joint (the part and everything beyond), not yet through the
+  hole (cut planes, `dismemberment.md` layer 5, not built). The stump gets a hot crater on the
+  parent, a generated stub of frame (joint drum, snapped struts glowing at the ends, torn
+  cables sparking for ~20 s); the piece gets the same at its end. No inner frame under the
+  armour yet (layer 1), no shell fracture (layer 3), no loose pieces flying off (layer 2).
+- **Pilot**: a capsule (torso and legs) on the cockpit camera; any drilled cylinder that
+  reaches it kills (no extra margin yet). GAME OVER via the range panel.
+- **Reactor breach**: flash and fluence on everything in the `damageable` group; the suit is
+  baked into glowing pieces flung out at 40–160 m/s, its hull stops being a body until repair.
+- **Probes that count hits** turn damage off (`DamageModel.enabled = false`): weapons, dodge,
+  fair-fight. Drones with hit points ≥ 1e8 can't be destroyed (probes already used 1e9+).
+- **Not built yet**: existing holes aren't subtracted (a second shot down the same channel
+  drills it again), limp joints swinging (a hit joint is taken out of AMBAC, held), stuck
+  gimbals / valves, venting thrust, fault detection, damage MFD page, missile fragment visuals,
+  vulcan pits, the cockpit's own hull holes (the screen is holed, the shell behind it isn't),
+  camera green lights.
