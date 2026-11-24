@@ -70,8 +70,9 @@ class Part:
 	var aabb := AABB()        ## bone space
 	var left := 1.0           ## share of its cross-section still there
 	var severed := false
-	var equipment: MsEquipment   ## equipment as a part: a box, not a hull
+	var equipment: MsEquipment   ## equipment as a part: a box per mesh, not a hull
 	var box := AABB()
+	var boxes: Array = []        ## [MeshInstance3D, AABB in its own space]
 
 class Component:
 	var kind := 0
@@ -237,7 +238,13 @@ func _build() -> void:
 			p.equipment = eq
 			p.box = MsLoadout.local_box(eq)
 			p.dry = eq.mass
-			p.volume = maxf(p.box.get_volume() * 0.35, 0.1)
+			var solid := 0.0
+			for node in eq.find_children("*", "MeshInstance3D", true, false):
+				var mi := node as MeshInstance3D
+				if mi.mesh != null:
+					p.boxes.append([mi, mi.get_aabb()])
+					solid += mi.get_aabb().get_volume()
+			p.volume = maxf((solid if solid > 0.0 else p.box.get_volume()) * 0.35, 0.1)
 			p.density = p.dry / p.volume
 			var dims := p.box.size
 			p.width = maxf(dims.x, dims.y)
@@ -570,7 +577,7 @@ func _start_drill(contact: ProjectileManager.BeamContact) -> Drill:
 	for p in parts:
 		if p.equipment == null or p.severed or not p.equipment.is_visible_in_tree():
 			continue
-		var t := _ray_box(p.equipment.global_transform, p.box, from, dir)
+		var t := _equipment_span(p, from, dir, 0.0)
 		if t.x >= 0.0:
 			spans.append([p, t.x, t.y])
 	if spans.is_empty():
@@ -656,6 +663,23 @@ func _hull_spans(from: Vector3, dir: Vector3, length: float) -> Array:
 	return out
 
 
+## Where a ray enters the first of `p`'s mesh boxes and leaves the last (grown by `grow`).
+func _equipment_span(p: Part, from: Vector3, dir: Vector3, grow: float) -> Vector2:
+	var t0 := INF
+	var t1 := -INF
+	for b in p.boxes:
+		var mi := b[0] as MeshInstance3D
+		if not is_instance_valid(mi) or not mi.is_visible_in_tree():
+			continue
+		var t := _ray_box(mi.global_transform, (b[1] as AABB).grow(grow), from, dir)
+		if t.x >= 0.0:
+			t0 = minf(t0, t.x)
+			t1 = maxf(t1, t.y)
+	if p.boxes.is_empty():
+		return _ray_box(p.equipment.global_transform, p.box.grow(grow), from, dir)
+	return Vector2(t0, t1) if t0 < INF else Vector2(-1, -1)
+
+
 ## Entry and exit distances of a ray through a box (Vector2(-1, -1): misses).
 static func _ray_box(frame: Transform3D, box: AABB, from: Vector3, dir: Vector3) -> Vector2:
 	var inv := frame.affine_inverse()
@@ -680,6 +704,9 @@ static func _ray_box(frame: Transform3D, box: AABB, from: Vector3, dir: Vector3)
 ## Where along the line the drilled cylinder reaches `c`, or -INF if it misses.
 func _component_t(c: Component, from: Vector3, dir: Vector3, beam_radius: float) -> float:
 	var xf := _component_frame(c)
+	if c.kind == Kind.EQUIPMENT and c.part != null:
+		var te := _equipment_span(c.part, from, dir, beam_radius * 0.5)
+		return te.x if te.x >= 0.0 else -INF
 	if c.is_box:
 		var grown := c.box.grow(beam_radius * 0.5)
 		var t := _ray_box(xf, grown, from, dir)
