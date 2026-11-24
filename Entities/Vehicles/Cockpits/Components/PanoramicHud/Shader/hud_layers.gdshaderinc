@@ -59,8 +59,13 @@ uniform float hud_symbol_halo_deg = 0.13;
 uniform mat3 hud_control_frame = mat3(1.0);
 uniform vec4 hud_control_color : source_color, color_conversion_disabled = vec4(0.0);
 uniform vec4 hud_control_accent_color : source_color, color_conversion_disabled = vec4(0.9, 0.42, 0.66, 0.54);
-// The bands' fill, as a share of their border's alpha.
-uniform float hud_control_fill = 0.75;
+// Each band's fill, as a share of its border's alpha: x the V above, y the white ^ below,
+// z the accent ^ (with a kick tank the ^s are its two halves, hollow when spent).
+uniform vec3 hud_control_fill = vec3(0.75);
+// Each band's border, as a share of its colour's alpha (the white ^ dims with no kick ready).
+uniform vec3 hud_control_border = vec3(1.0);
+// Brief brightening of the white / accent ^ as its half of the kick tank fills back up, 0..1.
+uniform vec2 hud_control_pop = vec2(0.0);
 
 // Contacts: a triangle pointing down around each. Per contact: xyz = direction (display
 // frame), w = half the triangle's side in deg (0 = unused); then x = hostile, y = the lock's
@@ -410,17 +415,24 @@ vec3 hud_control(vec3 color, vec3 local_dir, float brightness, float aa) {
 	float above = hud_chevron(q, vec2(0.0, 1.7), arm, 1.2, 0.21);
 	float below = hud_chevron(q, vec2(0.0, -1.7), arm_down, 1.2, 0.21);
 	float accent = hud_chevron(q, vec2(0.0, -2.8), arm_down, 1.2, 0.21);
-	float plain = min(above, below);
-	float plain_border = abs(plain + 0.04) - 0.04;
+	float above_border = abs(above + 0.04) - 0.04;
+	float below_border = abs(below + 0.04) - 0.04;
 	float accent_border = abs(accent + 0.04) - 0.04;
+	// A pop lifts the colour toward white and the alpha up.
+	vec4 low = hud_control_color;
+	low = vec4(mix(low.rgb, vec3(1.0), 0.45 * hud_control_pop.x), min(low.a * (1.0 + 0.6 * hud_control_pop.x), 1.0));
+	vec4 high = hud_control_accent_color;
+	high = vec4(mix(high.rgb, vec3(1.0), 0.45 * hud_control_pop.y), min(high.a * (1.0 + 0.6 * hud_control_pop.y), 1.0));
 
 	vec4 acc = vec4(0.0);
 	float halo = hud_symbol_halo_deg / hud_control_scale;
-	hud_ink(acc, hud_symbol_halo_color, hud_fill(min(plain_border, accent_border) - halo, aa));
-	hud_ink(acc, vec4(hud_control_color.rgb, hud_control_color.a * hud_control_fill), hud_fill(plain, aa));
-	hud_ink(acc, vec4(hud_control_accent_color.rgb, hud_control_accent_color.a * hud_control_fill), hud_fill(accent, aa));
-	hud_ink(acc, hud_control_color, hud_fill(plain_border, aa));
-	hud_ink(acc, hud_control_accent_color, hud_fill(accent_border, aa));
+	hud_ink(acc, hud_symbol_halo_color, hud_fill(min(min(above_border, below_border), accent_border) - halo, aa));
+	hud_ink(acc, vec4(hud_control_color.rgb, hud_control_color.a * hud_control_fill.x), hud_fill(above, aa));
+	hud_ink(acc, vec4(low.rgb, low.a * hud_control_fill.y), hud_fill(below, aa));
+	hud_ink(acc, vec4(high.rgb, high.a * hud_control_fill.z), hud_fill(accent, aa));
+	hud_ink(acc, vec4(hud_control_color.rgb, hud_control_color.a * hud_control_border.x), hud_fill(above_border, aa));
+	hud_ink(acc, vec4(low.rgb, low.a * hud_control_border.y), hud_fill(below_border, aa));
+	hud_ink(acc, vec4(high.rgb, high.a * hud_control_border.z), hud_fill(accent_border, aa));
 	return hud_compose(color, acc, brightness);
 }
 

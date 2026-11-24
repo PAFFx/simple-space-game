@@ -6,8 +6,10 @@ extends SceneTree
 ##   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off state=floating rectangle=1280x720+0+0
 ##   godot-double --path . --resolution 1280x720 -s Tools/Weapons/weapons_snapshot.gd -- <out_dir> [shots]
 ##
-## shots: comma list of hud,stack,beam,external,impact,ring,vulcan,missile,block,turret,glow,offaxis
-## (default all). offaxis also prints AIM lines: lead, gun and target agreement and miss.
+## shots: comma list of hud,stack,beam,external,impact,ring,vulcan,missile,block,turret,glow,offaxis,
+## kick (default all but kick). offaxis also prints AIM lines: lead, gun and target agreement and
+## miss. kick: the control centre's ^s as the kick tank (full, 75%, half, not ready, empty, the
+## pop as the white ^ fills back up), close in below the centre.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 
@@ -76,6 +78,8 @@ func _run(shots: PackedStringArray) -> void:
 	_fcs.draw_now()   # skip the rifle draw
 	# The centre display has the SOI from the start; these shots designate with the HUD cursor.
 	_fcs.select_soi(FireControl.Scs.FORWARD)
+	if "kick" in shots:
+		await _kick_tank_shots(fc)
 	if "hud" in shots:
 		_fcs.cursor = Vector2(55, 30)
 		await _frames(2)
@@ -603,6 +607,28 @@ func _fire_sequence(tag: String, count: int, every := 1) -> void:
 				_sweep.aim_override = _sweep.aim + Vector2(-1.2, 0.5)
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("%s/%s_%02d.png" % [_out, tag, i])
+
+
+## The control centre's ^s at a few kick tank levels, refill off so they hold still.
+func _kick_tank_shots(fc: FlightComputer) -> void:
+	var refill := fc.burst_refill_flow
+	fc.burst_refill_flow = 0.0
+	var cap := fc.burst_reserve_capacity
+	_look(0, -2.5, 14.0)
+	for level in [["full", 1.0], ["75", 0.75], ["half", 0.5], ["notready", 0.15], ["empty", 0.0]]:
+		fc.burst_reserve = cap * float(level[1])
+		await _shot("kick_%s" % level[0])
+		print("KICK %s: tank %.0f kg (ready %s)" % [level[0], fc.burst_reserve, fc.burst_reserve >= fc.burst_min_reserve])
+	# The white ^ filling back up: just under half, then over it.
+	fc.burst_reserve = cap * 0.45
+	await _frames(5)
+	fc.burst_reserve = cap * 0.5 + 1.0
+	await _frames(1)
+	await RenderingServer.frame_post_draw
+	root.get_texture().get_image().save_png("%s/kick_pop.png" % _out)
+	fc.burst_reserve = cap
+	fc.burst_refill_flow = refill
+	_look(0, 0)
 
 
 func _look(yaw_right_deg: float, pitch_deg: float, fov := 0.0) -> void:
