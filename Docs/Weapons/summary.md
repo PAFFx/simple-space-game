@@ -300,6 +300,8 @@ The range's rearm (F4 → 0) repairs everything; the F4 panel lists each part.
 
 Probe: `Tools/Weapons/fair_fight_probe.gd -- [parts=arc,ecap,damage]`.
 
+This armour-by-location model is a placeholder; its replacement is designed in `Docs/Damage/`.
+
 ## Testing
 
 - `F4` in the test range: spawn static / drifting / jinking / turret targets at a chosen range,

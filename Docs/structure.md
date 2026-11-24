@@ -93,6 +93,7 @@ simple-space-game/
 ├── Docs/                          Architecture documentation
 │   ├── structure.md               This file
 │   ├── Audio/                     Buses, shot sounds, SFX lab
+│   ├── Damage/                    Damage and destruction design (beams drilling, systems, cockpit)
 │   ├── FlightControl/             Thrusters, FBW control laws, allocation, controls
 │   ├── MobileSuit/                Prototype suit + linear seat cockpit
 │   ├── Performance/               Frame budget snapshots (where the frame time goes)
@@ -286,6 +287,7 @@ types. Any cockpit that extends `CockpitBase` and has a `PanoramicDisplayMount` 
 | `Docs/MobileSuit/prototype.md` | Prototype suit scene tree, rig, render layers, regenerating models |
 | `Docs/MobileSuit/linear_seat_v2_cockpit.md` | RX-93 linear seat v2 cockpit and its rail grip variant, seated pilot (IK, G lean), sensor outlines |
 | `Docs/Weapons/summary.md` | Fire control, envelopes and aiming, projectiles, beam look, controls, test tools |
+| `Docs/Damage/summary.md` | Damage and destruction design: hit pipeline, layout, systems graph, severing, I-field (with `physics.md`, `beam_effects.md`, `dismemberment.md`, `cockpit_and_cameras.md`, `todo.md`) |
 | `Docs/Audio/summary.md` | External bus, shot fire sounds, the SFX lab and its recipes |
 | `Docs/Audio/todo.md` | Sounds still to make; parked enemy / pass-by / cockpit-warning work |
 | `Docs/Performance/frame_budget.md` | Frame time by phase, subtree and GPU pass (dated snapshot), measuring pitfalls |
