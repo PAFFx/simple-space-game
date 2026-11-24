@@ -10,8 +10,7 @@ Decided with the user (2026-11-25): pilot hit = game over; beam energy front-loa
 pierces targets sliding under it at 10–40 m/s (`physics.md` §1); the reactor sits below the
 cockpit around the waist (moved in the mass model) and any hit on it breaches; vacuum-realistic
 vapour (no billowing smoke); warheads as assumed; the proposed extra cameras go in; secondary
-explosions sized per weapon. Propellant: hydrogen doesn't fit the suit, water proposed
-(`physics.md` §5, pending).
+explosions sized per weapon; propellant water (`physics.md` §5; hydrogen didn't fit).
 
 ## Goal
 
@@ -181,7 +180,7 @@ camera, its missile cells, and three large E-pac **I-field charges**.
 | Hit | Physically | Look |
 |---|---|---|
 | Electronics, actuators, cables | capacitor and battery banks discharging, insulation vaporising | arcs crackling for 0.1–0.5 s, then a small flash and a puff of vapour that thins out fast (vacuum) |
-| Propellant cell (water, proposed) | the beam stops in it and flashes it to steam; the closed cell bursts (no fire: no oxygen); a hole vents (`physics.md` §5) | a violent burst, armour panels blown off (`dismemberment.md`), a glittering cloud of ice crystals gone in a few seconds, a sharp push (~0.4 MN for a few hundredths of a second) |
+| Propellant cell (water) | the beam stops in it and flashes it to steam; the closed cell bursts (no fire: no oxygen); a hole vents (`physics.md` §5) | a violent burst, armour panels blown off (`dismemberment.md`), a glittering cloud of ice crystals gone in a few seconds, a sharp push (~0.4 MN for a few hundredths of a second) |
 | Weapon stores | breach, sized per weapon (`physics.md` §6) | E-pacs: a sharp small explosion; bazooka shells and missiles: their HE and fragments; vulcan drums: rounds cooking off over 1–3 s |
 | Reactor (waist, below the cockpit) | any hit breaches: plasma and field energy released mostly as radiation | a bright clean sphere ~200 m, lethal inside ~60 m, sensors blinded to ~400 m |
 | Power systems around the reactor | lines, conditioning, coolant hit, the core not | power lost or reduced: thrusters dead, cameras on batteries, the suit drifts |

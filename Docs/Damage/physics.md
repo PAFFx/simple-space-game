@@ -6,8 +6,8 @@ inertia 2.62 / 1.42 / 2.98 × 10⁶ kg·m²); thrust and torque from `Docs/Fligh
 (clean torque 24 / 10 / 24 MN·m, 11 G up, 7.7 G forward). Every tunable is marked **[tune]**.
 
 Decided (2026-11-25): beam energy **front-loaded** (pierces targets sliding under it at 10–40 m/s;
-an even spread didn't); propellant: liquid hydrogen was chosen but doesn't fit the suit, water
-proposed (§5, pending); the reactor sits below the cockpit around the waist (moved in the mass
+an even spread at 4 GJ didn't; even at ~16 GJ is the alternative, below); propellant **water**
+(§5; hydrogen didn't fit the suit); the reactor sits below the cockpit around the waist (moved in the mass
 model) and a hit on it always breaches; secondary explosions sized per weapon; vacuum-realistic
 vapour; pilot hit = game over.
 
@@ -78,6 +78,41 @@ the head lands on first gets the head. What the head can remove in that time:
 | 200 m/s | 0.006 s | 207 kg | 32 kg | limbs and head; the body deeply gouged |
 
 Behind the first point the slot gets only the tail: a hole with a shallower scar trailing from it.
+
+### Even spread with more energy (option, undecided)
+
+What a beam can go through is an areal density: `σ = η·E_spot / (e·π·r²)` kg/m², where `E_spot` is
+the energy one point receives. On the suit: chest 280 kg/m² (56 kg/m³ × 5 m), waist with the
+reactor 560, shield 450, water 1,000 per metre. With an even spread a point sliding at `v⊥` gets
+`E · (2r / v⊥) / pour`, so piercing a sliding target needs `E / r ≥ σ·π·v⊥·pour·e / (2η)`: more
+energy, or a narrower beam (its smaller spot is crossed sooner, but its column is lighter by the
+square).
+
+| Option | Still target | 10 m/s | 40 m/s | 100 m/s | Burn-through, still chest |
+|---|---|---|---|---|---|
+| Front-loaded, 4 GJ, Ø 1.2 m (current) | 707 kg/m² | 706 | 550 | 319 | 10 ms |
+| Even, 4 GJ, Ø 1.2 m | 707 | 566 | **141** | 57 | 59 ms |
+| **Even, 16 GJ, Ø 1.2 m** | 2,829 | 2,264 | 566 | 226 | 15 ms |
+| Even, 8 GJ, Ø 1.2 m | 1,415 | 1,132 | 283 | 113 | 30 ms |
+| Even, 4 GJ, Ø 0.6 m | 2,829 | 1,132 | 283 | 113 | 15 ms |
+
+Even spread matches the current beam at 40 m/s with **~16 GJ** (4×). What comes with it:
+
+- **Over-penetration** on still or tracked targets (our rifle always tracks): 2,800 kg/m², about
+  ten chests in a row or 2.8 m of water. Water cells no longer stop beams (they still burst), the
+  beam leaves the suit with ~90% of its energy and hits whatever is behind (wingmen, the station).
+- **Slicing**: every point of the slot gets the same dwell, so a target sliding at 40 m/s gets a
+  6 m long cut through 566 kg/m² (a torso, a limb) instead of a hole with a shallow scar: a beam
+  sweeping across a dodging suit cuts it apart.
+- **The shield without its I-field** is nothing (450 of 2,829): the I-field becomes all-or-nothing.
+- **Power**: ~107 GW for the whole pour (one main thruster is ~93 GW); a rifle E-pac holds 32 ×
+  16 = 512 GJ (breach yields are per weapon anyway, §6). The I-field's leak share has to drop to
+  ~1.5–2.5% for the same heat on the shield.
+
+**No option gives a long visible stall.** Piercing something sliding at `v⊥` means burning
+through it within `1.2 m / v⊥` (30 ms at 40 m/s), so a still target can never take longer than
+that: the stall is at most a frame or two whatever the profile or energy. Its look has to come
+from the effects (`beam_effects.md`).
 
 ### Drilling in the sim
 
@@ -186,7 +221,7 @@ Each fragment (11 kJ) goes through ~10–15 mm: cameras, sensors, nozzles, cable
 
 ## 5. Propellant and tank hits
 
-### Which propellant (pending: water proposed)
+### Which propellant (decided: water)
 
 The mass model carries **25.2 t** of propellant in **~66 m³** of tanks (~380 kg/m³ on average).
 Liquid hydrogen (71 kg/m³) would need ~355 m³, 73% of the whole suit's 487 m³: real hydrogen
@@ -209,7 +244,7 @@ why real electric thrusters fly xenon, krypton or argon.
 | Argon | 1,395 | 18 m³ | cryogenic, 87 K | ~0.5% | inert, boils off invisibly |
 | Xenon | ~2,900 | 9 m³ | cryogenic or supercritical; rare and costly | ~0.1% | inert |
 
-**Proposed: water.** It fits with room to spare (25 m³, the freed volume goes to the reactor in
+**Water** (chosen). It fits with room to spare (25 m³, the freed volume goes to the reactor in
 the pelvis and to structure), needs no cryogenics (no boil-off sitting in a hangar or on patrol,
 no 20 K plumbing to shoot through), loses ~4% to plasma chemistry instead of ~22%, is in every
 colony and ice asteroid, isn't flammable or toxic, and doubles as radiation shielding. The mass
@@ -292,6 +327,6 @@ through the waist sets off a 200 m flash. At close range, aim high.
 | Vulcan round mass, RHA calibration | 2.5 kg, 120 mm @ 1100 m/s | what vulcans can break |
 | Armour RHA factor | ×3 | the same |
 | Warheads (bazooka, missile) | above | fragments and contact impulse |
-| Propellant, tank pressure, cells | water (proposed), 0.3 MPa, 4–8 | what stops beams, burst size, venting pop |
+| Propellant, tank pressure, cells | water, 0.3 MPa, 4–8 | what stops beams, burst size, venting pop |
 | Secondary yields | per weapon, §6 | secondary explosion size |
 | Reactor yield | 2.5 TJ | the big flash |

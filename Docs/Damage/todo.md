@@ -115,11 +115,11 @@ Pilot hit = game over. Beam energy front-loaded (τ 0.02 s): it pierces targets 
 at 10–40 m/s; an even spread didn't. Reactor below the cockpit around the waist, any hit
 breaches; moved in the mass model (chest density 1.6 → 1.0, pelvis 1.2 → 2.5, centre of mass
 0.1 m lower, flight measured unchanged but forward 7.66 → 7.57 G). Vacuum-realistic vapour.
-Warheads as assumed in `physics.md` §4. The proposed cameras go in. Secondary explosions per
+Water propellant (`physics.md` §5). Warheads as assumed in `physics.md` §4. The proposed cameras go in. Secondary explosions per
 weapon (`physics.md` §6). The loose pieces get listed by the x-ray snapshot (phase 0).
 
 ## Open
 
-1. **Propellant**: liquid hydrogen doesn't fit (25.2 t needs ~355 m³, 73% of the suit). Proposed
-   water (`physics.md` §5): fits in 25 m³, no cryogenics, ~4% plasma losses against hydrogen's
-   ~22%; full cells stop beams and steam-burst. Alternatives in the same table.
+1. **Beam profile**: front-loaded 4 GJ (current: holes, tanks stop beams, the shield buys a
+   little) or even 16 GJ (cuts sliding targets apart, over-penetrates still ones, tanks and a bare
+   shield don't stop it). `physics.md` §1, *Even spread with more energy*.
