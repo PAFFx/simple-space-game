@@ -642,7 +642,7 @@ on axis 1, hence `invert_surge` (it turns the forward/back and yaw mix around to
 - **Stick travel is the throttle** (`PilotCommand.analog_thrust`): up to `analog_boost_onset`
   (0.55 of the shaped demand, ~69% of the travel) spans the cruise limit; beyond it the
   acceleration eases (quadratic) up to `boost_accel_g` and the suit counts as boosting (rates,
-  auto-rotation cap, HUD), with 0.05 hysteresis. Past `analog_full_boost_onset` (0.85, ~91% of
+  auto-rotation cap, HUD), with 0.05 hysteresis. Past `analog_full_boost_onset` (0.92, ~95% of
   the travel) it eases on (linear) into full boost, reached at the stops: no acceleration cap, and
   the auto-rotation limit opening from 30° to the solver's full range. So there is no boost
   button; the button is the dodge. Precision uses the whole travel for its own limit. (Before the

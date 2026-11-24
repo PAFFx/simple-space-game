@@ -155,7 +155,7 @@ enum RotationMode { RATE_DAMP, ATTITUDE_HOLD }
 @export_range(0.1, 0.95) var analog_boost_onset: float = 0.55
 ## Past this travel the stick eases from boost into full boost (no acceleration cap,
 ## auto-rotation opening to the solver's full range), reached at the stops.
-@export_range(0.1, 1.0) var analog_full_boost_onset: float = 0.85
+@export_range(0.1, 1.0) var analog_full_boost_onset: float = 0.92
 ## Precision mode's speed loop gain, (m/s²) per (m/s) of error.
 @export var velocity_gain: float = 0.8
 ## Braking: (m/s²) per (m/s) of the motion being stopped, up to stop_accel_g (a combat
