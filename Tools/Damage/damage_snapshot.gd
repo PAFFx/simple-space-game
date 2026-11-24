@@ -65,6 +65,7 @@ func _run(cases: PackedStringArray) -> void:
 			"back": await _case("back", &"forearm.L", Vector3.ZERO, Vector3(0.6, 0.0, 1.0), Vector3(-12, 3, 14), [0.02, 0.06, 0.2, 0.6, 1.5])
 			"cool": await _cool()
 			"hole": await _hole()
+			"sever": await _sever()
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
 			"drone": await _drone()
@@ -157,6 +158,32 @@ func _hole() -> void:
 		_look(exit_view, target)
 		await _frames(3)
 		_save("hole_out_%02ds" % age)
+
+
+## A forearm shot off: the torn socket at the elbow and the piece tumbling away.
+func _sever() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var p := _model.find_part(&"forearm.R")
+	var joint := _skel.global_transform * _skel.get_bone_global_pose(p.bone)
+	var dir := (basis * Vector3(-0.2, 0.0, 1.0)).normalized()
+	var target := _part_centre(&"forearm.R")
+	var view := joint.origin + basis * Vector3(10.0, 3.0, -7.0)
+	_look(view, joint.origin)
+	await _fire(target - dir * 300.0, dir, "sever", [0.1, 0.6, 1.5])
+	for i in 60:
+		await physics_frame
+	_look(joint.origin + basis * Vector3(4.5, 1.0, -3.0), joint.origin)
+	await _frames(3)
+	_save("sever_stump_close")
+	for child in current_scene.get_children():
+		if child is RigidBody3D and child.name.begins_with("Debris"):
+			var at := (child as RigidBody3D).global_transform * (child as RigidBody3D).center_of_mass
+			_look(at + basis * Vector3(-6.0, 3.0, -6.0), at)
+			await _frames(3)
+			_save("sever_piece")
+			break
 
 
 func _hole_birth() -> float:

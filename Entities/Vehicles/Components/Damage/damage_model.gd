@@ -138,6 +138,7 @@ var _mass_removed := {}       ## part name → [dry, tank]
 var _queue: Array = []        ## [time, Callable]
 var _rng := RandomNumberGenerator.new()
 var _hull_layers: Array = []
+var _stubs: Array[Node] = []
 
 
 func _ready() -> void:
@@ -1009,7 +1010,10 @@ func sever(p: Part) -> void:
 		for eq in loadout.equipment:
 			if eq.equipped and eq.is_visible_in_tree() and _equipment_on(eq, bones):
 				equip.append(eq)
-	var body := _make_debris(group, equip, 3.0, _part_frame(p).origin)
+	var joint := _part_frame(p)
+	var axis := joint.basis.y.normalized()          # from the joint out along the severed part
+	var radius := clampf(minf(p.aabb.size.x, p.aabb.size.z) * 0.36, 0.35, 1.1)
+	var body := _make_debris(group, equip, 3.0, joint.origin)
 	for eq in equip:
 		_lose_equipment(eq)
 		loadout.set_equipped(eq, false)
@@ -1017,10 +1021,39 @@ func sever(p: Part) -> void:
 	_remove_parts(group)
 	_event("%s SEVERED" % p.name)
 	part_severed.emit(p.name)
-	if body != null:
-		var fx := DamageFx.of(self)
+	var fx := DamageFx.of(self)
+	# The torn socket on what is left: a melted crater at the joint, a stub of frame.
+	var parent := _parent_part(p)
+	if parent != null and parent.mesh != null:
+		var h := holes.add_hole(parent.mesh, _skel, parent.bone, joint.origin + axis * 0.35, -axis, radius, 1.6, 1750.0)
+		h.s_drill = 0.7
 		if fx != null:
-			fx.sever(_part_frame(p).origin, _body.linear_velocity)
+			_stubs.append(fx.stump(parent.area, joint.origin, axis, radius, _velocity_at(joint.origin)))
+	# And the torn end of the piece that flew off.
+	if body != null:
+		for child in body.get_children():
+			var mi := child as MeshInstance3D
+			if mi != null and String(mi.name).begins_with("Baked_" + String(p.name)):
+				var h := holes.add_hole(mi, null, -1, joint.origin - axis * 0.35, axis, radius, 1.6, 1750.0)
+				h.s_drill = 0.7
+		if fx != null:
+			fx.stump(body, joint.origin, -axis, radius, Vector3.ZERO)
+			fx.sever(joint.origin, _body.linear_velocity)
+
+
+## The nearest part up the skeleton from `p`.
+func _parent_part(p: Part) -> Part:
+	var b := _skel.get_bone_parent(p.bone)
+	while b >= 0:
+		for q in parts:
+			if q.bone == b and q.equipment == null:
+				return q
+		b = _skel.get_bone_parent(b)
+	return null
+
+
+func _velocity_at(world: Vector3) -> Vector3:
+	return _body.linear_velocity + _body.angular_velocity.cross(world - _body.global_transform * _body.center_of_mass)
 
 
 func _bone_is_under(bone: int, ancestor: int) -> bool:
@@ -1094,6 +1127,7 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 	var fill := _reaction.get_fill()
 	for q in group:
 		var mi := _bake(q.mesh)
+		mi.name = "Baked_" + String(q.name)
 		body.add_child(mi)
 		var holes_on := holes.get_holes(q.mesh)
 		var bh := Vector2(heat, holes.now) if heat > 0.0 else Vector2.ZERO
@@ -1230,6 +1264,10 @@ func repair() -> void:
 		if is_instance_valid(body):
 			body.queue_free()
 	_debris.clear()
+	for stub in _stubs:
+		if is_instance_valid(stub):
+			stub.queue_free()
+	_stubs.clear()
 	for node in _hidden_nodes:
 		if is_instance_valid(node):
 			node.visible = true

@@ -27,7 +27,18 @@ class Arc:
 	var life := 0.4
 	var velocity := Vector3.ZERO
 
+class Stub:
+	var root: Node3D
+	var cables: MeshInstance3D
+	var hot: StandardMaterial3D
+	var radius := 1.0
+	var age := 0.0
+	var cable_base: Array[Vector3] = []
+	var cable_dir: Array[Vector3] = []
+	var next_spark := 0.3
+
 var _lights: Array[HoleLight] = []
+var _stubs: Array[Stub] = []
 var _arcs: Array[Arc] = []
 var _spark_material: StandardMaterial3D
 var _vapour_material: StandardMaterial3D
@@ -91,6 +102,23 @@ func _process(delta: float) -> void:
 		h.light.global_position = h.anchor.global_transform * h.local
 		h.light.light_energy = h.energy * k * k * (1.0 if h.age > 0.15 else 2.0)
 		h.light.light_color = Color(1.0, lerpf(0.25, 0.55, k), lerpf(0.05, 0.25, k))
+	for i in range(_stubs.size() - 1, -1, -1):
+		var st := _stubs[i]
+		if not is_instance_valid(st.root):
+			_stubs.remove_at(i)
+			continue
+		st.age += delta
+		# The broken ends cool like the holes (over tens of seconds).
+		st.hot.emission_energy_multiplier = 3.0 * exp(-st.age / 12.0)
+		st.hot.emission = Color(1.0, lerpf(0.12, 0.45, exp(-st.age / 6.0)), 0.04)
+		_draw_cables(st)
+		st.next_spark -= delta
+		if st.age < 20.0 and st.next_spark <= 0.0:
+			st.next_spark = randf_range(0.4, 2.5) * (1.0 + st.age * 0.2)
+			var k := randi() % st.cable_base.size()
+			var end := st.root.global_transform * (st.cable_base[k] + st.cable_dir[k])
+			_arc(end, Vector3.ZERO, st.radius * 0.5, 0.15)
+			_spray(end, Vector3.UP, Vector3.ZERO, 12, 180.0, 4.0, 0.1, 0.4, 0.02, 15.0)
 	for i in range(_arcs.size() - 1, -1, -1):
 		var a := _arcs[i]
 		a.age += delta
@@ -159,6 +187,84 @@ func sever(at: Vector3, velocity: Vector3) -> void:
 	_arc(at, velocity, 2.5, 0.8)
 	_arc(at, velocity, 2.0, 1.2)
 	ProjectileManager.of(self).flash(at, Color(1.0, 0.7, 0.4), 1.0, 4.0, 0.25, 6.0, 1.0, 40.0, velocity, 1.0)
+
+
+## Where a limb tore off, on `anchor` (it rides it): a stub of the inner frame (the joint's
+## drum, broken struts glowing at their ends) and torn cables that spark for a while. `axis`
+## points out of the stump; `radius` is the part's. Returns the stub's root node.
+func stump(anchor: Node3D, at: Vector3, axis: Vector3, radius: float, velocity: Vector3) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Stump"
+	anchor.add_child(root)
+	var up := axis.normalized()
+	var side := up.cross(Vector3.UP if absf(up.y) < 0.9 else Vector3.RIGHT).normalized()
+	root.global_transform = Transform3D(Basis(side, up, side.cross(up)), at)
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.11, 0.11, 0.12)
+	metal.metallic = 0.85
+	metal.roughness = 0.45
+	var hot := StandardMaterial3D.new()
+	hot.albedo_color = Color(0.08, 0.06, 0.05)
+	hot.emission_enabled = true
+	hot.emission = Color(1.0, 0.35, 0.06)
+	hot.emission_energy_multiplier = 3.0
+	# The joint's drum, across the joint.
+	var drum := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = radius * 0.45
+	cyl.bottom_radius = radius * 0.45
+	cyl.height = radius * 1.3
+	cyl.radial_segments = 14
+	cyl.material = metal
+	drum.mesh = cyl
+	drum.rotation = Vector3(0.0, 0.0, PI * 0.5)
+	root.add_child(drum)
+	# Struts and actuator rods snapped off at different lengths, glowing where they broke.
+	for i in 4:
+		var strut := MeshInstance3D.new()
+		var rod := CylinderMesh.new()
+		var length := radius * randf_range(0.5, 1.4)
+		rod.top_radius = radius * randf_range(0.08, 0.16)
+		rod.bottom_radius = rod.top_radius
+		rod.height = length
+		rod.radial_segments = 8
+		rod.material = metal
+		strut.mesh = rod
+		var ang := TAU * (i + randf() * 0.5) / 4.0
+		var off := Vector3(cos(ang), 0.0, sin(ang)) * radius * 0.45
+		strut.position = off + Vector3(0.0, length * 0.5, 0.0)
+		strut.rotation = Vector3(randf_range(-0.35, 0.35), 0.0, randf_range(-0.35, 0.35))
+		root.add_child(strut)
+		var tip := MeshInstance3D.new()
+		var cap := SphereMesh.new()
+		cap.radius = rod.top_radius * 1.3
+		cap.height = cap.radius * 1.4
+		cap.radial_segments = 8
+		cap.rings = 4
+		cap.material = hot
+		tip.mesh = cap
+		tip.position = Vector3(0.0, length * 0.5, 0.0)
+		strut.add_child(tip)
+	# Cut cable bundles: limp, swaying a little, sparking at their ends.
+	var cables := MeshInstance3D.new()
+	cables.mesh = ImmediateMesh.new()
+	var cable_mat := StandardMaterial3D.new()
+	cable_mat.albedo_color = Color(0.05, 0.05, 0.05)
+	cable_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cables.material_override = cable_mat
+	root.add_child(cables)
+	var stub := Stub.new()
+	stub.root = root
+	stub.cables = cables
+	stub.hot = hot
+	stub.radius = radius
+	for i in 5:
+		var ang := TAU * randf()
+		stub.cable_base.append(Vector3(cos(ang), 0.0, sin(ang)) * radius * randf_range(0.1, 0.5))
+		stub.cable_dir.append((Vector3(randfn(0, 0.5), 1.0, randfn(0, 0.5))).normalized() * radius * randf_range(0.8, 1.8))
+	_stubs.append(stub)
+	_spray(at, up, velocity, 40, 40.0, 10.0, 0.2, 0.6, 0.03, 40.0)
+	return root
 
 
 ## The reactor gave way: a bright clean sphere ~200 m across, mostly light.
@@ -350,6 +456,23 @@ func _arc(at: Vector3, velocity: Vector3, size: float, life: float) -> void:
 	a.velocity = velocity
 	_arcs.append(a)
 	_draw_arc(a)
+
+
+func _draw_cables(st: Stub) -> void:
+	var im := st.cables.mesh as ImmediateMesh
+	im.clear_surfaces()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for k in st.cable_base.size():
+		var sway := Vector3(sin(st.age * 1.3 + k), 0.0, cos(st.age * 1.1 + k * 2.0)) * st.radius * 0.12
+		var prev := st.cable_base[k]
+		for j in range(1, 7):
+			var f := j / 6.0
+			var p := st.cable_base[k] + st.cable_dir[k] * f + sway * f * f
+			for o in [Vector3.ZERO, Vector3(0.03, 0.0, 0.0), Vector3(0.0, 0.0, 0.03)]:
+				im.surface_add_vertex(prev + o)
+				im.surface_add_vertex(p + o)
+			prev = p
+	im.surface_end()
 
 
 ## A few jagged bolts crackling between points around the arc's centre, redrawn each frame.
