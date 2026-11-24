@@ -20,11 +20,11 @@ extends KeyboardPilotInput
 ## vulcans, second fires them (the first stays pressed under the second); weapon release
 ## fires the selected weapon; the 5-way hat selects weapons; master arm on / off; the
 ## Sensor Control Switch picks the sensor of interest (forward: TMS cursor / HMCS; aft,
-## left, right: the centre, left, right display) and the mini-stick slews its cursor.
-## Left: either trigger detent locks the contact under the cursor; the TMS switch
-## (5-way hat) zooms (forward; locks first if nothing is), steps the lock right /
-## left, unlocks (aft) and locks the nearest contact (depress); weapon release holds the
-## shield up; NAV / DGFT / BVR.
+## left, right: the centre, left, right display), the mini-stick slews its cursor and its
+## depress locks the contact under it.
+## Left: the TMS switch (5-way hat) zooms (forward; locks first if nothing is), steps the
+## lock right / left, unlocks (aft) and locks the nearest contact (depress); weapon release
+## holds the shield up; NAV / DGFT / BVR.
 
 @export_group("Devices")
 @export var left_stick_name: String = "EVO L"
@@ -56,6 +56,8 @@ extends KeyboardPilotInput
 @export var master_arm_off_button: int = 25
 ## Sensor Control Switch in FireControl.Scs order: forward, right, aft, left.
 @export var scs_buttons := PackedInt32Array([10, 11, 12, 13])
+## Locks the contact under the cursor.
+@export var lock_button: int = 30           ## TMS cursor depress
 @export var cursor_x_axis: int = 3
 @export var cursor_y_axis: int = 4
 @export var invert_cursor_y: bool = false
@@ -63,8 +65,6 @@ extends KeyboardPilotInput
 @export_range(0.0, 1.0) var cursor_expo: float = 0.5
 
 @export_group("Weapons, left stick")
-## Trigger detents lock the contact under the cursor; TMS depress the nearest one.
-@export var lock_buttons := PackedInt32Array([0, 1])
 @export var lock_nearest_button: int = 19   ## TMS depress
 @export var unlock_button: int = 17         ## TMS aft
 @export var target_next_button: int = 16    ## TMS right
@@ -176,9 +176,8 @@ func _poll_stick_weapons(cmd: PilotCommand) -> void:
 	cmd.vulcan_ready = cmd.vulcan_ready or cmd.vulcan_fire or _button(_right, vulcan_ready_button)
 	cmd.fire_main = cmd.fire_main or _button(_right, weapon_release_button)
 	cmd.shield_block = cmd.shield_block or _button(_left, shield_block_button)
-	for button in lock_buttons:
-		if _pressed(_left, button):
-			cmd.lock_commit = true
+	if _pressed(_right, lock_button):
+		cmd.lock_commit = true
 	if _pressed(_left, lock_nearest_button):
 		cmd.lock_nearest = true
 	if _pressed(_left, unlock_button):

@@ -1467,7 +1467,6 @@ burst_reserve_capacity = 300.0
 script = ExtResource("16_her5p")
 weapon_select_buttons = PackedInt32Array(15, 16, 17, 18, 19)
 scs_buttons = PackedInt32Array(10, 11, 12, 13)
-lock_buttons = PackedInt32Array(0, 1)
 master_mode_buttons = PackedInt32Array(14, 10, 12)
 
 [node name="Ambac" type="Node" parent="." unique_id=1271757552 node_paths=PackedStringArray("skeleton")]
