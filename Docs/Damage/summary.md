@@ -250,6 +250,20 @@ Tools/Damage/              probes and snapshots (todo.md)
 | `Tools/Damage/penetration_probe.gd` | headless checks: shots at each part (timings, holes, events), shield, drone, vulcan impulse, sever + repair |
 | `Tools/Damage/damage_snapshot.gd` | windowed renders: `hole,cool,forearm,shin,chest,thigh,sever,shield,bareshield,drone,reactor,screen` |
 
+Renders (`damage_snapshot.gd`): a through-hole in the shin, drilling then cooling (entry face
+0.5 s, 3 s, 20 s, 45 s; exit face 3 s, 20 s):
+
+![hole cooling](images/hole_cooling.png)
+
+A forearm shot off: the beam, the piece tumbling away, the elbow's socket and frame stub, the piece:
+
+![sever](images/sever.png)
+
+The screen from the seat: head camera lost (body cameras' coarser picture); rear cameras lost
+(no signal behind); shield camera lost (the shield shows); a beam through the cockpit's edge:
+
+![screen damage](images/screen_damage.png)
+
 Measured (`penetration_probe.gd`, rifle 4 GJ front-loaded, 300 m):
 
 | Shot | Burn-through | What happened |
