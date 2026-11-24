@@ -772,6 +772,7 @@ func _build_limb_reaction(root: Node3D) -> void:
 		seg.bone_name = p[0]
 		seg.mass = snappedf(DRY_MASS * p[1] * p[2] / weight, 0.1)
 		seg.propellant_capacity = snappedf(PROPELLANT * p[1] * p[3] / tank, 0.1)
+		seg.volume = p[1]
 		list.append(seg)
 	node.segments = list
 

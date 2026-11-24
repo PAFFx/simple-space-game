@@ -27,6 +27,16 @@ enum Kind { BEAM, BULLET, MISSILE }
 @export var spool_time: float = 0.0
 ## BEAM: seconds the beam keeps leaving the barrel (its length: speed × emit_time).
 @export var emit_time: float = 0.0
+## BEAM: energy of the whole shot, J (Docs/Damage/physics.md). 0 = the old flat `damage`
+## on whatever it touches. A target with beam_contact() drills by it instead.
+@export var energy: float = 0.0
+## BEAM: how the energy is spread over the pour: power ∝ e^(−t/τ), τ in s (0 = evenly).
+## Front-loaded, the head drills before a sliding target slips out from under the spot.
+@export var energy_tau: float = 0.0
+## BEAM: radius of the hole it drills, m.
+@export var hole_radius: float = 0.6
+## BULLET: projectile mass, kg (its momentum pushes what it hits).
+@export var mass: float = 0.0
 
 @export_group("Look")
 @export var color := Color(1.0, 0.16, 0.12)
@@ -63,3 +73,16 @@ func distance_at(t: float) -> float:
 ## Farthest the shot gets before it fades.
 func get_range() -> float:
 	return distance_at(lifetime)
+
+
+## Share of the beam's energy that left the barrel between t0 and t1 s into the pour (0..1).
+func energy_share(t0: float, t1: float) -> float:
+	var pour := maxf(emit_time, 1e-4)
+	var a := clampf(t0, 0.0, pour)
+	var b := clampf(t1, 0.0, pour)
+	if b <= a:
+		return 0.0
+	if energy_tau <= 0.0:
+		return (b - a) / pour
+	var whole := 1.0 - exp(-pour / energy_tau)
+	return (exp(-a / energy_tau) - exp(-b / energy_tau)) / whole

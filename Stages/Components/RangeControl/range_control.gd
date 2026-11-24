@@ -8,7 +8,8 @@ extends CanvasLayer
 ##   1 static · 2 drifting · 3 jinking · 4 hard jinking · 5 evasive (dodges your shots)
 ##   6 ace (hard jinking and dodging) · 7 turret · 8 hunter turret · 9 clear all · 0 rearm
 ##   - / + nearer / farther
-## Rearm also repairs the suit (SuitDamage); the panel lists each part's armour.
+## Rearm also repairs the suit (DamageModel); the panel lists each part. When the pilot is
+## killed (a beam through the cockpit, a reactor breach) a GAME OVER screen asks for a rearm.
 
 const TOGGLE := &"debug_toggle_range_control"
 ## Panels in this group close each other: they share the number keys.
@@ -51,6 +52,7 @@ func _ready() -> void:
 		InputMap.action_add_event(TOGGLE, ev)
 	add_to_group(PANEL_GROUP)
 	_build_ui()
+	_build_game_over()
 	_panel.visible = false
 	_hook_fire_control.call_deferred()
 
@@ -128,7 +130,7 @@ func rearm() -> void:
 	var fcs := suit.find_component(FireControl) as FireControl if suit != null else null
 	if fcs != null:
 		fcs.rearm()
-	var damage := suit.find_component(SuitDamage) as SuitDamage if suit != null else null
+	var damage := suit.find_component(DamageModel) as DamageModel if suit != null else null
 	if damage != null:
 		damage.repair()
 	hits_taken = 0
@@ -198,6 +200,32 @@ func _vehicle() -> VehicleBase:
 	return vehicle
 
 
+var _game_over: Label
+
+
+func _build_game_over() -> void:
+	_game_over = Label.new()
+	_game_over.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_game_over.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_game_over.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_game_over.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_game_over.add_theme_font_size_override(&"font_size", 40)
+	_game_over.add_theme_color_override(&"font_color", Color(1.0, 0.3, 0.25))
+	_game_over.add_theme_color_override(&"font_outline_color", Color.BLACK)
+	_game_over.add_theme_constant_override(&"outline_size", 8)
+	_game_over.visible = false
+	add_child(_game_over)
+
+
+func _process(_delta: float) -> void:
+	var suit := _vehicle()
+	var damage := suit.find_component(DamageModel) as DamageModel if suit != null else null
+	var over := damage != null and damage.pilot_dead
+	if over != _game_over.visible:
+		_game_over.visible = over
+		_game_over.text = "GAME OVER\n%s\n\nF4 → 0 to rearm" % ("REACTOR BREACH" if damage.reactor_gone else "PILOT KILLED IN ACTION")
+
+
 func _build_ui() -> void:
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -232,15 +260,24 @@ func _refresh() -> void:
 	lines.append("targets  %d" % alive)
 	lines.append("hits taken  %d   blocked  %d" % [hits_taken, hits_blocked])
 	var suit := _vehicle()
-	var damage := suit.find_component(SuitDamage) as SuitDamage if suit != null else null
+	var damage := suit.find_component(DamageModel) as DamageModel if suit != null else null
 	if damage != null:
 		var parts := PackedStringArray()
-		for part: StringName in damage.max_hit_points:
-			parts.append("%s %3d%%" % [String(part).to_upper(), roundi(damage.get_fraction(part) * 100.0)])
-		parts.append("SHIELD %3d%%" % roundi(damage.get_shield_fraction() * 100.0))
+		for state in damage.get_part_states():
+			if state[1] < 0.999:
+				parts.append("%s %s" % [String(state[0]).to_upper(), "GONE" if state[1] <= 0.0 else "%3d%%" % roundi(state[1] * 100.0)])
+		var shield := suit.find_children("*", "MsShield", true, false)
 		lines.append("")
-		lines.append("ARMOUR%s" % ("  ** SUIT DOWN: 0 rearms **" if damage.destroyed else ""))
+		lines.append("DAMAGE%s" % ("  ** PILOT KIA: 0 rearms **" if damage.pilot_dead else ""))
+		if parts.is_empty():
+			lines.append("  intact")
 		for i in range(0, parts.size(), 3):
 			lines.append("  " + "   ".join(parts.slice(i, i + 3)))
+		lines.append("  thrusters out %d   cameras out %d" % [damage.count_dead(DamageModel.Kind.THRUSTER),
+				damage.count_dead(DamageModel.Kind.BODY_CAMERA) + damage.count_dead(DamageModel.Kind.EYES)])
+		if not shield.is_empty():
+			lines.append("  I-field charges %d" % (shield[0] as MsShield).charges)
+		if damage.last_event != "":
+			lines.append("  last: %s" % damage.last_event)
 	_label.text = "\n".join(lines)
 	_panel.reset_size()

@@ -21,6 +21,9 @@ extends Node3D
 ## A spooling weapon shows a charge glow on its muzzle (set_charge): the dodge cue.
 ## Anything riding a muzzle is placed where the muzzle is drawn (physics-interpolated),
 ## not where it was last physics tick, so it doesn't stutter behind a moving gun.
+## A beam with `energy` drills (Docs/Damage): a target with `beam_contact(BeamContact)` gets
+## the energy arriving each tick and answers whether the beam is through; until then the front
+## holds at the drill face, after it the line goes on from the exit with what is left.
 ## Explosions are balls of light.
 ## A shot's fire_sound plays on its muzzle (External bus): the cockpit's simulated outside sound.
 
@@ -66,6 +69,24 @@ class Shot:
 	var prev_tail := 0.0
 	var hit_ids := {}
 	var last_splash := -1.0
+	var own_exclude := false
+
+## One tick of a beam touching a target (beam_contact). The target fills in the result.
+class BeamContact:
+	var key := 0                   ## the shot (the same across its ticks)
+	var point := Vector3.ZERO      ## where the beam's ray met the target's collider
+	var normal := Vector3.ZERO     ## the collider's surface there
+	var collider: Node
+	var direction := Vector3.ZERO
+	var energy := 0.0              ## J arriving at the target this tick
+	var radius := 0.6              ## the hole's radius, m
+	var spec: ProjectileSpec
+	var source: Node
+	# Result:
+	var absorbed := 0.0            ## J the target took
+	var through := false           ## burned through: the beam goes on from exit_point
+	var exit_point := Vector3.ZERO
+	var front := Vector3.ZERO      ## not through: where the front stands (the drill face)
 
 class Charge:
 	var muzzle: Node3D
@@ -514,13 +535,92 @@ func _step_beam(shot: Shot, delta: float, space: PhysicsDirectSpaceState3D, quer
 	if not shot.blocked:
 		return
 	var point: Vector3 = hit.position
+	var collider := hit.collider as Node
+	if spec.energy > 0.0 and _beam_target(collider) != null:
+		_drill(shot, hit, dir, delta, space, query)
+		return
 	# It ends where it hit: the particles stop there.
 	shot.reach = maxf(shot.position.distance_to(point), shot.tail)
 	shot.at_range = false
-	var collider := hit.collider as Node
 	if not _beam_hit(shot, collider, point, dir) and shot.age - shot.last_splash > 0.06:
 		shot.last_splash = shot.age
 		impact(spec, point, _velocity_of(collider), 0.45)
+
+
+## A beam with energy on something that drills (beam_contact): this tick's energy goes in;
+## through, the line goes on from the exit with what is left and may meet the next target
+## in the same tick. Not through, the front stands at the drill face.
+func _drill(shot: Shot, hit: Dictionary, dir: Vector3, delta: float,
+		space: PhysicsDirectSpaceState3D, query: PhysicsRayQueryParameters3D) -> void:
+	var spec := shot.spec
+	var left := -1.0
+	for _i in 4:
+		var collider := hit.collider as Node
+		var point: Vector3 = hit.position
+		var target := _beam_target(collider)
+		if target == null:
+			# Something that doesn't drill: the rest of the line stops on it.
+			shot.reach = maxf(shot.position.distance_to(point), shot.tail)
+			shot.at_range = false
+			if not _beam_hit(shot, collider, point, dir) and shot.age - shot.last_splash > 0.06:
+				shot.last_splash = shot.age
+				impact(spec, point, _velocity_of(collider), 0.45)
+			return
+		var distance := shot.position.distance_to(point)
+		if left < 0.0:
+			# What reaches `distance` this tick left the barrel distance / speed earlier.
+			var lag := distance / maxf(spec.speed, 1.0)
+			left = spec.energy * spec.energy_share(shot.age - delta - lag, shot.age - lag)
+		var c := BeamContact.new()
+		c.key = shot.get_instance_id()
+		c.point = point
+		c.normal = hit.normal
+		c.collider = collider
+		c.direction = dir
+		c.energy = left
+		c.radius = spec.hole_radius
+		c.spec = spec
+		c.source = shot.source if is_instance_valid(shot.source) else null
+		c.front = point
+		var id := target.get_instance_id()
+		var first := not shot.hit_ids.has(id)
+		target.call(&"beam_contact", c)
+		if first:
+			shot.hit_ids[id] = true
+			# A small contact flash: the target draws the drilling itself (DamageFx).
+			impact(spec, point, _velocity_of(collider), 0.18)
+			shot_hit.emit(spec, point, collider)
+		if not c.through:
+			shot.reach = maxf(shot.position.distance_to(c.front), shot.tail)
+			shot.at_range = false
+			shot.blocked = true
+			return
+		# Through: this body no longer stops the beam (its channel is open).
+		left = maxf(left - c.absorbed, 0.0)
+		if not shot.own_exclude:
+			shot.exclude = shot.exclude.duplicate()
+			shot.own_exclude = true
+		shot.exclude.append(hit.rid)
+		query.exclude = shot.exclude
+		query.from = c.exit_point
+		query.to = shot.position + dir * shot.reach
+		hit = space.intersect_ray(query)
+		if hit.is_empty():
+			shot.blocked = false
+			return
+	shot.blocked = true
+
+
+## The node that takes beam contacts for `collider` (itself or an ancestor), or null.
+static func _beam_target(collider: Node) -> Node:
+	var node := collider
+	while node != null:
+		if node.has_method(&"beam_contact"):
+			return node
+		if node.has_method(&"apply_hit"):
+			return null
+		node = node.get_parent()
+	return null
 
 
 ## A beam touching `collider` at `point`: hurts it the first time (true), else nothing.
@@ -706,7 +806,8 @@ func _land(shot: Shot, at: Vector3, collider: Node) -> void:
 	if shot.spec.blast_radius > 0.0:
 		_burst(shot, at, velocity)
 	else:
-		_damage(collider, shot.spec.damage, at, shot.velocity.normalized(), shot.source if is_instance_valid(shot.source) else null)
+		if not _impact(collider, shot.spec, at, shot.velocity - velocity, 0.0, shot.source):
+			_damage(collider, shot.spec.damage, at, shot.velocity.normalized(), shot.source if is_instance_valid(shot.source) else null)
 		impact(shot.spec, at, velocity)
 	shot_hit.emit(shot.spec, at, collider)
 
@@ -740,10 +841,27 @@ func _burst(shot: Shot, at: Vector3, velocity: Vector3) -> void:
 			continue
 		var radius: float = target.get_meta(&"hud_radius", 0.0)
 		var d := maxf(target.global_position.distance_to(at) - radius, 0.0)
+		if _impact(target, spec, at, Vector3.ZERO, maxf(target.global_position.distance_to(at) - radius, 0.5), shot.source):
+			continue
 		if d < spec.blast_radius:
 			_damage(target, spec.damage * (1.0 - d / spec.blast_radius), at,
 					(target.global_position - at).normalized(), shot.source if is_instance_valid(shot.source) else null)
 	explode(at, velocity, spec.blast_radius, spec.color)
+
+
+## A bullet or a burst reaching something with a physical damage model
+## (`apply_impact(spec, at, relative_velocity, burst_distance, source)`): true if it took it.
+static func _impact(node: Node, spec: ProjectileSpec, at: Vector3, relative_velocity: Vector3,
+		burst_distance: float, source: Node) -> bool:
+	while node != null:
+		if node.has_method(&"apply_impact"):
+			node.call(&"apply_impact", spec, at, relative_velocity, burst_distance,
+					source if is_instance_valid(source) else null)
+			return true
+		if node.has_method(&"apply_hit"):
+			return false
+		node = node.get_parent()
+	return false
 
 
 static func _damage(node: Node, amount: float, at: Vector3, direction: Vector3, source: Node) -> void:

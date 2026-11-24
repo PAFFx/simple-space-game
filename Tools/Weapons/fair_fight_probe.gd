@@ -1,10 +1,10 @@
 extends SceneTree
 
 ## Checks for the fair-fight pass: the turret's gun arm (can you circle out of its arc?),
-## its E-cap and recoil, and the suit's armour by location.
+## its E-cap and recoil. (The suit's damage has its own probes: Tools/Damage.)
 ##
 ##   godot-double --headless --path . --fixed-fps 60 -s Tools/Weapons/fair_fight_probe.gd -- \
-##       [parts=arc,ecap,damage] [ranges=150,300,600] [time=12] [speed=120]
+##       [parts=arc,ecap] [ranges=150,300,600] [time=12] [speed=120]
 ##
 ## arc: a turret (perfect aim from the truth, 0.5 s spool) shoots for `time` s at a suit
 ## that holds still or circles it at `speed` m/s on the mains' axis; the same with the old
@@ -19,9 +19,9 @@ class ScriptedInput extends PilotInputSource:
 
 var _suit: RigidBody3D
 var _fcs: FireControl
-var _damage: SuitDamage
+var _damage: DamageModel
 var _input := ScriptedInput.new()
-var _parts := PackedStringArray(["arc", "ecap", "damage"])
+var _parts := PackedStringArray(["arc", "ecap"])
 var _ranges := PackedFloat64Array([150.0, 300.0, 600.0])
 var _time := 12.0
 var _speed := 120.0
@@ -67,16 +67,16 @@ func _run() -> void:
 	fc.input_source = _input
 	_fcs = vehicle.find_component(FireControl) as FireControl
 	_fcs.sensors.enabled = false
-	_damage = vehicle.find_component(SuitDamage) as SuitDamage
+	_damage = vehicle.find_component(DamageModel) as DamageModel
 	_check("suit has a damage model", _damage != null)
+	# Hits are counted, the suit isn't damaged (a reactor hit would end the run).
+	_damage.enabled = false
 	_suit.connect(&"hit_taken", func(_d: float, _p: Vector3, _dir: Vector3) -> void: _hits += 1)
 	await _ticks(60)
 	if "arc" in _parts:
 		await _arc()
 	if "ecap" in _parts:
 		await _ecap()
-	if "damage" in _parts:
-		await _damage_checks()
 	print("RESULT: %s" % ("PASS" if _failed == 0 else "%d FAILED" % _failed))
 	quit()
 
@@ -232,37 +232,6 @@ func _hit_box(box_name: String, times: int) -> void:
 	var box := _suit.get_node(box_name) as Node3D
 	for i in times:
 		(_suit as Node).call(&"apply_hit", 100.0, box.global_position, Vector3.FORWARD, null)
-
-
-func _damage_checks() -> void:
-	_damage.repair()
-	var rifle := _fcs.get_weapon(&"beam_rifle")
-	var missiles := _fcs.get_weapon(&"shield_missile")
-	var vulcan := _fcs.get_vulcan()
-	_hit_box("ColArmR", 1)
-	_check("one arm hit is a cost, not the arm", not rifle.broken and _damage.get_fraction(&"arm_r") == 0.5)
-	_hit_box("ColArmR", 1)
-	_check("two arm hits take the rifle", rifle.broken and not missiles.broken)
-	_hit_box("ColHead", 2)
-	_check("head gone: vulcans down, sensors worse", vulcan.broken and _fcs.sensors.narrow_sigma_mrad > 0.05)
-	var leg_thrusters := (_suit.get_node("Thrusters/Attach_shin_L") as Node).find_children("*", "Thruster", true, false)
-	_hit_box("ColLegL", 3)
-	_check("leg gone: its thrusters off", leg_thrusters.all(func(t: Node) -> bool: return not (t as Thruster).enabled))
-	_hit_box("ColArmR", 2)
-	_check("a lost part passes half on to the torso", absf(_damage.get_fraction(&"torso") - (600.0 - 100.0) / 600.0) < 0.01)
-	_hit_box("ColTorso", 5)
-	_check("core gone: suit down, FCS off", _damage.destroyed and not _fcs.flight_computer.fcs_enabled)
-	_damage.repair()
-	_check("repair puts it back", not rifle.broken and not vulcan.broken and _fcs.flight_computer.fcs_enabled
-			and leg_thrusters.all(func(t: Node) -> bool: return (t as Thruster).enabled)
-			and _damage.get_fraction(&"torso") == 1.0)
-	var shield := _suit.find_children("*", "MsShield", true, false)[0] as MsShield
-	for i in 12:
-		shield.apply_hit(100.0, shield.global_position, Vector3.FORWARD, current_scene)
-	_check("12 blocks wear the shield off the suit", not shield.equipped)
-	_damage.repair()
-	_check("repair refits the shield", shield.equipped)
-	await _ticks(30)
 
 
 func _check(label: String, ok: bool) -> void:

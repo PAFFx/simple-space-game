@@ -23,6 +23,9 @@ const DEBUG := 1 << 19
 ## Shields: shot and sensor rays hit them, nothing collides with them (the suit carrying
 ## one never touches it).
 const PHYS_SHIELD := 1 << 1
+## Damage hulls (DamageModel): an Area3D per part, posed with the skeleton, found only by
+## the damage model's own ray queries (nothing else casts against areas on this layer).
+const PHYS_DAMAGE := 1 << 2
 
 const MASK_THIRD_PERSION := WORLD | VEHICLE_EXT | FX
 const MASK_FIRST_PERSON  := WORLD | VEHICLE_FP | COCKPIT | PILOT | FX | HUD_3D

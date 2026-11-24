@@ -48,6 +48,12 @@ func _run() -> void:
 	_fcs = vehicle.find_component(FireControl) as FireControl
 	# Logic checks shoot from a perfect track; sensor noise is track_probe's job.
 	_fcs.sensors.enabled = false
+	# Weapon logic only: the suit counts hits but takes no damage, the shield's I-field
+	# never runs out (Tools/Damage has the damage probes).
+	(_vehicle_of(_fcs).find_component(DamageModel) as DamageModel).enabled = false
+	for shield in _vehicle_of(_fcs).find_children("*", "MsShield", true, false):
+		(shield as MsShield).field_charges = 100000
+		(shield as MsShield).charges = 100000
 	print("weapons: ", _fcs.weapons.keys())
 	_check("weapons found", _fcs.weapons.size() == 4)
 
@@ -235,7 +241,7 @@ func _run() -> void:
 	await _ticks(spool_ticks + 2)
 	_input.cmd.fire_main = false
 	await _ticks(60)
-	_check("lead shot hits a crossing target", drone.hit_points < hp)
+	_check("lead shot hits a crossing target", not is_instance_valid(drone) or drone.hit_points < hp)
 
 	# Vulcans: head envelope, burst.
 	var vulcan := _fcs.get_vulcan()
@@ -407,3 +413,7 @@ func _beam_range_check() -> void:
 func _ticks(count: int) -> void:
 	for i in count:
 		await physics_frame
+
+
+static func _vehicle_of(node: Node) -> Node:
+	return VehicleBase.find_vehicle(node) as Node
