@@ -190,8 +190,9 @@ const AMBAC := [
 # Mass model (LimbReaction, body frame): every part of the model, its solid volume
 # (Tools/Godot/measure_part_volumes.gd, 0.2 m voxels), a density factor for what's inside
 # it, and the share of that volume given to propellant tanks. The dry mass is split by
-# volume × density, the propellant by volume × tank share. Dense: the chest (cockpit,
-# generator), main pods (engines), waist frame, hands. Light: armour plates (skirts, calf
+# volume × density, the propellant by volume × tank share. Dense: the pelvis (the
+# reactor, ~2 t, below the cockpit around the waist), main pods (engines), waist frame,
+# hands; the chest (cockpit, frame) is average. Light: armour plates (skirts, calf
 # plates, shoulder armour) and the big, mostly hollow feet. Tanks are spread around the
 # body like a fighter's, most around the torso (chest, waist, backpack, skirts) and some in
 # the thighs and shins, so the centre of mass barely moves as they drain (13.37 m full,
@@ -202,7 +203,7 @@ const DRY_MASS := 27900.0
 const PROPELLANT := 25200.0
 const PARTS := [
 	# bone, volume m³, density, tank share
-	["chest", 59.38, 1.6, 0.2], ["spine", 5.52, 1.4, 0.0], ["pelvis", 27.90, 1.2, 0.4],
+	["chest", 59.38, 1.0, 0.2], ["spine", 5.52, 1.4, 0.0], ["pelvis", 27.90, 2.5, 0.4],
 	["hatch", 0.44, 1.0, 0.0], ["head", 10.18, 1.0, 0.0],
 	["backpack", 20.77, 1.3, 0.6], ["main_pod.R", 12.24, 1.6, 0.0], ["main_pod.L", 11.50, 1.6, 0.0],
 	["main_nozzle_up.R", 0.72, 1.6, 0.0], ["main_nozzle_low.R", 0.71, 1.6, 0.0],
