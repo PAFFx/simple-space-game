@@ -50,6 +50,7 @@ const _SHADER := preload("res://Entities/Vehicles/Cockpits/Components/PanoramicD
 @export var aperture_half_size_deg := Vector2(35.0, 35.0)
 
 var _material: ShaderMaterial
+var _damage: DamageModel
 var _hud_texture: Texture2D
 var _hud_parameters := {}
 var _aperture_amount: float = 0.0
@@ -148,7 +149,31 @@ func _push_shader_uniforms() -> void:
 	_material.set_shader_parameter("display_basis",    get_display_basis())
 	_material.set_shader_parameter("overlay_viewport", sensor_head.get_overlay_texture())
 	_material.set_shader_parameter("overlay_reveal",   sensor_head.overlay_reveal)
+	_push_coverage()
 	push_zoom_uniforms()
+
+
+## Which directions a live camera still sees (DamageModel): the rest is no signal, and what
+## only the body cameras see comes through coarser. Without a damage model: everything.
+func _push_coverage() -> void:
+	if _damage == null:
+		var vehicle := VehicleBase.find_vehicle(self)
+		_damage = vehicle.find_component(DamageModel) as DamageModel if vehicle != null else null
+		if _damage == null:
+			return
+	var cones := _damage.get_camera_cones()
+	if cones.is_empty() and not _damage.is_built():
+		_material.set_shader_parameter("camera_count", 0)
+		return
+	var dirs := PackedVector4Array()
+	dirs.resize(32)
+	var n := mini(cones.size(), 32)
+	for i in n:
+		var d: Vector3 = cones[i][0]
+		dirs[i] = Vector4(d.x, d.y, d.z, cones[i][1] + (2.0 if cones[i][2] == 0 else 0.0))
+	_material.set_shader_parameter("camera_count", n)
+	_material.set_shader_parameter("camera_cones", dirs)
+	_material.set_shader_parameter("coverage_on", 1)
 
 
 ## World orientation of the panoramic frame: screen-local direction d shows world direction

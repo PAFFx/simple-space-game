@@ -66,6 +66,7 @@ func _run(cases: PackedStringArray) -> void:
 			"cool": await _cool()
 			"hole": await _hole()
 			"sever": await _sever()
+			"screen": await _screen()
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
 			"drone": await _drone()
@@ -184,6 +185,41 @@ func _sever() -> void:
 			await _frames(3)
 			_save("sever_piece")
 			break
+
+
+## The panoramic screen from the seat as cameras are lost: all live; the head's eyes gone
+## (body cameras only: coarser); the rear cameras gone too, looking back (no signal); the
+## shield's camera gone (the shield shows on the screen).
+func _screen() -> void:
+	_model.repair()
+	await _frames(20)
+	var fp := _vehicle.get_cockpit().get_player_camera()
+	fp.make_current()
+	var look := func(yaw_deg: float, pitch_deg: float) -> void:
+		(fp as PilotCamera).set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(pitch_deg), deg_to_rad(yaw_deg), 0.0)))
+	look.call(0.0, 0.0)
+	await _frames(10)
+	_save("screen_1_all")
+	_kill(&"main camera")
+	await _frames(10)
+	_save("screen_2_no_eyes")
+	for n in [&"rear head camera", &"camera 1", &"skirt_rear.R camera", &"skirt_rear.L camera", &"camera 5"]:
+		_kill(n)
+	look.call(180.0, 10.0)
+	await _frames(10)
+	_save("screen_3_back_dark")
+	look.call(60.0, -10.0)
+	_model.shield_camera_lost(_suit.find_children("*", "MsShield", true, false)[0])
+	await _frames(10)
+	_save("screen_4_shield_opaque")
+	_model.repair()
+	_cam.make_current()
+
+
+func _kill(cname: StringName) -> void:
+	for c in _model.components:
+		if c.name == cname:
+			_model._kill_component(c)
 
 
 func _hole_birth() -> float:

@@ -191,7 +191,7 @@ func _create_camera() -> void:
 	# Hide the mech body and all equipment from the sensor by default.
 	# Use set_group_visible() to selectively re-enable layers once individual
 	# body parts have been assigned their own sensor sub-layers.
-	_camera.cull_mask = Layers.WORLD | Layers.FX
+	_camera.cull_mask = Layers.WORLD | Layers.FX | Layers.SENSOR_OPAQUE
 	_camera.near = 0.5
 	# Placed every frame from interpolated transforms; never interpolate it again.
 	_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF

@@ -86,6 +86,9 @@ class Component:
 	var alive := true
 	var ref: Object
 	var index := -1
+	var facing := Vector3.ZERO   ## cameras: which way it looks (body frame)
+	var half_deg := 65.0         ## cameras: half its field, deg
+	var grade := 1               ## cameras: 0 the head's main camera, 1 a body camera
 
 class Drill:
 	var key := 0
@@ -139,6 +142,7 @@ var _queue: Array = []        ## [time, Callable]
 var _rng := RandomNumberGenerator.new()
 var _hull_layers: Array = []
 var _stubs: Array[Node] = []
+var _opaque: Array[Node] = []
 
 
 func _ready() -> void:
@@ -400,7 +404,11 @@ func _build_components() -> void:
 	var sensors := _vehicle.find_component(SensorSuite) as SensorSuite
 	if head != null:
 		var eye := head.aabb.get_center() + Vector3(0.0, 0.0, -head.aabb.size.z * 0.3)
-		_bone_component(Kind.EYES, &"main camera", head, eye, 0.6)
+		var eyes := _bone_component(Kind.EYES, &"main camera", head, eye, 0.6)
+		eyes.facing = Vector3.FORWARD
+		eyes.half_deg = 105.0   # the head turns
+		eyes.grade = 0
+		_panoramic_camera(&"rear head camera", head, Vector3(0.0, 0.5, 1.0), 75.0)
 	var fcs := _vehicle.find_component(FireControl) as FireControl
 	if fcs != null:
 		for w: MsWeapon in fcs.weapons.values():
@@ -414,6 +422,54 @@ func _build_components() -> void:
 			c.index = i
 			c.ref = sensors
 			c.part = _nearest_part(_body.global_transform * sensors.body_camera_positions[i])
+			c.facing = sensors.body_camera_facings[i].normalized() if i < sensors.body_camera_facings.size() else Vector3.FORWARD
+			c.half_deg = 65.0 if c.facing.dot(Vector3.FORWARD) > 0.5 else 70.0
+	# Cameras for the panoramic screen only: rear skirts (past the bazooka), feet, forearms.
+	for spec in [[&"skirt_rear.R", Vector3(0.5, -0.5, 1.0), 65.0], [&"skirt_rear.L", Vector3(-0.5, -0.5, 1.0), 65.0],
+			[&"foot.R", Vector3(0.3, -1.0, 0.0), 70.0], [&"foot.L", Vector3(-0.3, -1.0, 0.0), 70.0],
+			[&"forearm.R", Vector3(1.0, -0.3, 0.0), 60.0], [&"forearm.L", Vector3(-1.0, -0.3, 0.0), 60.0]]:
+		var part := find_part(spec[0])
+		if part != null:
+			_panoramic_camera(StringName("%s camera" % spec[0]), part, spec[1], spec[2])
+
+
+func _panoramic_camera(cname: StringName, part: Part, facing: Vector3, half_deg: float) -> Component:
+	var c := _bone_component(Kind.BODY_CAMERA, cname, part, part.aabb.get_center(), 0.35)
+	c.facing = facing.normalized()
+	c.half_deg = half_deg
+	return c
+
+
+## The cameras still giving a picture: [world direction, cos of half field, grade] each,
+## for the panoramic screen's coverage (0 grade: the head's main camera).
+func get_camera_cones() -> Array:
+	var out: Array = []
+	if not _built:
+		return out
+	var basis := _body.global_basis
+	for c in components:
+		if not c.alive or c.facing == Vector3.ZERO or (c.part != null and c.part.severed):
+			continue
+		if c.kind != Kind.EYES and c.kind != Kind.BODY_CAMERA:
+			continue
+		out.append([(basis * c.facing).normalized(), cos(deg_to_rad(c.half_deg)), c.grade])
+	return out
+
+
+## `node`'s meshes show on the panoramic screen (no camera sees past it any more), or not.
+func set_opaque(node: Node, opaque: bool) -> void:
+	for child in node.find_children("*", "VisualInstance3D", true, false):
+		var vi := child as VisualInstance3D
+		vi.layers = (vi.layers | Layers.SENSOR_OPAQUE) if opaque else (vi.layers & ~Layers.SENSOR_OPAQUE)
+	if opaque:
+		_opaque.append(node)
+
+
+## The shield's camera was shot out: the shield stops being see-through.
+func shield_camera_lost(shield: MsShield) -> void:
+	set_opaque(shield, true)
+	_event("shield camera out")
+	component_destroyed.emit(&"camera", &"shield camera")
 
 
 func _nearest_part(world: Vector3) -> Part:
@@ -786,7 +842,8 @@ func _kill_component(c: Component) -> void:
 			if sensors != null:
 				sensors.main_camera_alive = false
 		Kind.BODY_CAMERA:
-			(c.ref as SensorSuite).body_camera_dead[c.index] = true
+			if c.ref is SensorSuite:
+				(c.ref as SensorSuite).body_camera_dead[c.index] = true
 		Kind.VULCAN:
 			(c.ref as MsWeapon).broken = true
 	_event("%s out" % c.name)
@@ -821,6 +878,7 @@ func _break_equipment(eq: MsEquipment) -> void:
 				w.broken = true
 	_event("%s destroyed" % eq.name)
 	component_destroyed.emit(&"equipment", eq.name)
+	set_opaque(eq, true)   # its camera went with it: it shows on the screen now
 	var stores: float = STORES.get(StringName(eq.name), 0.0)
 	if stores > 0.0:
 		var at := eq.global_transform * MsLoadout.local_box(eq).get_center()
@@ -1268,6 +1326,10 @@ func repair() -> void:
 		if is_instance_valid(stub):
 			stub.queue_free()
 	_stubs.clear()
+	for node in _opaque:
+		if is_instance_valid(node):
+			set_opaque(node, false)
+	_opaque.clear()
 	for node in _hidden_nodes:
 		if is_instance_valid(node):
 			node.visible = true

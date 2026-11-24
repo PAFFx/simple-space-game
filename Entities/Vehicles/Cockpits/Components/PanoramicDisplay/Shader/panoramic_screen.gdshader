@@ -33,6 +33,14 @@ uniform vec4 no_signal_color : source_color = vec4(0.02, 0.02, 0.03, 1.0);
 // Color shown when a segment is disabled (damaged panel or open door).
 uniform vec4 damaged_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 
+// Camera coverage (DamageModel): the live cameras' fields, world direction and cos of the
+// half field (+2 marks the head's main camera). Uncovered: no signal. Seen only by body
+// cameras: a coarser, flatter picture.
+uniform int coverage_on = 0;
+uniform int camera_count = 0;
+uniform vec4 camera_cones[32];
+uniform vec2 body_camera_px = vec2(320.0, 180.0);
+
 // HUD overlay drawn in equirectangular panoramic space:
 // x = azimuth (forward at 0.5, wraps at the back), y = elevation (top = +90°).
 uniform sampler2D hud_texture : source_color, hint_default_transparent, filter_linear, repeat_enable;
@@ -227,6 +235,31 @@ vec3 composite_zoom(vec3 color, vec3 local_dir) {
 }
 
 
+// 0: no camera sees `dir`, 1: a body camera, 2: the main camera (soft edges between).
+float coverage(vec3 dir) {
+	float body = 0.0;
+	float main_cam = 0.0;
+	for (int i = 0; i < 32; i++) {
+		if (i >= camera_count) {
+			break;
+		}
+		vec4 c = camera_cones[i];
+		bool is_main = c.w > 1.5;
+		float cos_half = is_main ? c.w - 2.0 : c.w;
+		float k = smoothstep(cos_half - 0.02, cos_half + 0.02, dot(dir, c.xyz));
+		if (is_main) {
+			main_cam = max(main_cam, k);
+		} else {
+			body = max(body, k);
+		}
+	}
+	return max(body, main_cam > 0.001 ? 1.0 + main_cam : 0.0);
+}
+
+float cov_hash(vec2 p) {
+	return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.7);
+}
+
 void fragment() {
 	// --- Step 1: Recover azimuth and elevation from UV2 ---
 	// UV2.x = azimuth / TAU  (absolute angle, may be negative or > 1 due to arc_offset)
@@ -289,8 +322,26 @@ void fragment() {
 
 			// --- Step 6: Bounds check, then sample ---
 			if (all(greaterThanEqual(sample_uv, vec2(0.0))) && all(lessThanEqual(sample_uv, vec2(1.0)))) {
-				color = texture(sensor_viewport, sample_uv).rgb * screen_brightness;
+				float cov = coverage_on == 1 ? coverage(world_dir) : 2.0;
+				vec2 uv = sample_uv;
+				if (cov < 1.5) {
+					// Body cameras only: their coarser picture.
+					uv = (floor(sample_uv * body_camera_px) + 0.5) / body_camera_px;
+				}
+				color = texture(sensor_viewport, uv).rgb * screen_brightness;
+				if (cov < 1.5) {
+					float l = dot(color, vec3(0.3, 0.55, 0.15));
+					color = mix(color, vec3(l), 0.35) * 0.9;
+				}
 				color = composite_overlay(color, sample_uv);
+				if (cov < 1.0) {
+					// No camera sees here: dark, a faint shifting block noise, a thin edge.
+					vec2 cell = floor(vec2(azimuth, elevation) * 60.0);
+					float noise = cov_hash(cell + floor(TIME * 12.0));
+					vec3 dead = no_signal_color.rgb + vec3(0.05, 0.08, 0.12) * noise * noise;
+					float edge = smoothstep(0.0, 0.35, cov) * (1.0 - smoothstep(0.35, 0.95, cov));
+					color = mix(dead, color, smoothstep(0.6, 1.0, cov)) + vec3(0.2, 0.35, 0.5) * edge * 0.6;
+				}
 			}
 		}
 

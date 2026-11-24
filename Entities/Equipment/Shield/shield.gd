@@ -148,6 +148,8 @@ func beam_contact(contact: ProjectileManager.BeamContact) -> void:
 		if fx != null:
 			fx.blow_out(d[5], contact.direction, _velocity(vehicle), contact.radius, self)
 		left -= 2.0 * contact.radius / plate_width
+		if model != null and randf() < 0.6:
+			model.shield_camera_lost(self)
 		if left < 0.35 and model != null:
 			model.break_shield(self)
 

@@ -16,6 +16,7 @@ const SENSOR_BODY_PARTS := 1 << 7  # The suit's own body and carried weapons (sh
 const SENSOR_WEAPONS    := 1 << 8  # Weapons (beam rifles, missile pods, etc.)
 const SENSOR_SHIELDS    := 1 << 9  # Shields and armour panels
 const SENSOR_COMBAT     := 1 << 10 # Outlines of the arms and the gun, shown in DGFT / BVR
+const SENSOR_OPAQUE     := 1 << 11 # Own parts no live camera sees past (DamageModel): drawn on the screen
 
 const DEBUG := 1 << 19
 
