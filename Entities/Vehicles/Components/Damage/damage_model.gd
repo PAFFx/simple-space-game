@@ -24,6 +24,8 @@ signal component_destroyed(kind: StringName, component: StringName)
 signal pilot_killed
 signal reactor_breached
 signal cockpit_holed(entry: Vector3, exit: Vector3)
+## Everything was put back (repair).
+signal repaired
 ## A shot reached the suit's structure (once per shot).
 signal hit(position: Vector3, direction: Vector3)
 
@@ -815,7 +817,14 @@ func _hit_component(c: Component, d: Drill) -> void:
 			_event("PILOT HIT")
 			_kill_pilot()
 		Kind.COCKPIT:
-			cockpit_holed.emit(_drill_point(d, d.t0), _drill_point(d, d.t_end))
+			# Where the beam's line crosses the cockpit's sphere: the screen's two holes.
+			var centre := component_position(c)
+			var o := _drill_point(d, 0.0)
+			var dir := _body.global_basis * d.dir_body
+			var along := (centre - o).dot(dir)
+			var miss := (o + dir * along).distance_to(centre)
+			var half := sqrt(maxf(c.radius * c.radius - miss * miss, 0.0))
+			cockpit_holed.emit(o + dir * (along - half), o + dir * (along + half))
 			_event("cockpit holed")
 		Kind.REACTOR:
 			c.alive = false
@@ -1391,6 +1400,7 @@ func repair() -> void:
 	if fc != null:
 		fc.fcs_enabled = true
 	_capability_changed()
+	repaired.emit()
 
 
 # --- Helpers ---

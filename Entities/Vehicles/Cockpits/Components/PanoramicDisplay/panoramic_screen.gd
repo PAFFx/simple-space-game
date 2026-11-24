@@ -51,6 +51,7 @@ const _SHADER := preload("res://Entities/Vehicles/Cockpits/Components/PanoramicD
 
 var _material: ShaderMaterial
 var _damage: DamageModel
+var _screen_holes: Array[Vector4] = []
 var _hud_texture: Texture2D
 var _hud_parameters := {}
 var _aperture_amount: float = 0.0
@@ -153,6 +154,30 @@ func _push_shader_uniforms() -> void:
 	push_zoom_uniforms()
 
 
+## A beam went through the cockpit: the screen is holed where its line crossed it.
+func _on_cockpit_holed(entry: Vector3, exit: Vector3) -> void:
+	for at in [entry, exit]:
+		add_screen_hole(at - global_position, deg_to_rad(16.0))
+
+
+## A hole in the screen toward `world_dir` (from its centre), `radius` rad across: burned
+## open, a ring of dead panels, flickering ones and cracks around it. It stays with the screen.
+func add_screen_hole(world_dir: Vector3, radius: float) -> void:
+	var local := (get_display_basis().inverse() * world_dir).normalized()
+	if _screen_holes.size() >= 8:
+		_screen_holes.remove_at(0)
+	_screen_holes.append(Vector4(local.x, local.y, local.z, radius))
+	var arr := PackedVector4Array(_screen_holes)
+	arr.resize(8)
+	_material.set_shader_parameter("screen_hole_count", _screen_holes.size())
+	_material.set_shader_parameter("screen_holes", arr)
+
+
+func clear_screen_holes() -> void:
+	_screen_holes.clear()
+	_material.set_shader_parameter("screen_hole_count", 0)
+
+
 ## Which directions a live camera still sees (DamageModel): the rest is no signal, and what
 ## only the body cameras see comes through coarser. Without a damage model: everything.
 func _push_coverage() -> void:
@@ -161,6 +186,8 @@ func _push_coverage() -> void:
 		_damage = vehicle.find_component(DamageModel) as DamageModel if vehicle != null else null
 		if _damage == null:
 			return
+		_damage.cockpit_holed.connect(_on_cockpit_holed)
+		_damage.repaired.connect(clear_screen_holes)
 	var cones := _damage.get_camera_cones()
 	if cones.is_empty() and not _damage.is_built():
 		_material.set_shader_parameter("camera_count", 0)

@@ -212,6 +212,17 @@ func _screen() -> void:
 	_model.shield_camera_lost(_suit.find_children("*", "MsShield", true, false)[0])
 	await _frames(10)
 	_save("screen_4_shield_opaque")
+	# A beam through the cockpit's edge (the pilot lives): the screen holed front and back.
+	_model.repair()
+	await _frames(5)
+	var screen := _vehicle.get_cockpit().get_panoramic_screen()
+	var right := _suit.global_basis.x
+	var fwd := -_suit.global_basis.z
+	screen.add_screen_hole(fwd * 0.8 + right * 0.6 + _suit.global_basis.y * 0.1, deg_to_rad(16.0))
+	screen.add_screen_hole(-fwd * 0.8 + right * 0.6, deg_to_rad(16.0))
+	look.call(-30.0, 0.0)
+	await _frames(10)
+	_save("screen_5_holed")
 	_model.repair()
 	_cam.make_current()
 

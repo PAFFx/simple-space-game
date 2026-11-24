@@ -41,6 +41,10 @@ uniform int camera_count = 0;
 uniform vec4 camera_cones[32];
 uniform vec2 body_camera_px = vec2(320.0, 180.0);
 
+// Holes a beam burned through the screen (screen space directions, angular radius).
+uniform int screen_hole_count = 0;
+uniform vec4 screen_holes[8];
+
 // HUD overlay drawn in equirectangular panoramic space:
 // x = azimuth (forward at 0.5, wraps at the back), y = elevation (top = +90°).
 uniform sampler2D hud_texture : source_color, hint_default_transparent, filter_linear, repeat_enable;
@@ -285,6 +289,39 @@ void fragment() {
 		}
 	}
 
+	// --- Step 2b: Beam holes in the screen ---
+	float panel_dead = 0.0;
+	float panel_flicker = 0.0;
+	float panel_hot = 0.0;
+	if (screen_hole_count > 0) {
+		float cel2 = cos(elevation);
+		vec3 dir_s = vec3(sin(azimuth) * cel2, sin(elevation), -cos(azimuth) * cel2);
+		for (int i = 0; i < 8; i++) {
+			if (i >= screen_hole_count) {
+				break;
+			}
+			vec3 hd = screen_holes[i].xyz;
+			float hr = screen_holes[i].w;
+			float ang = acos(clamp(dot(dir_s, hd), -1.0, 1.0)) / hr;
+			vec3 e1 = normalize(cross(hd, abs(hd.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+			float around = atan(dot(dir_s, cross(hd, e1)), dot(dir_s, e1));
+			float ragged = 0.55 + 0.04 * sin(around * 5.0 + float(i) * 2.3) + 0.03 * sin(around * 13.0 + float(i))
+					+ 0.06 * (cov_hash(vec2(floor(around * 9.0), float(i))) - 0.5);
+			if (ang < ragged) {
+				discard;
+			}
+			// Panels: dead within ~2 radii (blocky edge), flickering further out, a scorched
+			// molten rim at the hole, cracks running out.
+			vec2 cell = floor(vec2(azimuth, elevation) * 40.0);
+			float jitter = cov_hash(cell + float(i) * 7.0);
+			panel_dead = max(panel_dead, step(ang, 1.1 + jitter * 0.6));
+			panel_flicker = max(panel_flicker, (1.0 - smoothstep(2.2, 3.6, ang)) * step(0.5, cov_hash(cell + floor(TIME * 9.0))));
+			panel_hot = max(panel_hot, 1.0 - smoothstep(ragged, ragged + 0.25, ang));
+			float crack = 1.0 - smoothstep(0.0, 0.025, abs(fract(around * 1.6 + 0.13 * sin(ang * 3.0)) - 0.5) - 0.47);
+			panel_dead = max(panel_dead, crack * (1.0 - smoothstep(1.5, 4.2, ang)));
+		}
+	}
+
 	// --- Step 3: Check the segment mask ---
 	// fract() wraps any arc_offset so the mask always indexes [0, 1] correctly.
 	float active = texture(segment_mask, vec2(fract(UV2.x), 0.5)).r;
@@ -359,6 +396,11 @@ void fragment() {
 		color = composite_zoom_frame(color, local_dir, hud_brightness, degrees(length(fwidth(local_dir))) * 0.7);
 	}
 
+	if (screen_hole_count > 0) {
+		color = mix(color, color * vec3(1.4, 0.6, 1.2) + vec3(0.03, 0.0, 0.05), panel_flicker * 0.7);
+		color = mix(color, vec3(0.0), panel_dead);
+		color = mix(color, vec3(1.0, 0.32, 0.05) * 1.6, panel_hot);
+	}
 	ALBEDO   = color;
 	EMISSION = color;
 }
