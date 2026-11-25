@@ -346,14 +346,15 @@ func play_sound(stream: AudioStream, position: Vector3, velocity := Vector3.ZERO
 
 
 ## Flash, afterglow and sparks where a shot lands.
-func impact(spec: ProjectileSpec, position: Vector3, velocity := Vector3.ZERO, scale := 1.0) -> void:
+func impact(spec: ProjectileSpec, position: Vector3, velocity := Vector3.ZERO, scale := 1.0, sparks := true) -> void:
 	var size := spec.impact_size * scale
 	var hot := spec.color.lerp(Color.WHITE, 0.5)
 	flash(position, hot, size * 0.35, size, 0.22, spec.intensity * 1.6, spec.glow * 2.5,
 			size * 7.0, velocity, 1.0)
 	flash(position, spec.color, size * 0.5, size * 1.5, 0.9, spec.intensity * 0.45, spec.glow * 0.8, 0.0, velocity)
 	flash(position, spec.color.darkened(0.25), size * 0.3, size * 0.5, 2.2, spec.intensity * 0.25, 0.0, 0.0, velocity)
-	_emit_sparks(position, velocity, hot, size)
+	if sparks:
+		_emit_sparks(position, velocity, hot, size)
 
 
 ## Something going up: a sphere of light `size` m in radius swells out of a white flash,
@@ -588,7 +589,7 @@ func _drill(shot: Shot, hit: Dictionary, dir: Vector3, delta: float,
 		if first:
 			shot.hit_ids[id] = true
 			# A small contact flash: the target draws the drilling itself (DamageFx).
-			impact(spec, point, _velocity_of(collider), 0.18)
+			impact(spec, point, _velocity_of(collider), 0.18, false)
 			shot_hit.emit(spec, point, collider)
 		if not c.through:
 			shot.reach = maxf(shot.position.distance_to(c.front), shot.tail)

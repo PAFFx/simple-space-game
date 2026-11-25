@@ -65,8 +65,9 @@ func _init() -> void:
 	_spark_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_spark_material.vertex_color_use_as_albedo = true
 	_spark_material.albedo_color = Color(1.6, 1.6, 1.6)
-	_spark_material.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
-	_spark_material.billboard_keep_scale = true
+	# Streaks are turned by the emitter (Y along the velocity, facing the camera); a material
+	# billboard would override that and stand every streak upright.
+	_spark_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_spark_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_spark_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_spark_material.albedo_texture = _soft_texture(true)
@@ -75,7 +76,7 @@ func _init() -> void:
 	_vapour_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	_vapour_material.billboard_keep_scale = true
 	_vapour_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_vapour_material.albedo_texture = _soft_texture(false)
+	_vapour_material.albedo_texture = _puff_texture()
 	_vapour_material.roughness = 1.0
 	_vapour_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	_vapour_material.proximity_fade_enabled = true
@@ -83,6 +84,7 @@ func _init() -> void:
 	_vapour_material.disable_receive_shadows = true
 	_glint_material = _spark_material.duplicate()
 	_glint_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	_glint_material.billboard_keep_scale = true
 	_glint_material.albedo_color = Color(1.8, 1.9, 2.2)
 	_arc_material = StandardMaterial3D.new()
 	_arc_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -135,7 +137,7 @@ func _process(delta: float) -> void:
 func drill_in(at: Vector3, direction: Vector3, velocity: Vector3, radius: float, anchor: Node3D) -> void:
 	var back := -direction.normalized()
 	_spray(at, back, velocity, 45, 70.0, 60.0, 0.15, 0.55, radius * 0.05, 180.0)
-	_vapour(at + back * radius * 0.5, back, velocity, 8, 20.0, radius * 1.2, radius * 5.0, 0.6, Color(1.0, 0.7, 0.45, 0.22), 40.0)
+	_vapour(at + back * radius * 0.5, back, velocity, 8, 20.0, radius * 1.5, radius * 6.0, 0.3, Color(1.0, 0.7, 0.45, 0.22), 40.0)
 	if anchor != null:
 		_add_light(anchor, at, radius * 8.0, 3.0, 9.0)
 
@@ -144,7 +146,7 @@ func drill_in(at: Vector3, direction: Vector3, velocity: Vector3, radius: float,
 func blow_out(at: Vector3, direction: Vector3, velocity: Vector3, radius: float, anchor: Node3D) -> void:
 	var dir := direction.normalized()
 	_spray(at, dir, velocity, 90, 28.0, 70.0, 0.2, 0.8, radius * 0.06, 240.0)
-	_vapour(at, dir, velocity, 12, 18.0, radius * 1.5, radius * 7.0, 0.8, Color(1.0, 0.6, 0.35, 0.28), 60.0)
+	_vapour(at, dir, velocity, 12, 18.0, radius * 1.8, radius * 8.0, 0.35, Color(1.0, 0.6, 0.35, 0.28), 60.0)
 	if anchor != null:
 		_add_light(anchor, at, radius * 8.0, 2.5, 7.0)
 
@@ -154,23 +156,22 @@ func burst(at: Vector3, velocity: Vector3, radius: float, kind: StringName) -> v
 	var pm := ProjectileManager.of(self)
 	match kind:
 		&"steam":
+			# Water into vacuum flashes to vapour and ice at once: a thin haze racing out,
+			# gone in under a second.
 			pm.flash(at, Color(1.0, 0.9, 0.8), radius * 0.3, radius * 1.2, 0.12, 6.0, 1.0, radius * 8.0, velocity, 1.0)
-			_vapour(at, Vector3.ZERO, velocity, 16, 180.0, radius * 2.0, radius * 12.0, 1.6, Color(0.92, 0.95, 1.0, 0.16), radius * 14.0)
-			_glints(at, velocity, 220, radius * 9.0, 2.4)
-			_spray(at, Vector3.ZERO, velocity, 60, 180.0, 25.0, 0.2, 0.7, radius * 0.05, 60.0)
+			_vapour(at, Vector3.ZERO, velocity, 6, 180.0, radius * 3.0, radius * 22.0, 0.7, Color(0.92, 0.95, 1.0, 0.1), radius * 40.0)
 		&"minovsky":
-			# Ruptured Minovsky lines: a pink-white flash, a small fireball, arcs, the
-			# particles' glitter and heavy smoke rolling out (fiction: it lingers).
+			# Ruptured Minovsky lines: a pink-white flash, a small fireball, arcs and heavy
+			# smoke rolling out (fiction: it lingers).
 			pm.flash(at, Color(1.0, 0.85, 0.95), radius * 0.3, radius * 1.6, 0.14, 9.0, 1.2, radius * 12.0, velocity, 1.0)
 			pm.explode(at, velocity, radius * 1.3, Color(1.0, 0.5, 0.35))
 			_arc(at, velocity, radius * 2.2, 0.45)
 			_arc(at, velocity, radius * 1.6, 0.6)
 			_spray(at, Vector3.ZERO, velocity, 70, 180.0, 30.0, 0.2, 0.9, 0.05, 90.0)
-			_glints(at, velocity, 120, radius * 6.0, 2.0, Color(1.0, 0.55, 0.85))
 			_smoke(at, velocity, radius, 3.5)
 		&"stores":
 			pm.explode(at, velocity, radius * 1.4, Color(1.0, 0.55, 0.25))
-			_spray(at, Vector3.ZERO, velocity, 140, 180.0, 60.0, 0.3, 1.4, radius * 0.06, 120.0)
+			_spray(at, Vector3.ZERO, velocity, 70, 180.0, 60.0, 0.3, 1.2, 0.05, 120.0)
 			_vapour(at, Vector3.ZERO, velocity, 20, 180.0, radius * 0.8, radius * 4.0, 1.2, Color(0.7, 0.62, 0.55, 0.4), radius * 6.0)
 		_:
 			_arc(at, velocity, radius * 2.0, 0.35)
@@ -194,18 +195,18 @@ func i_field(at: Vector3, outward: Vector3, velocity: Vector3, color: Color) -> 
 ## Water venting from a hole on `anchor` (it rides it): a jet of vapour and ice along
 ## `local_dir` for `seconds`; `strength` 1 = a cell emptying, ~0.2 = a leaking line.
 func vent(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float, strength: float,
-		color := Color(0.97, 0.98, 1.0)) -> void:
+		color := Color(0.97, 0.98, 1.0), opacity := 0.12) -> void:
 	if strength > 0.5:
 		# The cell empties in a fraction of a second: one burst of mist and ice.
 		var at := anchor.global_transform * local_at
 		var dir := (anchor.global_basis * local_dir).normalized()
-		_vapour(at, dir, Vector3.ZERO, 30, 25.0, 1.2, 9.0, 1.8, Color(0.96, 0.98, 1.0, 0.55), 40.0)
-		_glints(at, Vector3.ZERO, 200, 14.0, 2.2)
+		_vapour(at, dir, Vector3.ZERO, 8, 30.0, 2.0, 16.0, 0.8, Color(0.96, 0.98, 1.0, 0.14), 90.0)
+		_glints(at, Vector3.ZERO, 60, 20.0, 1.2)
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE * lerpf(0.9, 1.8, strength)
 	var p := GPUParticles3D.new()
-	p.amount = roundi(lerpf(90.0, 160.0, strength))
-	p.lifetime = lerpf(0.7, 1.2, strength)
+	p.amount = roundi(lerpf(60.0, 120.0, strength))
+	p.lifetime = lerpf(0.5, 0.9, strength)
 	p.local_coords = false
 	p.draw_pass_1 = quad
 	p.material_override = _vapour_material
@@ -217,15 +218,17 @@ func vent(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float,
 	m.initial_velocity_min = lerpf(8.0, 22.0, strength)
 	m.initial_velocity_max = lerpf(15.0, 40.0, strength)
 	m.gravity = Vector3.ZERO
+	m.angle_min = 0.0
+	m.angle_max = 360.0
 	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 0.3))
-	curve.add_point(Vector2(1.0, 3.0))
-	curve.max_value = 3.0
+	curve.add_point(Vector2(0.0, 0.6))
+	curve.add_point(Vector2(1.0, 4.0))
+	curve.max_value = 4.0
 	var ct := CurveTexture.new()
 	ct.curve = curve
 	m.scale_curve = ct
 	var g := Gradient.new()
-	g.set_color(0, Color(color.r, color.g, color.b, lerpf(0.65, 0.8, strength)))
+	g.set_color(0, Color(color.r, color.g, color.b, opacity))
 	g.set_color(1, Color(color.r * 0.93, color.g * 0.95, color.b, 0.0))
 	var gt := GradientTexture1D.new()
 	gt.gradient = g
@@ -256,20 +259,20 @@ func fragment_strike(at: Vector3, dir: Vector3, velocity: Vector3, delay: float)
 
 ## Smoke rolling out of a burst: dark, swelling and lingering for `life` s.
 func _smoke(at: Vector3, velocity: Vector3, radius: float, life: float) -> void:
-	_vapour(at, Vector3.ZERO, velocity, 22, 180.0, radius * 1.5, radius * 9.0, life,
-			Color(0.16, 0.14, 0.13, 0.7), radius * 5.0)
-	_vapour(at, Vector3.ZERO, velocity, 10, 180.0, radius * 1.0, radius * 5.0, life * 0.5,
-			Color(0.45, 0.32, 0.26, 0.5), radius * 3.0)
+	_vapour(at, Vector3.ZERO, velocity, 14, 180.0, radius * 3.5, radius * 12.0, life,
+			Color(0.16, 0.14, 0.13, 0.6), radius * 3.0)
+	_vapour(at, Vector3.ZERO, velocity, 6, 180.0, radius * 2.5, radius * 7.0, life * 0.5,
+			Color(0.45, 0.32, 0.26, 0.45), radius * 2.0)
 
 
 ## Smoke leaking from a cut line on `anchor` (it rides it) along `local_dir` for `seconds`.
 func smoke_leak(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float) -> void:
-	vent(anchor, local_at, local_dir, seconds, 0.35, Color(0.18, 0.16, 0.15))
+	vent(anchor, local_at, local_dir, seconds, 0.35, Color(0.18, 0.16, 0.15), 0.45)
 
 
 ## A limb tore off at `at`.
 func sever(at: Vector3, velocity: Vector3) -> void:
-	_spray(at, Vector3.ZERO, velocity, 120, 180.0, 30.0, 0.3, 1.5, 0.12, 40.0)
+	_spray(at, Vector3.ZERO, velocity, 80, 180.0, 30.0, 0.3, 1.5, 0.06, 40.0)
 	_arc(at, velocity, 2.5, 0.8)
 	_arc(at, velocity, 2.0, 1.2)
 	ProjectileManager.of(self).flash(at, Color(1.0, 0.7, 0.4), 1.0, 4.0, 0.25, 6.0, 1.0, 40.0, velocity, 1.0)
@@ -394,9 +397,9 @@ func _emitter(at: Vector3, amount: int, lifetime: float, material: Material, mes
 func _spray(at: Vector3, dir: Vector3, velocity: Vector3, amount: int, spread: float, speed: float,
 		life_min: float, life_max: float, size: float, speed_max: float) -> void:
 	var quad := QuadMesh.new()
-	quad.size = Vector2(maxf(size, 0.02), maxf(size, 0.02) * 14.0)
+	quad.size = Vector2(maxf(size, 0.02), maxf(size, 0.02) * 12.0)
 	var p := _emitter(at, amount, life_max, _spark_material, quad)
-	p.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Y_TO_VELOCITY
+	p.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY
 	var m := ParticleProcessMaterial.new()
 	m.direction = dir if dir.length_squared() > 0.0 else Vector3.UP
 	m.spread = spread
@@ -508,6 +511,32 @@ static func _soft_texture(hard: bool) -> GradientTexture2D:
 	g.add_point(0.35 if hard else 0.1, Color(1, 1, 1, 0.8 if hard else 0.7))
 	t.gradient = g
 	return t
+
+
+static var _puff: ImageTexture
+
+
+## A wisp of gas: soft round falloff broken up by noise, so overlapping puffs read as one
+## cloud, not a heap of balls. Made once, shared.
+static func _puff_texture() -> ImageTexture:
+	if _puff != null:
+		return _puff
+	var n := FastNoiseLite.new()
+	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	n.frequency = 0.02
+	n.fractal_octaves = 3
+	n.seed = 3
+	const SIZE := 128
+	var img := Image.create(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	for y in SIZE:
+		for x in SIZE:
+			var d := Vector2(x - SIZE * 0.5 + 0.5, y - SIZE * 0.5 + 0.5).length() / (SIZE * 0.5)
+			var fall := clampf(1.0 - d, 0.0, 1.0)
+			var a := pow(fall, 1.3) * clampf(0.75 + n.get_noise_2d(x, y) * 0.6, 0.0, 1.0)
+			img.set_pixel(x, y, Color(1, 1, 1, a))
+	img.generate_mipmaps()
+	_puff = ImageTexture.create_from_image(img)
+	return _puff
 
 
 func _add_light(anchor: Node3D, at: Vector3, light_range: float, energy: float, life: float) -> void:

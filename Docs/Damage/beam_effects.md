@@ -167,6 +167,12 @@ Checked frame by frame with `Tools/Damage/damage_snapshot.gd` (`hole`, `cool`, `
 - **Around the mouth**: molten lip (beaded, glossy), glow fading in ~0.4 radii, a narrow heat
   tint, soot to ~1.6 radii. Patchy noise there read as camouflage: kept soft.
 - **Spray**: 45 streaks in (blow-back), 90 out (blow-out), 60–240 m/s, 0.15–0.8 s, thin and
-  stretched along their velocity. Brighter and slower ones read as floating bokeh balls.
-- **Vapour / steam**: thin, swelling fast, 0.6–1.6 s; ice glints 5 cm.
+  stretched along their velocity (the emitter turns them, `TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY`;
+  a material billboard stood them all upright, like rain). Brighter and slower ones read as
+  floating bokeh balls, and so did the beam's own impact sparks on a drilling contact (bloom
+  turns 7 cm points into discs): a drilling contact has the flash only.
+- **Vapour / steam**: gone in 0.3–0.7 s (vacuum), drawn with a noise-broken puff texture so
+  overlapping puffs read as one cloud. Steam from a burst tank cell is a thin haze racing out,
+  no lingering puffs; a venting cell a faint cone with a few ice glints. Smoke (Minovsky lines)
+  is the one that lingers.
 - The exit side through several meshes (shin and calf guard) shows the bore crossing each.
