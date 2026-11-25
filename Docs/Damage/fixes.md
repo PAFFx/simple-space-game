@@ -87,6 +87,8 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
 - [ ] **Real smoke, not steam.** Thick smoke that can block vision (and the sensors' view),
   lasting, drifting, lit by fires; fire on parts that were shot (burning lines and electronics)
   until it burns out.
+- [ ] **A fresh cut face blows out white** for over a second (the cut cap's 1800 K glow, seen
+  in the snap render): far too bright; tone it down with the other glows.
 - [ ] **Remove the beam hit scatter effect and the glow after a hit.** It looks low-res. *Cause:*
   `ProjectileManager.impact` (flashes + sparks) on non-drilling contacts and the contact flash
   on drilling ones; the hole's own glow and DamageFx carry the hit.

@@ -270,6 +270,12 @@ func smoke_leak(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: 
 	vent(anchor, local_at, local_dir, seconds, 0.35, Color(0.18, 0.16, 0.15), 0.45)
 
 
+## A weakened limb straining at its wound (`size` its width): sparks and a crackle of arcs.
+func creak(at: Vector3, velocity: Vector3, size: float) -> void:
+	_arc(at, velocity, size * 0.5, 0.25)
+	_spray(at, Vector3.ZERO, velocity, 30, 180.0, 8.0, 0.2, 0.7, 0.03, 30.0)
+
+
 ## A limb tore off at `at`.
 func sever(at: Vector3, velocity: Vector3) -> void:
 	_spray(at, Vector3.ZERO, velocity, 80, 180.0, 30.0, 0.3, 1.5, 0.06, 40.0)

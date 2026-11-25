@@ -38,6 +38,10 @@ const WATER_DENSITY := 1000.0
 const STEP := 0.1
 ## A part breaks off when less than this share of its cross-section is left.
 const BREAK_LEFT := 0.35
+## A limb with less than this left snaps off by itself (after a moment); between it and
+## STRESS_LEFT it holds until the suit's acceleration at the wound is too much for what is left.
+const SNAP_LEFT := 0.5
+const STRESS_LEFT := 0.8
 ## Blow-off radius of a burst, m per J^(1/3) (cube-root scaling).
 const BLAST_K := 0.0025
 const REACTOR_YIELD := 2.5e12
@@ -150,6 +154,12 @@ var _queue: Array = []        ## [time, Callable]
 var _rng := RandomNumberGenerator.new()
 var _hull_layers: Array = []
 var _stubs: Array[Node] = []
+var _snapping := {}          ## Part → true: about to snap off
+var _last_v := Vector3.INF
+var _last_w := Vector3.ZERO
+var _accel := Vector3.ZERO
+var _alpha := Vector3.ZERO
+var _boost_accel := 0.0      ## the suit's full thrust / mass, m/s² (set when built)
 var _opaque: Array[Node] = []
 var _glow_slots := {}   ## CameraMarker → [overlay ShaderMaterial, lens index]
 var _thruster_saved := {}     ## Thruster → [max thrust, gimbal limits ×3] as built
@@ -191,6 +201,7 @@ func _physics_process(delta: float) -> void:
 		var jet: Vector3 = (xf.basis * (lk[2] as Vector3)).normalized()
 		# The jet goes out; the suit is pushed the other way.
 		_body.apply_force(-jet * float(lk[3]), at - _body.global_position)
+	_stress(delta)
 	if _capability_dirty and _clock >= _capability_due:
 		_capability_dirty = false
 		var fc := _flight()
@@ -275,6 +286,15 @@ func _build() -> void:
 			c.ref = eq
 	_build_components()
 	_place_cameras()
+	# Full boost: the main thrust along the strongest axis, over the suit's mass.
+	var thrust := {}
+	for t in _vehicle.find_children("*", "", true, false):
+		if t is Thruster:
+			var th := t as Thruster
+			var axis := (_body.global_basis.inverse() * -th.global_basis.z).round()
+			thrust[axis] = float(thrust.get(axis, 0.0)) + th.max_thrust
+	for k in thrust:
+		_boost_accel = maxf(_boost_accel, float(thrust[k]) / maxf(_body.mass, 1.0))
 	_built = true
 
 
@@ -1005,6 +1025,62 @@ func _remove_section(p: Part, share: float) -> void:
 			_break_equipment(p.equipment)
 	elif not CORE_PARTS.has(p.name) and p.left < (BREAK_LEFT if p.limb else 0.0):
 		_later(0.03, func() -> void: sever(p))
+	elif p.limb and p.left < SNAP_LEFT and not _snapping.has(p):
+		# Too little left to hold: it groans at the wound and goes.
+		_snapping[p] = true
+		_groan(p)
+		_later(_rng.randf_range(0.3, 1.2), func() -> void:
+			_snapping.erase(p)
+			if not p.severed:
+				_groan(p)
+				sever(p))
+
+
+## Weakened limbs carry the suit's acceleration through what is left of them: the load at the
+## wound (linear + angular acceleration there) against a limit that falls with the section lost,
+## the suit's full boost acceleration at STRESS_LEFT, nothing at BREAK_LEFT.
+func _stress(delta: float) -> void:
+	var v := _body.linear_velocity
+	var w := _body.angular_velocity
+	if _last_v == Vector3.INF or delta <= 0.0:
+		_last_v = v
+		_last_w = w
+		return
+	# Smoothed over ~0.1 s: a single tick's jolt (an impulse, a contact) isn't a sustained load.
+	var k := 1.0 - exp(-delta / 0.1)
+	_accel = _accel.lerp((v - _last_v) / delta, k)
+	_alpha = _alpha.lerp((w - _last_w) / delta, k)
+	var a := _accel
+	var alpha := _alpha
+	_last_v = v
+	_last_w = w
+	if reactor_gone or _boost_accel <= 0.0:
+		return
+	var com := _body.global_transform * _body.center_of_mass
+	for p in parts:
+		if not p.limb or p.severed or p.equipment != null or p.left >= STRESS_LEFT or _snapping.has(p):
+			continue
+		var at := _part_frame(p) * (p.last_hole if p.has_hole else p.aabb.get_center())
+		var r := at - com
+		var load := (a + alpha.cross(r) + w.cross(w.cross(r))).length()
+		var limit := _boost_accel * (p.left - BREAK_LEFT) / (STRESS_LEFT - BREAK_LEFT)
+		if load > limit:
+			_snapping[p] = true
+			_groan(p)
+			_later(0.05, func() -> void:
+				_snapping.erase(p)
+				if not p.severed:
+					_event("%s snapped under load" % p.name)
+					sever(p))
+
+
+## A weakened limb straining at its wound: sparks and arcs.
+func _groan(p: Part) -> void:
+	var fx := DamageFx.of(self)
+	if fx == null:
+		return
+	var at := _part_frame(p) * (p.last_hole if p.has_hole else p.aabb.get_center())
+	fx.creak(at, _velocity_at(at), p.width)
 
 
 func _hit_joints(p: Part, chance: float) -> void:
@@ -2079,6 +2155,10 @@ func repair() -> void:
 		if is_instance_valid(stub):
 			stub.queue_free()
 	_stubs.clear()
+	_snapping.clear()
+	_last_v = Vector3.INF
+	_accel = Vector3.ZERO
+	_alpha = Vector3.ZERO
 	for node in _opaque:
 		if is_instance_valid(node):
 			set_opaque(node, false)
