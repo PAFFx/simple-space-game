@@ -31,6 +31,12 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   not look whole: it should snap off at the cut, or hang by what is left (bent, sagging, a limp
   joint) and break off under load or the next hit.
 
+- [ ] **Later stage: parts cut nearly off stay hanging.** Not everything torn comes off clean:
+  a limb cut through all but a strut or the cables dangles from the suit (an arm hanging, a
+  shield still on what is left of the forearm), swinging with the suit's motion, until the
+  next hit or a hard manoeuvre tears it away. Needs a physics joint between the debris body and
+  the suit (a hinge or cone at the cut, breakable) and the debris kept drawn at the cut.
+
 ## B. Beam holes: rendering bugs
 
 - [x] **The glow and melt texture swims when the camera moves.** It changes with the view a lot.
