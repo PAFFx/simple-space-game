@@ -31,11 +31,16 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   not look whole: it should snap off at the cut, or hang by what is left (bent, sagging, a limp
   joint) and break off under load or the next hit.
 
-- [ ] **Later stage: parts cut nearly off stay hanging.** Not everything torn comes off clean:
+- [x] **Parts cut nearly off stay hanging.** Not everything torn comes off clean:
   a limb cut through all but a strut or the cables dangles from the suit (an arm hanging, a
   shield still on what is left of the forearm), swinging with the suit's motion, until the
   next hit or a hard manoeuvre tears it away. Needs a physics joint between the debris body and
   the suit (a hinge or cone at the cut, breakable) and the debris kept drawn at the cut.
+  *Done (2026-11-27):* a limb shot off (not torn off under load, not in a breach) stays
+  hanging with a chance of 50% (less with less section left): a swinging joint at the cut or
+  socket (cone 75°, twist 40°) and a few cables drawn from the stump. It tears loose when the
+  load on it passes 20 m/s² (a hard boost), when what it hangs from comes off, or in a breach;
+  equipment on it (the shield on a forearm) hangs with it.
 
 ## B. Beam holes: rendering bugs
 
@@ -96,8 +101,8 @@ Still to do: real inner-frame meshes under the armour.
   for every hole on a part: beam bores, torn panel openings, and the torn socket craters
   (on the suit and on the piece that flew off: on a thin skirt the socket's floor, 0.7 m deep,
   hung in the air as a slab with the older holes punched through it).
-- [ ] **Check in play:** a smooth grey half-disc in a crater on the front skirt (play-test
-  screenshot); likely the same floating socket floor, fixed above.
+- [x] **A smooth grey half-disc in a crater on the front skirt** (play-test): the floating
+  socket floor, fixed above (confirmed in play).
 
 ## C. Power and hydraulics: the suit is a system, not a sack of tanks
 

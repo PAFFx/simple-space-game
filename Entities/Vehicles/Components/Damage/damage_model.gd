@@ -43,6 +43,11 @@ const BREAK_LEFT := 0.35
 const SNAP_LEFT := 0.5
 ## A breach makes its debris a few pieces per physics tick, under the flash.
 const PIECES_PER_TICK := 4
+## A limb shot off may stay hanging on its last strut and cables (chance; more with more of its
+## section left), until the load on it passes DANGLE_HOLD m/s² of its own mass (a hard boost)
+## or what it hangs from comes off.
+const DANGLE_CHANCE := 0.5
+const DANGLE_HOLD := 20.0
 const PIECE_TICK := 1.0 / 60.0
 const STRESS_LEFT := 0.8
 ## Blow-off radius of a burst, m per J^(1/3) (cube-root scaling).
@@ -159,6 +164,7 @@ var _rng := RandomNumberGenerator.new()
 var _hull_layers: Array = []
 var _stubs: Array[Node] = []
 var _snapping := {}          ## Part → true: about to snap off
+var _dangles: Array = []     ## [joint, piece body, part it hangs from, suit-local anchor, piece-local anchor, cables mesh, smoothed accel, last velocity]
 var _last_v := Vector3.INF
 var _last_w := Vector3.ZERO
 var _accel := Vector3.ZERO
@@ -209,6 +215,7 @@ func _physics_process(delta: float) -> void:
 		# The jet goes out; the suit is pushed the other way.
 		_body.apply_force(-jet * float(lk[3]), at - _body.global_position)
 	_stress(delta)
+	_hold_dangles(delta)
 	if _capability_dirty and _clock >= _capability_due:
 		_capability_dirty = false
 		var fc := _flight()
@@ -1175,7 +1182,7 @@ func _stress(delta: float) -> void:
 				_snapping.erase(p)
 				if not p.severed:
 					_event("%s snapped under load" % p.name)
-					sever(p))
+					sever(p, false))
 
 
 ## A weakened limb straining at its wound: sparks and arcs.
@@ -1802,7 +1809,8 @@ func apply_impact(spec: ProjectileSpec, at: Vector3, relative_velocity: Vector3,
 # --- Severing ---
 
 ## `p` breaks off at its joint, with every part beyond it: a free body in the pose it had.
-func sever(p: Part) -> void:
+## `may_dangle`: shot off (it may stay hanging); false when torn off under load.
+func sever(p: Part, may_dangle := true) -> void:
 	if p.severed or reactor_gone:
 		return
 	if p.equipment != null:
@@ -1811,7 +1819,7 @@ func sever(p: Part) -> void:
 	if p.limb and p.has_hole and p.cut_y == INF:
 		var y := p.last_hole.y
 		if y > p.aabb.position.y + p.aabb.size.y * 0.18 and y < p.aabb.end.y - p.aabb.size.y * 0.08:
-			_cut_part(p, y)
+			_cut_part(p, y, may_dangle)
 			return
 	var group: Array[Part] = []
 	for q in parts:
@@ -1857,11 +1865,13 @@ func sever(p: Part) -> void:
 		if fx != null:
 			fx.stump(body, joint.origin, -axis, radius, Vector3.ZERO)
 			fx.sever(joint.origin, _body.linear_velocity)
+		if may_dangle and p.limb and parent != null:
+			_maybe_dangle(p, body, parent, joint.origin, axis)
 
 
 ## `p` breaks across at `y` (bone space) where it was holed: the near side stays on with a
 ## hot cut face, the far side and every part beyond fly off as one piece.
-func _cut_part(p: Part, y: float) -> void:
+func _cut_part(p: Part, y: float, may_dangle := true) -> void:
 	var frame := _part_frame(p)
 	var c0 := p.aabb.get_center()
 	var cut_local := Vector3(c0.x, y, c0.z)
@@ -1926,6 +1936,106 @@ func _cut_part(p: Part, y: float) -> void:
 		if body != null:
 			fx.stump(body, cut_world, -axis, radius, Vector3.ZERO)
 		fx.sever(cut_world, _body.linear_velocity)
+	if may_dangle and body != null:
+		_maybe_dangle(p, body, p, cut_world, axis)
+
+
+## The piece `body` just cut from `p` may stay hanging from `holder` at `at` (world; `axis` from
+## the stump out along the piece): a swinging joint there and a few cables.
+func _maybe_dangle(p: Part, body: RigidBody3D, holder: Part, at: Vector3, axis: Vector3) -> void:
+	if _rng.randf() > DANGLE_CHANCE * clampf(0.6 + p.left, 0.3, 1.0):
+		return
+	body.linear_velocity = _velocity_at(at)
+	body.angular_velocity = _body.angular_velocity
+	var joint := ConeTwistJoint3D.new()
+	joint.name = "Dangle"
+	_vehicle.get_parent().add_child(joint)
+	var x := axis.normalized()
+	var y := x.cross(Vector3.UP if absf(x.y) < 0.9 else Vector3.RIGHT).normalized()
+	joint.global_transform = Transform3D(Basis(x, y, x.cross(y)), at)
+	joint.set_param(ConeTwistJoint3D.PARAM_SWING_SPAN, deg_to_rad(75.0))
+	joint.set_param(ConeTwistJoint3D.PARAM_TWIST_SPAN, deg_to_rad(40.0))
+	joint.set_param(ConeTwistJoint3D.PARAM_SOFTNESS, 0.6)
+	joint.node_a = joint.get_path_to(_body)
+	joint.node_b = joint.get_path_to(body)
+	var cables := MeshInstance3D.new()
+	cables.name = "DangleCables"
+	cables.mesh = ImmediateMesh.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.04, 0.04, 0.045)
+	cables.material_override = mat
+	cables.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_vehicle.get_parent().add_child(cables)
+	_dangles.append([joint, body, holder, _body.global_transform.affine_inverse() * at,
+			body.global_transform.affine_inverse() * at, cables, 0.0, body.linear_velocity])
+	_event("%s hanging" % p.name)
+
+
+## The load on each hanging piece: torn loose past what its strut and cables hold.
+func _hold_dangles(delta: float) -> void:
+	for i in range(_dangles.size() - 1, -1, -1):
+		var dg: Array = _dangles[i]
+		var body := dg[1] as RigidBody3D
+		if not is_instance_valid(body) or not is_instance_valid(dg[0]):
+			_drop_dangle(i, false)
+			continue
+		var v := body.linear_velocity
+		var a := (v - (dg[7] as Vector3)).length() / maxf(delta, 1e-4)
+		dg[7] = v
+		dg[6] = lerpf(float(dg[6]), a, 1.0 - exp(-delta / 0.08))
+		var gap := (_body.global_transform * (dg[3] as Vector3)).distance_to(body.global_transform * (dg[4] as Vector3))
+		if float(dg[6]) > DANGLE_HOLD or gap > 2.5:
+			_drop_dangle(i, true)
+
+
+## Lets the hanging piece `i` go: `torn` makes it crack loose (sparks), else it just ends.
+func _drop_dangle(i: int, torn: bool) -> void:
+	var dg: Array = _dangles[i]
+	_dangles.remove_at(i)
+	if is_instance_valid(dg[0]):
+		(dg[0] as Node).queue_free()
+	if is_instance_valid(dg[5]):
+		(dg[5] as Node).queue_free()
+	var body := dg[1] as RigidBody3D
+	if not is_instance_valid(body):
+		return
+	# Clear of the suit's hull for a moment, as when it was first cut.
+	body.add_collision_exception_with(_body)
+	var suit := _body
+	get_tree().create_timer(1.0).timeout.connect(func() -> void:
+		if is_instance_valid(body) and is_instance_valid(suit):
+			body.remove_collision_exception_with(suit))
+	if torn:
+		var at := body.global_transform * (dg[4] as Vector3)
+		var fx := DamageFx.of(self)
+		if fx != null:
+			fx.creak(at, body.linear_velocity, 1.5)
+		_event("hanging %s tore loose" % (dg[2] as Part).name)
+
+
+func _process(_delta: float) -> void:
+	# The cables between each stump and its hanging piece: a few strands, sagging a little.
+	for dg in _dangles:
+		if not is_instance_valid(dg[1]) or not is_instance_valid(dg[5]):
+			continue
+		var im := (dg[5] as MeshInstance3D).mesh as ImmediateMesh
+		im.clear_surfaces()
+		var a := _body.global_transform * (dg[3] as Vector3)
+		var b := (dg[1] as Node3D).global_transform * (dg[4] as Vector3)
+		var side := (b - a).cross(Vector3.UP).normalized() if absf((b - a).normalized().y) < 0.95 else Vector3.RIGHT
+		var up := side.cross(b - a).normalized()
+		im.surface_begin(Mesh.PRIMITIVE_LINES)
+		for k in 5:
+			var off := side * (k - 2) * 0.12 + up * ((k % 2) * 0.1 - 0.05)
+			var prev := a + off
+			for j in range(1, 7):
+				var t := j / 6.0
+				var pt := a.lerp(b, t) + off * (1.0 - t * 0.6) - up * sin(t * PI) * 0.15
+				im.surface_add_vertex(prev)
+				im.surface_add_vertex(pt)
+				prev = pt
+		im.surface_end()
 
 
 ## The nearest part up the skeleton from `p`.
@@ -1965,6 +2075,9 @@ func _remove_parts(group: Array[Part]) -> void:
 	var fc := _flight()
 	var fill := _reaction.get_fill()
 	var ambac := _vehicle.find_component(AmbacController) as AmbacController
+	for i in range(_dangles.size() - 1, -1, -1):
+		if group.has(_dangles[i][2]):
+			_drop_dangle(i, true)
 	for q in group:
 		q.severed = true
 		q.mesh.visible = false
@@ -2320,6 +2433,8 @@ func repair() -> void:
 			stub.queue_free()
 	_stubs.clear()
 	_snapping.clear()
+	for i in range(_dangles.size() - 1, -1, -1):
+		_drop_dangle(i, false)
 	_last_v = Vector3.INF
 	_accel = Vector3.ZERO
 	_alpha = Vector3.ZERO
