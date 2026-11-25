@@ -232,6 +232,17 @@ func vent(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float,
 			p.queue_free())
 
 
+## A fragment striking armour at `at` (flying `dir`) after `delay` s: a hot spark splash.
+func fragment_strike(at: Vector3, dir: Vector3, velocity: Vector3, delay: float) -> void:
+	var go := func() -> void:
+		ProjectileManager.of(self).flash(at, Color(1.0, 0.75, 0.45), 0.15, 0.6, 0.12, 6.0, 0.2, 0.0, velocity, 1.0)
+		_spray(at, -dir, velocity, 10, 70.0, 20.0, 0.1, 0.35, 0.025, 60.0)
+	if delay <= 0.0:
+		go.call()
+	else:
+		get_tree().create_timer(delay).timeout.connect(go)
+
+
 ## A limb tore off at `at`.
 func sever(at: Vector3, velocity: Vector3) -> void:
 	_spray(at, Vector3.ZERO, velocity, 120, 180.0, 30.0, 0.3, 1.5, 0.12, 40.0)

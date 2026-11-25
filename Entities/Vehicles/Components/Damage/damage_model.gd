@@ -96,6 +96,7 @@ class Component:
 	var facing := Vector3.ZERO   ## cameras: which way it looks (body frame)
 	var half_deg := 65.0         ## cameras: half its field, deg
 	var grade := 1               ## cameras: 0 the head's main camera, 1 a body camera
+	var lens: MeshInstance3D     ## cameras: its green lens light
 
 class Drill:
 	var key := 0
@@ -150,6 +151,7 @@ var _rng := RandomNumberGenerator.new()
 var _hull_layers: Array = []
 var _stubs: Array[Node] = []
 var _opaque: Array[Node] = []
+var _lens_dead_material: Material
 var _thruster_saved := {}     ## Thruster → [max thrust, gimbal limits ×3] as built
 var _leaks: Array = []        ## [node, local point, local jet direction, N, until]
 
@@ -272,6 +274,7 @@ func _build() -> void:
 			c.box = p.box
 			c.ref = eq
 	_build_components()
+	_build_lens_lights()
 	_built = true
 
 
@@ -457,6 +460,58 @@ func _build_components() -> void:
 		var part := find_part(spec[0])
 		if part != null:
 			_panoramic_camera(StringName("%s camera" % spec[0]), part, spec[1], spec[2])
+
+
+func _lens_live_material() -> Material:
+	for c in components:
+		if c.alive and c.lens != null and is_instance_valid(c.lens) and c.lens.material_override != _lens_dead_material:
+			return c.lens.material_override
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.35, 1.0, 0.45)
+	return mat
+
+
+## A small green light on every camera's lens (riding its part): dark once the camera is gone.
+func _build_lens_lights() -> void:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.35, 1.0, 0.45)
+	var dead_mat := StandardMaterial3D.new()
+	dead_mat.albedo_color = Color(0.03, 0.05, 0.035)
+	dead_mat.roughness = 0.3
+	_lens_dead_material = dead_mat
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.09
+	sphere.height = 0.18
+	sphere.radial_segments = 8
+	sphere.rings = 4
+	for c in components:
+		if c.kind != Kind.EYES and c.kind != Kind.BODY_CAMERA:
+			continue
+		var anchor: Node3D = c.part.area if c.part != null and c.part.area != null else _body as Node as Node3D
+		var lens := MeshInstance3D.new()
+		lens.name = "Lens"
+		lens.mesh = sphere
+		lens.material_override = mat
+		lens.layers = Layers.VEHICLE_EXT
+		lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		anchor.add_child(lens)
+		# On the part's surface toward where the camera looks.
+		var at := component_position(c)
+		var dir := (_body.global_basis * c.facing).normalized() if c.facing != Vector3.ZERO else _body.global_basis * Vector3.FORWARD
+		if c.part != null:
+			var surface := _surface_toward(c.part, at, dir)
+			if surface != Vector3.INF:
+				at = surface + dir * 0.05
+		lens.global_position = at
+		var light := OmniLight3D.new()
+		light.light_color = Color(0.4, 1.0, 0.5)
+		light.light_energy = 0.6
+		light.omni_range = 0.9
+		light.shadow_enabled = false
+		lens.add_child(light)
+		c.lens = lens
 
 
 func _panoramic_camera(cname: StringName, part: Part, facing: Vector3, half_deg: float) -> Component:
@@ -933,6 +988,10 @@ func _kill_component(c: Component, dead := false) -> void:
 	if not c.alive:
 		return
 	c.alive = false
+	if c.lens != null and is_instance_valid(c.lens):
+		c.lens.material_override = _lens_dead_material
+		for light in c.lens.get_children():
+			(light as Node3D).visible = false
 	match c.kind:
 		Kind.THRUSTER:
 			_hit_thruster(c, dead)
@@ -1474,6 +1533,19 @@ func apply_impact(spec: ProjectileSpec, at: Vector3, relative_velocity: Vector3,
 	# Missile: 1000 fragments of 10 g at ~1.5 km/s, and the detonation products close in.
 	var burst_at := at
 	var fragments := 1000.0
+	# The strikes that land on the suit: sparks where they hit (the side facing the burst).
+	var fx := DamageFx.of(self)
+	var strikes := mini(roundi(fragments * 70.0 / (4.0 * PI * maxf(burst_distance, 2.0) ** 2)), 40)
+	if fx != null and strikes > 0:
+		var toward := (burst_at - _body.global_position).normalized()
+		for k in strikes:
+			var p := parts[_rng.randi() % parts.size()]
+			if p.severed or p.mesh == null:
+				continue
+			var centre := _part_frame(p) * p.aabb.get_center()
+			var hit_at := _surface_toward(p, centre, (toward + Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 0.35).normalized())
+			if hit_at != Vector3.INF:
+				fx.fragment_strike(hit_at, (hit_at - burst_at).normalized(), _body.linear_velocity, _rng.randf() * 0.12)
 	for c in components:
 		if not c.alive or not (c.kind in [Kind.EYES, Kind.BODY_CAMERA, Kind.THRUSTER, Kind.VULCAN]):
 			continue
@@ -1900,6 +1972,10 @@ func repair() -> void:
 			p.area.collision_layer = Layers.PHYS_DAMAGE
 	for c in components:
 		c.alive = true
+		if c.lens != null and is_instance_valid(c.lens):
+			c.lens.material_override = _lens_live_material()
+			for light in c.lens.get_children():
+				(light as Node3D).visible = true
 		if c.kind == Kind.THRUSTER:
 			(c.ref as Thruster).enabled = true
 		elif c.kind == Kind.VULCAN:

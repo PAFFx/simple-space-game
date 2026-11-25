@@ -71,6 +71,7 @@ func _run(cases: PackedStringArray) -> void:
 			"panel": await _panel()
 			"cockpit": await _cockpit_view()
 			"vent": await _vent()
+			"lens": await _lens()
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
 			"drone": await _drone()
@@ -214,6 +215,22 @@ func _cockpit_view() -> void:
 	_save("cockpit_4_other_side")
 	print("pilot alive: ", not _model.pilot_dead)
 	_cam.make_current()
+
+
+## The cameras' green lens lights, then with the head's eyes, the chest and a shoulder
+## camera shot out.
+func _lens() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var at := _part_centre(&"chest") + basis * Vector3(0.0, 1.5, 0.0)
+	_look(at + basis * Vector3(7.0, 2.0, -16.0), at)
+	await _frames(5)
+	_save("lens_1_live")
+	for n in [&"main camera", &"camera 0", &"camera 2"]:
+		_kill(n)
+	await _frames(5)
+	_save("lens_2_shot_out")
 
 
 ## A thigh cell venting (the push, the icy jet) and a calf nozzle's valve stuck open.
