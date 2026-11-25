@@ -391,12 +391,11 @@ func _section(p: Part, y: float, to_part: Transform3D) -> PackedVector3Array:
 
 
 ## Where `p`'s real skin is along a beam entering it at `entry` (world) going `dir` (`s` from the
-## entry, m): material where s <= x or s >= y. One shell: [.., x]; the outer and the far
-## shell of a hollow part: x = the first one's end, y = the last one's start. No skin probe:
-## all material.
+## entry, m): it enters the skin at x and leaves it for good at y (inner shells, the inside
+## between them: all counted as the part). No skin data: the whole line.
 func _skin_shells(p: Part, entry: Vector3, dir: Vector3, length: float) -> Vector2:
 	if p.skin_faces.is_empty():
-		return Vector2(1e6, -1e6)
+		return Vector2(-1e6, 1e6)
 	var to_bone := (_skel.global_transform * FinalPoses.of(_skel).pose(p.bone)).affine_inverse()
 	var d := (to_bone.basis * dir).normalized()
 	var o := to_bone * entry - d   # from 1 m before the entry
@@ -429,9 +428,7 @@ func _skin_shells(p: Part, entry: Vector3, dir: Vector3, length: float) -> Vecto
 			spans.append([-1.0, h[0]])   # began inside (an open shell)
 	if spans.is_empty():
 		return Vector2(-1e6, 1e6)
-	if spans.size() == 1:
-		return Vector2(spans[0][1], 1e6)
-	return Vector2(spans[0][1], spans[-1][0])
+	return Vector2(spans[0][0], spans[-1][1])
 
 
 ## The mesh's vertices, skinned in the skeleton's current pose, in `bone`'s space.

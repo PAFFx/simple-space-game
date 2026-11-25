@@ -164,9 +164,10 @@ Still to do: real inner-frame meshes under the armour.
 - [x] **Insides look hollow** (play-test): every inside surface seen through an opening (back
   faces) is now drawn as rough torn, re-melted metal (bump-mapped slag, triplanar over the
   part), the same as the bores, instead of a smooth dark shell.
-  And no opening is left open (user's call, 2026-11-26): where a bore would come out of the
-  armour into the part's hollow inside, or out of its far side, it is closed by a floor of the
-  same rough metal. Holes are craters into the suit, never see-through.
+  Holes: a crater ends in a floor of the same rough metal; a beam that went **through** leaves an
+  open hole (user, 2026-11-27: capping through holes looked wrong). With the parts closed shells,
+  the bore is drawn solid from where the beam entered the skin to where it left it for good
+  (machinery inside, never an empty skin) and is open past that.
 - [ ] **The body (chest, waist) is the most hollow:** shots into it often open onto an empty
   shell. The render meshes are thin skins with nothing behind; the dark interior shading helps
   but there is no inside. Needs inner frame and machinery meshes under the torso armour

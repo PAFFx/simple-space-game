@@ -19,7 +19,7 @@ class Hole:
 	var s_drill := 0.0
 	var time := 0.0
 	var peak := 2200.0
-	var shell := Vector2(1e6, -1e6)   ## real skin along the axis: material where s <= x or s >= y
+	var shell := Vector2(-1e6, 1e6)   ## the part's real skin along the axis: enters at x, leaves at y
 
 class Surface:
 	var mesh: MeshInstance3D

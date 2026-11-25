@@ -16,8 +16,9 @@ uniform int hole_count = 0;
 uniform vec4 hole_a[HOLE_MAX];   // origin.xyz (part space, m), radius
 uniform vec4 hole_b[HOLE_MAX];   // axis.xyz, s_in
 uniform vec4 hole_c[HOLE_MAX];   // s_drill, s_out, time it formed, peak temperature (K)
-// Where the part's real skin is along the axis (the hull is convex, a plate's is not): metal
-// where s <= x or s >= y; elsewhere the bore crosses the part's empty inside.
+// Where the part's real skin is along the axis (its hull is convex, its skin is not): the beam
+// enters it at x and leaves it at y. The bore is drawn solid between (the parts are closed shells
+// with machinery inside); past y there is no part: a through hole is open there.
 uniform vec4 hole_d[HOLE_MAX];
 uniform mat4 part_to_model = mat4(1.0);
 uniform mat4 model_to_part = mat4(1.0);
@@ -334,16 +335,21 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 			// The surface it stops on, in hole `last`'s terms.
 			vec3 lo = hole_a[last].xyz;
 			vec3 la = hole_b[last].xyz;
-			// Never open: where the ray would leave the part (a through hole's far end) or come
-			// out of the armour into the part's hollow inside, the opening is closed there by
-			// rough re-melted metal (the torn insides), as a floor across the bore.
-			bool cap = kind > 1.5;
-			float t_cap = t_hit;
+			// Past where the beam left the part's real skin there is no part. A through hole is open
+			// there (and at its far end): you see through it. A crater that would reach it (its
+			// hull deeper than its skin) is closed by a floor of re-melted metal at the skin.
+			bool l_thru = hole_c[last].x >= hole_c[last].y - 1e-3;
 			float l_hs = dot(p + rd * t_hit - lo, la);
-			if (l_hs > hole_d[last].x && l_hs < hole_d[last].y) {
-				cap = true;
+			bool past = l_hs > hole_d[last].y;
+			if (l_thru && (kind > 1.5 || past)) {
+				h.discard_it = true;
+				return h;
+			}
+			bool cap = kind > 1.5 || past;
+			float t_cap = t_hit;
+			if (past) {
 				float ra_l = dot(rd, la);
-				t_cap = ra_l > 1e-4 ? clamp((hole_d[last].x - dot(p - lo, la)) / ra_l, 0.0, t_hit) : t_hit;
+				t_cap = ra_l > 1e-4 ? clamp((hole_d[last].y - dot(p - lo, la)) / ra_l, 0.0, t_hit) : t_hit;
 			}
 			if (cap) {
 				vec3 g1 = normalize(cross(la, abs(la.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
