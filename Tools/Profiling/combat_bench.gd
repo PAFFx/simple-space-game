@@ -6,7 +6,7 @@ extends SceneTree
 #
 #   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off state=floating
 #   godot-double --path . --resolution 1280x720 -s Tools/Profiling/combat_bench.gd -- \
-#       [drones=6] [lock=1] [seconds=8] [silence=<path>] [viewports=1] [damage=1]
+#       [drones=6] [lock=1] [seconds=8] [silence=<path>] [viewports=1] [damage=1] [hits=1] [view=ext]
 #
 # silence: a node path under the suit (e.g. FireControl, CockpitMount, or a HUD widget as
 # CockpitMount/<cockpit>/PanoramicHud/HudViewport/Contacts), Stage/<child> or drones; that subtree's
@@ -14,7 +14,10 @@ extends SceneTree
 # difference to a run without it. Prints one BENCH line; viewports=1 adds each viewport's
 # measured render time (CPU submission and GPU), the busiest first. damage=1: the suit is badly
 # holed first (24 holes over 12 parts, the head's eyes out, two holes in the screen), so the
-# damage shaders and the body-camera screen path are in the frame.
+# damage shaders and the body-camera screen path are in the frame. hits=1: a rifle beam hits one
+# of the suit's limbs every second while measuring (repaired every 4 hits), so the cost of
+# taking hits is in the frame; the BENCH line adds the 95th percentile and the worst frame.
+# view=ext: measured from the external camera instead of the cockpit.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 
@@ -33,6 +36,11 @@ var _seconds := 8.0
 var _silence := ""
 var _viewports := false
 var _damage := false
+var _hits := false
+var _ext := false
+var _frame_times: Array[float] = []
+const RIFLE := preload("res://Entities/Projectiles/Specs/nu_beam_rifle.tres")
+const HIT_PARTS := [&"forearm.L", &"thigh.R", &"shin.L", &"upper_arm.R", &"backpack", &"shoulder.L", &"skirt_side.R", &"thigh.L"]
 var _nohulls := false
 var _nodamage := false
 var _vps: Array[Viewport] = []
@@ -58,6 +66,8 @@ func _initialize() -> void:
 			"silence": _silence = value
 			"viewports": _viewports = value != "0"
 			"damage": _damage = value != "0"
+			"hits": _hits = value != "0"
+			"view": _ext = value == "ext"
 			"nohulls": _nohulls = value != "0"
 			"nodamage": _nodamage = value != "0"
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
@@ -139,6 +149,10 @@ func _run() -> void:
 	if _nohulls:
 		for n in _suit.find_children("DamageHull_*", "BoneAttachment3D", true, false):
 			n.queue_free()
+	if _ext:
+		var vs := _suit.find_children("*", "ViewSwitcher", true, false)
+		if not vs.is_empty():
+			(vs[0] as ViewSwitcher)._set_external(true)
 	await _frames(120)
 	if _viewports:
 		_vps.append(root)
@@ -151,14 +165,29 @@ func _run() -> void:
 	RenderingServer.frame_pre_draw.connect(func() -> void: _t.pre = Time.get_ticks_usec())
 	RenderingServer.frame_post_draw.connect(_on_post)
 	_measuring = true
+	var landed := [0]
+	var dm := (_suit as Node as VehicleBase).find_component(DamageModel) as DamageModel
+	if dm != null:
+		dm.hit.connect(func(_p: Vector3, _d: Vector3) -> void: landed[0] += 1)
 	var start := Time.get_ticks_msec()
+	var next_hit := 0.5
+	var shot_n := 0
 	while Time.get_ticks_msec() - start < _seconds * 1000.0:
+		if _hits and (Time.get_ticks_msec() - start) / 1000.0 >= next_hit:
+			next_hit += 1.0
+			_shoot(shot_n)
+			shot_n += 1
 		await process_frame
 	_measuring = false
 	var f := float(_acc.frames)
 	var s := maxf(float(_acc.steps), 1.0)
-	print("BENCH %-40s frame %.2f ms (%.0f fps)  physics %.2f ms/step (%.2f steps/frame)  process %.2f  draw %.2f" % [
-			_silence if _silence != "" else "baseline", _acc.frame / 1000.0 / f, 1000000.0 * f / _acc.frame,
+	if _hits:
+		print("HITS fired %d, landed %d" % [shot_n, landed[0]])
+	_frame_times.sort()
+	var p95 := _frame_times[int(_frame_times.size() * 0.95)] if not _frame_times.is_empty() else 0.0
+	var worst := _frame_times[-1] if not _frame_times.is_empty() else 0.0
+	print("BENCH %-40s frame %.2f ms (%.0f fps)  p95 %.2f  worst %.2f  physics %.2f ms/step (%.2f steps/frame)  process %.2f  draw %.2f" % [
+			_silence if _silence != "" else "baseline", _acc.frame / 1000.0 / f, 1000000.0 * f / _acc.frame, p95, worst,
 			_acc.physics / 1000.0 / s, s / f, _acc.process / 1000.0 / f, _acc.draw / 1000.0 / f])
 	if _viewports:
 		var rows := []
@@ -199,6 +228,7 @@ func _on_post() -> void:
 		_acc.draw += now - _t.pre
 		if _last_post > 0:
 			_acc.frame += now - _last_post
+			_frame_times.append((now - _last_post) / 1000.0)
 		_acc.frames += 1
 		for vp in _vps:
 			var rid := vp.get_viewport_rid()
@@ -206,6 +236,28 @@ func _on_post() -> void:
 					RenderingServer.viewport_get_measured_render_time_cpu(rid),
 					RenderingServer.viewport_get_measured_render_time_gpu(rid))
 	_last_post = now
+
+
+## A rifle beam into one of the suit's limbs from 300 m off to the side (every 4th: repaired).
+func _shoot(n: int) -> void:
+	var model := (_suit as Node as VehicleBase).find_component(DamageModel) as DamageModel
+	if model == null:
+		return
+	if n > 0 and n % 4 == 0:
+		model.repair()
+	var p := model.find_part(HIT_PARTS[n % HIT_PARTS.size()])
+	var skel := model._skel
+	var aim := func() -> Vector3: return skel.global_transform * skel.get_bone_global_pose(p.bone) * p.aabb.get_center()
+	# The muzzle rides along with the suit (it weaves), 300 m off to one side, re-aimed every tick.
+	var muzzle := Marker3D.new()
+	_suit.add_child(muzzle)
+	muzzle.position = Vector3(1.0 if n % 2 == 0 else -1.0, 0.2, -0.6).normalized() * 300.0
+	var pm := ProjectileManager.of(current_scene)
+	var dir: Vector3 = (aim.call() - muzzle.global_position).normalized()
+	var shot := pm.spawn(RIFLE, muzzle.global_position, _suit.linear_velocity + dir * RIFLE.speed, dir, [], current_scene)
+	pm.stream_from(shot, muzzle, func() -> Array:
+		var d: Vector3 = (aim.call() - muzzle.global_position).normalized()
+		return [muzzle.global_position, _suit.linear_velocity + d * RIFLE.speed, d])
 
 
 func _frames(count: int) -> void:
