@@ -442,10 +442,12 @@ func _drone() -> void:
 	drone.global_position = at
 	await _frames(5)
 	var dir := (_suit.global_basis * Vector3(0.4, 0, -1)).normalized()
-	var aim := at + _suit.global_basis * Vector3(0, 2.5, 0)
+	# Off the core (4.5 m): the plain blast, not the core's flash.
+	var aim := at + _suit.global_basis * Vector3(0, 5.5, 0)
 	_look(at + _suit.global_basis * Vector3(-12, 7, 26), at)
-	await _fire(aim - dir * 300.0, dir, "drone", [0.02, 0.08, 0.3, 1.0, 4.0])
-	drone.queue_free()
+	await _fire(aim - dir * 300.0, dir, "drone", [0.02, 0.08, 0.3, 1.0])
+	if is_instance_valid(drone):
+		drone.queue_free()
 
 
 func _save(name: String) -> void:

@@ -45,7 +45,7 @@ signal destroyed(drone: TargetDrone)
 @export_group("Structure")
 @export var shell_areal: float = 80.0
 @export var interior_density: float = 15.0
-@export var core_radius: float = 1.6
+@export var core_radius: float = 4.5
 @export var core_density: float = 300.0
 ## Chance a hole through it cuts its control.
 @export_group("Jink")
@@ -126,9 +126,7 @@ var _speed_limit_g := 0.0
 var _ball: MeshInstance3D
 var _holes: HoleSet
 var _drills := {}   ## shot → [kg per STEP, pos, spare, hole, chord, entry, core t, gun t, through, last, direction]
-var _tumble := Vector3.ZERO   ## disabled: its spin, rad/s about this axis
-var _spark_due := 0.0
-var _spark_until := 0.0
+
 var _clock := 0.0
 var _left := 1.0
 var _dead := false
@@ -232,8 +230,8 @@ func beam_contact(contact: ProjectileManager.BeamContact) -> void:
 		if fx != null:
 			fx.blow_out(contact.point + contact.direction * chord, contact.direction, velocity, contact.radius, self)
 		_left -= 2.0 * contact.radius / (2.0 * radius) * 2.2
-		# A rifle beam straight through cuts its power and control: it goes dead.
-		_disable(contact.point + contact.direction * chord, contact.direction)
+		# A test drone: a beam straight through it blows it up (a dead one would be hard to tell).
+		_blow_up()
 
 
 ## What lies on the beam's line through it: [kg per STEP, 0, 0, hole, chord, entry, core t, gun t, done, last].
@@ -322,22 +320,17 @@ func _lose_control() -> void:
 		fx.burst(global_position, velocity, 1.5, &"electronics")
 
 
-## Its power and control lines are cut (`at`, `dir`: where a beam left it, which way): no thrust,
-## no gun; it drifts and tumbles, smoking from the wound, its cut lines arcing. Only a core
-## hit makes it explode.
-func _disable(at: Vector3, dir: Vector3) -> void:
-	if _dead or hit_points >= 1e8:
+## A beam went through: it explodes (not the core's flash, a plain blast).
+func _blow_up() -> void:
+	if hit_points <= -1e8 or hit_points >= 1e8:
 		return
-	_lose_control()
-	_tumble = Vector3(randfn(0, 1), randfn(0, 1), randfn(0, 1)).normalized() * randf_range(0.4, 1.2)
-	_spark_due = _clock + 0.3
-	_spark_until = _clock + 12.0
-	var fx := DamageFx.of(self)
-	if fx != null:
-		fx.smoke_leak(self, to_local(at), (global_basis.inverse() * dir).normalized(), randf_range(6.0, 10.0))
+	hit_points = -1e9
+	ProjectileManager.of(self).explode(global_position, velocity, radius * 2.0)
+	destroyed.emit(self)
+	queue_free()
 
 
-## A beam that stopped inside (not through, not the core): deep, it still cut the lines; shallow,
+## A beam that stopped inside (not through, not the core): deep, it still blows it up; shallow,
 ## it wrecked the thrusters near the hole (jinks and dodges at half strength).
 func _drill_ended(d: Array) -> void:
 	if bool(d[8]) or _dead or hit_points >= 1e8 or not is_inside_tree():
@@ -346,7 +339,7 @@ func _drill_ended(d: Array) -> void:
 	var entry: Vector3 = d[5]
 	var dir: Vector3 = d[10]
 	if depth >= 1.0:
-		_disable(entry + dir * depth, -dir)
+		_blow_up()
 	elif depth > 0.05:
 		jink_accel_g *= 0.5
 		dodge_accel_g *= 0.5
@@ -364,17 +357,7 @@ func _physics_process(delta: float) -> void:
 			_drills.erase(key)
 	if _dead:
 		global_position += velocity * delta
-		if _tumble != Vector3.ZERO:
-			global_basis = Basis(_tumble.normalized(), _tumble.length() * delta) * global_basis
-		else:
-			rotate(Vector3.UP, delta * 0.3)
-		# Cut lines arcing for a while.
-		if _clock < _spark_until and _clock >= _spark_due:
-			_spark_due = _clock + randf_range(0.4, 1.6)
-			var fx := DamageFx.of(self)
-			if fx != null:
-				var at := global_position + Vector3(randfn(0, 1), randfn(0, 1), randfn(0, 1)).normalized() * radius * 0.9
-				fx.creak(at, velocity, radius * 0.4)
+		rotate(Vector3.UP, delta * 0.3)
 		return
 	_anchor += _base_velocity * delta
 	_speed_limit_g = jink_accel_g

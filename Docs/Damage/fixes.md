@@ -184,10 +184,10 @@ Still to do: real inner-frame meshes under the armour.
   the core explodes it**. A grazing hit that doesn't go through still costs it systems by where
   it hit (gun, sensors, thrusters).
 
-  *Done (2026-11-27):* through → disabled (tumbles, smoke leak, arcing for 12 s); stopped
-  inside ≥ 1 m deep → disabled; shallower → thrusters wrecked (jink and dodge at half);
-  losing its section no longer explodes it; the core still does. Its smoke barely shows
-  against space (E).
+  *Done (2026-11-27):* the drone is a test target, and a disabled one was hard to tell from a
+  live one: a beam through it (or stopping ≥ 1 m deep) **blows it up**; through the core
+  (now r 4.5 m of the 7 m drone, was 1.6) it goes up in the core's flash; a shallow hit
+  wrecks its thrusters (jink and dodge at half).
 
 ## I. Notes
 
