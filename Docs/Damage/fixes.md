@@ -87,13 +87,17 @@ Still to do: real inner-frame meshes under the armour.
   face is drawn in front of the back face it is on, so its depth is negative, and the bore's
   depth dimming `exp(−depth/1.6)` brightened it instead (×10 looking down a long piece). And it
   was drawn on any back face behind the plane, including open shells beyond the limb: now only
-  within the ellipse of the part's cross-section (bone space).
+  within the real cross-section (the convex outline of where the plane meets the part's skin
+  triangles), so a cut thin plate gets a thin face, not a slab.
 - [x] **Bores drawn in empty space behind thin armour.** A hole's bore was drawn to the depth
   of the part's convex hull, not its real skin: behind a thin plate it floated in the air. Each
   part keeps its skin's triangles (bone space); a new hole records where the skin really is
-  along its line (nested shells counted), and the bore is drawn only in that metal.
-- [ ] **Not yet reproduced:** a smooth grey half-disc in a crater on the front skirt (play-test
-  screenshot); the torn hip socket and a skirt shot look right in renders.
+  along its line (nested shells counted), and the bore is drawn only in that metal. The same
+  for every hole on a part: beam bores, torn panel openings, and the torn socket craters
+  (on the suit and on the piece that flew off: on a thin skirt the socket's floor, 0.7 m deep,
+  hung in the air as a slab with the older holes punched through it).
+- [ ] **Check in play:** a smooth grey half-disc in a crater on the front skirt (play-test
+  screenshot); likely the same floating socket floor, fixed above.
 
 ## C. Power and hydraulics: the suit is a system, not a sack of tanks
 

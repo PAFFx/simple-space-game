@@ -31,8 +31,7 @@ class Surface:
 	var cut_plane := Vector4(0.0, 1.0, 0.0, 0.0)   ## part space normal, offset
 	var cut_side := 0.0
 	var cut_heat := Vector2(1800.0, -1000.0)
-	var cut_box := AABB(Vector3.ONE * -1e4, Vector3.ONE * 2e4)   ## bone space: the part's box
-	var cut_box_xf := Transform3D.IDENTITY                         ## part space → bone space
+	var cut_edges := PackedVector4Array()   ## the cut's outline: (nx, ny, c) half-planes in its plane
 	var dirty := true
 
 var now := 0.0
@@ -110,19 +109,46 @@ func heat(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, kelvin: float) 
 
 ## `mesh` was cut through: the plane (part space: point and normal); `keep_below` keeps the
 ## side the normal points away from. Its cut face is drawn hot (`peak` K) and cools, only within
-## the part's cross-section: the ellipse across its bone's y in `bounds` (bone space; `to_bone`
-## takes part space there). Open shells of the mesh elsewhere show back faces that would
-## otherwise draw the face floating outside the part.
+## `section` (part space: where the plane meets the part's skin; its convex outline is used).
+## Open shells and thin plates show back faces that would otherwise draw the face floating
+## outside the part.
 func cut(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, point: Vector3, normal: Vector3,
-		keep_below: bool, bounds: AABB, to_bone := Transform3D.IDENTITY, peak := 1800.0) -> void:
+		keep_below: bool, section: PackedVector3Array, peak := 1800.0) -> void:
 	var s := _surface(mesh, skeleton, bone)
 	var n := normal.normalized()
 	s.cut_plane = Vector4(n.x, n.y, n.z, n.dot(point))
 	s.cut_side = 1.0 if keep_below else -1.0
 	s.cut_heat = Vector2(peak, now)
-	s.cut_box = bounds
-	s.cut_box_xf = to_bone
+	s.cut_edges = _outline(n, section)
 	_upload(s)
+
+
+## The convex outline of `points` (on the plane of normal `n`) in the plane's own coordinates
+## (as the shader builds them), as half-planes nx·u + ny·v <= c, a few cm outside.
+static func _outline(n: Vector3, points: PackedVector3Array) -> PackedVector4Array:
+	var out := PackedVector4Array()
+	if points.size() < 3:
+		return out
+	var e1 := n.cross(Vector3.UP if absf(n.y) < 0.9 else Vector3.RIGHT).normalized()
+	var e2 := n.cross(e1)
+	var flat := PackedVector2Array()
+	for p in points:
+		flat.append(Vector2(p.dot(e1), p.dot(e2)))
+	var hull := Geometry2D.convex_hull(flat)
+	if hull.size() < 4:
+		return out
+	var centre := Vector2.ZERO
+	for i in hull.size() - 1:
+		centre += hull[i]
+	centre /= float(hull.size() - 1)
+	for i in hull.size() - 1:
+		var a := hull[i]
+		var b := hull[i + 1]
+		var nn := Vector2(b.y - a.y, a.x - b.x).normalized()
+		if nn.dot(centre - a) > 0.0:
+			nn = -nn
+		out.append(Vector4(nn.x, nn.y, nn.dot(a) + 0.05, 0.0))
+	return out
 
 
 func get_hole_count(mesh: MeshInstance3D) -> int:
@@ -250,6 +276,8 @@ func _upload(s: Surface) -> void:
 		m.set_shader_parameter(&"cut_plane", s.cut_plane)
 		m.set_shader_parameter(&"cut_side", s.cut_side)
 		m.set_shader_parameter(&"cut_heat", s.cut_heat)
-		m.set_shader_parameter(&"cut_box_min", s.cut_box.position)
-		m.set_shader_parameter(&"cut_box_max", s.cut_box.end)
-		m.set_shader_parameter(&"cut_box_xf", Projection(s.cut_box_xf))
+		var edges := s.cut_edges.duplicate()
+		var count := mini(edges.size(), 24)
+		edges.resize(24)
+		m.set_shader_parameter(&"cut_edge_count", count)
+		m.set_shader_parameter(&"cut_edges", edges)

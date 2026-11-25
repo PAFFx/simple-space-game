@@ -341,6 +341,20 @@ func _make_skin_probe(p: Part) -> void:
 	p.skin_faces = faces
 
 
+## Where the plane across `p`'s bone at height `y` (bone space) meets its skin: the points
+## where its triangles' edges cross it, taken to the cut mesh's part space by `to_part`.
+func _section(p: Part, y: float, to_part: Transform3D) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var f := p.skin_faces
+	for t in range(0, f.size(), 3):
+		for k in 3:
+			var a := f[t + k]
+			var b := f[t + (k + 1) % 3]
+			if (a.y - y) * (b.y - y) < 0.0:
+				out.append(to_part * a.lerp(b, (y - a.y) / (b.y - a.y)))
+	return out
+
+
 ## Where `p`'s real skin is along a beam entering it at `entry` (world) going `dir` (`s` from the
 ## entry, m): material where s <= x or s >= y. One shell: [.., x]; the outer and the far
 ## shell of a hollow part: x = the first one's end, y = the last one's start. No skin probe:
@@ -1438,6 +1452,7 @@ func _blow_panel(p: Part, inside: Vector3, out: Vector3, radius: float, speed: f
 	var thickness := 0.35
 	var h := holes.add_hole(p.mesh, _skel, p.bone, inside + out * (skin + thickness), -out, radius, thickness * 2.0, 1150.0)
 	h.s_drill = h.s_out
+	h.shell = _skin_shells(p, inside + out * (skin + thickness), -out, thickness * 2.0)
 	for k in range(1, found.size()):
 		_launch_plate(found[k], out, speed)
 
@@ -1828,6 +1843,7 @@ func sever(p: Part) -> void:
 	if parent != null and parent.mesh != null:
 		var h := holes.add_hole(parent.mesh, _skel, parent.bone, joint.origin + axis * 0.35, -axis, radius, 1.6, 1750.0)
 		h.s_drill = 0.7
+		h.shell = _skin_shells(parent, joint.origin + axis * 0.35, -axis, 1.6)
 		if fx != null:
 			_stubs.append(fx.stump(parent.area, joint.origin, axis, radius, _velocity_at(joint.origin)))
 	# And the torn end of the piece that flew off.
@@ -1837,6 +1853,7 @@ func sever(p: Part) -> void:
 			if mi != null and String(mi.name).begins_with("Baked_" + String(p.name)):
 				var h := holes.add_hole(mi, null, -1, joint.origin - axis * 0.35, axis, radius, 1.6, 1750.0)
 				h.s_drill = 0.7
+				h.shell = _skin_shells(p, joint.origin - axis * 0.35, axis, 1.6)
 		if fx != null:
 			fx.stump(body, joint.origin, -axis, radius, Vector3.ZERO)
 			fx.sever(joint.origin, _body.linear_velocity)
@@ -1873,7 +1890,7 @@ func _cut_part(p: Part, y: float) -> void:
 	# The stub: cut on the mesh, its hull trimmed, its mass and what was beyond the cut gone.
 	p.cut_y = y
 	p.left = BREAK_LEFT + 0.1
-	holes.cut(p.mesh, _skel, p.bone, cut_local, Vector3.UP, true, p.aabb.grow(0.1))
+	holes.cut(p.mesh, _skel, p.bone, cut_local, Vector3.UP, true, _section(p, p.cut_y, Transform3D.IDENTITY))
 	var kept := PackedVector3Array()
 	for v in p.hull_points:
 		if v.y < y:
@@ -2011,7 +2028,7 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		if q.cut_y != INF:
 			var pose := FinalPoses.of(_skel).pose(q.bone)
 			var c0 := q.aabb.get_center()
-			holes.cut(mi, null, -1, pose * Vector3(c0.x, q.cut_y, c0.z), pose.basis.y, true, q.aabb.grow(0.1), pose.affine_inverse())
+			holes.cut(mi, null, -1, pose * Vector3(c0.x, q.cut_y, c0.z), pose.basis.y, true, _section(q, q.cut_y, pose))
 		var m := q.dry + q.tank * fill
 		mass += m
 		centre += (FinalPoses.of(_skel).pose(q.bone) * q.aabb.get_center()) * m
@@ -2028,7 +2045,7 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		holes.adopt(mi, holes.get_holes(cut.mesh), pose)
 		var c0 := cut.aabb.get_center()
 		holes.cut(mi, null, -1, pose * Vector3(c0.x, cut.cut_y if cut.cut_y != INF else cut.last_hole.y, c0.z),
-				pose.basis.y, false, cut.aabb.grow(0.1), pose.affine_inverse())
+				pose.basis.y, false, _section(cut, cut.cut_y if cut.cut_y != INF else cut.last_hole.y, pose))
 		var m := (cut.dry + cut.tank * fill) * cut_share
 		mass += m
 		var far_y := cut.aabb.end.y - cut.aabb.size.y * cut_share * 0.5

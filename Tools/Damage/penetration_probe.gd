@@ -265,7 +265,13 @@ func _fire(spec: ProjectileSpec, at: Vector3, dir: Vector3) -> Array:
 
 func _shield(charged: bool) -> void:
 	_model.repair()
-	await _ticks(20)
+	# Still and settled (the case before may have left it turning, the arm swinging): the beam
+	# takes a few ticks to arrive and is aimed at where the shield is now.
+	_suit.linear_velocity = Vector3.ZERO
+	_suit.angular_velocity = Vector3.ZERO
+	await _ticks(60)
+	_suit.linear_velocity = Vector3.ZERO
+	_suit.angular_velocity = Vector3.ZERO
 	_log.clear()
 	var shield := _suit.find_children("*", "MsShield", true, false)[0] as MsShield
 	if not charged:
@@ -336,17 +342,20 @@ func _repair() -> void:
 	await _ticks(10)
 	var forearm := _model.find_part(&"forearm.R")
 	var thrusters_before := _count_enabled()
-	var mass_before := _suit.mass
+	# Dry: the flight computer burns propellant holding the suit while this runs.
+	var mass_before := _suit.mass - _fc.propellant
 	_model.sever(_model.find_part(&"thigh.L"))
 	await _ticks(30)
 	var thrusters_cut := _count_enabled()
 	var leg_gone := _model.find_part(&"shin.L").severed and not _model.find_part(&"shin.L").mesh.visible
-	print("%-22s thigh severed: shin gone %s, thrusters %d → %d, mass %.1f → %.1f t" % ["sever + repair", leg_gone, thrusters_before, thrusters_cut, mass_before / 1000.0, _suit.mass / 1000.0])
-	_check("severing a thigh takes the leg, its thrusters and its mass", leg_gone and thrusters_cut < thrusters_before and _suit.mass < mass_before - 3000.0)
+	print("%-22s thigh severed: shin gone %s, thrusters %d → %d, dry mass %.1f → %.1f t" % ["sever + repair", leg_gone, thrusters_before, thrusters_cut, mass_before / 1000.0, (_suit.mass - _fc.propellant) / 1000.0])
+	_check("severing a thigh takes the leg, its thrusters and its mass", leg_gone and thrusters_cut < thrusters_before and _suit.mass - _fc.propellant < mass_before - 3000.0)
 	_model.repair()
 	await _ticks(10)
+	print("%-22s after repair: forearm %s, shin shown %s, thrusters %d (was %d), mass %.1f (was %.1f) t" % ["", "severed" if forearm.severed else "on",
+			_model.find_part(&"shin.L").mesh.visible, _count_enabled(), thrusters_before, (_suit.mass - _fc.propellant) / 1000.0, mass_before / 1000.0])
 	_check("repair puts it all back", not forearm.severed and _model.find_part(&"shin.L").mesh.visible
-			and _count_enabled() == thrusters_before and absf(_suit.mass - mass_before) < 50.0)
+			and _count_enabled() == thrusters_before and absf(_suit.mass - _fc.propellant - mass_before) < 50.0)
 
 
 func _count_enabled() -> int:
