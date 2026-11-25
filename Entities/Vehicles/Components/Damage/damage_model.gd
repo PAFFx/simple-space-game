@@ -1591,9 +1591,11 @@ func _kill_pilot() -> void:
 		return
 	pilot_dead = true
 	destroyed = true
+	# The flight computer outlives the pilot: it stops taking input and holds the suit (a
+	# valve stuck open by the same hit would otherwise spin it up for as long as it burns).
 	var fc := _flight()
 	if fc != null:
-		fc.fcs_enabled = false
+		fc.pilot_lost = true
 	var fcs := _vehicle.find_component(FireControl) as FireControl
 	if fcs != null:
 		for w: MsWeapon in fcs.weapons.values():
@@ -2311,6 +2313,7 @@ func repair() -> void:
 	last_event = ""
 	if fc != null:
 		fc.fcs_enabled = true
+		fc.pilot_lost = false
 	_capability_changed()
 	repaired.emit()
 
