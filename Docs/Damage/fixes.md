@@ -188,14 +188,23 @@ Still to do: real inner-frame meshes under the armour.
 
 ## E. Smoke and fire
 
-- [ ] **Real smoke, not steam.** Thick smoke that can block vision (and the sensors' view),
+- [x] **Real smoke, not steam.** Thick smoke that can block vision (and the sensors' view),
   lasting, drifting, lit by fires; fire on parts that were shot (burning lines and electronics)
-  until it burns out.
-- [ ] **A fresh cut face blows out white** for over a second (the cut cap's 1800 K glow, seen
-  in the snap render): far too bright; tone it down with the other glows.
-- [ ] **Remove the beam hit scatter effect and the glow after a hit.** It looks low-res. *Cause:*
+  until it burns out. *Done (2026-11-28):* a part shot through (its Minovsky lines ruptured)
+  catches fire 60% of the time (`DamageFx.burn`, 6–20 s): flames in the channel, a flickering
+  orange light, and thick grey smoke pouring out of both ends (world layer, so it hides what is
+  behind it from the sensors too; shaded, so the sun and the fire light it), left behind in
+  world space as the suit moves. Repair puts every attached effect out.
+- [x] **A fresh cut face blows out white** for over a second (the cut cap's 1800 K glow, seen
+  in the snap render): far too bright; tone it down with the other glows. *Done:* the part
+  broke there, so only patches glow (`cut_temperature`, where the beam melted through); the rest
+  is warm torn metal; peak 1400 K instead of 1800.
+- [x] **Remove the beam hit scatter effect and the glow after a hit.** It looks low-res. *Cause:*
   `ProjectileManager.impact` (flashes + sparks) on non-drilling contacts and the contact flash
-  on drilling ones; the hole's own glow and DamageFx carry the hit.
+  on drilling ones; the hole's own glow and DamageFx carry the hit. *Done:* no contact flash on
+  drilling targets; a beam on something that doesn't drill gets one short flash
+  (`beam_splash`), no afterglow, no sparks. (The white-out in the forearm render is the rifle's
+  E-pac going off, not the hit.)
 
 ## F. Explosion and beam scale
 

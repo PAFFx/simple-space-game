@@ -357,6 +357,14 @@ func impact(spec: ProjectileSpec, position: Vector3, velocity := Vector3.ZERO, s
 		_emit_sparks(position, velocity, hot, size)
 
 
+## A beam touching something that doesn't drill (rock, the station): one short hot flash, no
+## afterglow, no sparks.
+func beam_splash(spec: ProjectileSpec, position: Vector3, velocity := Vector3.ZERO, scale := 1.0) -> void:
+	var size := spec.impact_size * scale
+	flash(position, spec.color.lerp(Color.WHITE, 0.5), size * 0.35, size, 0.18, spec.intensity * 1.6,
+			spec.glow * 2.5, size * 7.0, velocity, 1.0)
+
+
 ## Something going up: a sphere of light `size` m in radius swells out of a white flash,
 ## and smaller balls bubble out around it one after another.
 func explode(position: Vector3, velocity: Vector3, size: float, color := Color(1.0, 0.62, 0.3)) -> void:
@@ -545,7 +553,7 @@ func _step_beam(shot: Shot, delta: float, space: PhysicsDirectSpaceState3D, quer
 	shot.at_range = false
 	if not _beam_hit(shot, collider, point, dir) and shot.age - shot.last_splash > 0.06:
 		shot.last_splash = shot.age
-		impact(spec, point, _velocity_of(collider), 0.45)
+		beam_splash(spec, point, _velocity_of(collider), 0.45)
 
 
 ## A beam with energy on something that drills (beam_contact): this tick's energy goes in;
@@ -565,7 +573,7 @@ func _drill(shot: Shot, hit: Dictionary, dir: Vector3, delta: float,
 			shot.at_range = false
 			if not _beam_hit(shot, collider, point, dir) and shot.age - shot.last_splash > 0.06:
 				shot.last_splash = shot.age
-				impact(spec, point, _velocity_of(collider), 0.45)
+				beam_splash(spec, point, _velocity_of(collider), 0.45)
 			return
 		var distance := shot.position.distance_to(point)
 		if left < 0.0:
@@ -587,9 +595,8 @@ func _drill(shot: Shot, hit: Dictionary, dir: Vector3, delta: float,
 		var first := not shot.hit_ids.has(id)
 		target.call(&"beam_contact", c)
 		if first:
+			# No contact flash: the target draws the drilling itself (DamageFx, the hole's glow).
 			shot.hit_ids[id] = true
-			# A small contact flash: the target draws the drilling itself (DamageFx).
-			impact(spec, point, _velocity_of(collider), 0.18, false)
 			shot_hit.emit(spec, point, collider)
 		if not c.through:
 			shot.reach = maxf(shot.position.distance_to(c.front), shot.tail)
@@ -631,7 +638,7 @@ func _beam_hit(shot: Shot, collider: Node, point: Vector3, dir: Vector3) -> bool
 		return false
 	shot.hit_ids[id] = true
 	_damage(collider, shot.spec.damage, point, dir, shot.source if is_instance_valid(shot.source) else null)
-	impact(shot.spec, point, _velocity_of(collider))
+	beam_splash(shot.spec, point, _velocity_of(collider))
 	shot_hit.emit(shot.spec, point, collider)
 	return true
 

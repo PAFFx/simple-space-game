@@ -35,7 +35,7 @@ void fragment() {
 	float det = dot(dpdx, r1);
 	NORMAL = normalize(abs(det) * NORMAL - sign(det) * (dhx * r1 + dhy * r2));
 	float age = hole_now - cut_heat.y;
-	float t = hole_cool(cut_heat.x * (0.85 + 0.3 * hole_noise(uv * 1.6)), age) * (0.82 + 0.12 * melt);
+	float t = cut_temperature(cut_heat.x, age, uv) * (0.82 + 0.12 * melt);
 	float runs = smoothstep(0.25, 0.75, patches) * 0.75 + melt * 0.25;
 	ALBEDO = mix(vec3(0.05, 0.045, 0.04), vec3(0.12, 0.105, 0.09), runs);
 	ROUGHNESS = 0.72 + 0.18 * runs;

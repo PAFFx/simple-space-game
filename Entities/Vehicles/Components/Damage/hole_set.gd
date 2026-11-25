@@ -30,7 +30,7 @@ class Surface:
 	var body_heat := Vector2(0.0, -1000.0)
 	var cut_plane := Vector4(0.0, 1.0, 0.0, 0.0)   ## part space normal, offset
 	var cut_side := 0.0
-	var cut_heat := Vector2(1800.0, -1000.0)
+	var cut_heat := Vector2(1400.0, -1000.0)
 	var cut_edges := PackedVector4Array()   ## the cut's outline: (nx, ny, c) half-planes in its plane
 	var cap: MeshInstance3D                  ## the cut's face (stencil cap), if cut
 	var cap_root: Node3D                     ## what holds it (a bone attachment for a skinned part)
@@ -123,7 +123,7 @@ func heat(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, kelvin: float) 
 ## Open shells and thin plates show back faces that would otherwise draw the face floating
 ## outside the part.
 func cut(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, point: Vector3, normal: Vector3,
-		keep_below: bool, section: PackedVector3Array, peak := 1800.0) -> void:
+		keep_below: bool, section: PackedVector3Array, peak := 1400.0) -> void:
 	var s := _surface(mesh, skeleton, bone)
 	var n := normal.normalized()
 	s.cut_plane = Vector4(n.x, n.y, n.z, n.dot(point))

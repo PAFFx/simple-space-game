@@ -44,6 +44,8 @@ const BREAK_LEFT := 0.35
 const SNAP_LEFT := 0.5
 ## Below this share of its section left a part's thrusters are dead (lines and mounts gone).
 const THRUSTER_LEFT := 0.3
+## Chance a part shot through (its Minovsky lines ruptured) catches fire inside.
+const FIRE_CHANCE := 0.6
 ## Parts with a real joint inside (frame, actuators, cables): torn off they leave a frame stub.
 ## The rest (skirts, pods, nozzles, guards, shoulder armour) are bolted on: only a socket crater.
 const JOINTED := ["head", "upper_arm", "forearm", "hand", "thigh", "shin", "foot"]
@@ -1272,6 +1274,15 @@ func _through_part(p: Part, d: Drill, chord: float, mid := Vector3.INF, exit := 
 			_minovsky_rupture(p, mid, exit, _body.global_basis * d.dir_body)
 
 
+## Lines and electronics in `p` burning at `at` (world), in the channel along `dir`.
+func _start_fire(p: Part, at: Vector3, dir: Vector3, seconds: float) -> void:
+	var fx := DamageFx.of(self)
+	if fx == null or p.area == null or p.severed:
+		return
+	var inv := p.area.global_transform.affine_inverse()
+	fx.burn(p.area, inv * at, (inv.basis * dir).normalized(), seconds, clampf(p.width / 3.0, 0.5, 1.5))
+
+
 ## The beam cut the Minovsky lines in `p` (the generator's particles run through the whole
 ## body as its high-power hydraulics and power): they rupture a moment later at `at` (world),
 ## a burst with fire and smoke, and the cut line leaks smoke from `exit` for a while.
@@ -1281,6 +1292,8 @@ func _minovsky_rupture(p: Part, at: Vector3, exit: Vector3, dir: Vector3) -> voi
 		if reactor_gone or p.severed:
 			return
 		_burst(at, energy, &"minovsky", 1)
+		if _rng.randf() < FIRE_CHANCE:
+			_start_fire(p, at, dir, _rng.randf_range(6.0, 20.0))
 		var fx := DamageFx.of(self)
 		if fx != null and exit != Vector3.INF and p.area != null:
 			var inv := p.area.global_transform.affine_inverse()
@@ -3185,7 +3198,7 @@ func repair() -> void:
 			(g as CockpitGimbal).jammed = false
 		for g in cockpit.find_children("*", "CockpitBeamGlow", true, false):
 			(g as CockpitBeamGlow).put_out()
-	for n in get_tree().get_nodes_in_group(DamageFx.CABIN_GROUP):
+	for n in get_tree().get_nodes_in_group(DamageFx.ATTACHED_GROUP):
 		n.queue_free()
 	var fc := _flight()
 	var fill := _reaction.get_fill()

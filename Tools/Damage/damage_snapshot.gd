@@ -65,6 +65,7 @@ func _run(cases: PackedStringArray) -> void:
 			"thigh": await _case("thigh", &"thigh.L", Vector3.ZERO, Vector3(0.3, 0.0, 1.0), Vector3(-22, 2, -24), [0.03, 0.1, 0.3, 1.0, 3.0])
 			"back": await _case("back", &"forearm.L", Vector3.ZERO, Vector3(0.6, 0.0, 1.0), Vector3(-12, 3, 14), [0.02, 0.06, 0.2, 0.6, 1.5])
 			"cool": await _cool()
+			"fire": await _fire_case()
 			"hole": await _hole()
 			"sever": await _sever()
 			"screen": await _screen()
@@ -125,6 +126,24 @@ func _fire(at: Vector3, dir: Vector3, tag: String, times: Array) -> void:
 			_save("%s_%d_%03dms" % [tag, i + 1, roundi(float(times[i]) * 1000.0)])
 			i += 1
 	muzzle.queue_free()
+
+
+## The chest's side shot through and burning inside: flames in the hole, smoke pouring out and drifting.
+func _fire_case() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var target := _part_centre(&"chest") + basis * Vector3(2.2, 0.3, 0.0)
+	var dir := (basis * Vector3(0.0, 0.0, 1.0)).normalized()
+	_look(target + basis * Vector3(14, 4, -20), target)
+	await _fire(target - dir * 300.0, dir, "fire", [0.3])
+	_model._start_fire(_model.find_part(&"chest"), target, dir, 12.0)
+	var waited := 0.0
+	for t: float in [0.5, 2.0, 5.0]:
+		for i in roundi((t - waited) * 60.0):
+			await physics_frame
+		waited = t
+		_save("fire_burning_%.1fs" % t)
 
 
 ## One hole seen close up as it cools: frames at hole ages 0.1 … 60 s.

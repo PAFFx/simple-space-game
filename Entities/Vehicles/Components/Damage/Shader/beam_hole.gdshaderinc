@@ -32,7 +32,7 @@ uniform vec2 body_heat = vec2(0.0, -1000.0);
 // (cut_bump m); back faces seen through the opening draw it at its place, hot and cooling.
 uniform vec4 cut_plane = vec4(0.0, 1.0, 0.0, 0.0);
 uniform float cut_side = 0.0;
-uniform vec2 cut_heat = vec2(1800.0, -1000.0);
+uniform vec2 cut_heat = vec2(1400.0, -1000.0);
 // The cut's outline in its plane (where it meets the part's skin): half-planes nx·u + ny·v <= c in
 // the plane's coordinates; the face is only drawn inside it. 0 = no outline (anywhere).
 uniform int cut_edge_count = 0;
@@ -63,6 +63,14 @@ float hole_noise(vec2 p) {
 	f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(hole_hash(i), hole_hash(i + vec2(1.0, 0.0)), f.x),
 			mix(hole_hash(i + vec2(0.0, 1.0)), hole_hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+// A cut face's temperature at `p` (its plane, m): the part broke there, so only patches (where
+// the beam melted through) glow; the rest is torn metal, warm at most.
+float cut_temperature(float peak, float age, vec2 p) {
+	float t = hole_cool(peak * (0.85 + 0.3 * hole_noise(p * 1.6)), age);
+	float hot = smoothstep(0.45, 0.85, hole_noise(p * 0.7 + 5.3));
+	return 290.0 + (t - 290.0) * mix(0.35, 1.0, hot);
 }
 
 struct HoleHit {
@@ -210,7 +218,7 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				vec3 e1 = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
 				h.tex_p = vec3(dot(q, e1), dot(q, cross(n, e1)), 0.0);
 				h.tex_n = vec3(0.0, 0.0, 1.0);
-				h.temperature = hole_cool(cut_heat.x * (0.85 + 0.3 * hole_noise(h.tex_p.xy * 1.6)), age);
+				h.temperature = cut_temperature(cut_heat.x, age, h.tex_p.xy);
 				return h;
 			}
 		} else if (f > -0.25) {

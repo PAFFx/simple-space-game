@@ -10,8 +10,8 @@ extends Node3D
 
 const GROUP := &"damage_fx"
 const MAX_LIGHTS := 4
-## The cockpit's own effects (`cabin`): DamageModel.repair clears them.
-const CABIN_GROUP := &"cabin_fx"
+## Effects riding the suit (the cabin's, fires, leaks): DamageModel.repair clears them.
+const ATTACHED_GROUP := &"damage_fx_attached"
 
 class HoleLight:
 	var light: OmniLight3D
@@ -20,6 +20,7 @@ class HoleLight:
 	var age := 0.0
 	var life := 6.0
 	var energy := 4.0
+	var fire := false   ## flickers orange at an even level, fading out at the end
 
 class Arc:
 	var mesh: MeshInstance3D
@@ -107,8 +108,13 @@ func _process(delta: float) -> void:
 			continue
 		var k := 1.0 - h.age / h.life
 		h.light.global_position = h.anchor.global_transform * h.local
-		h.light.light_energy = h.energy * k * k * (1.0 if h.age > 0.15 else 2.0)
-		h.light.light_color = Color(1.0, lerpf(0.25, 0.55, k), lerpf(0.05, 0.25, k))
+		if h.fire:
+			var flicker := 0.6 + 0.25 * sin(_now * 21.0 + h.life) * sin(_now * 6.7) + 0.15 * randf()
+			h.light.light_energy = h.energy * flicker * minf((h.life - h.age) / 2.0, 1.0)
+			h.light.light_color = Color(1.0, 0.42, 0.1)
+		else:
+			h.light.light_energy = h.energy * k * k * (1.0 if h.age > 0.15 else 2.0)
+			h.light.light_color = Color(1.0, lerpf(0.25, 0.55, k), lerpf(0.05, 0.25, k))
 	for i in range(_stubs.size() - 1, -1, -1):
 		var st := _stubs[i]
 		if not is_instance_valid(st.root):
@@ -175,6 +181,7 @@ func prewarm() -> void:
 		func() -> void:
 			var holes: Array[Vector3] = [at + Vector3.UP]
 			cabin(_warm_anchor, at, holes, 0.3),
+		func() -> void: burn(_warm_anchor, Vector3.ZERO, Vector3.FORWARD, 0.3),
 		func() -> void:
 			var tw := create_tween()
 			tw.tween_interval(4.0)
@@ -284,6 +291,7 @@ func vent(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float,
 	gt.gradient = g
 	m.color_ramp = gt
 	p.process_material = m
+	p.add_to_group(ATTACHED_GROUP)
 	anchor.add_child(p)
 	p.position = local_at
 	p.basis = Basis.looking_at(local_dir, Vector3.UP if absf(local_dir.y) < 0.95 else Vector3.RIGHT)
@@ -346,13 +354,46 @@ func cabin(anchor: Node3D, at: Vector3, holes: Array[Vector3], seconds: float) -
 			_stop_later(e.node, seconds * randf_range(0.7, 1.0))
 
 
+## Something shot through is burning inside (lines, electronics) at `local_at` on `anchor` (it
+## rides it), the channel running along `local_axis`: flames in the hole, thick dark smoke
+## pouring out of both ends and drifting off (it hides what is behind it, from the sensors too),
+## a flickering light, for `seconds`, till it burns out.
+func burn(anchor: Node3D, local_at: Vector3, local_axis: Vector3, seconds: float, size := 1.0) -> void:
+	var axis := local_axis.normalized()
+	var flames := _attached_emitter(&"fire", anchor, local_at, 36, 0.4, false)
+	_puffs(flames, axis, 180.0, 0.5 * size, 2.0 * size, 0.25 * size, 0.9 * size, Color(1.0, 0.75, 0.35, 0.85))
+	flames.mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	flames.mat.emission_sphere_radius = 0.35 * size
+	flames.ramp.offsets = PackedFloat32Array([0.0, 0.3, 1.0])
+	flames.ramp.colors = PackedColorArray([Color(1.0, 0.8, 0.45, 0.85), Color(1.0, 0.38, 0.07, 0.55), Color(0.35, 0.04, 0.0, 0.0)])
+	flames.node.local_coords = false
+	_stop_later(flames.node, seconds)
+	for side in [1.0, -1.0]:
+		# Grey: lit by the sun it shows against space, in shadow it is dark.
+		var smoke := _attached_emitter(&"vapour", anchor, local_at + axis * side * 0.6 * size, 44, 7.0, false)
+		_puffs(smoke, axis * side, 35.0, 1.0 * size, 3.5 * size, 0.6 * size, 6.0 * size, Color(0.4, 0.38, 0.36, 0.6))
+		smoke.mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		smoke.mat.emission_sphere_radius = 0.3 * size
+		smoke.node.local_coords = false
+		_stop_later(smoke.node, seconds * 1.2)
+	_add_light(anchor, anchor.global_transform * local_at, 7.0 * size, 1.6, seconds)
+	_lights[-1].fire = true
+
+
 ## A one-off emitter on `anchor` (local frame, `at`) for the cabin: freed after it is done.
 func _cabin_emitter(kind: StringName, anchor: Node3D, at: Vector3, amount: int, lifetime: float,
 		one_shot: bool) -> Pooled:
+	var e := _attached_emitter(kind, anchor, at, amount, lifetime, one_shot)
+	e.node.layers = Layers.COCKPIT | Layers.VEHICLE_EXT
+	return e
+
+
+## A one-off emitter riding `anchor` (local frame, `at`): freed after it is done, or on repair.
+func _attached_emitter(kind: StringName, anchor: Node3D, at: Vector3, amount: int, lifetime: float,
+		one_shot: bool) -> Pooled:
 	var e := _new_emitter(kind, amount, anchor)
 	var p := e.node
-	p.add_to_group(CABIN_GROUP)
-	p.layers = Layers.COCKPIT | Layers.VEHICLE_EXT
+	p.add_to_group(ATTACHED_GROUP)
 	p.local_coords = true
 	p.one_shot = one_shot
 	p.explosiveness = 0.92 if one_shot else 0.0
