@@ -1053,6 +1053,7 @@ func _advance(d: Drill, t: float) -> void:
 		if seg[3] == null and p.mesh != null:
 			var entry: Vector3 = xf * (d.from_body + d.dir_body * float(seg[1]))
 			seg[3] = holes.add_hole(p.mesh, _skel, p.bone, entry, xf.basis * d.dir_body, d.radius, chord)
+			_knock_stubs(p, entry, xf.basis * d.dir_body, chord, d.radius)
 			(seg[3] as HoleSet.Hole).shell = _skin_shells(p, entry, xf.basis * d.dir_body, chord)
 			part_damaged.emit(p.name)
 			var fx := DamageFx.of(self)
@@ -1465,6 +1466,7 @@ func _blow_panel(p: Part, inside: Vector3, out: Vector3, radius: float, speed: f
 	h.shell = _skin_shells(p, inside + out * (skin + thickness), -out, thickness * 2.0)
 	for k in range(1, found.size()):
 		_launch_plate(found[k], out, speed)
+	_knock_stubs(p, inside + out * (skin + thickness), -out, thickness * 2.0, radius)
 
 
 ## Where the line from `inside` along `dir` leaves `p`'s hull (world), or INF.
@@ -2047,6 +2049,35 @@ func _jointed(p: Part) -> bool:
 		if String(p.name).begins_with(prefix):
 			return true
 	return false
+
+
+## A hit (on `_p`, along `dir` from `at` over `length`, a beam of `radius`) that passes through
+## a frame stub's socket: nothing is left to hold the stub, it is knocked loose and flies off.
+## Any part's hit counts: a socket often sits between parts (the hip, among the skirts).
+func _knock_stubs(_p: Part, at: Vector3, dir: Vector3, length: float, radius: float) -> void:
+	for i in range(_stubs.size() - 1, -1, -1):
+		var st := _stubs[i] as Node3D
+		if not is_instance_valid(st):
+			continue
+		var rel := st.global_position - at
+		var s := clampf(rel.dot(dir), -1.5, length + 1.5)
+		if (rel - dir * s).length() > radius + 0.8:
+			continue
+		_stubs.remove_at(i)
+		var body := RigidBody3D.new()
+		body.name = "Debris"
+		body.gravity_scale = 0.0
+		body.mass = 400.0
+		_vehicle.get_parent().add_child(body)
+		body.global_transform = st.global_transform
+		st.reparent(body)
+		body.linear_velocity = _velocity_at(body.global_position) + (dir + (st.global_basis.y * 0.6)).normalized() * _rng.randf_range(15.0, 40.0)
+		body.angular_velocity = Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 3.0
+		_solidify(body)
+		_debris.append(body)
+		var fx := DamageFx.of(self)
+		if fx != null:
+			fx.creak(body.global_position, body.linear_velocity, 1.2)
 
 
 ## The nearest part up the skeleton from `p`.

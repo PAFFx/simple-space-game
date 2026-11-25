@@ -52,6 +52,8 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   backpack and pelvis). Every part torn off left a frame stub (joint drum, struts, cables up
   to 1.4 radii long), even bolted-on armour (skirts, main pods, nozzles). Now only jointed
   limbs (head, arms, hands, legs, feet) leave one, and it is short, in the socket.
+  A later hit through the socket (beam or torn panel passing within ~0.8 m of it) knocks the
+  stub loose: it flies off as debris, nothing left to hold it.
 
 ## B. Beam holes: rendering bugs
 
