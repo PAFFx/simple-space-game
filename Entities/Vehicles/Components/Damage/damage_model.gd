@@ -44,6 +44,15 @@ const BREAK_LEFT := 0.35
 const SNAP_LEFT := 0.5
 ## Below this share of its section left a part's thrusters are dead (lines and mounts gone).
 const THRUSTER_LEFT := 0.3
+## Power (Docs/Damage/fixes.md C): what each reactor gives of the suit's whole. Two in the
+## abdomen (either going up takes the suit), a smaller, tougher one in the backpack.
+const REACTOR_SHARE := {&"reactor L": 0.4, &"reactor R": 0.4, &"backpack reactor": 0.2}
+## A hit to the backpack reactor sets it off this often; else it scrams (shuts down).
+const BACKPACK_BREACH := 0.3
+const BACKPACK_YIELD := 3.0e9
+## A part whose Minovsky lines ruptured has them cut through this often (nothing beyond it
+## gets power or pressure).
+const LINES_CUT_CHANCE := 0.5
 ## Debris from any suit (DamageModel._add_debris): a reactor blast throws it.
 const DEBRIS_GROUP := &"damage_debris"
 ## How far a reactor blast throws loose debris, m.
@@ -102,6 +111,7 @@ class Part:
 	var aabb := AABB()        ## bone space
 	var left := 1.0           ## share of its cross-section still there
 	var severed := false
+	var lines_cut := false    ## a beam cut the power and hydraulic lines through it
 	var equipment: MsEquipment   ## equipment as a part: a box per mesh, not a hull
 	var box := AABB()
 	var boxes: Array = []        ## [MeshInstance3D, AABB in its own space]
@@ -204,6 +214,9 @@ var _breach_v := Vector3.ZERO   ## the suit's velocity when its reactor went
 var _breach_w := Vector3.ZERO      ## the suit's full thrust / mass, m/s² (set when built)
 var _opaque: Array[Node] = []
 var _body_shown := false   ## the feed draws the suit's body (it has been damaged)
+var _breaching: Component   ## the reactor going up
+var _power_dirty := false
+var _thrust_built := {}     ## Thruster → its max_thrust as built (power derates it)
 var _sensor: SensorHead
 var _glow_slots := {}   ## CameraMarker → [overlay ShaderMaterial, lens index]
 var _thruster_saved := {}     ## Thruster → [max thrust, gimbal limits ×3] as built
@@ -248,6 +261,9 @@ func _physics_process(delta: float) -> void:
 	_stress(delta)
 	_hold_dangles(delta)
 	_prep_small(1500)
+	if _power_dirty:
+		_power_dirty = false
+		_apply_power()
 	if _capability_dirty and _clock >= _capability_due:
 		_capability_dirty = false
 		var fc := _flight()
@@ -626,10 +642,15 @@ func _build_components() -> void:
 		legs.capsule = true
 		legs.tip = Vector3(0.0, -0.95, -0.85)
 		_add_component(Kind.COCKPIT, &"cockpit", chest, cam, Vector3.ZERO, 1.6)
-	# Reactor: below the cockpit around the waist (top of the pelvis).
+	# Reactors: two side by side in the abdomen below the cockpit (top of the pelvis), a smaller
+	# one in the backpack.
 	if pelvis != null:
 		var at := pelvis.aabb.get_center() + Vector3(0.0, pelvis.aabb.size.y * 0.22, 0.0)
-		_bone_component(Kind.REACTOR, &"reactor", pelvis, at, 0.85)
+		_bone_component(Kind.REACTOR, &"reactor L", pelvis, at + Vector3(-0.8, 0.0, 0.0), 0.6)
+		_bone_component(Kind.REACTOR, &"reactor R", pelvis, at + Vector3(0.8, 0.0, 0.0), 0.6)
+	var backpack := find_part(&"backpack")
+	if backpack != null:
+		_bone_component(Kind.REACTOR, &"backpack reactor", backpack, backpack.aabb.get_center(), 0.45)
 	# Water tank cells: each tank fills a box in its part, split in four along its longest
 	# side: the chest's behind the cockpit, the pelvis's below the reactor, others centred.
 	for p in parts:
@@ -671,6 +692,7 @@ func _build_components() -> void:
 			var part := _part_at(_skel.find_bone(attach.bone_name), t.global_position) if attach != null else null
 			var c := _add_component(Kind.THRUSTER, t.name, part, t, Vector3.ZERO, 0.3 + 0.6 * sqrt(t.max_thrust / 1.6e6))
 			c.ref = t
+			_thrust_built[t] = t.max_thrust
 	# Head: the main camera's eyes and the vulcans.
 	var sensors := _comp(SensorSuite) as SensorSuite
 	if head != null:
@@ -1328,6 +1350,10 @@ func _minovsky_rupture(p: Part, at: Vector3, exit: Vector3, dir: Vector3) -> voi
 		if reactor_gone or p.severed:
 			return
 		_burst(at, energy, &"minovsky", 1)
+		if not CORE_PARTS.has(p.name) and not p.lines_cut and _rng.randf() < LINES_CUT_CHANCE:
+			p.lines_cut = true
+			_event("%s lines cut" % p.name)
+			_power_changed()
 		if _rng.randf() < FIRE_CHANCE:
 			_start_fire(p, at, dir, _rng.randf_range(6.0, 20.0))
 		var fx := DamageFx.of(self)
@@ -1461,9 +1487,15 @@ func _hit_component(c: Component, d: Drill) -> void:
 			_cockpit_hit_fx(o, dir, d.radius * HoleSet.BEAM_GROW)
 			_event("cockpit holed")
 		Kind.REACTOR:
-			c.alive = false
-			_event("REACTOR HIT")
-			_later(0.04, _breach_reactor)
+			if c.name == &"backpack reactor" and _rng.randf() >= BACKPACK_BREACH:
+				_scram(c)
+			elif c.name == &"backpack reactor":
+				_backpack_breach(c)
+			else:
+				c.alive = false
+				_breaching = c
+				_event("REACTOR HIT")
+				_later(0.04, _breach_reactor)
 		Kind.THRUSTER:
 			_kill_component(c)
 		Kind.EYES, Kind.BODY_CAMERA, Kind.VULCAN:
@@ -2150,10 +2182,113 @@ func _kill_pilot() -> void:
 
 
 func _reactor_position() -> Vector3:
+	if _breaching != null:
+		return component_position(_breaching)
 	for c in components:
-		if c.kind == Kind.REACTOR:
+		if c.kind == Kind.REACTOR and REACTOR_SHARE.get(c.name, 0.0) >= 0.4:
 			return component_position(c)
 	return _body.global_transform * _body.center_of_mass
+
+
+## The backpack reactor shut itself down (hit, held): the rest of the suit runs on the
+## abdomen's two, its own lines may still be fed from them.
+func _scram(c: Component) -> void:
+	c.alive = false
+	_event("backpack reactor scrammed")
+	component_destroyed.emit(&"reactor", c.name)
+	_power_changed()
+
+
+## The backpack reactor went up: a big blast in the back (it takes the backpack and whatever
+## is near), and it may set off the abdomen's reactors.
+func _backpack_breach(c: Component) -> void:
+	c.alive = false
+	var at := component_position(c)
+	_event("BACKPACK REACTOR BREACH")
+	component_destroyed.emit(&"reactor", c.name)
+	var fx := DamageFx.of(self)
+	if fx != null:
+		fx.reactor_flash_small(at, _body.linear_velocity, 14.0)
+	_stores_blast(at, BACKPACK_YIELD)
+	var reach := BLAST_K * pow(BACKPACK_YIELD, 1.0 / 3.0) * STORES_REACH
+	for r in components:
+		if r.kind == Kind.REACTOR and r.alive and component_position(r).distance_to(at) < reach + r.radius \
+				and _rng.randf() < 0.6:
+			r.alive = false
+			_breaching = r
+			_later(0.08, _breach_reactor)
+			break
+	_power_changed()
+
+
+## Share of the suit's power its live reactors give (1 = all three).
+func power_share() -> float:
+	var share := 0.0
+	for c in components:
+		if c.kind == Kind.REACTOR and c.alive:
+			share += REACTOR_SHARE.get(c.name, 0.0)
+	return share
+
+
+## Whether power and pressure reach `p`: its lines, and every part's on the way to the torso
+## (where the reactors feed the bus), aren't cut; a part with a live reactor of its own feeds
+## itself and what lies beyond it.
+func is_powered(p: Part, fed := {}) -> bool:
+	if fed.is_empty():
+		fed = _reactor_parts()
+	var b := p.bone
+	while b >= 0:
+		var q := _part_of_bone(b)
+		if q == null:
+			return true
+		if fed.has(q):
+			return true
+		if q.lines_cut:
+			return false
+		b = _skel.get_bone_parent(q.bone)
+	return true
+
+
+func _has_live_reactor(p: Part) -> bool:
+	return _reactor_parts().has(p)
+
+
+## The parts with a live reactor in them (a set).
+func _reactor_parts() -> Dictionary:
+	var out := {}
+	for c in components:
+		if c.kind == Kind.REACTOR and c.alive and c.part != null:
+			out[c.part] = true
+	if out.is_empty():
+		out[null] = true   # none left: keeps the set non-empty for is_powered's default
+	return out
+
+
+## Power may have changed (lines cut, a reactor lost or gone with its part): applied on the
+## next tick (`_apply_power`), with every other change of the suit's capability.
+func _power_changed() -> void:
+	_capability_changed()
+
+
+## What power no longer reaches dies (thrusters, cameras), limbs go limp, and the thrusters
+## left run on what power remains.
+func _apply_power() -> void:
+	if not _built or reactor_gone:
+		return
+	var fed := _reactor_parts()
+	var powered := {}
+	for c in components:
+		if not c.alive or c.part == null or not (c.kind in [Kind.THRUSTER, Kind.EYES, Kind.BODY_CAMERA]):
+			continue
+		if not powered.has(c.part):
+			powered[c.part] = is_powered(c.part, fed)
+		if not powered[c.part]:
+			_kill_component(c, true)
+	var share := clampf(power_share(), 0.0, 1.0)
+	for t: Thruster in _thrust_built:
+		if is_instance_valid(t):
+			t.max_thrust = _thrust_built[t] * share
+	_update_control()
 
 
 func _breach_reactor() -> void:
@@ -2728,15 +2863,21 @@ static func _is_fx(n: Node) -> bool:
 ## AMBAC joints are out, its weapons can't aim or fire, its equipment can't be used or raised.
 func _update_control() -> void:
 	limp.clear()
+	var reactors := _reactor_parts()
 	for p in parts:
 		if p.equipment != null:
 			continue
 		var b := p.bone
+		var fed := false   # a live reactor on the way feeds what lies beyond it
 		while b >= 0:
 			var q := _part_of_bone(b)
 			if q == null:
 				break
 			if q.severed or _joint_out.has(q.name):
+				limp[p] = true
+				break
+			fed = fed or reactors.has(q)
+			if q.lines_cut and not fed:
 				limp[p] = true
 				break
 			b = _skel.get_bone_parent(q.bone)
@@ -3421,6 +3562,12 @@ func repair() -> void:
 	_capability_changed()
 	if _sensor_head() != null:
 		_sensor.move_home()
+	_breaching = null
+	for p in parts:
+		p.lines_cut = false
+	for t: Thruster in _thrust_built:
+		if is_instance_valid(t):
+			t.max_thrust = _thrust_built[t]
 	repaired.emit()
 
 
@@ -3439,6 +3586,7 @@ func _set_all_thrusters(on: bool) -> void:
 
 
 func _capability_changed() -> void:
+	_power_dirty = true
 	if not _capability_dirty:
 		_capability_due = _clock + 0.2
 	_capability_dirty = true

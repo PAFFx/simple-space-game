@@ -6,8 +6,11 @@ extends SceneTree
 ##   own       nothing shows on a part that is gone (or past a cut through it)
 ##   thrust    a dead thruster gives no thrust and shows no plume, even commanded to full; the
 ##             thrusters of a severed part (or one with under 30% of its section) are dead
-##   control   a severed part, or one with a joint shot on its way to the torso, can't be moved:
-##             its AMBAC joints are out, its weapons can't fire, its equipment can't be used
+##   control   a severed part, or one with a joint shot or its lines cut on its way to the torso
+##             (with no live reactor between), can't be moved: its AMBAC joints are out, its
+##             weapons can't fire, its equipment can't be used
+##   power     no live thruster or camera on a part power doesn't reach; the live thrusters
+##             give what the live reactors' share allows
 ##   equip     equipment on a severed part is off the suit
 ##   sane      no NaN, no runaway spin
 ##   frame     the slowest frames while it took damage (spikes over 12 ms are reported)
@@ -233,6 +236,19 @@ func _check(log: Array[String]) -> void:
 			var plume := t.get_node_or_null(^"Gimbal/Visual/PlumePivot") as Node3D
 			if plume != null and plume.visible:
 				_fail("thrust", "dead %s shows a plume" % t.name, log)
+	# power
+	var share := clampf(_model.power_share(), 0.0, 1.0)
+	var reactors := _model._reactor_parts()
+	for c in _model.components:
+		if not c.alive or c.part == null or not (c.kind in [DamageModel.Kind.THRUSTER, DamageModel.Kind.EYES, DamageModel.Kind.BODY_CAMERA]):
+			continue
+		if not _model.is_powered(c.part, reactors):
+			_fail("power", "%s alive on unpowered %s" % [c.name, c.part.name], log)
+		if c.kind == DamageModel.Kind.THRUSTER and not _model.reactor_gone:
+			var t := c.ref as Thruster
+			var built: float = _model._thrust_built.get(t, t.max_thrust)
+			if absf(t.max_thrust - built * share) > built * 0.01:
+				_fail("power", "%s gives %.0f%% of its rating, power is %.0f%%" % [t.name, t.max_thrust / built * 100.0, share * 100.0], log)
 	# control
 	var ambac := _vehicle.find_component(AmbacController) as AmbacController
 	for p in _model.parts:
@@ -272,14 +288,20 @@ func _check(log: Array[String]) -> void:
 		_fail("sane", "spinning %.0f°/s" % rad_to_deg(w.length()), log)
 
 
-## Severed, or a joint shot somewhere between it and the torso (itself included).
+## Severed, a joint shot, or its lines cut (no live reactor between) somewhere between it and the
+## torso (itself included).
 func _chain_broken(p: DamageModel.Part) -> bool:
 	var b := p.bone
+	var fed := false
+	var reactors := _model._reactor_parts()
 	while b >= 0:
 		var q := _model._part_of_bone(b)
 		if q == null:
 			return false
 		if q.severed or _model._joint_out.has(q.name):
+			return true
+		fed = fed or reactors.has(q)
+		if q.lines_cut and not fed:
 			return true
 		b = _skel.get_bone_parent(q.bone)
 	return false

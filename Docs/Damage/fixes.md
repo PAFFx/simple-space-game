@@ -125,18 +125,29 @@ Still to do: real inner-frame meshes under the armour.
 
 ## C. Power and hydraulics: the suit is a system, not a sack of tanks
 
-- [ ] **Generators.** Two big Minovsky reactors in the abdomen below the cockpit (separate, but
+- [x] **Generators.** Two big Minovsky reactors in the abdomen below the cockpit (separate, but
   either one going up sets off a big explosion), plus a separate, smaller, tougher one in the
   backpack. Today: one reactor in the pelvis, r 0.85 m. Update the layout, the mass model and
-  `_breach_reactor` (which reactor, how big a blast, chain to the other).
-- [ ] **Half the suit blown off and it still works.** Power and hydraulics (the Minovsky lines
+  `_breach_reactor` (which reactor, how big a blast, chain to the other). *Done (2026-11-28):*
+  `reactor L` / `reactor R` (0.6 m, either one hit takes the suit, the blast centred on it) and a
+  `backpack reactor` (0.45 m, 20% of the power): a hit scrams it 70% of the time (thrust drops to
+  80%), else it goes up (`_backpack_breach`: a 3 GJ blast in the back, which sets off an abdomen
+  reactor 60% of the time when it reaches one).
+- [x] **Half the suit blown off and it still works.** Power and hydraulics (the Minovsky lines
   from the reactors) must be a network: each limb, thruster group, sensor and display is fed
   through lines that run through the parts. Lines cut, so whatever is downstream loses power or
   pressure (limbs go limp, thrusters die, screens and sensors drop). A reactor lost leaves the
-  rest on the other one, at reduced power.
-- [ ] **Far more fire and explosions.** Most of a suit is hydraulics and electronics, not
+  rest on the other one, at reduced power. *Done:* the reactors feed the torso's bus; the
+  lines run out along the skeleton. A part whose lines ruptured has them cut half the time
+  (`lines_cut`): it and everything beyond it lose power and pressure (limp, thrusters and
+  cameras dead, equipment off), unless a live reactor sits on the way (the backpack feeds its
+  pods). Thrust follows the live reactors' share (`power_share`). Applied on the next tick
+  after any change (`_apply_power`); the fuzz's `power` and `control` rules check it.
+- [x] **Far more fire and explosions.** Most of a suit is hydraulics and electronics, not
   tanks: hits there should catch fire, arc and explode (sized by what is there), not only the
-  tank cells. Ties into the network above (a ruptured line feeds a fire for a while).
+  tank cells. Ties into the network above (a ruptured line feeds a fire for a while). *Done:*
+  every part shot through ruptures its lines (a burst with arcs, fire 60% of the time, smoke),
+  stores blow up big, the backpack reactor can go up.
 
 - [x] **Thrusters on a destroyed part keep working** (play-test: backpack and chest shot to
   pieces, their thrusters still fire and show plumes). *Cause:* a thruster dies only when a

@@ -19,7 +19,7 @@ var _fcs: FireControl
 var _skel: Skeleton3D
 var _failed := 0
 var _cases := PackedStringArray(["cockpit", "head", "chest", "waist", "forearm", "thigh", "shin", "backpack",
-		"shield", "bareshield", "shieldback", "drone", "vulcan", "repair"])
+		"shield", "bareshield", "shieldback", "reactors", "drone", "vulcan", "repair"])
 var _log: PackedStringArray = []
 
 
@@ -89,6 +89,7 @@ func _run() -> void:
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
 			"shieldback": await _shield_behind()
+			"reactors": await _reactors()
 			"drone": await _drone()
 			"vulcan": await _vulcan()
 			"repair": await _repair()
@@ -329,6 +330,30 @@ func _shield_behind() -> void:
 	print("%-22s field %s, charges left %d, equipped %s | %s" % ["shield (from behind)",
 			"UP" if shield.is_field_up() else "-", shield.charges, shield.equipped, ", ".join(_log) if not _log.is_empty() else "-"])
 	_check("a shot from behind gets past the field and wrecks the shield", not shield.equipped and not shield.is_field_up())
+
+
+## The backpack reactor: scrammed, the suit runs on the abdomen's two (thrust 80%); gone up, a big
+## blast in the back.
+func _reactors() -> void:
+	_model.repair()
+	await _still(10)
+	var bp: DamageModel.Component = null
+	for c in _model.components:
+		if c.name == &"backpack reactor":
+			bp = c
+	var t: Thruster = _model._thrust_built.keys()[0]
+	var built: float = _model._thrust_built[t]
+	_model._scram(bp)
+	await _ticks(3)
+	print("backpack reactor scrammed: power %.0f%%, %s at %.0f%%" % [_model.power_share() * 100.0, t.name, t.max_thrust / built * 100.0])
+	_check("a scrammed backpack reactor derates thrust to the abdomen's share", absf(t.max_thrust / built - 0.8) < 0.01)
+	_model.repair()
+	await _still(10)
+	_log.clear()
+	_model._backpack_breach(bp)
+	await _ticks(30)
+	print("backpack reactor breach: %s" % ", ".join(_log))
+	_check("a backpack reactor breach tears up the back", _log.size() > 3 and not _model.find_part(&"backpack").left > 0.9)
 
 
 func _drone() -> void:

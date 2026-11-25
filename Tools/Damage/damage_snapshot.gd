@@ -67,6 +67,7 @@ func _run(cases: PackedStringArray) -> void:
 			"cool": await _cool()
 			"fire": await _fire_case()
 			"breach": await _breach_case()
+			"backpack_breach": await _backpack_breach_case()
 			"hole": await _hole()
 			"sever": await _sever()
 			"screen": await _screen()
@@ -181,6 +182,27 @@ func _breach_case() -> void:
 	_look(at + away * 500.0, at)
 	await _frames(3)
 	await _save("breach_500m_later")
+
+
+## The backpack reactor going up, from behind and to the side.
+func _backpack_breach_case() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var at := _suit.global_position
+	_look(at + _suit.global_basis * Vector3(-45, 25, 60), at + _suit.global_basis.y * 14.0)
+	await _frames(3)
+	for c in _model.components:
+		if c.name == &"backpack reactor":
+			_model._backpack_breach(c)
+	var waited := 0.0
+	for t: float in [0.1, 0.4, 1.5]:
+		for i in roundi((t - waited) * 60.0):
+			await physics_frame
+		waited = t
+		await _save("backpack_breach_%.1fs" % t)
 
 
 ## One hole seen close up as it cools: frames at hole ages 0.1 … 60 s.
