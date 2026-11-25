@@ -51,24 +51,28 @@ func _process(delta: float) -> void:
 		if s.dirty or fresh:
 			_upload(s)
 		else:
-			var skinned := s.skeleton != null and s.bone >= 0
-			var p2m := Projection()
-			var m2p := Projection()
-			if skinned:
-				var part_to_model := s.mesh.global_transform.affine_inverse() * part_frame(s.mesh, s.skeleton, s.bone)
-				p2m = Projection(part_to_model)
-				m2p = Projection(part_to_model.affine_inverse())
 			for m in s.materials:
 				m.set_shader_parameter(&"hole_now", now)
-				if skinned:
-					m.set_shader_parameter(&"part_to_model", p2m)
-					m.set_shader_parameter(&"model_to_part", m2p)
+
+
+## A skeleton has its final pose for this frame (after its modifiers): its skinned parts' frames
+## go to their materials now, so the holes sit where the mesh is drawn.
+func _on_final_pose(skeleton: Skeleton3D) -> void:
+	for s: Surface in _surfaces.values():
+		if s.skeleton != skeleton or s.bone < 0 or not is_instance_valid(s.mesh):
+			continue
+		var part_to_model := s.mesh.global_transform.affine_inverse() * part_frame(s.mesh, s.skeleton, s.bone)
+		var p2m := Projection(part_to_model)
+		var m2p := Projection(part_to_model.affine_inverse())
+		for m in s.materials:
+			m.set_shader_parameter(&"part_to_model", p2m)
+			m.set_shader_parameter(&"model_to_part", m2p)
 
 
 ## The part frame of `mesh` in the world: its bone posed (skinned) or the mesh itself.
 static func part_frame(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int) -> Transform3D:
 	if skeleton != null and bone >= 0:
-		return skeleton.global_transform * skeleton.get_bone_global_pose(bone)
+		return skeleton.global_transform * FinalPoses.of(skeleton).pose(bone)
 	return mesh.global_transform
 
 
@@ -166,6 +170,11 @@ func _surface(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int) -> Surface:
 	s.mesh = mesh
 	s.skeleton = skeleton
 	s.bone = bone
+	if skeleton != null and bone >= 0:
+		var fp := FinalPoses.of(skeleton)
+		var call := _on_final_pose.bind(skeleton)
+		if not fp.updated.is_connected(call):
+			fp.updated.connect(call)
 	for i in mesh.mesh.get_surface_count():
 		var m := _convert(mesh.get_active_material(i))
 		mesh.set_surface_override_material(i, m)

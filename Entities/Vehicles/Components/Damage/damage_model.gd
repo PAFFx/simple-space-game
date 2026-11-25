@@ -310,7 +310,7 @@ func _build() -> void:
 ## The mesh's vertices, skinned in the skeleton's current pose, in `bone`'s space.
 static func bone_space_points(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int) -> PackedVector3Array:
 	var out := PackedVector3Array()
-	var to_bone := skeleton.get_bone_global_pose(bone).affine_inverse()
+	var to_bone := FinalPoses.of(skeleton).pose(bone).affine_inverse()
 	var mesh_in_skel := skeleton.global_transform.affine_inverse() * mesh.global_transform
 	for s in mesh.mesh.get_surface_count():
 		var arrays := mesh.mesh.surface_get_arrays(s)
@@ -335,7 +335,7 @@ static func skin_surface(mesh: MeshInstance3D, skeleton: Skeleton3D, arrays: Arr
 		var bone := skin.get_bind_bone(b)
 		if bone < 0:
 			bone = skeleton.find_bone(skin.get_bind_name(b))
-		mats.append(skeleton.get_bone_global_pose(maxi(bone, 0)) * skin.get_bind_pose(b))
+		mats.append(FinalPoses.of(skeleton).pose(maxi(bone, 0)) * skin.get_bind_pose(b))
 	var per := bones_arr.size() / maxi(verts.size(), 1)
 	var out := PackedVector3Array()
 	out.resize(verts.size())
@@ -426,7 +426,7 @@ func _build_components() -> void:
 		var k := clampf(pow(vol / maxf(p.aabb.get_volume(), 0.01), 1.0 / 3.0), 0.05, 0.8)
 		var size := p.aabb.size * k
 		var centre := p.aabb.get_center()
-		var to_bone := (_skel.global_transform * _skel.get_bone_global_pose(p.bone)).affine_inverse().basis * _body.global_basis
+		var to_bone := (_skel.global_transform * FinalPoses.of(_skel).pose(p.bone)).affine_inverse().basis * _body.global_basis
 		var shift := Vector3.ZERO
 		if p == chest:
 			shift = (to_bone * Vector3.BACK).normalized()
@@ -631,7 +631,7 @@ func _nearest_part(world: Vector3) -> Part:
 	for p in parts:
 		if p.equipment != null:
 			continue
-		var c := _skel.global_transform * _skel.get_bone_global_pose(p.bone) * p.aabb.get_center()
+		var c := _skel.global_transform * FinalPoses.of(_skel).pose(p.bone) * p.aabb.get_center()
 		var d := c.distance_to(world)
 		if d < best_d:
 			best_d = d
@@ -644,14 +644,14 @@ func _nearest_part(world: Vector3) -> Part:
 func _part_frame(p: Part) -> Transform3D:
 	if p.equipment != null:
 		return p.equipment.global_transform
-	return _skel.global_transform * _skel.get_bone_global_pose(p.bone)
+	return _skel.global_transform * FinalPoses.of(_skel).pose(p.bone)
 
 
 func _component_frame(c: Component) -> Transform3D:
 	if c.node != null:
 		return c.node.global_transform
 	if c.bone >= 0:
-		return _skel.global_transform * _skel.get_bone_global_pose(c.bone)
+		return _skel.global_transform * FinalPoses.of(_skel).pose(c.bone)
 	return _body.global_transform
 
 
@@ -1929,14 +1929,14 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		var holes_on := holes.get_holes(q.mesh)
 		var bh := Vector2(heat, holes.now) if heat > 0.0 else Vector2.ZERO
 		if not holes_on.is_empty() or heat > 0.0:
-			holes.adopt(mi, holes_on, _skel.get_bone_global_pose(q.bone), bh)
+			holes.adopt(mi, holes_on, FinalPoses.of(_skel).pose(q.bone), bh)
 		if q.cut_y != INF:
-			var pose := _skel.get_bone_global_pose(q.bone)
+			var pose := FinalPoses.of(_skel).pose(q.bone)
 			var c0 := q.aabb.get_center()
 			holes.cut(mi, null, -1, pose * Vector3(c0.x, q.cut_y, c0.z), pose.basis.y, true)
 		var m := q.dry + q.tank * fill
 		mass += m
-		centre += (_skel.get_bone_global_pose(q.bone) * q.aabb.get_center()) * m
+		centre += (FinalPoses.of(_skel).pose(q.bone) * q.aabb.get_center()) * m
 		# Frame stubs left where a limb came off this part go with it.
 		for stub in _stubs:
 			if is_instance_valid(stub) and stub.get_parent() == q.area:
@@ -1946,7 +1946,7 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		var mi := _bake(cut.mesh)
 		mi.name = "Baked_" + String(cut.name)
 		body.add_child(mi)
-		var pose := _skel.get_bone_global_pose(cut.bone)
+		var pose := FinalPoses.of(_skel).pose(cut.bone)
 		holes.adopt(mi, holes.get_holes(cut.mesh), pose)
 		var c0 := cut.aabb.get_center()
 		holes.cut(mi, null, -1, pose * Vector3(c0.x, cut.cut_y if cut.cut_y != INF else cut.last_hole.y, c0.z),
