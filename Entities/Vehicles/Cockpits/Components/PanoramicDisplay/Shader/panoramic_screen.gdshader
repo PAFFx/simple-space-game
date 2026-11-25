@@ -315,10 +315,10 @@ void fragment() {
 			vec2 cell = floor(vec2(azimuth, elevation) * 40.0);
 			float jitter = cov_hash(cell + float(i) * 7.0);
 			panel_dead = max(panel_dead, step(ang, 1.1 + jitter * 0.6));
-			panel_flicker = max(panel_flicker, (1.0 - smoothstep(2.2, 3.6, ang)) * step(0.5, cov_hash(cell + floor(TIME * 9.0))));
+			panel_flicker = max(panel_flicker, (1.0 - smoothstep(1.6, 2.4, ang)) * step(0.65, cov_hash(cell + floor(TIME * 9.0))));
 			panel_hot = max(panel_hot, 1.0 - smoothstep(ragged, ragged + 0.25, ang));
 			float crack = 1.0 - smoothstep(0.0, 0.025, abs(fract(around * 1.6 + 0.13 * sin(ang * 3.0)) - 0.5) - 0.47);
-			panel_dead = max(panel_dead, crack * (1.0 - smoothstep(1.5, 4.2, ang)));
+			panel_dead = max(panel_dead, crack * (1.0 - smoothstep(1.2, 2.6, ang)));
 		}
 	}
 
@@ -397,7 +397,7 @@ void fragment() {
 	}
 
 	if (screen_hole_count > 0) {
-		color = mix(color, color * vec3(1.4, 0.6, 1.2) + vec3(0.03, 0.0, 0.05), panel_flicker * 0.7);
+		color = mix(color, color.gbr * 1.3 + vec3(0.02), panel_flicker * 0.6);
 		color = mix(color, vec3(0.0), panel_dead);
 		color = mix(color, vec3(1.0, 0.32, 0.05) * 1.6, panel_hot);
 	}

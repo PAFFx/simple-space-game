@@ -69,6 +69,7 @@ func _run(cases: PackedStringArray) -> void:
 			"screen": await _screen()
 			"cut": await _cut()
 			"panel": await _panel()
+			"cockpit": await _cockpit_view()
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
 			"drone": await _drone()
@@ -187,6 +188,31 @@ func _sever() -> void:
 			await _frames(3)
 			_save("sever_piece")
 			break
+
+
+## A beam through the cockpit 1.2 m in front of the pilot (he lives): from the seat, the
+## screen, the shell and the chest holed, space through them.
+func _cockpit_view() -> void:
+	_model.repair()
+	await _frames(20)
+	var fp := _vehicle.get_cockpit().get_player_camera() as PilotCamera
+	var eye := fp.global_position
+	var basis := _suit.global_basis
+	var target := eye + basis * Vector3(0.0, 0.1, -1.2)
+	var dir := (basis * Vector3(-1.0, 0.0, 0.0)).normalized()
+	fp.make_current()
+	fp.set_look_rotation(Basis.from_euler(Vector3(0.0, deg_to_rad(-60.0), 0.0)))
+	await _frames(5)
+	_save("cockpit_0_before")
+	await _fire(target - dir * 300.0, dir, "cockpit", [0.05, 0.6])
+	for i in 90:
+		await physics_frame
+	_save("cockpit_3_after")
+	fp.set_look_rotation(Basis.from_euler(Vector3(0.0, deg_to_rad(60.0), 0.0)))
+	await _frames(5)
+	_save("cockpit_4_other_side")
+	print("pilot alive: ", not _model.pilot_dead)
+	_cam.make_current()
 
 
 ## A tank cell bursting in the backpack (steam): armour plates torn off and thrown out.

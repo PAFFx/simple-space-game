@@ -903,6 +903,7 @@ func _hit_component(c: Component, d: Drill) -> void:
 			var miss := (o + dir * along).distance_to(centre)
 			var half := sqrt(maxf(c.radius * c.radius - miss * miss, 0.0))
 			cockpit_holed.emit(o + dir * (along - half), o + dir * (along + half))
+			_hole_cockpit(o, dir, d.radius)
 			_event("cockpit holed")
 		Kind.REACTOR:
 			c.alive = false
@@ -1044,6 +1045,34 @@ func _burst(at: Vector3, energy: float, kind: StringName) -> void:
 	var away := (_body.global_transform * _body.center_of_mass - at)
 	if away.length() > 0.01:
 		_body.apply_impulse(away.normalized() * push, at - _body.global_position)
+
+
+## The beam's line through the cockpit: every interior mesh on it gets a through-hole (in its
+## own frame: it rides the cockpit's gimbal), so with the screen and the chest holed the pilot
+## sees out. Meshes with their own shaders are left whole.
+func _hole_cockpit(origin: Vector3, dir: Vector3, radius: float) -> void:
+	var cockpit := _vehicle.get_cockpit()
+	if cockpit == null:
+		return
+	var screen := cockpit.get_panoramic_screen()
+	for node in cockpit.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh == null or not mi.is_visible_in_tree() or (screen != null and screen.is_ancestor_of(mi)):
+			continue
+		if mi.skin != null:
+			continue   # the pilot
+		var plain := true
+		for si in mi.mesh.get_surface_count():
+			if not (mi.get_active_material(si) is BaseMaterial3D):
+				plain = false
+		if not plain:
+			continue
+		var t := _ray_box(mi.global_transform, mi.get_aabb().grow(radius), origin, dir)
+		if t.x < 0.0:
+			continue
+		var entry := origin + dir * t.x
+		var h := holes.add_hole(mi, null, -1, entry, dir, radius, maxf(t.y - t.x, 0.1), 1900.0)
+		h.s_drill = h.s_out
 
 
 ## Tears an armour panel off `p`: the hull surface from `inside` toward `out`, `radius` m
