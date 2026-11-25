@@ -96,8 +96,8 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
 - [ ] **The reactor explosion grows with the zoom-out / FOV.** *Cause:* the flash sprite has a
   minimum angular size (`flash.gdshader`: `size = max(min(flash_size, max_angle·dist),
   min_angle·dist)`), so far away it stops shrinking. Big explosions need world size only.
-- [ ] **Beams bigger?** Open: the rifle beam's drawn width against the hole it makes (0.6 m
-  radius). Decide with a side-by-side render at combat ranges.
+- [x] **Beams bigger?** Decided: the beam's size is right; the **holes** must be bigger
+  (rifle hole radius today 0.6 m), most of all through the cockpit (G).
 
 ## G. Cockpit: being hit and dying
 
@@ -105,7 +105,8 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   zoom out to third person when the suit is destroyed (and when the pilot dies).
 - [ ] **A hit to the cockpit breaks its gimbal.** The cockpit stops turning on its own and stays
   stuck to the suit's attitude.
-- [ ] **Holes much bigger.** Beam holes through the cockpit are far too small.
+- [ ] **Holes much bigger.** Beam holes through the cockpit are far too small, and holes
+  everywhere should be bigger (the beam's size stays).
 - [ ] **Every pierced screen breaks.** One shot kills several screens but only one shows cracks;
   every composite screen a beam passes through cracks (each crossing is a break).
 - [ ] **Make a cockpit hit terrifying** even when the pilot lives. Sequence: the beam right in
@@ -126,20 +127,15 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   - Black only where nothing can supply a picture (the head's cameras gone and no camera covers
     that direction).
 
-  **Ideas** (to choose from):
-  1. *Per part* (closest to today's `SENSOR_OPAQUE`): each part and equipment lists the cameras
-     that see past it; when all are gone, that part is drawn in the feed. Precise, can look
-     patchy (a single shoulder drawn, the rest see-through).
-  2. *Whole body once damaged*: as soon as any body camera is lost, the whole suit is drawn in
-     the feed (only weapons keep their own rule). Simple and readable: "my see-through is gone".
-  3. *Fading see-through*: each lost camera makes the body more visible (drawn translucent,
-     30% per camera lost, opaque when its own cameras are all gone). Shows degradation
-     gradually; mixes 1 and 2.
-  4. *Head cameras lost*: the sub cameras take over the picture (as the coverage does today),
-     lower placed, so the view shifts to theirs; black where none sees.
-
-  Recommendation: 1 for weapons and the shield (they are clearly separate objects), 3 for the
-  body; 4 as the fallback when the head's eyes are gone.
+  **Decided (2026-11-27):**
+  - **Any damage to the suit shows the whole body** in the feed (drawn from the head's
+    viewpoint, real meshes with their holes): seeing your own body is how you assess the
+    damage. Undamaged, the body stays see-through as today.
+  - **Shield and fin funnels** stay see-through (they would block the view) until they
+    themselves are damaged; then they are drawn.
+  - **Head's cameras gone**: the view comes from the chest camera (the left chest sensor).
+    That gone too: no full front view any more; only what the remaining sub cameras cover,
+    black elsewhere.
 
 ## I. Notes
 
