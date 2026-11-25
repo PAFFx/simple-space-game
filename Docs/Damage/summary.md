@@ -4,7 +4,7 @@ Status: **first pass built** (2026-11-25, branch `feat/damage-design`; see *As b
 The old `SuitDamage` mock (hit points per box) is gone. Numbers and their derivations are in
 `physics.md`, the beam's look in `beam_effects.md`, parts and limbs coming off in
 `dismemberment.md`, the panoramic screen and cockpit in `cockpit_and_cameras.md`, the build order
-in `todo.md`.
+in `todo.md`; the play-test fix list is `fixes.md`.
 
 Decided with the user (2026-11-25): pilot hit = game over; beam energy front-loaded so it
 pierces targets sliding under it at 10–40 m/s (`physics.md` §1); the reactor sits below the
