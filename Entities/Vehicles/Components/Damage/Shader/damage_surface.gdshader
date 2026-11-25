@@ -83,7 +83,9 @@ void fragment() {
 		// Melt and slag in patches, a little fine grain; deeper in the bore the wall is seen
 		// through a narrow opening and catches less light: it reads as a hole.
 		float runs = smoothstep(0.25, 0.75, patches_in) * 0.75 + melt * 0.25;
-		float deep = exp(-h.depth / 1.6);
+		// A cut face is drawn in front of the back face it is on (negative depth): no dimming,
+		// and no brightening either (exp of a negative depth made it glare white at angles).
+		float deep = exp(-max(h.depth, 0.0) / 1.6);
 		float t = h.temperature * (0.82 + 0.2 * runs + 0.12 * melt);
 		albedo = mix(vec3(0.05, 0.045, 0.04), vec3(0.12, 0.105, 0.09), runs) * (0.4 + 0.6 * deep);
 		// Re-solidified slag is rough: glossy, its bumps mirrored the planet and sun in

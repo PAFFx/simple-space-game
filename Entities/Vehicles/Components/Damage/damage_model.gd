@@ -1794,7 +1794,7 @@ func _cut_part(p: Part, y: float) -> void:
 	# The stub: cut on the mesh, its hull trimmed, its mass and what was beyond the cut gone.
 	p.cut_y = y
 	p.left = BREAK_LEFT + 0.1
-	holes.cut(p.mesh, _skel, p.bone, cut_local, Vector3.UP, true)
+	holes.cut(p.mesh, _skel, p.bone, cut_local, Vector3.UP, true, p.aabb.grow(0.1))
 	var kept := PackedVector3Array()
 	for v in p.hull_points:
 		if v.y < y:
@@ -1932,7 +1932,7 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		if q.cut_y != INF:
 			var pose := FinalPoses.of(_skel).pose(q.bone)
 			var c0 := q.aabb.get_center()
-			holes.cut(mi, null, -1, pose * Vector3(c0.x, q.cut_y, c0.z), pose.basis.y, true)
+			holes.cut(mi, null, -1, pose * Vector3(c0.x, q.cut_y, c0.z), pose.basis.y, true, q.aabb.grow(0.1), pose.affine_inverse())
 		var m := q.dry + q.tank * fill
 		mass += m
 		centre += (FinalPoses.of(_skel).pose(q.bone) * q.aabb.get_center()) * m
@@ -1949,7 +1949,7 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		holes.adopt(mi, holes.get_holes(cut.mesh), pose)
 		var c0 := cut.aabb.get_center()
 		holes.cut(mi, null, -1, pose * Vector3(c0.x, cut.cut_y if cut.cut_y != INF else cut.last_hole.y, c0.z),
-				pose.basis.y, false)
+				pose.basis.y, false, cut.aabb.grow(0.1), pose.affine_inverse())
 		var m := (cut.dry + cut.tank * fill) * cut_share
 		mass += m
 		var far_y := cut.aabb.end.y - cut.aabb.size.y * cut_share * 0.5

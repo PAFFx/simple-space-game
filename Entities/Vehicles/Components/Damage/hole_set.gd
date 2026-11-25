@@ -30,6 +30,8 @@ class Surface:
 	var cut_plane := Vector4(0.0, 1.0, 0.0, 0.0)   ## part space normal, offset
 	var cut_side := 0.0
 	var cut_heat := Vector2(1800.0, -1000.0)
+	var cut_box := AABB(Vector3.ONE * -1e4, Vector3.ONE * 2e4)   ## bone space: the part's box
+	var cut_box_xf := Transform3D.IDENTITY                         ## part space → bone space
 	var dirty := true
 
 var now := 0.0
@@ -106,14 +108,19 @@ func heat(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, kelvin: float) 
 
 
 ## `mesh` was cut through: the plane (part space: point and normal); `keep_below` keeps the
-## side the normal points away from. Its cut face is drawn hot (`peak` K) and cools.
+## side the normal points away from. Its cut face is drawn hot (`peak` K) and cools, only within
+## the part's cross-section: the ellipse across its bone's y in `bounds` (bone space; `to_bone`
+## takes part space there). Open shells of the mesh elsewhere show back faces that would
+## otherwise draw the face floating outside the part.
 func cut(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, point: Vector3, normal: Vector3,
-		keep_below: bool, peak := 1800.0) -> void:
+		keep_below: bool, bounds: AABB, to_bone := Transform3D.IDENTITY, peak := 1800.0) -> void:
 	var s := _surface(mesh, skeleton, bone)
 	var n := normal.normalized()
 	s.cut_plane = Vector4(n.x, n.y, n.z, n.dot(point))
 	s.cut_side = 1.0 if keep_below else -1.0
 	s.cut_heat = Vector2(peak, now)
+	s.cut_box = bounds
+	s.cut_box_xf = to_bone
 	_upload(s)
 
 
@@ -237,3 +244,6 @@ func _upload(s: Surface) -> void:
 		m.set_shader_parameter(&"cut_plane", s.cut_plane)
 		m.set_shader_parameter(&"cut_side", s.cut_side)
 		m.set_shader_parameter(&"cut_heat", s.cut_heat)
+		m.set_shader_parameter(&"cut_box_min", s.cut_box.position)
+		m.set_shader_parameter(&"cut_box_max", s.cut_box.end)
+		m.set_shader_parameter(&"cut_box_xf", Projection(s.cut_box_xf))

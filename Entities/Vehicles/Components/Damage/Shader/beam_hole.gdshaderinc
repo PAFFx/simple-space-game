@@ -27,6 +27,11 @@ uniform vec2 body_heat = vec2(0.0, -1000.0);
 uniform vec4 cut_plane = vec4(0.0, 1.0, 0.0, 0.0);
 uniform float cut_side = 0.0;
 uniform vec2 cut_heat = vec2(1800.0, -1000.0);
+// The part's own box (its bone's space; cut_box_xf takes part space there): the cut face is only
+// drawn within the ellipse across the bone (x, z) inscribed in it.
+uniform vec3 cut_box_min = vec3(-1e4);
+uniform vec3 cut_box_max = vec3(1e4);
+uniform mat4 cut_box_xf = mat4(1.0);
 uniform float cut_bump = 0.22;
 
 varying vec3 v_part_pos;
@@ -195,7 +200,11 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				}
 				t -= g / slope;
 			}
-			if (t > 0.0 && t < dist) {
+			vec3 qb = (cut_box_xf * vec4(cam + rd * t, 1.0)).xyz;
+			vec2 half_xz = max((cut_box_max.xz - cut_box_min.xz) * 0.5, vec2(1e-3));
+			vec2 e = (qb.xz - (cut_box_max.xz + cut_box_min.xz) * 0.5) / half_xz;
+			bool in_box = dot(e, e) <= 1.0;
+			if (t > 0.0 && t < dist && in_box) {
 				vec3 q = cam + rd * t;
 				h.inside = true;
 				h.depth = t - dist;
