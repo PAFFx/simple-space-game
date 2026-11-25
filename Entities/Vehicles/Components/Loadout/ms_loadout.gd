@@ -79,11 +79,30 @@ func _process(delta: float) -> void:
 			eq.toggle()
 
 
+## Equipment whose stow point is gone (DamageModel: its manipulator or the part it is on was
+## shot off): it can't be stowed any more, it stays in the hand.
+var stow_lost := {}
+
+
+func set_stow_lost(eq: MsEquipment, lost: bool) -> void:
+	if lost:
+		stow_lost[eq] = true
+	else:
+		stow_lost.erase(eq)
+
+
+## Whether `eq` can be stowed (it has a stow point and that is still there).
+func can_stow(eq: MsEquipment) -> bool:
+	return _stow_attach.has(eq) and not stow_lost.has(eq)
+
+
 ## Draws or stows the equipment that has a stow point, toward `hand_wanted`.
 func _physics_process(delta: float) -> void:
 	if draw_frozen:
 		return
 	for eq: MsEquipment in _stow_attach:
+		if stow_lost.has(eq) and eq.draw_progress > 0.0:
+			eq.hand_wanted = true   # nowhere to put it: it stays in the hand
 		var goal := 2.0 if eq.hand_wanted and eq.equipped else 0.0
 		var p := eq.draw_progress
 		if p == goal:

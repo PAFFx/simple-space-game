@@ -2223,6 +2223,13 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 				copy.global_transform = src.global_transform
 			arm.visible = false
 			_hidden_nodes.append(arm)
+			# What it held can't be stowed any more.
+			var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+			if loadout != null:
+				for eq: MsEquipment in loadout.equipment:
+					if arm.name == "StowArm_%s" % eq.name:
+						loadout.set_stow_lost(eq, true)
+						_event("%s can't be stowed" % eq.name)
 	if cut != null:
 		# The far side of a part cut through: the whole mesh, cut the other way.
 		var mi := _bake(cut.mesh)
@@ -2507,6 +2514,9 @@ func repair() -> void:
 			stub.queue_free()
 	_stubs.clear()
 	_snapping.clear()
+	var lo := _vehicle.find_component(MsLoadout) as MsLoadout
+	if lo != null:
+		lo.stow_lost.clear()
 	for i in range(_dangles.size() - 1, -1, -1):
 		_drop_dangle(i, false)
 	_last_v = Vector3.INF

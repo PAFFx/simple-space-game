@@ -58,6 +58,8 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
 - [x] **The rifle's stow manipulator stayed after its skirt was shot off** (play-test). It is
   built on its own attachment on the skirt's bone, not part of the skirt's mesh; now it goes
   with the skirt's piece (its meshes copied onto it) and is hidden on the suit until repair.
+  What it held can't be stowed any more (`MsLoadout.stow_lost`): a drawn rifle stays in the
+  hand, still usable; repair gives the stow back.
 
 ## B. Beam holes: rendering bugs
 
