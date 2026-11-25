@@ -547,9 +547,9 @@ func stump(anchor: Node3D, at: Vector3, axis: Vector3, radius: float, velocity: 
 ## The reactor gave way: a bright clean sphere ~200 m across, mostly light.
 func reactor_flash(at: Vector3, velocity: Vector3) -> void:
 	var pm := ProjectileManager.of(self)
-	pm.flash(at, Color(1.0, 0.98, 0.95), 20.0, 260.0, 0.35, 30.0, 6.0, 4000.0, velocity, 1.0)
-	pm.ball(at, velocity, 200.0, 3.2, Color(1.0, 0.85, 0.6), 0.0, 5.0, 3000.0)
-	pm.ball(at, velocity, 120.0, 1.6, Color(1.0, 0.95, 0.9), 0.05, 3.0, 0.0)
+	ProjectileManager.world_sized(pm.flash(at, Color(1.0, 0.98, 0.95), 20.0, 260.0, 0.35, 30.0, 6.0, 4000.0, velocity, 1.0))
+	ProjectileManager.world_sized(pm.ball(at, velocity, 200.0, 3.2, Color(1.0, 0.85, 0.6), 0.0, 5.0, 3000.0))
+	ProjectileManager.world_sized(pm.ball(at, velocity, 120.0, 1.6, Color(1.0, 0.95, 0.9), 0.05, 3.0, 0.0))
 	_spray(at, Vector3.ZERO, velocity, 400, 180.0, 160.0, 0.6, 3.0, 0.6, 260.0)
 
 

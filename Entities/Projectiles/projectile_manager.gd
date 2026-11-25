@@ -379,7 +379,7 @@ func explode(position: Vector3, velocity: Vector3, size: float, color := Color(1
 
 ## One sphere of light: swells to `radius` (m) white-hot, holds, takes on `color` and fades.
 func ball(position: Vector3, velocity: Vector3, radius: float, duration: float, color: Color,
-		delay := 0.0, glow := 0.0, light_range := 0.0) -> void:
+		delay := 0.0, glow := 0.0, light_range := 0.0) -> Flash:
 	# The ball's edge sits at 0.84 of the sprite's radius; the rest is its halo.
 	var f := flash(position, color, radius * 0.25 / 0.84, radius / 0.84, duration, 6.0, glow,
 			light_range, velocity)
@@ -388,6 +388,14 @@ func ball(position: Vector3, velocity: Vector3, radius: float, duration: float, 
 	f.sprite.set_instance_shader_parameter(&"flash_ball", 1.0)
 	f.sprite.set_instance_shader_parameter(&"flash_max_angle", 0.9)
 	_place_flash(f)
+	return f
+
+
+## `f` keeps its size in the world at any distance it is seen from (a big explosion): without
+## this a flash is capped to an angular size, so it would grow as the camera pulls back.
+static func world_sized(f: Flash) -> Flash:
+	f.sprite.set_instance_shader_parameter(&"flash_max_angle", 1.25)
+	return f
 
 
 ## How much the shots and flashes around `at` light it up: [colour × strength, the

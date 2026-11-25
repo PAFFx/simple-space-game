@@ -66,6 +66,7 @@ func _run(cases: PackedStringArray) -> void:
 			"back": await _case("back", &"forearm.L", Vector3.ZERO, Vector3(0.6, 0.0, 1.0), Vector3(-12, 3, 14), [0.02, 0.06, 0.2, 0.6, 1.5])
 			"cool": await _cool()
 			"fire": await _fire_case()
+			"breach": await _breach_case()
 			"hole": await _hole()
 			"sever": await _sever()
 			"screen": await _screen()
@@ -144,6 +145,42 @@ func _fire_case() -> void:
 			await physics_frame
 		waited = t
 		_save("fire_burning_%.1fs" % t)
+
+
+## A forearm shot off floats near; then the reactor goes: the old piece is thrown with the rest,
+## and the blast keeps its size in the world from 500 m and from 1500 m (taken back to back).
+func _breach_case() -> void:
+	_model.repair()
+	await _frames(20)
+	_model.sever(_model.find_part(&"forearm.L"))
+	for i in 60:
+		await physics_frame
+	var piece: RigidBody3D = null
+	for n in get_nodes_in_group(DamageModel.DEBRIS_GROUP):
+		piece = n as RigidBody3D
+	var before := piece.linear_velocity.length() if piece != null else -1.0
+	var at := _suit.global_position
+	_model._breach_reactor()
+	for i in 18:
+		await physics_frame
+	print("old piece: %.1f m/s before the blast, %.1f m/s after" % [before, piece.linear_velocity.length() if is_instance_valid(piece) else -1.0])
+	var basis := _suit.global_basis
+	var away := (basis * Vector3(-260, 120, -420)).normalized()
+	_view = _cam
+	_cam.make_current()
+	# Time stopped: the same moment from both distances (a few frames each, the first after a
+	# jump can be stale).
+	Engine.time_scale = 0.0
+	for d in [500.0, 1500.0]:
+		_look(at + away * d, at)
+		await _frames(3)
+		await _save("breach_%dm" % int(d))
+	Engine.time_scale = 1.0
+	for i in 30:
+		await physics_frame
+	_look(at + away * 500.0, at)
+	await _frames(3)
+	await _save("breach_500m_later")
 
 
 ## One hole seen close up as it cools: frames at hole ages 0.1 … 60 s.

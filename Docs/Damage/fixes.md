@@ -208,9 +208,17 @@ Still to do: real inner-frame meshes under the armour.
 
 ## F. Explosion and beam scale
 
-- [ ] **The reactor explosion grows with the zoom-out / FOV.** *Cause:* the flash sprite has a
+- [x] **The reactor explosion grows with the zoom-out / FOV.** *Cause:* the flash sprite has a
   minimum angular size (`flash.gdshader`: `size = max(min(flash_size, max_angle·dist),
   min_angle·dist)`), so far away it stops shrinking. Big explosions need world size only.
+  *Done (2026-11-28):* it was the maximum: a flash is capped at 0.22 rad (a ball 0.9), so a
+  260 m flash seen from the 500 m death view was drawn 110 m and grew as the camera pulled back.
+  The reactor's flash and balls are `ProjectileManager.world_sized` (cap 1.25 rad): at the same
+  instant the blast is 3× smaller from 3× as far (snapshot `breach`).
+- [x] **The blast throws what is around it.** The reactor doesn't just vaporize the suit: its
+  parts fly off (40–160 m/s, as before), and now debris already floating nearby (pieces shot
+  off earlier, other suits' wreckage, `DEBRIS_GROUP`) is thrown outward too, as fast as the
+  suit's own parts at that distance, spinning (a forearm shot off a second before: 0 → 58 m/s).
 - [x] **Beams bigger?** Decided: the beam's size is right; the **holes** must be bigger
   (rifle hole radius today 0.6 m), most of all through the cockpit (G).
 

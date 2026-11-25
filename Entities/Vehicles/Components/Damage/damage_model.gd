@@ -44,6 +44,10 @@ const BREAK_LEFT := 0.35
 const SNAP_LEFT := 0.5
 ## Below this share of its section left a part's thrusters are dead (lines and mounts gone).
 const THRUSTER_LEFT := 0.3
+## Debris from any suit (DamageModel._add_debris): a reactor blast throws it.
+const DEBRIS_GROUP := &"damage_debris"
+## How far a reactor blast throws loose debris, m.
+const BLAST_REACH := 400.0
 ## Chance a part shot through (its Minovsky lines ruptured) catches fire inside.
 const FIRE_CHANCE := 0.6
 ## Parts with a real joint inside (frame, actuators, cables): torn off they leave a frame stub.
@@ -2054,7 +2058,7 @@ func _launch_plate(piece: Array, out: Vector3, speed: float) -> void:
 	var tw := body.create_tween()
 	tw.tween_property(edge_mat, "emission_energy_multiplier", 0.0, 18.0)
 	_solidify(body)
-	_debris.append(body)
+	_add_debris(body)
 
 
 func _kill_pilot() -> void:
@@ -2110,7 +2114,9 @@ func _breach_reactor_body() -> void:
 			target.call(&"apply_radiation", fluence, at)
 		elif fluence > 5e6 and target.has_method(&"apply_hit"):
 			target.call(&"apply_hit", 1e9, target.global_position, (target.global_position - at).normalized(), _vehicle)
-	# The suit itself comes apart: every part flies off glowing.
+	# What already floats around is thrown first (the suit's own parts are made after, already
+	# moving), then the suit itself comes apart: every part flies off.
+	_throw_debris(at)
 	_blow_apart(at)
 	var fc := _flight()
 	if fc != null:
@@ -2468,7 +2474,7 @@ func _knock_stubs(_p: Part, at: Vector3, dir: Vector3, length: float, radius: fl
 		body.linear_velocity = _velocity_at(body.global_position) + (dir + (st.global_basis.y * 0.6)).normalized() * _rng.randf_range(15.0, 40.0)
 		body.angular_velocity = Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 3.0
 		_solidify(body)
-		_debris.append(body)
+		_add_debris(body)
 		var fx := DamageFx.of(self)
 		if fx != null:
 			fx.creak(body.global_position, body.linear_velocity, 1.2)
@@ -2918,7 +2924,7 @@ func _make_debris_body(group: Array[Part], equip: Array[MsEquipment], push: floa
 			+ Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * push * 0.2
 	body.angular_velocity = w0 + Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 0.6
 	_solidify(body)
-	_debris.append(body)
+	_add_debris(body)
 	return body
 
 
@@ -3007,6 +3013,30 @@ func _bake(mesh: MeshInstance3D) -> MeshInstance3D:
 	mi.mesh = am
 	mi.layers = mesh.layers
 	return mi
+
+
+## A piece knocked off the suit: kept to clear on repair, and in DEBRIS_GROUP so any blast
+## nearby can throw it.
+func _add_debris(body: RigidBody3D) -> void:
+	_debris.append(body)
+	body.add_to_group(DEBRIS_GROUP)
+
+
+## The blast throws whatever already floats around (pieces shot off before, other suits'
+## wreckage) outward: as fast as the suit's own parts at the same distance, spinning.
+func _throw_debris(at: Vector3) -> void:
+	for node in get_tree().get_nodes_in_group(DEBRIS_GROUP):
+		var body := node as RigidBody3D
+		if body == null or not body.is_inside_tree():
+			continue
+		var away := body.global_position - at
+		var dist := away.length()
+		if dist > BLAST_REACH:
+			continue
+		var dir := away / dist if dist > 0.01 else Vector3.UP
+		var speed := clampf(900.0 / maxf(dist, 2.0), 10.0, 160.0) * clampf(1.2 - dist / BLAST_REACH, 0.2, 1.0)
+		body.linear_velocity += dir * speed
+		body.angular_velocity += Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * clampf(speed / 40.0, 0.3, 3.0)
 
 
 ## The reactor took the suit apart: every part and piece of equipment flies off, glowing.
@@ -3121,7 +3151,7 @@ func _sweep_leftovers(at: Vector3) -> void:
 		body.angular_velocity = Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 1.5
 		holes.heat(copy, null, -1, 1400.0)
 		_solidify(body)
-		_debris.append(body)
+		_add_debris(body)
 		# A stow arm sets its parts' visibility every frame: hide the arm itself.
 		var hide: Node3D = mi
 		var up := mi.get_parent()
