@@ -29,6 +29,7 @@ var _fail_lines: Array[String] = []
 var _frames_ms: Array[float] = []
 var _spikes: Array[String] = []
 var _round := 0
+var _start := Transform3D.IDENTITY
 var _step := ""
 
 
@@ -67,6 +68,7 @@ func _run(rounds: int, hits: int) -> void:
 		quit(1)
 		return
 	_skel = _model._skel
+	_start = _suit.global_transform
 	(_vehicle.find_component(FireControl) as FireControl).sensors.enabled = false
 	# The torn-panel skins are split a little each frame after load.
 	for i in 600:
@@ -79,6 +81,7 @@ func _run(rounds: int, hits: int) -> void:
 		_round = r
 		_step = "repair"
 		_model.repair()
+		_suit.global_transform = _start
 		_suit.linear_velocity = Vector3.ZERO
 		_suit.angular_velocity = Vector3.ZERO
 		for i in 20:

@@ -2066,7 +2066,8 @@ func sever(p: Part, may_dangle := true) -> void:
 
 
 func sever_body(p: Part, may_dangle := true) -> void:
-	if p.severed or reactor_gone:
+	# The torso (chest, spine, pelvis) never comes off: it is the suit (a breach takes it apart).
+	if p.severed or reactor_gone or CORE_PARTS.has(p.name):
 		return
 	if p.equipment != null:
 		_break_equipment(p.equipment)
