@@ -131,7 +131,10 @@ cockpit.
   gone gets the bit and is drawn on the screen (`DamageModel.set_opaque`). The shield's camera
   dies with a through-hole (60%); broken equipment turns opaque. Rearm clears it.
 - **Screen holes**: where a beam's line crosses the cockpit sphere (1.6 m), up to 8 holes in the
-  screen's frame: burned open (ragged, molten rim), dead panels to ~1.1–1.7 radii, flickering
-  panels to ~3 radii, cracks. The cockpit shell behind is not holed yet, so the hole shows the
-  shell, not outside.
+  screen's frame: burned open (ragged, molten rim). The screen is tiled from flat panels
+  (`panel_deg`, 15° × 15°): the panel a hole is in dies whole (dark glass with a faint sheen),
+  the glass cracks from the hole across it and into the 8 panels around (hairline radial breaks
+  and broken rings, glints where they catch the light), and those neighbours keep their picture
+  with a few dead blocks. The cockpit shell and the chest are holed on the same line, so the
+  pilot sees space through it (2026-11-26).
 - **Pilot**: killed when the drilled cylinder reaches the capsule: GAME OVER (range panel).
