@@ -48,6 +48,11 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   hangs from up the bone chain; on a part cut through, by which side of the cut it is on. The
   V-fin is part of the head mesh and goes with the head (checked).
 
+- [x] **Inner frame left standing where a part was gone** (play-test: red-tipped struts at the
+  backpack and pelvis). Every part torn off left a frame stub (joint drum, struts, cables up
+  to 1.4 radii long), even bolted-on armour (skirts, main pods, nozzles). Now only jointed
+  limbs (head, arms, hands, legs, feet) leave one, and it is short, in the socket.
+
 ## B. Beam holes: rendering bugs
 
 - [x] **The glow and melt texture swims when the camera moves.** It changes with the view a lot.

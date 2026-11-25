@@ -41,6 +41,9 @@ const BREAK_LEFT := 0.35
 ## A limb with less than this left snaps off by itself (after a moment); between it and
 ## STRESS_LEFT it holds until the suit's acceleration at the wound is too much for what is left.
 const SNAP_LEFT := 0.5
+## Parts with a real joint inside (frame, actuators, cables): torn off they leave a frame stub.
+## The rest (skirts, pods, nozzles, guards, shoulder armour) are bolted on: only a socket crater.
+const JOINTED := ["head", "upper_arm", "forearm", "hand", "thigh", "shin", "foot"]
 ## A breach makes its debris a few pieces per physics tick, under the flash.
 const PIECES_PER_TICK := 4
 ## A limb shot off may stay hanging on its last strut and cables (chance; more with more of its
@@ -1852,7 +1855,7 @@ func sever(p: Part, may_dangle := true) -> void:
 		var h := holes.add_hole(parent.mesh, _skel, parent.bone, joint.origin + axis * 0.35, -axis, radius, 1.6, 1750.0)
 		h.s_drill = 0.7
 		h.shell = _skin_shells(parent, joint.origin + axis * 0.35, -axis, 1.6)
-		if fx != null:
+		if fx != null and _jointed(p):
 			_stubs.append(fx.stump(parent.area, joint.origin, axis, radius, _velocity_at(joint.origin)))
 	# And the torn end of the piece that flew off.
 	if body != null:
@@ -1863,7 +1866,8 @@ func sever(p: Part, may_dangle := true) -> void:
 				h.s_drill = 0.7
 				h.shell = _skin_shells(p, joint.origin - axis * 0.35, axis, 1.6)
 		if fx != null:
-			fx.stump(body, joint.origin, -axis, radius, Vector3.ZERO)
+			if _jointed(p):
+				fx.stump(body, joint.origin, -axis, radius, Vector3.ZERO)
 			fx.sever(joint.origin, _body.linear_velocity)
 		if may_dangle and p.limb and parent != null:
 			_maybe_dangle(p, body, parent, joint.origin, axis)
@@ -2036,6 +2040,13 @@ func _process(_delta: float) -> void:
 				im.surface_add_vertex(pt)
 				prev = pt
 		im.surface_end()
+
+
+func _jointed(p: Part) -> bool:
+	for prefix in JOINTED:
+		if String(p.name).begins_with(prefix):
+			return true
+	return false
 
 
 ## The nearest part up the skeleton from `p`.

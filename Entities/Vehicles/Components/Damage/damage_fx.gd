@@ -320,7 +320,8 @@ func stump(anchor: Node3D, at: Vector3, axis: Vector3, radius: float, velocity: 
 	for i in 4:
 		var strut := MeshInstance3D.new()
 		var rod := CylinderMesh.new()
-		var length := radius * randf_range(0.5, 1.4)
+		# Short: broken off at the socket, not standing out where the limb was.
+		var length := radius * randf_range(0.25, 0.6)
 		rod.top_radius = radius * randf_range(0.08, 0.16)
 		rod.bottom_radius = rod.top_radius
 		rod.height = length
@@ -358,7 +359,7 @@ func stump(anchor: Node3D, at: Vector3, axis: Vector3, radius: float, velocity: 
 	for i in 5:
 		var ang := TAU * randf()
 		stub.cable_base.append(Vector3(cos(ang), 0.0, sin(ang)) * radius * randf_range(0.1, 0.5))
-		stub.cable_dir.append((Vector3(randfn(0, 0.5), 1.0, randfn(0, 0.5))).normalized() * radius * randf_range(0.8, 1.8))
+		stub.cable_dir.append((Vector3(randfn(0, 0.5), 1.0, randfn(0, 0.5))).normalized() * radius * randf_range(0.35, 0.8))
 	_stubs.append(stub)
 	_spray(at, up, velocity, 40, 40.0, 10.0, 0.2, 0.6, 0.03, 40.0)
 	return root
