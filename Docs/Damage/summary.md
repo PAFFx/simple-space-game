@@ -287,19 +287,62 @@ Differences from the design above:
 - **Tank cells** are boxes generated in each part (4 per tank): the chest's behind the cockpit,
   the pelvis's below the reactor. Water stops beams; a cell that takes a beam steam-bursts ~30 ms
   later with the energy it absorbed (blow-off radius 0.0025·E^⅓ m).
-- **Severing** is at the part's joint (the part and everything beyond), not yet through the
-  hole (cut planes, `dismemberment.md` layer 5, not built). The stump gets a hot crater on the
-  parent, a generated stub of frame (joint drum, snapped struts glowing at the ends, torn
-  cables sparking for ~20 s); the piece gets the same at its end. No inner frame under the
-  armour yet (layer 1), no shell fracture (layer 3), no loose pieces flying off (layer 2).
+- **Severing**: a limb holed or torn away from its joint breaks **through the damage**: a cut
+  plane across the bone at the last hole (or where a burst tore it), bumpy (±0.2 m noise), drawn
+  by the hole shader (the stub discards beyond it, the piece before it; back faces seen through
+  the opening draw the cut face at the plane, hot and cooling). The stub's hull is trimmed, the
+  mass and propellant beyond the cut, thrusters and cameras there go with the piece. Near the
+  joint (first 18% of the part) it breaks at the joint. Both ends get a generated frame stub
+  (joint drum, snapped struts glowing at the ends, torn cables sparking ~20 s). No inner frame
+  under intact armour yet (`dismemberment.md` layer 1), no loose pieces (layer 2).
+- **Panels** (layer 3, built 2026-11-26): a burst (≥ 5 MJ) tears armour off the 3 nearest
+  parts, one per physics tick: the real skin around the burst's outward line (outermost
+  outward-facing triangles of the posed mesh, split to ~0.45 m, inside a ragged circle of
+  r = 0.0025·E^⅓, ≤ 0.45 × the part's width) is grouped into 2–3 plates by nearest seed,
+  given 0.14 m of thickness and a hot torn edge, and thrown off (8–120 m/s); the part gets a
+  short through-hole there (the opening and the plate's torn edge). The hull's surface wasn't
+  the mesh's (the backpack's skin sits 0.8 m inside its hull), so the cut follows the mesh.
+- **Old holes are free**: a beam's column, step by step, leaves out the share of its disc
+  inside a part's existing channels; a part crossed only through old channels gets no new hole
+  and loses no more section (`penetration_probe twice`: the second shot down a head's channel
+  goes straight through, the head stays at 59%).
+- **Cockpit**: a beam through the cockpit sphere holes the screen (as before) and every plain
+  cockpit mesh on its line (through-holes in their own frame, so they ride the gimbal); with the
+  chest holed by the drill the pilot sees space through it (`damage_snapshot cockpit`: a beam
+  1.2 m in front of the pilot, the station seen through the hole, the pilot alive).
+- **Thruster hits**: 45% dead, 20% derated to 35–70%, 20% nozzle stuck at rest, 15% valve stuck
+  open at 15–45% (it fires on its own, burning propellant; `enabled` off so the allocator works
+  around it). A main stuck open at 40%: FCS on, the suit holds its attitude (0.3°) and drifts
+  2.5 m/s in 2 s; FCS off it spins up to 112°/s. Parts torn off take their thrusters dead.
+- **Venting**: a burst cell empties through the hole at 2·Cd·P·A ≈ 0.41 MN for cell mass ×
+  25 m/s ÷ that (~0.07 s), pushing from where the line meets the hull, then the cut feed line
+  leaks 4 kN for 15 s; both show as icy jets. A backpack cell: 0.8 m/s and 14°/s (FCS off).
 - **Pilot**: a capsule (torso and legs) on the cockpit camera; any drilled cylinder that
   reaches it kills (no extra margin yet). GAME OVER via the range panel.
 - **Reactor breach**: flash and fluence on everything in the `damageable` group; the suit is
   baked into glowing pieces flung out at 40–160 m/s, its hull stops being a body until repair.
 - **Probes that count hits** turn damage off (`DamageModel.enabled = false`): weapons, dodge,
   fair-fight. Drones with hit points ≥ 1e8 can't be destroyed (probes already used 1e9+).
-- **Not built yet**: existing holes aren't subtracted (a second shot down the same channel
-  drills it again), limp joints swinging (a hit joint is taken out of AMBAC, held), stuck
-  gimbals / valves, venting thrust, fault detection, damage MFD page, missile fragment visuals,
-  vulcan pits, the cockpit's own hull holes (the screen is holed, the shell behind it isn't),
-  camera green lights.
+- **Not built yet**: limp joints swinging (a hit joint is taken out of AMBAC, held), fault
+  detection from motion, damage MFD page, missile fragment visuals, vulcan pits, camera green
+  lights, inner frame under intact armour, loose model pieces flying off whole.
+
+### Frame cost (2026-11-26, `Tools/Profiling/combat_bench.gd`, windowed, 6 drones)
+
+| | Frame |
+|---|---|
+| `main` (no damage system) | 2.48–2.66 ms |
+| branch, suit intact | 2.64–2.70 ms |
+| branch, 24 holes on 12 parts, head camera out, 2 screen holes (`damage=1`) | 2.78 ms |
+
+The first measurement had the branch 0.5 ms slower even with the damage model removed: the range
+panel's new `_process` called `find_component(DamageModel)` every frame, walking the whole suit
+(and the screen did the same for suits without one). Both cache it now. Hole uniforms are
+uploaded only when a mesh's holes change (or while one is drilled); rigid meshes skip their
+pose. One hit on the CPU (`penetration_probe timing`): a drill start 0.5 ms, a panel 9 ms (one
+per tick), a limb cut through 5 ms.
+
+![cuts, panels, cockpit, vent](images/cuts_panels_cockpit_vent.png)
+
+Thigh cut mid-way (the torn line, the stub's cut face from below), a plate flying off the
+backpack, space through the cockpit's holes, a thigh cell venting (the mist burst, the leak).
