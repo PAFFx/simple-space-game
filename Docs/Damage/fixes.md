@@ -314,7 +314,13 @@ Eight stencil values cycle so neighbouring cuts don't share marks. All variants 
 drawn once (a box too small to see, in front of the camera) after load: drawing them first on a
 real cut cost ~100 ms. Debris hulls come from cached vertices (asking a mesh for its hull reads
 it back from the render thread, ~9 ms per piece) and are made after load too.
-Known limit: where a part's mesh is open behind the cut (no back face along the line of sight)
-the stencil is not marked there and the face has a gap.
+Where a part's mesh was open behind the cut (no back face along the line of sight) the face had
+a gap: the suit's parts are closed shells now (below).
 Windowed combat bench with hits (12 s): average 4.5 ms (was 5.4–6.5), worst 23–25 ms (was 62–73).
 
+**Closed part shells (2026-11-27):** `build_mobile_suit_nu.py` closes every open boundary loop
+of the suit's parts with a fan of faces in a dark interior material (`MS_Interior`), wound to face
+out; the new faces sit inside joints and sockets. Left open on purpose: the nozzle bells, the two
+hatch doors, the doorways they close (chest, rear skirt) and the chest's airlock tunnel to the
+cockpit; one-sided panels (a single face's outline) too. Every part but the chest is now closed,
+so a cut face (stencil cap) and every hole close on real metal. Weapons are unchanged.

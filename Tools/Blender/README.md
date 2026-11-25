@@ -34,6 +34,8 @@ godot-mono --headless --path . -s Tools/Godot/build_rx93_scene.gd
 - `Sources/rx-93_nu_gundam.glb`: downloaded (Sketchfab) static model, kept as the source of truth.
   Check its licence before sharing the project. The build script welds it back into 174 parts and
   assigns them to bones/weapons by index (`GROUPS`), so a different source file needs a new table.
+  It closes each part's open boundary loops (interior material, out of sight in joints) so cuts
+  and holes never look into an empty skin; `OPEN_GROUPS` and `DOORS` list what stays open.
 
 - `cockpit_shell.py`: the capsule shell and inner door shared by both cockpit scripts.
 - `fix_character_weights.py`: plain Python, patches stray skin weights in a GLB in place (already
