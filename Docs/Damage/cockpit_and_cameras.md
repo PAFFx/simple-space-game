@@ -150,4 +150,4 @@ cockpit.
   breaks and broken rings, glints where they catch the light), and its other sub-screens keep
   their picture with a few dead blocks. The cockpit shell and the chest are holed on the same
   line, so the pilot sees space through it.
-- **Pilot**: killed when the drilled cylinder reaches the capsule: GAME OVER (range panel).
+- **Pilot**: killed when the drilled cylinder reaches the capsule: the view goes outside, pulled back.

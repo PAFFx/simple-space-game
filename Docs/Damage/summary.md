@@ -246,7 +246,7 @@ Tools/Damage/              probes and snapshots (todo.md)
 | `Entities/Equipment/Shield/shield.gd` | I-field charges, plate drilling, its camera, breaking off |
 | `Entities/Environment/Space/TargetDrone/target_drone.gd` | the drone drills too: shell, interior, core (breach), gun arm, loss of control |
 | `.../PanoramicDisplay/panoramic_screen.gd` + shader | camera coverage, screen holes |
-| `Stages/Components/RangeControl/range_control.gd` | F4 panel: parts left, thrusters and cameras out, I-field charges, last event; GAME OVER screen; 0 rearms (repairs everything) |
+| `Stages/Components/RangeControl/range_control.gd` | F4 panel: parts left, thrusters and cameras out, I-field charges, last event; 0 rearms (repairs and refuels everything) |
 | `Tools/Damage/penetration_probe.gd` | headless checks: shots at each part (timings, holes, events), shield, drone, vulcan impulse, sever + repair |
 | `Tools/Damage/damage_snapshot.gd` | windowed renders: `hole,cool,forearm,shin,chest,thigh,sever,shield,bareshield,drone,reactor,screen` |
 
@@ -324,7 +324,7 @@ Differences from the design above:
   then smoke leaking from the exit hole for 5–9 s. Not after a reactor breach or once the part
   is severed.
 - **Pilot**: a capsule (torso and legs) on the cockpit camera; any drilled cylinder that
-  reaches it kills (no extra margin yet). GAME OVER via the range panel.
+  reaches it kills (no extra margin yet); the view goes outside (ViewSwitcher), no text.
 - **Reactor breach**: flash and fluence on everything in the `damageable` group; the suit is
   baked into glowing pieces flung out at 40–160 m/s, its hull stops being a body until repair.
 - **Probes that count hits** turn damage off (`DamageModel.enabled = false`): weapons, dodge,

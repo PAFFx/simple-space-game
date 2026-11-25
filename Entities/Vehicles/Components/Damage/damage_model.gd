@@ -159,6 +159,7 @@ var _last_v := Vector3.INF
 var _last_w := Vector3.ZERO
 var _accel := Vector3.ZERO
 var _alpha := Vector3.ZERO
+var _capacity_built := 0.0   ## the flight computer's propellant capacity as built, kg
 var _boost_accel := 0.0      ## the suit's full thrust / mass, m/s² (set when built)
 var _opaque: Array[Node] = []
 var _glow_slots := {}   ## CameraMarker → [overlay ShaderMaterial, lens index]
@@ -286,6 +287,9 @@ func _build() -> void:
 			c.ref = eq
 	_build_components()
 	_place_cameras()
+	var fcb := _flight()
+	if fcb != null:
+		_capacity_built = fcb.propellant_capacity
 	# Full boost: the main thrust along the strongest axis, over the suit's mass.
 	var thrust := {}
 	for t in _vehicle.find_children("*", "", true, false):
@@ -2175,9 +2179,12 @@ func repair() -> void:
 		_reaction.set_part_tank(pname, m[1])
 		if fc != null:
 			fc.add_payload_mass(m[2])
-			fc.propellant_capacity += m[3]
-			fc.propellant += m[3] * fill
 	_mass_removed.clear()
+	# The tanks as built (the parts' cells don't add up to it, and removing parts stops at
+	# 1 kg), at the fill they had.
+	if fc != null and _capacity_built > 0.0:
+		fc.propellant_capacity = _capacity_built
+		fc.propellant = _capacity_built * fill
 	for j: AmbacJoint in _saved_priority:
 		j.priority = _saved_priority[j]
 	_saved_priority.clear()

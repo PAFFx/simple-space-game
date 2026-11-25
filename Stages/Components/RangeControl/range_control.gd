@@ -8,8 +8,7 @@ extends CanvasLayer
 ##   1 static · 2 drifting · 3 jinking · 4 hard jinking · 5 evasive (dodges your shots)
 ##   6 ace (hard jinking and dodging) · 7 turret · 8 hunter turret · 9 clear all · 0 rearm
 ##   - / + nearer / farther
-## Rearm also repairs the suit (DamageModel); the panel lists each part. When the pilot is
-## killed (a beam through the cockpit, a reactor breach) a GAME OVER screen asks for a rearm.
+## Rearm also repairs the suit (DamageModel) and refuels it; the panel lists each part.
 
 const TOGGLE := &"debug_toggle_range_control"
 ## Panels in this group close each other: they share the number keys.
@@ -52,7 +51,6 @@ func _ready() -> void:
 		InputMap.action_add_event(TOGGLE, ev)
 	add_to_group(PANEL_GROUP)
 	_build_ui()
-	_build_game_over()
 	_panel.visible = false
 	_hook_fire_control.call_deferred()
 
@@ -133,6 +131,11 @@ func rearm() -> void:
 	var damage := suit.find_component(DamageModel) as DamageModel if suit != null else null
 	if damage != null:
 		damage.repair()
+	# Full tanks (after the repair, which gives back any capacity lost with a holed tank).
+	var fc := suit.find_component(FlightComputer) as FlightComputer if suit != null else null
+	if fc != null:
+		fc.propellant = fc.propellant_capacity
+		fc.burst_reserve = minf(fc.burst_reserve_capacity, fc.propellant)
 	hits_taken = 0
 	hits_blocked = 0
 
@@ -198,40 +201,6 @@ func _vehicle() -> VehicleBase:
 				vehicle = node
 				break
 	return vehicle
-
-
-var _game_over: Label
-
-
-func _build_game_over() -> void:
-	_game_over = Label.new()
-	_game_over.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_game_over.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_game_over.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_game_over.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_game_over.add_theme_font_size_override(&"font_size", 40)
-	_game_over.add_theme_color_override(&"font_color", Color(1.0, 0.3, 0.25))
-	_game_over.add_theme_color_override(&"font_outline_color", Color.BLACK)
-	_game_over.add_theme_constant_override(&"outline_size", 8)
-	_game_over.visible = false
-	add_child(_game_over)
-
-
-var _damage: DamageModel
-var _damage_of: Node
-
-
-func _process(_delta: float) -> void:
-	var suit := _vehicle()
-	if suit != _damage_of:
-		# Looked up once per suit: find_component walks its whole tree.
-		_damage_of = suit
-		_damage = suit.find_component(DamageModel) as DamageModel if suit != null else null
-	var damage := _damage
-	var over := damage != null and damage.pilot_dead
-	if over != _game_over.visible:
-		_game_over.visible = over
-		_game_over.text = "GAME OVER\n%s\n\nF4 → 0 to rearm" % ("REACTOR BREACH" if damage.reactor_gone else "PILOT KILLED IN ACTION")
 
 
 func _build_ui() -> void:
