@@ -323,9 +323,17 @@ Differences from the design above:
   baked into glowing pieces flung out at 40–160 m/s, its hull stops being a body until repair.
 - **Probes that count hits** turn damage off (`DamageModel.enabled = false`): weapons, dodge,
   fair-fight. Drones with hit points ≥ 1e8 can't be destroyed (probes already used 1e9+).
+- **Damage page** (`CockpitDisplays/damage_page.gd`): the left display flips to it for 10 s after
+  each new damage, P holds it. The suit from the front, parts filled green / amber / red by the
+  section left (gone: dashed), thrusters as dots (red dead, amber derated or stuck nozzle,
+  flashing red valve stuck open), cameras as squares; reactor, pilot, I-field charges, counts,
+  the last 7 events.
+- **Camera lights**: a small green light on each camera's lens (on its part's surface toward
+  where it looks), dark once it is shot out: the enemy sees the blind spots too.
+- **Missile fragments**: the strikes that land show as spark splashes on the facing parts.
 - **Not built yet**: limp joints swinging (a hit joint is taken out of AMBAC, held), fault
-  detection from motion, damage MFD page, missile fragment visuals, vulcan pits, camera green
-  lights, inner frame under intact armour, loose model pieces flying off whole.
+  detection from motion, vulcan pits, inner frame under intact armour, loose model pieces
+  flying off whole.
 
 ### Frame cost (2026-11-26, `Tools/Profiling/combat_bench.gd`, windowed, 6 drones)
 
