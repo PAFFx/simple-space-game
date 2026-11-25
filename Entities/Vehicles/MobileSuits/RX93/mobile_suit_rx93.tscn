@@ -1565,6 +1565,7 @@ script = ExtResource("34_2q64x")
 equipment_name = "BEAM SABER"
 mass = 300.0
 mount_bone = &"backpack"
+damage_part = &"main_pod.R"
 
 [node name="FinFunnels" type="Node3D" parent="Loadout" unique_id=366093649 instance=ExtResource("36_41n2t")]
 script = ExtResource("34_2q64x")

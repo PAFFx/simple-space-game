@@ -330,6 +330,6 @@ so a cut face (stencil cap) and every hole close on real metal. Weapons are unch
 mount bone whose box holds it (the main thrusters hang from the backpack bone but sit in their
 nozzles: losing a pod's nozzles now kills its mains and their plumes). Equipment can name the
 part that carries it while stowed (`MsEquipment.damage_part`): the fin funnels' rack sits on the
-left main pod and goes with it; the beam saber sits on the backpack itself. The fuzz checks that
+left main pod and goes with it; the beam saber's on the right main pod. The fuzz checks that
 no live thruster sits inside a severed part.
 
