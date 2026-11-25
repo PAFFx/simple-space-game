@@ -41,6 +41,9 @@ const BREAK_LEFT := 0.35
 ## A limb with less than this left snaps off by itself (after a moment); between it and
 ## STRESS_LEFT it holds until the suit's acceleration at the wound is too much for what is left.
 const SNAP_LEFT := 0.5
+## A breach makes its debris a few pieces per physics tick, under the flash.
+const PIECES_PER_TICK := 4
+const PIECE_TICK := 1.0 / 60.0
 const STRESS_LEFT := 0.8
 ## Blow-off radius of a burst, m per J^(1/3) (cube-root scaling).
 const BLAST_K := 0.0025
@@ -160,7 +163,9 @@ var _last_w := Vector3.ZERO
 var _accel := Vector3.ZERO
 var _alpha := Vector3.ZERO
 var _capacity_built := 0.0   ## the flight computer's propellant capacity as built, kg
-var _boost_accel := 0.0      ## the suit's full thrust / mass, m/s² (set when built)
+var _boost_accel := 0.0
+var _breach_v := Vector3.ZERO   ## the suit's velocity when its reactor went
+var _breach_w := Vector3.ZERO      ## the suit's full thrust / mass, m/s² (set when built)
 var _opaque: Array[Node] = []
 var _glow_slots := {}   ## CameraMarker → [overlay ShaderMaterial, lens index]
 var _thruster_saved := {}     ## Thruster → [max thrust, gimbal limits ×3] as built
@@ -1973,9 +1978,12 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 	var com_world := body.global_transform * centre
 	var suit_com := _body.global_transform * _body.center_of_mass
 	var out := (com_world - from).normalized() if com_world.distance_to(from) > 0.1 else (com_world - suit_com).normalized()
-	body.linear_velocity = _body.linear_velocity + _body.angular_velocity.cross(com_world - suit_com) + out * push \
+	# A frozen hull (after a breach) has no velocity of its own any more: the one it had.
+	var v0 := _breach_v if reactor_gone else _body.linear_velocity
+	var w0 := _breach_w if reactor_gone else _body.angular_velocity
+	body.linear_velocity = v0 + w0.cross(com_world - suit_com) + out * push \
 			+ Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * push * 0.2
-	body.angular_velocity = _body.angular_velocity + Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 0.6
+	body.angular_velocity = w0 + Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 0.6
 	_solidify(body)
 	_debris.append(body)
 	return body
@@ -1989,12 +1997,26 @@ func _solidify(body: RigidBody3D) -> void:
 		var mi := child as MeshInstance3D
 		if mi == null or mi.mesh == null:
 			continue
-		var shape := mi.mesh.create_convex_shape(true, true)
+		var verts := 0
+		var am := mi.mesh as ArrayMesh
+		if am != null:
+			for si in am.get_surface_count():
+				verts += am.surface_get_array_len(si)
+		# A hull of a dense mesh costs tens of ms: a box for those.
+		var shape: Shape3D
+		if verts > 2000:
+			var box := BoxShape3D.new()
+			box.size = mi.mesh.get_aabb().size
+			shape = box
+		else:
+			shape = mi.mesh.create_convex_shape(true, false)
 		if shape == null:
 			continue
 		var cs := CollisionShape3D.new()
 		cs.shape = shape
 		cs.transform = mi.transform
+		if shape is BoxShape3D:
+			cs.transform = mi.transform * Transform3D(Basis.IDENTITY, mi.mesh.get_aabb().get_center())
 		body.add_child(cs)
 	body.collision_layer = Layers.PHYS_DEBRIS
 	body.collision_mask = Layers.WORLD
@@ -2044,15 +2066,53 @@ func _blow_apart(at: Vector3) -> void:
 	for p in parts:
 		if p.equipment == null and not p.severed:
 			all.append(p)
+	# Torn off at the joints and scattered, not vaporized: a limb segment far from the blast
+	# may stay on its parent (a whole arm, a leg in one piece); near it everything parts.
+	var with := {}
 	for q in all:
-		var group: Array[Part] = [q]
-		var centre := _part_frame(q) * q.aabb.get_center()
-		var speed := clampf(900.0 / maxf(centre.distance_to(at), 2.0), 40.0, 160.0)
-		_make_debris(group, [], speed, at, 1400.0)
+		with[q] = q
+	for q in all:
+		var parent := _parent_part(q)
+		if parent == null or not all.has(parent) or not q.limb or not parent.limb:
+			continue
+		var d := (_part_frame(q) * q.aabb.get_center()).distance_to(at)
+		if _rng.randf() < clampf((d - 4.0) / 8.0, 0.0, 0.7):
+			with[q] = parent
+	var pieces := {}
+	for q in all:
+		var top: Part = q
+		while with[top] != top:
+			top = with[top]
+		if not pieces.has(top):
+			pieces[top] = [] as Array[Part]
+		(pieces[top] as Array[Part]).append(q)
+	# Only what was close to the reactor glows; the rest is torn, not melted. The pieces are
+	# made a few per tick under the flash (a breach used to stall one frame for 90 ms); they
+	# keep the suit's velocity at the moment it went.
+	_breach_v = _body.linear_velocity
+	_breach_w = _body.angular_velocity
+	var t0 := _clock
+	var k := 0
+	for top: Part in pieces:
+		var group: Array[Part] = pieces[top]
+		var centre := _part_frame(top) * top.aabb.get_center()
+		var dist := centre.distance_to(at)
+		var speed := clampf(900.0 / maxf(dist, 2.0), 40.0, 160.0)
+		var heat := 1400.0 * clampf(1.0 - (dist - 2.0) / 5.0, 0.0, 1.0)
+		_later(PIECE_TICK * float(k / PIECES_PER_TICK), func() -> void:
+			var body := _make_debris(group, [], speed, at, heat)
+			if body != null:
+				body.global_position += _breach_v * (_clock - t0))
+		k += 1
 	if loadout != null:
 		for eq in loadout.equipment:
 			if eq.equipped and eq.is_visible_in_tree():
-				_make_debris([], [eq], 90.0, at)
+				var one: Array[MsEquipment] = [eq]
+				_later(PIECE_TICK * float(k / PIECES_PER_TICK), func() -> void:
+					var body := _make_debris([], one, 90.0, at)
+					if body != null:
+						body.global_position += _breach_v * (_clock - t0))
+				k += 1
 				loadout.set_equipped(eq, false)
 				_unequipped.append(eq)
 	_remove_parts(all)
@@ -2076,6 +2136,11 @@ func _blow_apart(at: Vector3) -> void:
 ## Whatever is still showing on the suit after it came apart (meshes that aren't parts: the
 ## rifle's stow arm, hatches, props) flies off as debris too, one piece per mesh.
 func _sweep_leftovers(at: Vector3) -> void:
+	# The cockpit goes with the pilot (its panoramic screen shows from outside too).
+	var cockpit := _vehicle.get_cockpit() as Node3D
+	if cockpit != null and cockpit.visible:
+		cockpit.visible = false
+		_hidden_nodes.append(cockpit)
 	var left: Array[MeshInstance3D] = []
 	for node in _vehicle.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D

@@ -174,32 +174,13 @@ func _surface(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int) -> Surface:
 	return s
 
 
-static var _melt: NoiseTexture2D
-
-
 ## Height of re-melted metal for the damage shader's bump: blobby dross with a little flow
-## (warped noise), tiling. Made once, shared.
-static func melt_texture() -> NoiseTexture2D:
-	if _melt != null:
-		return _melt
-	var n := FastNoiseLite.new()
-	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	n.frequency = 0.012
-	n.fractal_type = FastNoiseLite.FRACTAL_FBM
-	n.fractal_octaves = 5
-	n.fractal_gain = 0.55
-	n.domain_warp_enabled = true
-	n.domain_warp_amplitude = 45.0
-	n.domain_warp_frequency = 0.008
-	n.seed = 7
-	_melt = NoiseTexture2D.new()
-	_melt.width = 512
-	_melt.height = 512
-	_melt.seamless = true
-	_melt.normalize = true
-	_melt.generate_mipmaps = true
-	_melt.noise = n
-	return _melt
+## (warped simplex FBM, tiling). Baked to a file: generating it at run time took 190 ms.
+const MELT_HEIGHT := preload("res://Entities/Vehicles/Components/Damage/Shader/melt_height.png")
+
+
+static func melt_texture() -> Texture2D:
+	return MELT_HEIGHT
 
 
 static func _convert(source: Material) -> ShaderMaterial:

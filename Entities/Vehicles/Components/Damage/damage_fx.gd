@@ -519,30 +519,13 @@ static func _soft_texture(hard: bool) -> GradientTexture2D:
 	return t
 
 
-static var _puff: ImageTexture
-
-
 ## A wisp of gas: soft round falloff broken up by noise, so overlapping puffs read as one
-## cloud, not a heap of balls. Made once, shared.
-static func _puff_texture() -> ImageTexture:
-	if _puff != null:
-		return _puff
-	var n := FastNoiseLite.new()
-	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	n.frequency = 0.02
-	n.fractal_octaves = 3
-	n.seed = 3
-	const SIZE := 128
-	var img := Image.create(SIZE, SIZE, false, Image.FORMAT_RGBA8)
-	for y in SIZE:
-		for x in SIZE:
-			var d := Vector2(x - SIZE * 0.5 + 0.5, y - SIZE * 0.5 + 0.5).length() / (SIZE * 0.5)
-			var fall := clampf(1.0 - d, 0.0, 1.0)
-			var a := pow(fall, 1.3) * clampf(0.75 + n.get_noise_2d(x, y) * 0.6, 0.0, 1.0)
-			img.set_pixel(x, y, Color(1, 1, 1, a))
-	img.generate_mipmaps()
-	_puff = ImageTexture.create_from_image(img)
-	return _puff
+## cloud, not a heap of balls. Baked to a file.
+const SMOKE_PUFF := preload("res://Entities/Vehicles/Components/Damage/Shader/smoke_puff.png")
+
+
+static func _puff_texture() -> Texture2D:
+	return SMOKE_PUFF
 
 
 func _add_light(anchor: Node3D, at: Vector3, light_range: float, energy: float, life: float) -> void:
