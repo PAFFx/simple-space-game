@@ -1811,6 +1811,8 @@ func _remove_parts(group: Array[Part]) -> void:
 				if c.kind in [Kind.EYES, Kind.BODY_CAMERA, Kind.VULCAN, Kind.THRUSTER]:
 					c.alive = true
 					_kill_component(c, true)
+				elif c.kind == Kind.PILOT:
+					_kill_pilot.call_deferred()
 		for root in ["Thrusters", "Cameras"]:
 			var attach := _vehicle.get_node_or_null(NodePath(root + "/Attach_" + String(q.name).replace(".", "_")))
 			if attach != null and attach is Node3D:
@@ -1850,6 +1852,10 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		var m := q.dry + q.tank * fill
 		mass += m
 		centre += (_skel.get_bone_global_pose(q.bone) * q.aabb.get_center()) * m
+		# Frame stubs left where a limb came off this part go with it.
+		for stub in _stubs:
+			if is_instance_valid(stub) and stub.get_parent() == q.area:
+				stub.reparent(body)
 	if cut != null:
 		# The far side of a part cut through: the whole mesh, cut the other way.
 		var mi := _bake(cut.mesh)
@@ -1975,6 +1981,7 @@ func _blow_apart(at: Vector3) -> void:
 		_make_debris([], [shield], 90.0, at)
 		loadout.set_equipped(shield, false)
 		_unequipped.append(shield)
+	_sweep_leftovers(at)
 	# Nothing left of the hull to simulate: it stops being a body (repair brings it back).
 	_reaction.enabled = false
 	_hull_layers = [_body.collision_layer, _body.collision_mask]
@@ -1984,6 +1991,53 @@ func _blow_apart(at: Vector3) -> void:
 	var fc := _flight()
 	if fc != null:
 		fc.process_mode = Node.PROCESS_MODE_DISABLED
+
+
+## Whatever is still showing on the suit after it came apart (meshes that aren't parts: the
+## rifle's stow arm, hatches, props) flies off as debris too, one piece per mesh.
+func _sweep_leftovers(at: Vector3) -> void:
+	var left: Array[MeshInstance3D] = []
+	for node in _vehicle.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh != null and mi.is_visible_in_tree() and mi.layers & (Layers.VEHICLE_EXT | Layers.WORLD):
+			left.append(mi)
+	var scene := _vehicle.get_parent()
+	for mi in left:
+		var body := RigidBody3D.new()
+		body.name = "Debris"
+		body.gravity_scale = 0.0
+		scene.add_child(body)
+		var copy: MeshInstance3D
+		if mi.skin != null:
+			copy = _bake(mi)
+			body.global_transform = _skel.global_transform
+		else:
+			copy = MeshInstance3D.new()
+			copy.mesh = mi.mesh
+			for i in mi.get_surface_override_material_count():
+				copy.set_surface_override_material(i, mi.get_active_material(i))
+			copy.layers = mi.layers
+			body.global_transform = mi.global_transform
+		body.add_child(copy)
+		var centre := body.global_transform * copy.get_aabb().get_center()
+		body.mass = clampf(copy.get_aabb().get_volume() * 150.0, 20.0, 3000.0)
+		var speed := clampf(900.0 / maxf(centre.distance_to(at), 2.0), 40.0, 160.0)
+		body.linear_velocity = _body.linear_velocity + (centre - at).normalized() * speed
+		body.angular_velocity = Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 1.5
+		holes.heat(copy, null, -1, 1400.0)
+		_solidify(body)
+		_debris.append(body)
+		# A stow arm sets its parts' visibility every frame: hide the arm itself.
+		var hide: Node3D = mi
+		var up := mi.get_parent()
+		while up != null and up != _vehicle:
+			if up is StowArm:
+				hide = up as Node3D
+				break
+			up = up.get_parent()
+		if hide.visible:
+			hide.visible = false
+			_hidden_nodes.append(hide)
 
 
 ## The shield has too little plate left: it breaks off and drifts away.
