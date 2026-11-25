@@ -42,6 +42,12 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   load on it passes 20 m/s² (a hard boost), when what it hangs from comes off, or in a breach;
   equipment on it (the shield on a forearm) hangs with it.
 
+- [x] **The shield stayed on and working after its arm was shot off** (play-test). It hangs
+  from its own mount bone (`shield_mount.L`, under the forearm), not a damage part, so "what
+  was on the severed parts" never matched it. Equipment now goes with the piece whose part it
+  hangs from up the bone chain; on a part cut through, by which side of the cut it is on. The
+  V-fin is part of the head mesh and goes with the head (checked).
+
 ## B. Beam holes: rendering bugs
 
 - [x] **The glow and melt texture swims when the camera moves.** It changes with the view a lot.

@@ -1832,7 +1832,7 @@ func sever(p: Part, may_dangle := true) -> void:
 	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
 	if loadout != null:
 		for eq in loadout.equipment:
-			if eq.equipped and eq.is_visible_in_tree() and _equipment_on(eq, bones):
+			if eq.equipped and eq.is_visible_in_tree() and _equipment_on(eq, bones, null, INF):
 				equip.append(eq)
 	var joint := _part_frame(p)
 	var axis := joint.basis.y.normalized()          # from the joint out along the severed part
@@ -1889,7 +1889,7 @@ func _cut_part(p: Part, y: float, may_dangle := true) -> void:
 	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
 	if loadout != null:
 		for eq in loadout.equipment:
-			if eq.equipped and eq.is_visible_in_tree() and _equipment_on(eq, bones):
+			if eq.equipped and eq.is_visible_in_tree() and _equipment_on(eq, bones, p, y):
 				equip.append(eq)
 	var body := _make_debris(group, equip, 3.0, cut_world, 0.0, p, share)
 	for eq in equip:
@@ -2062,11 +2062,23 @@ func _bone_is_under(bone: int, ancestor: int) -> bool:
 	return false
 
 
-func _equipment_on(eq: MsEquipment, bones: Dictionary) -> bool:
+## Whether `eq` goes with a piece made of the parts on `bones`: it hangs from one of them, or
+## from a bone under one (the shield's own mount bone under the forearm). `cut` cut through at
+## `cut_y` (bone space): equipment on it beyond the cut goes too.
+func _equipment_on(eq: MsEquipment, bones: Dictionary, cut: Part, cut_y: float) -> bool:
 	var attach := eq.get_parent() as BoneAttachment3D
-	if attach != null:
-		return bones.has(_skel.find_bone(attach.bone_name))
-	return bones.has(_skel.find_bone(eq.mount_bone))
+	var b := _skel.find_bone(attach.bone_name if attach != null else String(eq.mount_bone))
+	while b >= 0:
+		if bones.has(b):
+			return true
+		if cut != null and b == cut.bone:
+			var local := (_skel.global_transform * FinalPoses.of(_skel).pose(cut.bone)).affine_inverse() * eq.global_position
+			return local.y > cut_y
+		for q in parts:
+			if q.bone == b and q.equipment == null:
+				return false   # it hangs from another part, which stays
+		b = _skel.get_bone_parent(b)
+	return false
 
 
 ## Takes `group` off the suit: hidden, out of the hull queries, the mass model, the flight
