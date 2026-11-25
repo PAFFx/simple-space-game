@@ -65,6 +65,7 @@ func _run() -> void:
 	for c in _cases:
 		match c:
 			"layout": _layout()
+			"twice": await _twice()
 			"cockpit": await _shot_at_point("cockpit (pilot)", _pilot_eye())
 			"head": await _shot_at("head", &"head", Vector3.ZERO)
 			"chest": await _shot_at("chest (cockpit)", &"chest", Vector3(0.0, 0.6, 0.0))
@@ -80,6 +81,26 @@ func _run() -> void:
 			"repair": await _repair()
 	print("RESULT: %s" % ("PASS" if _failed == 0 else "%d FAILED" % _failed))
 	quit()
+
+
+## The same line twice: the second shot goes through the first one's channel.
+func _twice() -> void:
+	_model.repair()
+	await _ticks(20)
+	var target := _part_centre(&"head")
+	var forward := -_suit.global_basis.z
+	var first := await _fire(RIFLE, target + forward * 300.0, -forward)
+	var shin := _model.find_part(&"head")
+	var left_after_one := shin.left
+	var holes_one := _model.holes.get_hole_count(shin.mesh)
+	await _ticks(30)
+	var second := await _fire(RIFLE, target + forward * 300.0, -forward)
+	print("%-22s first: stalled %3.0f ms, %s, head %d%% | second: stalled %3.0f ms, %s, head %d%%, holes %d → %d" % [
+			"same line twice", first[1] * 1000.0, "through" if first[2] else "stopped", roundi(left_after_one * 100.0),
+			second[1] * 1000.0, "through" if second[2] else "stopped", roundi(shin.left * 100.0),
+			holes_one, _model.holes.get_hole_count(shin.mesh)])
+	_check("a second shot down the same channel costs the head nothing more",
+			absf(shin.left - left_after_one) < 0.01 and _model.holes.get_hole_count(shin.mesh) == holes_one)
 
 
 ## Where every component sits, in the body frame (x right, y up, -z forward).

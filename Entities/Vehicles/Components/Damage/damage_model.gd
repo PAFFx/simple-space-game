@@ -603,20 +603,42 @@ func _start_drill(contact: ProjectileManager.BeamContact) -> Drill:
 		var t := _ray_box(_component_frame(c), c.box, from, dir)
 		if t.x >= 0.0:
 			cells.append([c, t.x, t.y])
+	# Holes already in each part on the line: what lies inside an old channel is gone.
+	var old := {}   ## Part → [world → part transform, holes]
+	for sp in spans:
+		var p: Part = sp[0]
+		if p.mesh != null and not old.has(p):
+			var hs := holes.get_holes(p.mesh)
+			if not hs.is_empty():
+				old[p] = [_part_frame(p).affine_inverse(), hs]
 	var n := ceili((d.t_end - d.t0) / STEP)
 	d.kg.resize(n)
 	d.cells.resize(n)
+	var seg_kg := PackedFloat32Array()
+	seg_kg.resize(spans.size())
 	for i in n:
 		var tc := d.t0 + (i + 0.5) * STEP
+		var at := from + dir * tc
 		var kg := 0.0
-		for s in spans:
-			if tc >= s[1] and tc <= s[2]:
-				kg += (s[0] as Part).density * STEP * area
+		for k in spans.size():
+			var sp: Array = spans[k]
+			if tc >= sp[1] and tc <= sp[2]:
+				var p: Part = sp[0]
+				var solid := 1.0 - (_channel_share(old[p], at, d.radius) if old.has(p) else 0.0)
+				kg += p.density * STEP * area * solid
+				seg_kg[k] += p.density * STEP * area * solid
 		for cell in cells:
 			if tc >= cell[1] and tc <= cell[2]:
 				kg += WATER_DENSITY * fill * STEP * area
 				d.cells[i] = cell[0]
 		d.kg[i] = kg
+	# A part the line only crosses through its old channels gets no new hole.
+	for k in spans.size():
+		var p: Part = spans[k][0]
+		var full := p.density * (float(spans[k][2]) - float(spans[k][1])) * area
+		if seg_kg[k] < full * 0.08:
+			d.segs[k][4] = true
+			d.segs[k][3] = &"open"
 	# Components the drilled cylinder reaches.
 	for c in components:
 		if not c.alive or c.kind == Kind.TANK or (c.part != null and c.part.severed):
@@ -628,6 +650,21 @@ func _start_drill(contact: ProjectileManager.BeamContact) -> Drill:
 			d.events.append([t, c])
 	d.events.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
 	return d
+
+
+## Share of a beam's disc (radius `r`, its axis at `at`, world) that lies inside one of
+## `info`'s old channels ([world → part, holes]): 1 = all of it already drilled away.
+static func _channel_share(info: Array, at: Vector3, r: float) -> float:
+	var q: Vector3 = (info[0] as Transform3D) * at
+	var best := 0.0
+	for h: HoleSet.Hole in info[1]:
+		var rel := q - h.origin
+		var s := rel.dot(h.axis)
+		if s < h.s_in - r or s > h.s_drill + r * 0.25:
+			continue
+		var dd := (rel - h.axis * s).length()
+		best = maxf(best, clampf((h.radius + r - dd) / (2.0 * r), 0.0, 1.0))
+	return best
 
 
 ## [part, t_in, t_out] for every hull of this suit on the line from `from` along `dir`.
@@ -763,6 +800,8 @@ func _advance(d: Drill, t: float) -> void:
 		if p.severed or t < seg[1]:
 			continue
 		var chord: float = seg[2] - seg[1]
+		if seg[3] is StringName:
+			continue
 		if seg[3] == null and p.mesh != null:
 			var entry: Vector3 = xf * (d.from_body + d.dir_body * float(seg[1]))
 			seg[3] = holes.add_hole(p.mesh, _skel, p.bone, entry, xf.basis * d.dir_body, d.radius, chord)
@@ -806,7 +845,7 @@ func _through_part(p: Part, d: Drill, chord: float) -> void:
 ## A drill that ended (no contact for a while): partial holes cost their share too.
 func _finish(d: Drill) -> void:
 	for seg in d.segs:
-		if seg[4] or seg[3] == null:
+		if seg[4] or seg[3] == null or seg[3] is StringName:
 			continue
 		var p: Part = seg[0]
 		var chord: float = seg[2] - seg[1]
