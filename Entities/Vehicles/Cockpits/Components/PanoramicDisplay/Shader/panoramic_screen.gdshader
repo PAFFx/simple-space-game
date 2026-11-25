@@ -44,9 +44,17 @@ uniform vec2 body_camera_px = vec2(320.0, 180.0);
 // Holes a beam burned through the screen (screen space directions, angular radius).
 uniform int screen_hole_count = 0;
 uniform vec4 screen_holes[8];
-// The screen is tiled from flat panels this many degrees across (azimuth, elevation): a panel
-// a beam goes through dies whole; its glass and its neighbours' crack.
-uniform vec2 panel_deg = vec2(15.0, 15.0);
+// The screen is built from composite screens, each of a few sub-screens behind one glass:
+// the door (centre front, its lower half the hatch), two big ones either side of it, two
+// sides, the rear, the top and the bottom. Azimuth edges (deg from the front): door half
+// width, front screens' outer edge, sides' outer edge; the door's split elevation. Then the
+// top and bottom screens' edges (elevation, deg). A beam kills the sub-screen it goes through
+// and cracks that composite's glass. Bezels: frame between composites, a seam between subs.
+uniform vec4 panel_layout = vec4(19.0, 75.0, 145.0, -13.5);
+uniform vec2 panel_caps = vec2(45.0, -61.0);
+uniform float bezel_deg = 0.55;
+uniform float seam_deg = 0.16;
+uniform vec3 bezel_color : source_color = vec3(0.018, 0.02, 0.024);
 
 // HUD overlay drawn in equirectangular panoramic space:
 // x = azimuth (forward at 0.5, wraps at the back), y = elevation (top = +90°).
@@ -267,6 +275,59 @@ float cov_hash(vec2 p) {
 	return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.7);
 }
 
+// Which composite screen and sub-screen a direction falls on (az, el in deg; az 0 front,
+// + right): vec4(composite, sub, distance to the composite's edge, distance to a sub seam),
+// distances in deg on the sphere.
+vec4 screen_panel(float az, float el) {
+	float door = panel_layout.x;
+	float front = panel_layout.y;
+	float side = panel_layout.z;
+	float top = panel_caps.x;
+	float bottom = panel_caps.y;
+	float ce = max(cos(radians(el)), 0.05);
+	float panel;
+	float sub;
+	float d_comp;
+	float d_sub;
+	if (el >= top || el <= bottom) {
+		bool up = el >= top;
+		panel = up ? 0.0 : 1.0;
+		float a = mod(az + 45.0, 360.0);
+		sub = floor(a / 90.0);
+		float r = mod(a, 90.0);
+		d_comp = up ? el - top : bottom - el;
+		d_sub = min(r, 90.0 - r) * ce;
+		return vec4(panel, sub, d_comp, d_sub);
+	}
+	float aa = abs(az);
+	float d_el = min(top - el, el - bottom);
+	float mid_el = (top + bottom) * 0.5;
+	if (aa <= door) {
+		panel = 2.0;
+		sub = el < panel_layout.w ? 0.0 : 1.0;
+		d_comp = min((door - aa) * ce, d_el);
+		d_sub = abs(el - panel_layout.w);
+	} else if (aa <= front) {
+		panel = az < 0.0 ? 3.0 : 4.0;
+		float m = (door + front) * 0.5;
+		sub = (aa < m ? 0.0 : 1.0) + (el < mid_el ? 0.0 : 2.0);
+		d_comp = min(min(aa - door, front - aa) * ce, d_el);
+		d_sub = min(abs(aa - m) * ce, abs(el - mid_el));
+	} else if (aa <= side) {
+		panel = az < 0.0 ? 5.0 : 6.0;
+		float m = (front + side) * 0.5;
+		sub = (aa < m ? 0.0 : 1.0) + (el < mid_el ? 0.0 : 2.0);
+		d_comp = min(min(aa - front, side - aa) * ce, d_el);
+		d_sub = min(abs(aa - m) * ce, abs(el - mid_el));
+	} else {
+		panel = 7.0;
+		sub = (az < 0.0 ? 0.0 : 1.0) + (el < mid_el ? 0.0 : 2.0);
+		d_comp = min((aa - side) * ce, d_el);
+		d_sub = min((180.0 - aa) * ce, abs(el - mid_el));
+	}
+	return vec4(panel, sub, d_comp, d_sub);
+}
+
 float hole_like_noise(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
@@ -300,10 +361,13 @@ void fragment() {
 		}
 	}
 
-	// --- Step 2b: Beam holes in the screen ---
-	// The panel the hole is in goes black; cracks spider out from the hole over it and into
-	// the panels around (thin dark breaks with a glint where the glass catches the light);
-	// the neighbours keep their picture under the cracks, with a few dead blocks.
+	// --- Step 2b: Composite screens, and beam holes in them ---
+	// The sub-screen a hole is in goes dark; the glass of that composite screen cracks from
+	// the hole (thin dark breaks with a glint where they catch the light), and its other
+	// sub-screens keep their picture under the cracks, with a few dead blocks.
+	float az_deg = degrees(atan(sin(azimuth), cos(azimuth)));
+	float el_deg = degrees(elevation);
+	vec4 my_panel = screen_panel(az_deg, el_deg);
 	float panel_dead = 0.0;
 	float panel_hot = 0.0;
 	float crack_dark = 0.0;
@@ -312,10 +376,6 @@ void fragment() {
 	if (screen_hole_count > 0) {
 		float cel2 = cos(elevation);
 		vec3 dir_s = vec3(sin(azimuth) * cel2, sin(elevation), -cos(azimuth) * cel2);
-		vec2 pw = radians(panel_deg);
-		float az0 = fract(UV2.x) * TAU;
-		vec2 my_panel = floor(vec2(az0, elevation) / pw);
-		float cols = floor(TAU / pw.x + 0.5);
 		for (int i = 0; i < 8; i++) {
 			if (i >= screen_hole_count) {
 				break;
@@ -331,40 +391,31 @@ void fragment() {
 				discard;
 			}
 			panel_hot = max(panel_hot, 1.0 - smoothstep(ragged, ragged + 0.22, ang));
-			// Which panel the hole is in, and how far this one is from it (wrapping round).
-			float h_az = atan(hd.x, -hd.z);
-			if (h_az < 0.0) {
-				h_az += TAU;
-			}
-			vec2 h_panel = floor(vec2(h_az, asin(clamp(hd.y, -1.0, 1.0))) / pw);
-			vec2 dp = abs(my_panel - h_panel);
-			dp.x = min(dp.x, cols - dp.x);
-			bool same = dp.x < 0.5 && dp.y < 0.5;
-			bool near = dp.x < 1.5 && dp.y < 1.5;
-			if (same) {
+			vec4 h_panel = screen_panel(degrees(atan(hd.x, -hd.z)), degrees(asin(clamp(hd.y, -1.0, 1.0))));
+			bool same_glass = abs(h_panel.x - my_panel.x) < 0.5;
+			bool same_sub = same_glass && abs(h_panel.y - my_panel.y) < 0.5;
+			if (same_sub) {
 				panel_dead = 1.0;
 			}
-			if (near) {
+			if (same_glass) {
 				// Spiderweb: radial cracks (wandering) and broken rings, thinning out.
 				float seed = float(i) * 3.7;
-				float reach = same ? 1.0 : 1.0 - smoothstep(1.2, 4.0, ang);
+				float reach = 1.0 - smoothstep(2.0, 7.0, ang);
 				float wob = 0.18 * (cov_hash(vec2(floor(ang * 3.0), seed)) - 0.5) + 0.08 * sin(ang * 4.0 + seed);
 				float rays = abs(fract(around / TAU * 13.0 + wob + seed) - 0.5);
-				// Hairlines: a pixel or two wide wherever they are (screen-space width).
 				float ray_d = 0.5 - rays;
-				float ray_line = 1.0 - smoothstep(0.0, fwidth(ray_d) * 1.3, ray_d) * 1.0;
+				float ray_line = 1.0 - smoothstep(0.0, fwidth(ray_d) * 1.3, ray_d);
 				ray_line *= step(0.6, ang) * step(0.35, cov_hash(vec2(floor(around / TAU * 13.0 + wob + seed), seed)) + 0.4);
 				float ring_n = ang * 1.7 + 0.25 * (cov_hash(vec2(floor(around * 5.0), seed)) - 0.5);
 				float ring_d = abs(fract(ring_n) - 0.5);
 				float ring_line = (1.0 - smoothstep(0.0, fwidth(ring_n) * 1.3, 0.5 - ring_d))
 						* step(0.5, cov_hash(vec2(floor(around * 4.0), floor(ring_n) + seed)));
-				float c = max(ray_line, ring_line * (1.0 - smoothstep(0.8, 2.6, ang))) * reach;
+				float c = max(ray_line, ring_line * (1.0 - smoothstep(0.8, 3.5, ang))) * reach;
 				crack_dark = max(crack_dark, c);
-				// A glint along stretches of each break, catching the cockpit light.
 				crack_glint = max(crack_glint, c * smoothstep(0.55, 0.9, hole_like_noise(vec2(around * 3.0, ang * 1.5) + seed)));
-				if (!same) {
+				if (!same_sub) {
 					vec2 cell = floor(vec2(azimuth, elevation) * 50.0);
-					block_dead = max(block_dead, step(0.9, cov_hash(cell + seed)) * (1.0 - smoothstep(1.5, 3.5, ang)));
+					block_dead = max(block_dead, step(0.92, cov_hash(cell + seed)) * (1.0 - smoothstep(2.0, 5.0, ang)));
 				}
 			}
 		}
@@ -444,6 +495,13 @@ void fragment() {
 		color = composite_zoom_frame(color, local_dir, hud_brightness, degrees(length(fwidth(local_dir))) * 0.7);
 	}
 
+	// The bezels: a frame between composite screens, a thin seam between sub-screens.
+	float fw = max(fwidth(el_deg), 0.02);
+	float frame = 1.0 - smoothstep(bezel_deg - fw, bezel_deg + fw, my_panel.z);
+	float seam = 1.0 - smoothstep(seam_deg - fw, seam_deg + fw, my_panel.w);
+	float edge_light = (1.0 - smoothstep(0.0, fw * 2.0, abs(my_panel.z - bezel_deg))) * 0.5;
+	color = mix(color, bezel_color, max(frame, seam * 0.85));
+	color += vec3(0.05, 0.055, 0.06) * edge_light;
 	if (screen_hole_count > 0) {
 		// A dead panel is dark glass: a faint sheen of the cockpit's light across it.
 		float sheen = 0.02 + 0.025 * hole_like_noise(vec2(azimuth, elevation) * 6.0);

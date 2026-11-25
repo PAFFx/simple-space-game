@@ -130,11 +130,16 @@ cockpit.
 - **Opaque parts**: `Layers.SENSOR_OPAQUE` is in the sensor camera's mask; a part whose camera is
   gone gets the bit and is drawn on the screen (`DamageModel.set_opaque`). The shield's camera
   dies with a through-hole (60%); broken equipment turns opaque. Rearm clears it.
+- **Composite screens** (2026-11-26): the screen is built from big composite screens, each of a
+  few sub-screens behind one glass, with bezels drawn on it (a 0.55° frame between composites,
+  a 0.16° seam between sub-screens): the **door** (centre front, ±19°, full height; its lower
+  sub-screen is the hatch), the **front left / right** (19–75°, 2×2), the **sides** (75–145°,
+  2×2), the **rear** (2×2), the **top** (above 45°, 4 quarters) and the **bottom** (below −61°,
+  4 quarters). Edges in `panel_layout` / `panel_caps` on the screen shader.
 - **Screen holes**: where a beam's line crosses the cockpit sphere (1.6 m), up to 8 holes in the
-  screen's frame: burned open (ragged, molten rim). The screen is tiled from flat panels
-  (`panel_deg`, 15° × 15°): the panel a hole is in dies whole (dark glass with a faint sheen),
-  the glass cracks from the hole across it and into the 8 panels around (hairline radial breaks
-  and broken rings, glints where they catch the light), and those neighbours keep their picture
-  with a few dead blocks. The cockpit shell and the chest are holed on the same line, so the
-  pilot sees space through it (2026-11-26).
+  screen's frame: burned open (ragged, molten rim). The sub-screen a hole is in dies whole (dark
+  glass with a faint sheen); the glass of that composite cracks from the hole (hairline radial
+  breaks and broken rings, glints where they catch the light), and its other sub-screens keep
+  their picture with a few dead blocks. The cockpit shell and the chest are holed on the same
+  line, so the pilot sees space through it.
 - **Pilot**: killed when the drilled cylinder reaches the capsule: GAME OVER (range panel).

@@ -73,6 +73,7 @@ func _run(cases: PackedStringArray) -> void:
 			"vent": await _vent()
 			"lens": await _lens()
 			"page": await _page()
+			"bezels": await _bezels()
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
 			"drone": await _drone()
@@ -215,6 +216,22 @@ func _cockpit_view() -> void:
 	await _frames(5)
 	_save("cockpit_4_other_side")
 	print("pilot alive: ", not _model.pilot_dead)
+	_cam.make_current()
+
+
+## The composite screens and their bezels from the seat: front, front left, left side, up,
+## down at the door, behind.
+func _bezels() -> void:
+	_model.repair()
+	await _frames(20)
+	var fp := _vehicle.get_cockpit().get_player_camera() as PilotCamera
+	fp.make_current()
+	for v in [["front", 0.0, 5.0], ["front_left", 45.0, 5.0], ["side_left", 105.0, 5.0], ["up", 0.0, 60.0],
+			["door", 0.0, -40.0], ["back", 180.0, 10.0]]:
+		fp.set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(v[2]), deg_to_rad(v[1]), 0.0)))
+		await _frames(6)
+		_save("bezels_%s" % v[0])
+	fp.set_look_rotation(Basis.IDENTITY)
 	_cam.make_current()
 
 
