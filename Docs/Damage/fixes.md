@@ -6,28 +6,28 @@ known from the code, or what to find out. `todo.md` keeps the original phase pla
 when done.
 
 Suggested order: **A** (nothing may be left floating), **B** (the holes themselves), **G**
-(cockpit death), then **C/D** (systems and explosions), **E**, **F**, **H**, **I**.
+(cockpit death), **J** (drones must go down), then **C/D** (systems and explosions), **E**, **F**, **H**.
 
 ---
 
 ## A. Destruction must be complete: nothing left floating, pieces are real
 
-- [ ] **Chunks and parts that come off have no collision.** They pass through the suit, the
+- [x] **Chunks and parts that come off have no collision.** They pass through the suit, the
   station, each other. *Cause:* `_make_debris` creates the RigidBody3D with
   `collision_layer = 0`, `collision_mask = 0`. Give debris a convex shape from its baked mesh
   (or the part's hull) on a debris layer that hits the world, other debris and suits.
-- [ ] **Things left floating after the suit is blown apart** (reactor breach): the cockpit, inner
+- [x] **Things left floating after the suit is blown apart** (reactor breach): the cockpit, inner
   frame stubs, the rifle manipulator arms. *Cause:* `_blow_apart` bakes the parts and equipment,
   but nodes that are not parts (cockpit scene, `Stump` frames, the rifle stow arms, anything
   else under the suit) are neither baked nor hidden. Walk the whole vehicle: bake or hide
   everything visible.
-- [ ] **Cut-off pieces still ride the body.** Inner frames, cockpit parts, the screens, the
+- [x] **Cut-off pieces still ride the body.** Inner frames, cockpit parts, the screens, the
   V-fin and others float in place and move with the suit after their part is cut away. *Cause:*
   only the part's own mesh (and `Thrusters/` / `Cameras/` attachments) is hidden and baked;
   other meshes or nodes on that bone (V-fin, accessories, bone-attached props) are not. Collect
   everything that follows a severed bone (meshes skinned mostly to it, BoneAttachment3D
   children) and move it with the debris.
-- [ ] **Half-cut parts look solid.** A part cut most of the way through but not severed should
+- [x] **Half-cut parts look solid.** A part cut most of the way through but not severed should
   not look whole: it should snap off at the cut, or hang by what is left (bent, sagging, a limp
   joint) and break off under load or the next hit.
 
@@ -103,7 +103,7 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
 
 ## G. Cockpit: being hit and dying
 
-- [ ] **On destruction, go to the third-person view.** The cockpit stays after the suit is gone;
+- [x] **On destruction, go to the third-person view.** The cockpit stays after the suit is gone;
   zoom out to third person when the suit is destroyed (and when the pilot dies).
 - [ ] **A hit to the cockpit breaks its gimbal.** The cockpit stops turning on its own and stays
   stuck to the suit's attitude.
@@ -138,6 +138,17 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   - **Head's cameras gone**: the view comes from the chest camera (the left chest sensor).
     That gone too: no full front view any more; only what the remaining sub cameras cover,
     black elsewhere.
+
+## J. Drones (target drones, hunters)
+
+- [ ] **A beam through a drone barely hurts it.** Most rifle hits on hunters (and likely the
+  other drones) leave them flying and shooting. *Cause* (`target_drone.gd beam_contact`): a beam
+  that goes through without touching the core or the gun only takes ~40% of its section
+  (`_left`) and loses control with `control_chance`; nothing else happens. A rifle beam is far
+  too strong for that: **any beam through a drone disables it** (power and control lines cut:
+  it goes dead, drifts and tumbles, sparking and smoking, no thrust, no gun); **only a hit through
+  the core explodes it**. A grazing hit that doesn't go through still costs it systems by where
+  it hit (gun, sensors, thrusters).
 
 ## I. Notes
 
