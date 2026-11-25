@@ -55,6 +55,10 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   A later hit through the socket (beam or torn panel passing within ~0.8 m of it) knocks the
   stub loose: it flies off as debris, nothing left to hold it.
 
+- [x] **The rifle's stow manipulator stayed after its skirt was shot off** (play-test). It is
+  built on its own attachment on the skirt's bone, not part of the skirt's mesh; now it goes
+  with the skirt's piece (its meshes copied onto it) and is hidden on the suit until repair.
+
 ## B. Beam holes: rendering bugs
 
 - [x] **The glow and melt texture swims when the camera moves.** It changes with the view a lot.

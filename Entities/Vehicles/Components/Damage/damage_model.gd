@@ -2203,6 +2203,26 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		for stub in _stubs:
 			if is_instance_valid(stub) and stub.get_parent() == q.area:
 				stub.reparent(body)
+		# A stow manipulator mounted on this part (the rifle's, on the rear skirt) goes with it.
+		for node in _vehicle.find_children("*", "StowArm", true, false):
+			var arm := node as Node3D
+			var attach := arm.get_parent() as BoneAttachment3D
+			if attach == null or _skel.find_bone(attach.bone_name) != q.bone or not arm.visible:
+				continue
+			for child in arm.find_children("*", "MeshInstance3D", true, false):
+				var src := child as MeshInstance3D
+				if src.mesh == null or not src.is_visible_in_tree():
+					continue
+				var copy := MeshInstance3D.new()
+				copy.mesh = src.mesh
+				for si in src.get_surface_override_material_count():
+					copy.set_surface_override_material(si, src.get_active_material(si))
+				copy.material_override = src.material_override
+				copy.layers = src.layers
+				body.add_child(copy)
+				copy.global_transform = src.global_transform
+			arm.visible = false
+			_hidden_nodes.append(arm)
 	if cut != null:
 		# The far side of a part cut through: the whole mesh, cut the other way.
 		var mi := _bake(cut.mesh)
