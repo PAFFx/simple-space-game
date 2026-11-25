@@ -102,6 +102,63 @@ float cut_field(vec3 p) {
 	return (dot(p, cut_plane.xyz) - cut_plane.w - cut_offset(p)) * cut_side;
 }
 
+// Radius of hole j's bore at axial position s (a through hole's exit flares).
+float hole_rr(int j, float s) {
+	float r = hole_a[j].w;
+	float s_in = hole_b[j].w;
+	float s_out = hole_c[j].y;
+	bool through = hole_c[j].x >= s_out - 1e-3;
+	return r * (through ? mix(1.0, 1.3, clamp((s - s_in) / max(s_out - s_in, 1e-3), 0.0, 1.0)) : 1.0);
+}
+
+// Whether part-space point x is in metal hole j removed (its bore, from the mouth to its floor
+// or, through, to the far end). Scorch-only records remove nothing.
+bool hole_holds(int j, vec3 x) {
+	float s_dr = hole_c[j].x;
+	if (s_dr < 0.0) {
+		return false;
+	}
+	vec3 a = hole_b[j].xyz;
+	vec3 q = x - hole_a[j].xyz;
+	float s = dot(q, a);
+	float s_out = hole_c[j].y;
+	bool through = s_dr >= s_out - 1e-3;
+	if (s < hole_b[j].w - hole_a[j].w * 2.0 || s > (through ? s_out : s_dr)) {
+		return false;
+	}
+	return length(q - a * s) < hole_rr(j, s);
+}
+
+// From x inside hole j's removed metal along rd (bore radius rr): how far to where the ray
+// leaves it, and through what: 0 its wall, 1 its floor, 2 out of the part (a through hole's far
+// end, or back out of the mouth).
+vec2 hole_leave(int j, vec3 x, vec3 rd, float rr) {
+	vec3 a = hole_b[j].xyz;
+	vec3 q = x - hole_a[j].xyz;
+	float s = dot(q, a);
+	vec3 u = q - a * s;
+	vec3 w = rd - a * dot(rd, a);
+	float A = dot(w, w);
+	float B = dot(u, w);
+	float C = dot(u, u) - rr * rr;
+	float tc = A > 1e-8 ? (-B + sqrt(max(B * B - A * C, 0.0))) / A : 1e6;
+	float ra = dot(rd, a);
+	float s_dr = hole_c[j].x;
+	float s_out = hole_c[j].y;
+	bool through = s_dr >= s_out - 1e-3;
+	float tf = ra > 1e-4 ? ((through ? s_out : s_dr) - s) / ra : 1e6;
+	float tb = ra < -1e-4 ? (hole_b[j].w - s) / ra : 1e6;
+	tc = max(tc, 0.0);
+	tf = max(tf, 0.0);
+	if (tc <= tf && tc <= tb) {
+		return vec2(tc, 0.0);
+	}
+	if (tf <= tb) {
+		return vec2(tf, through ? 2.0 : 1.0);
+	}
+	return vec2(tb, 2.0);
+}
+
 HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 	HoleHit h;
 	h.discard_it = false;
@@ -220,53 +277,72 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				h.zone = vec2(ang + seed, 0.0);
 				continue;
 			}
-			// Cast the view ray into the bore (an infinite cylinder of radius r·flare).
-			float rr = panel_hole ? max(rw, d + 1e-3) : r * flare;
-			vec3 u = radial;
-			vec3 w = rd - a * dot(rd, a);
-			float A = dot(w, w);
-			float B = dot(u, w);
-			float C = dot(u, u) - rr * rr;
-			float t1 = A > 1e-8 ? (-B + sqrt(max(B * B - A * C, 0.0))) / A : 1e6;
-			float s_hit = s + dot(rd, a) * t1;
-			float ra = dot(rd, a);
-			if (through) {
-				if (s_hit > s_out || s_hit < s_in) {
-					h.discard_it = true;
-					return h;
+			// Cast the view ray through the removed metal: the union of every hole it is in
+			// (overlapping holes from shots into the same spot), to the first wall or floor
+			// left standing; past a through hole's far end it has left the part (open).
+			float rr0 = panel_hole ? max(rw, d + 1e-3) : r * flare;
+			vec2 lv = hole_leave(i, p, rd, rr0);
+			float t_hit = lv.x;
+			float kind = lv.y;
+			int last = i;
+			for (int k = 0; k < 6; k++) {
+				if (kind > 1.5) {
+					break;
 				}
-				h.inside = true;
-				h.depth = t1;
-				vec3 hp = q + rd * t1;
-				vec3 hr = hp - a * dot(hp, a);
-				h.normal_part = -normalize(hr);
-				h.tex_p = vec3(dot(hp, e1), dot(hp, e2), dot(hp, a)) + seed;
-				h.tex_n = vec3(dot(h.normal_part, e1), dot(h.normal_part, e2), dot(h.normal_part, a));
-				float along_f = clamp((s_hit - s_in) / max(s_out - s_in, 1e-3), 0.0, 1.0);
-				h.temperature = hole_cool(peak * (1.0 - 0.12 * along_f), age);
+				vec3 y = p + rd * (t_hit + 0.004);
+				int nxt = -1;
+				for (int j = 0; j < HOLE_MAX; j++) {
+					if (j >= hole_count) {
+						break;
+					}
+					if (j != last && hole_holds(j, y)) {
+						nxt = j;
+						break;
+					}
+				}
+				if (nxt < 0) {
+					break;
+				}
+				vec2 l2 = hole_leave(nxt, y, rd, hole_rr(nxt, dot(y - hole_a[nxt].xyz, hole_b[nxt].xyz)));
+				t_hit += 0.004 + l2.x;
+				kind = l2.y;
+				last = nxt;
+			}
+			if (kind > 1.5) {
+				h.discard_it = true;
 				return h;
 			}
-			// A crater: the floor at s_drill, rounded off toward the wall.
-			float t_floor = ra > 1e-4 ? (s_dr - s) / ra : 1e6;
+			// The surface it stops on, in hole `last`'s terms.
+			vec3 lo = hole_a[last].xyz;
+			vec3 la = hole_b[last].xyz;
+			float l_s_in = hole_b[last].w;
+			float l_dr = hole_c[last].x;
+			float l_out = hole_c[last].y;
+			float l_age = hole_now - hole_c[last].z;
+			float l_peak = hole_c[last].w;
+			float l_seed = float(last) * 1.73 + hole_c[last].z * 0.37;
+			vec3 f1 = normalize(cross(la, abs(la.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+			vec3 f2 = cross(la, f1);
+			vec3 hp = p + rd * t_hit - lo;
+			float hs = dot(hp, la);
+			vec3 hr = hp - la * hs;
 			h.inside = true;
-			if (t_floor < t1) {
-				h.depth = max(t_floor, 0.0);
-				vec3 fp = q + rd * h.depth;
-				float fr = length(fp - a * dot(fp, a)) / rr;
-				h.normal_part = normalize(-a + (fp - a * dot(fp, a)) / rr * fr * 0.8);
-				h.tex_p = vec3(dot(fp, e1), dot(fp, e2), dot(fp, a)) + seed;
-				h.tex_n = vec3(dot(h.normal_part, e1), dot(h.normal_part, e2), dot(h.normal_part, a));
+			h.depth = t_hit;
+			if (kind > 0.5) {
+				// A crater's floor at s_drill, rounded off toward the wall.
+				float lrr = hole_rr(last, hs);
+				float fr = clamp(length(hr) / lrr, 0.0, 1.0);
+				h.normal_part = normalize(-la + hr / lrr * fr * 0.8);
 				// The face the beam is still on is white-hot.
-				h.temperature = hole_cool(peak + 500.0 * exp(-age * 6.0), age) * mix(1.0, 0.85, fr * fr);
+				h.temperature = hole_cool(l_peak + 500.0 * exp(-l_age * 6.0), l_age) * mix(1.0, 0.85, fr * fr);
 			} else {
-				h.depth = t1;
-				vec3 hp = q + rd * t1;
-				vec3 hr = hp - a * dot(hp, a);
 				h.normal_part = -normalize(hr);
-				h.tex_p = vec3(dot(hp, e1), dot(hp, e2), dot(hp, a)) + seed;
-				h.tex_n = vec3(dot(h.normal_part, e1), dot(h.normal_part, e2), dot(h.normal_part, a));
-				h.temperature = hole_cool(peak * (0.9 + 0.1 * clamp((s_hit - s_in) / max(s_dr - s_in, 1e-3), 0.0, 1.0)), age);
+				bool l_through = l_dr >= l_out - 1e-3;
+				float l_f = clamp((hs - l_s_in) / max((l_through ? l_out : l_dr) - l_s_in, 1e-3), 0.0, 1.0);
+				h.temperature = hole_cool(l_peak * (l_through ? 1.0 - 0.12 * l_f : 0.9 + 0.1 * l_f), l_age);
 			}
+			h.tex_p = vec3(dot(hp, f1), dot(hp, f2), hs) + l_seed;
+			h.tex_n = vec3(dot(h.normal_part, f1), dot(h.normal_part, f2), dot(h.normal_part, la));
 			return h;
 		}
 		// Around the mouth.

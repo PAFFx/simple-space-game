@@ -70,6 +70,11 @@ frame (no polar pinwheel, nothing moves with the view); the rim is textured over
 Back faces (the inside, only seen through openings) draw as dark metal and frame, not paint.
 Still to do: real inner-frame meshes under the armour.
 
+- [x] **Two shots into the same spot look see-through.** The shader took the first hole a
+  pixel falls in and drew its wall or floor alone, so overlapping holes cut false gaps (or drew
+  a wall where the other hole had removed the metal). The view ray now goes through the union
+  of every hole it is in, to the first wall or floor still standing.
+
 ## C. Power and hydraulics: the suit is a system, not a sack of tanks
 
 - [ ] **Generators.** Two big Minovsky reactors in the abdomen below the cockpit (separate, but
