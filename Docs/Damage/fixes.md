@@ -140,6 +140,16 @@ Still to do: real inner-frame meshes under the armour.
   smoke in the cabin. Then through the hole you see the inside of the suit (needs B: the body
   isn't hollow).
 
+- [ ] **After the pilot dies the suit spins up, faster and faster.** *Cause* (measured): the
+  pilot's death switches the flight computer's stabilisation off (`_kill_pilot`:
+  `fcs_enabled = false`), but the beam that killed the pilot usually also left a thruster valve
+  stuck open (or a tank venting). Nothing counters it: one main stuck at 18% spins the suit up
+  by ~24°/s every second (245°/s after 10 s) until the propellant runs out. With the
+  stabilisation left on, the same suit holds at 0°/s and drifts at 1 m/s. *Fix:* the flight
+  computer is automatic and outlives the pilot: on the pilot's death it switches to a hold
+  mode (null rotation and drift, no new commands) and keeps running until its power, its
+  thrusters or its propellant are gone; it only shuts down when the suit has no reactor left.
+
 ## H. Panoramic screen feeds
 
 - [ ] **The camera-lost effect is bad.** Remove the block static and edge; a dead area is just
