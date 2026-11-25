@@ -25,7 +25,7 @@ func _bind() -> void:
 		damage.component_destroyed.connect(func(kind: StringName, what: StringName) -> void:
 			_note("%s %s" % [String(kind).to_upper(), String(what).to_upper()]))
 		damage.part_severed.connect(func(part: StringName) -> void: _note("%s LOST" % String(part).to_upper()))
-		damage.cockpit_holed.connect(func(_a: Vector3, _b: Vector3) -> void: _note("COCKPIT HOLED"))
+		damage.cockpit_holed.connect(func(_o: Vector3, _d: Vector3, _r: float) -> void: _note("COCKPIT HOLED"))
 		damage.repaired.connect(func() -> void: _events.clear())
 
 

@@ -56,6 +56,7 @@ func _run(cases: PackedStringArray) -> void:
 	_cam.near = 0.1
 	current_scene.add_child(_cam)
 	_cam.make_current()
+	_view = _cam
 	for c in cases:
 		match c:
 			"forearm": await _case("forearm", &"forearm.R", Vector3.ZERO, Vector3(-0.5, 0.0, 1.0), Vector3(14, 2, -10), [0.02, 0.05, 0.12, 0.4, 1.5])
@@ -198,25 +199,40 @@ func _sever() -> void:
 ## screen, the shell and the chest holed, space through them.
 func _cockpit_view() -> void:
 	_model.repair()
-	await _frames(20)
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	await _frames(2)
 	var fp := _vehicle.get_cockpit().get_player_camera() as PilotCamera
 	var eye := fp.global_position
 	var basis := _suit.global_basis
 	var target := eye + basis * Vector3(0.0, 0.1, -1.2)
 	var dir := (basis * Vector3(-1.0, 0.0, 0.0)).normalized()
 	fp.make_current()
+	_view = fp
 	fp.set_look_rotation(Basis.from_euler(Vector3(0.0, deg_to_rad(-60.0), 0.0)))
 	await _frames(5)
 	_save("cockpit_0_before")
-	await _fire(target - dir * 300.0, dir, "cockpit", [0.05, 0.6])
+	await _fire(target - dir * 300.0, dir, "cockpit", [0.03, 0.12, 0.4, 1.0, 3.0])
 	for i in 90:
 		await physics_frame
 	_save("cockpit_3_after")
 	fp.set_look_rotation(Basis.from_euler(Vector3(0.0, deg_to_rad(60.0), 0.0)))
 	await _frames(5)
 	_save("cockpit_4_other_side")
+	fp.set_look_rotation(Basis.from_euler(Vector3(0.0, deg_to_rad(-100.0), 0.0)))
+	await _frames(5)
+	_save("cockpit_5_entry")
+	# The same hole from outside: the chest's entry, and through it the cockpit.
+	_cam.make_current()
+	_view = _cam
+	_look(target - dir * 9.0 + basis.y * 1.0, target)
+	await _frames(5)
+	_save("cockpit_6_outside")
 	print("pilot alive: ", not _model.pilot_dead)
 	_cam.make_current()
+	_view = _cam
 
 
 ## The composite screens and their bezels from the seat: front, front left, left side, up,
@@ -226,6 +242,7 @@ func _bezels() -> void:
 	await _frames(20)
 	var fp := _vehicle.get_cockpit().get_player_camera() as PilotCamera
 	fp.make_current()
+	_view = fp
 	for v in [["front", 0.0, 5.0], ["front_left", 45.0, 5.0], ["side_left", 105.0, 5.0], ["up", 0.0, 60.0],
 			["door", 0.0, -40.0], ["back", 180.0, 10.0]]:
 		fp.set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(v[2]), deg_to_rad(v[1]), 0.0)))
@@ -233,6 +250,7 @@ func _bezels() -> void:
 		_save("bezels_%s" % v[0])
 	fp.set_look_rotation(Basis.IDENTITY)
 	_cam.make_current()
+	_view = _cam
 
 
 ## The left display's damage page after a forearm shot, a thruster fault and a camera out.
@@ -241,6 +259,7 @@ func _page() -> void:
 	await _frames(20)
 	var fp := _vehicle.get_cockpit().get_player_camera() as PilotCamera
 	fp.make_current()
+	_view = fp
 	fp.set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(-38.0), deg_to_rad(28.0), 0.0)))
 	var basis := _suit.global_basis
 	var dir := (basis * Vector3(-0.5, 0.0, 1.0)).normalized()
@@ -252,6 +271,7 @@ func _page() -> void:
 	_save("page_left_display")
 	fp.set_look_rotation(Basis.IDENTITY)
 	_cam.make_current()
+	_view = _cam
 
 
 ## The cameras' green lens lights, then with the head's eyes, the chest and a shoulder
@@ -361,6 +381,7 @@ func _screen() -> void:
 	await _frames(20)
 	var fp := _vehicle.get_cockpit().get_player_camera()
 	fp.make_current()
+	_view = fp
 	var look := func(yaw_deg: float, pitch_deg: float) -> void:
 		(fp as PilotCamera).set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(pitch_deg), deg_to_rad(yaw_deg), 0.0)))
 	look.call(0.0, 0.0)
@@ -384,13 +405,14 @@ func _screen() -> void:
 	var screen := _vehicle.get_cockpit().get_panoramic_screen()
 	var right := _suit.global_basis.x
 	var fwd := -_suit.global_basis.z
-	screen.add_screen_hole(fwd * 0.8 + right * 0.6 + _suit.global_basis.y * 0.1, deg_to_rad(16.0))
-	screen.add_screen_hole(-fwd * 0.8 + right * 0.6, deg_to_rad(16.0))
+	var line_dir := (-fwd + _suit.global_basis.y * 0.05).normalized()
+	screen.add_beam_hole(screen.global_position + right * 0.6, line_dir, 0.6 * HoleSet.BEAM_GROW, _model.holes.now)
 	look.call(-30.0, 0.0)
 	await _frames(10)
 	_save("screen_5_holed")
 	_model.repair()
 	_cam.make_current()
+	_view = _cam
 
 
 func _kill(cname: StringName) -> void:
@@ -445,10 +467,14 @@ func _drone() -> void:
 		drone.queue_free()
 
 
+## The camera the pictures are taken with (ours, or the pilot's).
+var _view: Camera3D
+
+
 func _save(name: String) -> void:
 	# A death switches the game's view outside (ViewSwitcher): keep ours.
-	if root.get_camera_3d() != _cam:
-		_cam.make_current()
+	if root.get_camera_3d() != _view:
+		_view.make_current()
 		await process_frame
 	root.get_texture().get_image().save_png("%s/%s.png" % [_out, name])
 	print("saved ", name)

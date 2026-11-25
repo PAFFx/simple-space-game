@@ -126,7 +126,7 @@ func beam_contact(contact: ProjectileManager.BeamContact) -> void:
 	var kg := contact.energy * DamageModel.COUPLING / DamageModel.REMOVAL_ENERGY
 	var need: float = d[0] - d[1]
 	if fresh and model != null and d[3] != null:
-		d[2] = model.holes.add_hole(d[3], null, -1, contact.point, contact.direction, contact.radius,
+		d[2] = model.holes.add_hole(d[3], null, -1, contact.point, contact.direction, contact.radius * HoleSet.BEAM_GROW,
 				maxf((d[5] as Vector3).distance_to(contact.point), 0.1))
 		var fx := DamageFx.of(self)
 		if fx != null:

@@ -18,7 +18,7 @@ var _fc: FlightComputer
 var _fcs: FireControl
 var _skel: Skeleton3D
 var _failed := 0
-var _cases := PackedStringArray(["head", "chest", "waist", "forearm", "thigh", "shin", "backpack",
+var _cases := PackedStringArray(["cockpit", "head", "chest", "waist", "forearm", "thigh", "shin", "backpack",
 		"shield", "bareshield", "drone", "vulcan", "repair"])
 var _log: PackedStringArray = []
 
@@ -59,6 +59,7 @@ func _run() -> void:
 		if p.equipment == null:
 			print("  %-18s dry %6.0f kg  tank %6.0f  vol %5.1f  density %5.1f  width %4.2f m" % [p.name, p.dry, p.tank, p.volume, p.density, p.width])
 	_model.pilot_killed.connect(func() -> void: _log.append("pilot killed"))
+	_model.cockpit_holed.connect(func(_o: Vector3, _d: Vector3, _r: float) -> void: _log.append("cockpit holed"))
 	_model.reactor_breached.connect(func() -> void: _log.append("reactor breached"))
 	_model.part_severed.connect(func(n: StringName) -> void: _log.append("severed %s" % n))
 	_model.component_destroyed.connect(func(k: StringName, n: StringName) -> void: _log.append("%s %s out" % [k, n]))
@@ -69,7 +70,15 @@ func _run() -> void:
 			"panel": await _panel()
 			"timing": await _timing()
 			"faults": await _faults()
-			"cockpit": await _shot_at_point("cockpit (pilot)", _pilot_eye())
+			"cockpit":
+				await _shot_at_point("cockpit (pilot)", _pilot_eye)
+				var holed := _log.find("cockpit holed")
+				var killed := _log.find("pilot killed")
+				_check("the beam holes the cockpit before it reaches the pilot", holed >= 0 and (killed < 0 or holed < killed))
+				var cockpit := (_suit as Node as VehicleBase).get_cockpit()
+				var jammed := cockpit.find_children("*", "CockpitGimbal", true, false).all(func(g: Node) -> bool: return (g as CockpitGimbal).jammed)
+				_check("a cockpit hit jams the gimbal", jammed)
+				_check("the screen is holed along the beam", cockpit.get_panoramic_screen()._beams.size() == 1)
 			"head": await _shot_at("head", &"head", Vector3.ZERO)
 			"chest": await _shot_at("chest (cockpit)", &"chest", Vector3(0.0, 0.6, 0.0))
 			"waist": await _shot_at("waist (reactor)", &"pelvis", Vector3(0.0, 0.5, 0.0))
@@ -198,13 +207,26 @@ func _pilot_eye() -> Vector3:
 	return (_suit as Node as VehicleBase).get_cockpit().get_player_camera().global_position
 
 
-func _shot_at_point(label: String, target: Vector3) -> void:
+## Fires one rifle shot from 300 m ahead at the point `target` gives (asked once the suit is still).
+func _shot_at_point(label: String, target_of: Callable) -> void:
 	_model.repair()
-	await _ticks(20)
+	await _still(20)
 	_log.clear()
+	var target: Vector3 = target_of.call()
 	var forward := -_suit.global_basis.z
 	var timing := await _fire(RIFLE, target + forward * 300.0, -forward)
 	print("%-22s stalled %4.0f ms, beam %s | %s" % [label, timing[1] * 1000.0, "through" if timing[2] else "stopped", ", ".join(_log) if not _log.is_empty() else "-"])
+
+
+## `count` ticks with the suit held still (a case before may have left it moving): shots are
+## aimed at where things are now and take a few ticks to arrive.
+func _still(count: int) -> void:
+	for i in count:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	_suit.linear_velocity = Vector3.ZERO
+	_suit.angular_velocity = Vector3.ZERO
 
 
 func _part_centre(part_name: StringName) -> Vector3:
@@ -215,7 +237,7 @@ func _part_centre(part_name: StringName) -> Vector3:
 ## Fires one rifle shot at `part` (offset in the body's frame) from 300 m ahead (or behind).
 func _shot_at(label: String, part: StringName, offset: Vector3, from_behind := false) -> void:
 	_model.repair()
-	await _ticks(20)
+	await _still(20)
 	_log.clear()
 	var target := _part_centre(part) + _suit.global_basis * offset
 	var forward := -_suit.global_basis.z

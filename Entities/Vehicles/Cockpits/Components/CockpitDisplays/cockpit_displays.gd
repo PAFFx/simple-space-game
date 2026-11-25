@@ -87,7 +87,7 @@ func _hook_damage(vehicle: VehicleBase, mesh_name: String) -> void:
 	var damage := vehicle.find_component(DamageModel) as DamageModel if vehicle != null else null
 	if damage == null:
 		return
-	var show := func(_a = null, _b = null) -> void: _flash_alternate(mesh_name)
+	var show := func(_a = null, _b = null, _c = null) -> void: _flash_alternate(mesh_name)
 	damage.component_destroyed.connect(show)
 	damage.part_severed.connect(show)
 	damage.cockpit_holed.connect(show)

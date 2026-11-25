@@ -19,6 +19,10 @@ extends Node
 ## How fast the gimbal centres (and comes back) around a hatch opening, 1/s.
 @export var hatch_blend_rate: float = 2.0
 
+## A beam went through the cockpit (DamageModel): the gimbal is wrecked and the capsule stays
+## where it is in the suit until repaired.
+var jammed := false
+
 var _cockpit: Node3D
 var _rest := Basis.IDENTITY
 var _hatch: CockpitHatch
@@ -37,7 +41,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _cockpit == null or flight_computer == null or flight_computer.control_law == null:
+	if _cockpit == null or jammed or flight_computer == null or flight_computer.control_law == null:
 		return
 	var target := 0.0 if _hatch != null and _hatch.is_unsealed() else 1.0
 	_engaged = move_toward(_engaged, target, hatch_blend_rate * delta)

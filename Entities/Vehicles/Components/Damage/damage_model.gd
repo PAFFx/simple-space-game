@@ -23,7 +23,8 @@ signal part_severed(part: StringName)
 signal component_destroyed(kind: StringName, component: StringName)
 signal pilot_killed
 signal reactor_breached
-signal cockpit_holed(entry: Vector3, exit: Vector3)
+## A beam went through the cockpit along `origin` + t·`direction`, its hole `radius` m.
+signal cockpit_holed(origin: Vector3, direction: Vector3, radius: float)
 ## Everything was put back (repair).
 signal repaired
 ## A shot reached the suit's structure (once per shot).
@@ -1111,9 +1112,11 @@ func _component_t(c: Component, from: Vector3, dir: Vector3, beam_radius: float)
 				best = dist
 				best_t = t
 		return best_t if best <= c.radius + beam_radius else -INF
+	# Where the cylinder first reaches the sphere.
 	var t := (a - from).dot(dir)
 	var dist := (from + dir * t).distance_to(a)
-	return t if dist <= c.radius + beam_radius else -INF
+	var reach := c.radius + beam_radius
+	return t - sqrt(reach * reach - dist * dist) if dist <= reach else -INF
 
 
 ## Spends `coupled` J on the column; returns what is left once through.
@@ -1153,7 +1156,7 @@ func _advance(d: Drill, t: float) -> void:
 			continue
 		if seg[3] == null and p.mesh != null:
 			var entry: Vector3 = xf * (d.from_body + d.dir_body * float(seg[1]))
-			seg[3] = holes.add_hole(p.mesh, _skel, p.bone, entry, xf.basis * d.dir_body, d.radius, chord)
+			seg[3] = holes.add_hole(p.mesh, _skel, p.bone, entry, xf.basis * d.dir_body, d.radius * HoleSet.BEAM_GROW, chord)
 			_knock_stubs(p, entry, xf.basis * d.dir_body, chord, d.radius)
 			(seg[3] as HoleSet.Hole).shell = _skin_shells(p, entry, xf.basis * d.dir_body, chord)
 			part_damaged.emit(p.name)
@@ -1323,15 +1326,12 @@ func _hit_component(c: Component, d: Drill) -> void:
 			_event("PILOT HIT")
 			_kill_pilot()
 		Kind.COCKPIT:
-			# Where the beam's line crosses the cockpit's sphere: the screen's two holes.
-			var centre := component_position(c)
 			var o := _drill_point(d, 0.0)
 			var dir := _body.global_basis * d.dir_body
-			var along := (centre - o).dot(dir)
-			var miss := (o + dir * along).distance_to(centre)
-			var half := sqrt(maxf(c.radius * c.radius - miss * miss, 0.0))
-			cockpit_holed.emit(o + dir * (along - half), o + dir * (along + half))
-			_hole_cockpit(o, dir, d.radius)
+			_jam_gimbal()
+			_hole_cockpit(o, dir, d.radius * HoleSet.BEAM_GROW)
+			cockpit_holed.emit(o, dir, d.radius * HoleSet.BEAM_GROW)
+			_cockpit_hit_fx(o, dir, d.radius * HoleSet.BEAM_GROW)
 			_event("cockpit holed")
 		Kind.REACTOR:
 			c.alive = false
@@ -1522,9 +1522,11 @@ func _burst(at: Vector3, energy: float, kind: StringName, max_panels := 3) -> vo
 		_body.apply_impulse(away.normalized() * push, at - _body.global_position)
 
 
-## The beam's line through the cockpit: every interior mesh on it gets a through-hole (in its
-## own frame: it rides the cockpit's gimbal), so with the screen and the chest holed the pilot
-## sees out. Meshes with their own shaders are left whole.
+## The beam's line through the cockpit, `radius` m: the same cylinder as the chest's hole.
+## Every interior mesh it crosses gets a through-hole in its own frame (it rides the gimbal),
+## so with the screen and the chest holed the pilot sees out; a small piece inside it, or one
+## with its own shader (the MFD screens, the rail lamps) it crosses at its middle, is burned
+## away. The panoramic screen opens on its own (`cockpit_holed`).
 func _hole_cockpit(origin: Vector3, dir: Vector3, radius: float) -> void:
 	var cockpit := _vehicle.get_cockpit()
 	if cockpit == null:
@@ -1536,18 +1538,66 @@ func _hole_cockpit(origin: Vector3, dir: Vector3, radius: float) -> void:
 			continue
 		if mi.skin != null:
 			continue   # the pilot
+		var t := _ray_box(mi.global_transform, mi.get_aabb().grow(radius), origin, dir)
+		if t.x < 0.0:
+			continue
 		var plain := true
 		for si in mi.mesh.get_surface_count():
 			if not (mi.get_active_material(si) is BaseMaterial3D):
 				plain = false
+		var box := mi.get_aabb()
+		var inside := 0
+		for k in 8:
+			var q := mi.global_transform * box.get_endpoint(k) - origin
+			if (q - dir * q.dot(dir)).length() < radius:
+				inside += 1
+		var c := mi.global_transform * box.get_center() - origin
+		var through_middle := (c - dir * c.dot(dir)).length() < radius
+		if inside == 8 or (not plain and through_middle):
+			mi.visible = false
+			_hidden_nodes.append(mi)
+			continue
 		if not plain:
 			continue
-		var t := _ray_box(mi.global_transform, mi.get_aabb().grow(radius), origin, dir)
-		if t.x < 0.0:
-			continue
-		var entry := origin + dir * t.x
-		var h := holes.add_hole(mi, null, -1, entry, dir, radius, maxf(t.y - t.x, 0.1), 1900.0)
+		var h := holes.add_hole(mi, null, -1, origin + dir * t.x, dir, radius, maxf(t.y - t.x, 0.1), 1900.0)
 		h.s_drill = h.s_out
+		h.shell = Vector2.ZERO   # thin cockpit furniture: open all through, no bore
+
+
+## The hit as the pilot lives it: the beam blinding at arm's length, most of the screen dying,
+## a fireball and sparks in the cabin, the air blasting out of the holes, fire and smoke.
+func _cockpit_hit_fx(origin: Vector3, dir: Vector3, radius: float) -> void:
+	var cockpit := _vehicle.get_cockpit() as Node3D
+	if cockpit == null:
+		return
+	var screen := _vehicle.get_cockpit().get_panoramic_screen()
+	var centre := screen.global_position if screen != null else cockpit.global_position
+	var near := origin + dir * (centre - origin).dot(dir)
+	var v := _body.linear_velocity
+	var pm := ProjectileManager.of(self)
+	if pm != null:
+		pm.flash(near, Color(1.0, 0.88, 0.96), 0.4, 2.2, 0.2, 30.0, 2.0, 0.0, v, 1.0)
+		_later(0.06, func() -> void: pm.explode(near, _body.linear_velocity, 0.45, Color(1.0, 0.55, 0.25)))
+	var holes_at: Array[Vector3] = screen.beam_crossings(origin, dir, radius) if screen != null else []
+	for g in cockpit.find_children("*", "CockpitBeamGlow", true, false):
+		(g as CockpitBeamGlow).hit_flash(near, Color(1.0, 0.85, 0.95), 45.0)
+		if not holes_at.is_empty():
+			(g as CockpitBeamGlow).burn(holes_at[0], 8.0)
+	if screen != null:
+		screen.blackout(0.85, 0.5)
+	var fx := DamageFx.of(self)
+	if fx != null:
+		fx.cabin(cockpit, near, holes_at, 8.0)
+
+
+## A beam through the cockpit wrecks its gimbal: the capsule stops turning and stays where it
+## is in the suit, so its holes stay lined up with the chest's.
+func _jam_gimbal() -> void:
+	var cockpit := _vehicle.get_cockpit()
+	if cockpit == null:
+		return
+	for g in cockpit.find_children("*", "CockpitGimbal", true, false):
+		(g as CockpitGimbal).jammed = true
 
 
 ## Tears an armour panel off `p`: the hull surface from `inside` toward `out`, `radius` m
@@ -3056,6 +3106,14 @@ func repair() -> void:
 		if is_instance_valid(node):
 			node.visible = true
 	_hidden_nodes.clear()
+	var cockpit := _vehicle.get_cockpit()
+	if cockpit != null:
+		for g in cockpit.find_children("*", "CockpitGimbal", true, false):
+			(g as CockpitGimbal).jammed = false
+		for g in cockpit.find_children("*", "CockpitBeamGlow", true, false):
+			(g as CockpitBeamGlow).put_out()
+	for n in get_tree().get_nodes_in_group(DamageFx.CABIN_GROUP):
+		n.queue_free()
 	var fc := _flight()
 	var fill := _reaction.get_fill()
 	for pname in _mass_removed:

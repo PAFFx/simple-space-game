@@ -10,6 +10,8 @@ extends Node3D
 
 const GROUP := &"damage_fx"
 const MAX_LIGHTS := 4
+## The cockpit's own effects (`cabin`): DamageModel.repair clears them.
+const CABIN_GROUP := &"cabin_fx"
 
 class HoleLight:
 	var light: OmniLight3D
@@ -171,6 +173,9 @@ func prewarm() -> void:
 		func() -> void: fragment_strike(at, Vector3.FORWARD, v, 0.0),
 		func() -> void: reactor_flash_small(at, v, 5.0),
 		func() -> void:
+			var holes: Array[Vector3] = [at + Vector3.UP]
+			cabin(_warm_anchor, at, holes, 0.3),
+		func() -> void:
 			var tw := create_tween()
 			tw.tween_interval(4.0)
 			tw.tween_callback(_warm_anchor.queue_free),
@@ -300,6 +305,96 @@ func fragment_strike(at: Vector3, dir: Vector3, velocity: Vector3, delay: float)
 		go.call()
 	else:
 		get_tree().create_timer(delay).timeout.connect(go)
+
+
+## A beam through the cockpit, seen from the seat. `anchor` is the capsule (everything rides it,
+## in its frame); `at` where the beam passed closest to the pilot, `holes` where it holed the
+## capsule (world). Sparks off every panel it touched, the air blasting out of the holes as fog,
+## then insulation burning at the holes' edges and smoke drawn out through them, `seconds` s.
+func cabin(anchor: Node3D, at: Vector3, holes: Array[Vector3], seconds: float) -> void:
+	var to_local := anchor.global_transform.affine_inverse()
+	var c := to_local * at
+	var sparks := _cabin_emitter(&"spray", anchor, c, 160, 1.4, true)
+	sparks.mat.direction = Vector3.UP
+	sparks.mat.spread = 180.0
+	sparks.mat.initial_velocity_min = 2.0
+	sparks.mat.initial_velocity_max = 14.0
+	sparks.mat.lifetime_randomness = 0.7
+	sparks.mat.scale_min = 0.004
+	sparks.mat.scale_max = 0.012
+	sparks.mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	sparks.mat.emission_sphere_radius = 0.45
+	var cool := _cooling_ramp().gradient
+	sparks.ramp.offsets = cool.offsets
+	sparks.ramp.colors = cool.colors
+	for h in holes:
+		var hl := to_local * h
+		var out := (hl - c).normalized()
+		var air := _cabin_emitter(&"vapour", anchor, c, 18, 0.9, true)
+		_puffs(air, out, 25.0, 4.0, 14.0, 0.15, 1.3, Color(0.9, 0.92, 0.95, 0.22))
+		var fire := _cabin_emitter(&"fire", anchor, hl - out * 0.12, 40, 0.45, false)
+		_puffs(fire, -out, 70.0, 0.15, 0.7, 0.05, 0.24, Color(1.0, 0.75, 0.35, 0.9))
+		fire.mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		fire.mat.emission_sphere_radius = 0.3
+		fire.ramp.offsets = PackedFloat32Array([0.0, 0.3, 1.0])
+		fire.ramp.colors = PackedColorArray([Color(1.0, 0.8, 0.45, 0.9), Color(1.0, 0.4, 0.08, 0.6), Color(0.4, 0.05, 0.0, 0.0)])
+		var smoke := _cabin_emitter(&"vapour", anchor, hl - out * 0.35, 24, 3.0, false)
+		_puffs(smoke, out, 40.0, 0.1, 0.5, 0.15, 0.9, Color(0.13, 0.12, 0.11, 0.4))
+		smoke.mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		smoke.mat.emission_sphere_radius = 0.35
+		for e in [fire, smoke]:
+			_stop_later(e.node, seconds * randf_range(0.7, 1.0))
+
+
+## A one-off emitter on `anchor` (local frame, `at`) for the cabin: freed after it is done.
+func _cabin_emitter(kind: StringName, anchor: Node3D, at: Vector3, amount: int, lifetime: float,
+		one_shot: bool) -> Pooled:
+	var e := _new_emitter(kind, amount, anchor)
+	var p := e.node
+	p.add_to_group(CABIN_GROUP)
+	p.layers = Layers.COCKPIT | Layers.VEHICLE_EXT
+	p.local_coords = true
+	p.one_shot = one_shot
+	p.explosiveness = 0.92 if one_shot else 0.0
+	p.lifetime = lifetime
+	p.position = at
+	p.emitting = true
+	if one_shot:
+		_stop_later(p, 0.0)
+	return e
+
+
+## Puffs along `dir` (spread deg) at `speed_min`..`speed_max` m/s, swelling `from` → `to` m.
+func _puffs(e: Pooled, dir: Vector3, spread: float, speed_min: float, speed_max: float,
+		from: float, to: float, color: Color) -> void:
+	var m := e.mat
+	m.direction = dir
+	m.spread = spread
+	m.initial_velocity_min = speed_min
+	m.initial_velocity_max = speed_max
+	m.damping_min = speed_min * 0.5
+	m.damping_max = speed_max * 0.5
+	m.scale_min = from
+	m.scale_max = from
+	e.curve.clear_points()
+	e.curve.max_value = maxf(to / from, 1.0)
+	e.curve.add_point(Vector2(0.0, 1.0))
+	e.curve.add_point(Vector2(1.0, to / from))
+	e.ramp.offsets = PackedFloat32Array([0.0, 0.3, 1.0])
+	e.ramp.colors = PackedColorArray([color, Color(color.r, color.g, color.b, color.a * 0.7), Color(color.r, color.g, color.b, 0.0)])
+
+
+## Stops `p` emitting after `after` s (a one-shot stops on its own) and frees it once its last
+## particles are gone.
+func _stop_later(p: GPUParticles3D, after: float) -> void:
+	var tree := get_tree()
+	if after > 0.0:
+		tree.create_timer(after).timeout.connect(func() -> void:
+			if is_instance_valid(p):
+				p.emitting = false)
+	tree.create_timer(after + p.lifetime + 0.5).timeout.connect(func() -> void:
+		if is_instance_valid(p):
+			p.queue_free())
 
 
 ## Smoke rolling out of a burst: dark, swelling and lingering for `life` s.
@@ -476,7 +571,7 @@ func _emitter(kind: StringName, at: Vector3, amount: int, lifetime: float) -> Po
 	return e
 
 
-func _new_emitter(kind: StringName, bucket: int) -> Pooled:
+func _new_emitter(kind: StringName, bucket: int, parent: Node = null) -> Pooled:
 	var e := Pooled.new()
 	var p := GPUParticles3D.new()
 	p.one_shot = true
@@ -511,6 +606,16 @@ func _new_emitter(kind: StringName, bucket: int) -> Pooled:
 			m.scale_curve = ct
 			m.angle_min = 0.0
 			m.angle_max = 360.0
+		&"fire":
+			# Flames: the glints' additive look on swelling puffs (the vapour's motion).
+			quad.size = Vector2.ONE
+			p.material_override = _glint_material
+			e.curve = Curve.new()
+			var ct := CurveTexture.new()
+			ct.curve = e.curve
+			m.scale_curve = ct
+			m.angle_min = 0.0
+			m.angle_max = 360.0
 		_:
 			quad.size = Vector2.ONE * 0.05
 			p.material_override = _glint_material
@@ -522,7 +627,7 @@ func _new_emitter(kind: StringName, bucket: int) -> Pooled:
 	p.process_material = m
 	e.node = p
 	e.mat = m
-	add_child(p)
+	(parent if parent != null else self).add_child(p)
 	return e
 
 

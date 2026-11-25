@@ -173,13 +173,18 @@ Still to do: real inner-frame meshes under the armour.
   but there is no inside. Needs inner frame and machinery meshes under the torso armour
   (frame, reactor housing, cockpit block, ducts), drawn only where the armour is opened (or
   always: they cost little).
-- [ ] **The cockpit's panoramic screen shows through a hole in the chest** before the cockpit
+- [x] **The cockpit's panoramic screen shows through a hole in the chest** before the cockpit
   is breached. *Cause:* the cockpit shell is on the cockpit-only render layer (not drawn by the
   outside camera), but the screen mesh is also on the outside layer (`VEHICLE_EXT | COCKPIT`):
   through any hole in the chest skin the outside view sees the screen floating inside, no shell
   around it. *Fix:* the screen only on the cockpit layer (the sensor view excludes it already),
   and the cockpit shell's outside drawn for the outside camera, so a chest hole shows the
   cockpit block, and only a breach shows the screen.
+  *Done (2026-11-28):* the screen is on the cockpit layer only; outside cameras see a twin
+  (same mesh and material, `outside_view` instance uniform): dark glass with the same holes and
+  cracks, the picture only while the hatch is open. Once a beam has jammed the gimbal the
+  interior is drawn for outside cameras too (it can't turn into the hull): through the breach
+  you see the wrecked, burning cabin.
 
 ## E. Smoke and fire
 
@@ -204,9 +209,10 @@ Still to do: real inner-frame meshes under the armour.
 
 - [x] **On destruction, go to the third-person view.** The cockpit stays after the suit is gone;
   zoom out to third person when the suit is destroyed (and when the pilot dies).
-- [ ] **A hit to the cockpit breaks its gimbal.** The cockpit stops turning on its own and stays
-  stuck to the suit's attitude.
-- [ ] **Holes much bigger.** Beam holes through the cockpit are far too small, and holes
+- [x] **A hit to the cockpit breaks its gimbal.** The cockpit stops turning on its own and stays
+  stuck to the suit's attitude. *Done:* `CockpitGimbal.jammed`: the capsule stays where it was in
+  the suit, so its holes stay lined up with the chest's; repair frees it.
+- [x] **Holes much bigger.** Beam holes through the cockpit are far too small, and holes
   everywhere should be bigger (the beam's size stays).
   **What this means (user, 2026-11-26):** the cockpit's holes look scripted: what the pilot
   sees from inside doesn't match what the beam did to the suit outside. The inside must be the
@@ -215,12 +221,28 @@ Still to do: real inner-frame meshes under the armour.
   cockpit (the shell, a screen block, the seat rail, the hatch), that part is gone or melted in
   the cockpit view too, not just a round hole punched in the screen. One damage record drives
   both views.
-- [ ] **Every pierced screen breaks.** One shot kills several screens but only one shows cracks;
+  *Done (2026-11-28):* the beam's hole is `HoleSet.BEAM_GROW` (1.3×) its radius everywhere. A
+  cockpit hit sends the beam's line and hole radius (`cockpit_holed(origin, direction, radius)`):
+  the screen opens where that cylinder crosses it (its own fragments' distance to the line, a
+  shattered edge 1.15× wider, a thin hot lip cooling on the HoleSet's clock with the shared
+  `hole_heat.gdshaderinc`, a charred band), the cockpit's meshes get through-holes along the same
+  line (open, no bore), and small pieces inside the cylinder, or with their own shaders (the
+  MFDs, rail lamps) crossed at their middle, burn away. The cockpit sphere is hit where the beam
+  enters it, not at its middle (it came after the pilot before).
+- [x] **Every pierced screen breaks.** One shot kills several screens but only one shows cracks;
   every composite screen a beam passes through cracks (each crossing is a break).
-- [ ] **Make a cockpit hit terrifying** even when the pilot lives. Sequence: the beam right in
+  *Done:* each crossing's opening is sampled on the CPU (`_opening_panels`): every sub-screen it
+  touches dies and every composite it touches cracks from it.
+- [x] **Make a cockpit hit terrifying** even when the pilot lives. Sequence: the beam right in
   front of you, very bright and close; the screen dies (almost all of it); explosion, fire and
   smoke in the cabin. Then through the hole you see the inside of the suit (needs B: the body
   isn't hollow).
+  *Done:* `_cockpit_hit_fx`: a blinding flash where the beam passed closest and the cabin light
+  flashing with it (`CockpitBeamGlow.hit_flash`), a small fireball, 85% of the sub-screens
+  flickering out in random order over 0.5 s (`PanoramicScreen.blackout`; the rest flicker for a
+  few seconds), sparks, the air blasting out of the holes as fog, then fire at the holes with a
+  flickering orange cabin light and smoke drawn out through them for ~8 s (`DamageFx.cabin`,
+  emitters riding the capsule, prewarmed). The flames are still simple puffs (E).
 
 - [x] **After the pilot dies the suit spins up, faster and faster.** *Cause* (measured): the
   pilot's death switches the flight computer's stabilisation off (`_kill_pilot`:

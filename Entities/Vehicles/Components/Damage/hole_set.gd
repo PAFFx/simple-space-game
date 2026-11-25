@@ -37,6 +37,9 @@ class Surface:
 	var writers: Array[ShaderMaterial] = []  ## next passes marking the cross-section
 	var dirty := true
 
+## A beam hole is this much wider than the beam: the metal around it melts and runs.
+const BEAM_GROW := 1.3
+
 var now := 0.0
 var _surfaces := {}   ## MeshInstance3D → Surface
 

@@ -285,5 +285,4 @@ func _apply_damage() -> void:
 		if c.kind == DamageModel.Kind.EYES:
 			model._kill_component(c)
 	var screen := (_suit as Node as VehicleBase).get_cockpit().get_panoramic_screen()
-	screen.add_screen_hole(-_suit.global_basis.z + _suit.global_basis.x, deg_to_rad(16.0))
-	screen.add_screen_hole(_suit.global_basis.z - _suit.global_basis.x, deg_to_rad(16.0))
+	screen.add_beam_hole(screen.global_position + _suit.global_basis.x * 0.5, _suit.global_basis.z, 0.78, model.holes.now)
