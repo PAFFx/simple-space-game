@@ -339,8 +339,8 @@ Differences from the design above:
   light. Move them in the editor; `build_rx93_scene.gd` keeps them when it regenerates. The
   painted sensors (eyes 8, left chest 8, forehead 3, back of the head 3) make their own green
   paint glow (`sensor_glow.gdshader`, an overlay on the Head / Chest mesh, by atlas UV rect);
-  the rest show a dim green dot (1.2). Dark once the camera is shot out: the enemy sees the
-  blind spots too.
+  the other cameras show nothing in the game (a green dot marks them in the editor only).
+  Dark once the camera is shot out.
   The dots were placed by hand from pictures with `Tools/Damage/camera_dot_tool.gd` (one view
   per camera with the thrusters marked; a picked pixel is cast onto the posed skin): on the
   armour, ≥ 1.4 m from any nozzle, clear of the stowed rifle, bazooka and shield.

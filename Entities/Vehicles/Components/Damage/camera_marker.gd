@@ -4,8 +4,8 @@ extends Marker3D
 
 ## Where one of the suit's cameras sits and where it looks (−Z), riding the bone of the
 ## BoneAttachment3D it is under. Move it in the editor; DamageModel puts the camera there.
-## A camera without a painted lens shows a small green light here (in the editor too); a
-## painted one (the eyes, the chest sensor) makes its green paint glow instead.
+## A painted lens (the eyes, the chest sensor) makes its green paint glow. The other cameras
+## show nothing in the game; in the editor a small green dot marks where they are.
 
 const LIVE := Color(0.35, 1.0, 0.5)
 
@@ -14,7 +14,7 @@ const LIVE := Color(0.35, 1.0, 0.5)
 @export var camera: StringName
 ## Only glows (a second lens of `camera`, e.g. the forehead telescope); doesn't move it.
 @export var glow_only := false
-## Light brightness (emission energy).
+## Glow of a painted lens (emission energy).
 @export_range(0.0, 16.0, 0.1) var brightness := 1.5
 ## The lens is painted on the armour: these atlas UV rects of the part's mesh glow (only their
 ## green), no light is added.
@@ -25,7 +25,7 @@ var _material: StandardMaterial3D
 
 
 func _ready() -> void:
-	if painted_uv.is_empty():
+	if painted_uv.is_empty() and Engine.is_editor_hint():
 		_make_lens()
 
 
@@ -57,6 +57,5 @@ func _make_lens() -> void:
 	_lens = MeshInstance3D.new()
 	_lens.name = "Lens"
 	_lens.mesh = sphere
-	_lens.layers = Layers.VEHICLE_EXT if not Engine.is_editor_hint() else 1
 	_lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_lens, false, Node.INTERNAL_MODE_BACK)

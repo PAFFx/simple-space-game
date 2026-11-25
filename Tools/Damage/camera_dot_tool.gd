@@ -77,10 +77,11 @@ func _run(picks: Dictionary) -> void:
 	for node in _suit.find_children("*", "Marker3D", true, false):
 		if node is CameraMarker:
 			markers[node.name] = node
-			# Bigger while we look at them.
-			for child in node.get_children(true):
-				if child is MeshInstance3D:
-					(child as Node3D).scale = Vector3.ONE * 2.5
+			# The dots only show in the editor: draw them here, bigger, to see them.
+			var m := node as CameraMarker
+			if not m.is_painted():
+				m._make_lens()
+				m._lens.scale = Vector3.ONE * 2.5
 	if picks.is_empty():
 		_add_grid()
 		for name in VIEWS:
