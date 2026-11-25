@@ -329,17 +329,30 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				kind = l2.y;
 				last = nxt;
 			}
-			if (kind > 1.5) {
-				h.discard_it = true;
-				return h;
-			}
-			// The surface it stops on, in hole `last`'s terms; none where there is no metal
-			// (a thin plate's bore ends at its back; past it the part is hollow or open).
+			// The surface it stops on, in hole `last`'s terms.
 			vec3 lo = hole_a[last].xyz;
 			vec3 la = hole_b[last].xyz;
+			// Never open: where the ray would leave the part (a through hole's far end) or come
+			// out of the armour into the part's hollow inside, the opening is closed there by
+			// rough re-melted metal (the torn insides), as a floor across the bore.
+			bool cap = kind > 1.5;
+			float t_cap = t_hit;
 			float l_hs = dot(p + rd * t_hit - lo, la);
 			if (l_hs > hole_d[last].x && l_hs < hole_d[last].y) {
-				h.discard_it = true;
+				cap = true;
+				float ra_l = dot(rd, la);
+				t_cap = ra_l > 1e-4 ? clamp((hole_d[last].x - dot(p - lo, la)) / ra_l, 0.0, t_hit) : t_hit;
+			}
+			if (cap) {
+				vec3 g1 = normalize(cross(la, abs(la.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+				vec3 cp = p + rd * t_cap - lo;
+				float c_seed = float(last) * 1.73 + hole_c[last].z * 0.37 + 11.0;
+				h.inside = true;
+				h.depth = t_cap;
+				h.normal_part = -la;
+				h.tex_p = vec3(dot(cp, g1), dot(cp, cross(la, g1)), dot(cp, la)) + c_seed;
+				h.tex_n = vec3(0.0, 0.0, -1.0);
+				h.temperature = hole_cool(hole_c[last].w * 0.75, hole_now - hole_c[last].z);
 				return h;
 			}
 			float l_s_in = hole_b[last].w;
