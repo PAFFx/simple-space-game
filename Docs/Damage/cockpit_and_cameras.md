@@ -50,8 +50,8 @@ cone half-angle, quality. For each fragment's direction, **coverage = the best l
 cone contains it** (soft-edged over a couple of degrees):
 
 - **Covered by the head**: the full-quality image (today's).
-- **Covered only by body cameras**: the same image, blocky (sampled through a block quantise at
-  the body cameras' resolution) and slightly delayed-looking (no extra render, a cue only).
+- **Covered only by body cameras**: the same full-quality image (superseded: a blocky, flatter
+  picture here was tried and dropped; the body cameras are as good as the eyes).
 - **Not covered**: no signal: dark with the blue block noise the overlay already uses for
   "resolving in", and a thin sector border so the pilot sees the edge of the blind area.
 
@@ -124,9 +124,10 @@ cockpit.
   the rear skirts (65°), feet (70°) and forearms (60°). All alive they cover the whole sphere;
   without the head's eyes 99.4% (the rest no signal), without the eyes and the rear head
   camera 94.4%. Each is a damage component on its part; a severed part takes its camera.
-- **Screen**: per pixel, the best live camera covering its direction. Main camera: the full
-  picture. Body cameras only: sampled in 320×180 blocks, a little desaturated. None: dark with
-  shifting block static and a thin blue edge. Checked from the seat (`damage_snapshot.gd screen`).
+- **Screen**: per pixel, whether any live camera covers its direction. Every camera gives the
+  full HD picture (body cameras are as good as the head's eyes; what only the head has is the
+  forehead zoom camera and the targeting sensors). None: dark with shifting block static and a
+  thin blue edge. Checked from the seat (`damage_snapshot.gd screen`).
 - **Opaque parts**: `Layers.SENSOR_OPAQUE` is in the sensor camera's mask; a part whose camera is
   gone gets the bit and is drawn on the screen (`DamageModel.set_opaque`). The shield's camera
   dies with a through-hole (60%); broken equipment turns opaque. Rearm clears it.
