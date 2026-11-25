@@ -84,6 +84,7 @@ struct HoleHit {
 	float near_heat;    // K of the hottest hole near a back face (interior light)
 	vec2 wall;          // inside: angle around the bore and depth (texture coordinates)
 	vec2 zone;          // around a mouth: angle and distance from the rim (in radii)
+	bool interior;      // a back face (the shell's inside) near a hole: seen through it
 };
 
 // Height of the cut surface above its plane at `p` (torn, uneven).
@@ -112,6 +113,7 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 	h.near_heat = 290.0;
 	h.wall = vec2(0.0);
 	h.zone = vec2(0.0, 99.0);
+	h.interior = false;
 	vec3 rd = normalize(p - cam);
 	if (cut_side != 0.0) {
 		float f = cut_field(p);
@@ -196,7 +198,9 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				h.discard_it = true;
 				return h;
 			}
-			if (d >= r * flare) {
+			// A panel's opening (wide and short): torn, not melted, open to its ragged edge.
+			bool panel_hole = (s_out - s_in) < r * 0.9;
+			if (d >= r * flare && !panel_hole) {
 				// Between the true bore and the ragged outline: melted lip.
 				h.lip = 1.0;
 				h.temperature = max(h.temperature, t_now);
@@ -204,7 +208,7 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				continue;
 			}
 			// Cast the view ray into the bore (an infinite cylinder of radius r·flare).
-			float rr = r * flare;
+			float rr = panel_hole ? max(rw, d + 1e-3) : r * flare;
 			vec3 u = radial;
 			vec3 w = rd - a * dot(rd, a);
 			float A = dot(w, w);
@@ -252,19 +256,22 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 		}
 		// Around the mouth.
 		float x = max(d - rw, 0.0) / r;
-		float zone = along || s <= s_out + r ? 1.0 : 0.0;
+		// Fades out (no hard edge) past the far end and well before the entry.
+		float zone = along ? 1.0 : (1.0 - smoothstep(s_out + r * 0.5, s_out + r * 1.5, s))
+				* smoothstep(s_in - r * 3.0, s_in - r * 2.0, s);
 		if (zone > 0.0) {
-			float spread = exp(-x * 2.6);
+			float spread = exp(-x * 2.6) * zone;
 			if (x < h.zone.y) {
 				h.zone = vec2(ang + seed, x);
 			}
 			h.temperature = max(h.temperature, 290.0 + (t_now - 290.0) * spread);
-			h.lip = max(h.lip, (1.0 - smoothstep(0.0, 0.22, x)) * 0.85);
-			h.scorch = max(h.scorch, 1.0 - smoothstep(0.1, 1.6 + 0.5 * hole_noise(vec2(ang * 2.0, seed)), x));
-			h.tint = max(h.tint, (1.0 - smoothstep(0.4, 1.1, x)) * smoothstep(0.05, 0.3, x));
+			h.lip = max(h.lip, (1.0 - smoothstep(0.0, 0.22, x)) * 0.85 * zone);
+			h.scorch = max(h.scorch, (1.0 - smoothstep(0.1, 1.6 + 0.5 * hole_noise(vec2(ang * 2.0, seed)), x)) * zone);
+			h.tint = max(h.tint, (1.0 - smoothstep(0.4, 1.1, x)) * smoothstep(0.05, 0.3, x) * zone);
 		}
 		if (!front_facing) {
 			h.near_heat = max(h.near_heat, 290.0 + (t_now - 290.0) * exp(-x * 0.5));
+			h.interior = h.interior || x < 4.0;
 		}
 	}
 	return h;

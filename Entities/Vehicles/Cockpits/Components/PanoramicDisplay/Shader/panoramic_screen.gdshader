@@ -277,55 +277,46 @@ float cov_hash(vec2 p) {
 
 // Which composite screen and sub-screen a direction falls on (az, el in deg; az 0 front,
 // + right): vec4(composite, sub, distance to the composite's edge, distance to a sub seam),
-// distances in deg on the sphere.
+// distances in deg on the sphere. The screens aren't a grid: the door narrows above the hatch
+// (a trapezoid), the front screens' outer edges lean out at the top, the sides lean back, the
+// top screen's edge sits higher in front, the bottom rises toward the sides, and sub-screens
+// are split on slants.
 vec4 screen_panel(float az, float el) {
-	float door = panel_layout.x;
-	float front = panel_layout.y;
-	float side = panel_layout.z;
-	float top = panel_caps.x;
-	float bottom = panel_caps.y;
+	float aa = abs(az);
 	float ce = max(cos(radians(el)), 0.05);
-	float panel;
-	float sub;
-	float d_comp;
-	float d_sub;
+	float split = panel_layout.w;
+	float top = panel_caps.x + 7.0 * cos(radians(az));
+	float bottom = panel_caps.y + 9.0 * smoothstep(panel_layout.x, panel_layout.y, aa);
+	float mid = (top + bottom) * 0.5;
 	if (el >= top || el <= bottom) {
 		bool up = el >= top;
-		panel = up ? 0.0 : 1.0;
-		float a = mod(az + 45.0, 360.0);
-		sub = floor(a / 90.0);
+		float a = mod(az + (up ? 25.0 : 65.0), 360.0);
 		float r = mod(a, 90.0);
-		d_comp = up ? el - top : bottom - el;
-		d_sub = min(r, 90.0 - r) * ce;
-		return vec4(panel, sub, d_comp, d_sub);
+		return vec4(up ? 0.0 : 1.0, floor(a / 90.0), up ? el - top : bottom - el, min(r, 90.0 - r) * ce);
 	}
-	float aa = abs(az);
 	float d_el = min(top - el, el - bottom);
-	float mid_el = (top + bottom) * 0.5;
+	// The door: the hatch's rectangle below the split, narrowing to the top above it.
+	float door = el < split ? panel_layout.x : mix(panel_layout.x, panel_layout.x * 0.65, clamp((el - split) / max(top - split, 1.0), 0.0, 1.0));
+	float front = panel_layout.y + (el - mid) * 0.35;
+	float side = panel_layout.z - (el - mid) * 0.3;
 	if (aa <= door) {
-		panel = 2.0;
-		sub = el < panel_layout.w ? 0.0 : 1.0;
-		d_comp = min((door - aa) * ce, d_el);
-		d_sub = abs(el - panel_layout.w);
-	} else if (aa <= front) {
-		panel = az < 0.0 ? 3.0 : 4.0;
-		float m = (door + front) * 0.5;
-		sub = (aa < m ? 0.0 : 1.0) + (el < mid_el ? 0.0 : 2.0);
-		d_comp = min(min(aa - door, front - aa) * ce, d_el);
-		d_sub = min(abs(aa - m) * ce, abs(el - mid_el));
-	} else if (aa <= side) {
-		panel = az < 0.0 ? 5.0 : 6.0;
-		float m = (front + side) * 0.5;
-		sub = (aa < m ? 0.0 : 1.0) + (el < mid_el ? 0.0 : 2.0);
-		d_comp = min(min(aa - front, side - aa) * ce, d_el);
-		d_sub = min(abs(aa - m) * ce, abs(el - mid_el));
-	} else {
-		panel = 7.0;
-		sub = (az < 0.0 ? 0.0 : 1.0) + (el < mid_el ? 0.0 : 2.0);
-		d_comp = min((aa - side) * ce, d_el);
-		d_sub = min((180.0 - aa) * ce, abs(el - mid_el));
+		return vec4(2.0, el < split ? 0.0 : 1.0, min((door - aa) * ce, d_el), abs(el - split));
 	}
-	return vec4(panel, sub, d_comp, d_sub);
+	if (aa <= front) {
+		float m = (door + front) * 0.5 + (el - mid) * 0.25;
+		float me = mid + (aa - m) * 0.2;
+		float sub = (aa < m ? 0.0 : 1.0) + (el < me ? 0.0 : 2.0);
+		return vec4(az < 0.0 ? 3.0 : 4.0, sub, min(min(aa - door, front - aa) * ce, d_el), min(abs(aa - m) * ce, abs(el - me)));
+	}
+	if (aa <= side) {
+		float m = (front + side) * 0.5 - (el - mid) * 0.2;
+		float me = mid - (aa - m) * 0.18;
+		float sub = (aa < m ? 0.0 : 1.0) + (el < me ? 0.0 : 2.0);
+		return vec4(az < 0.0 ? 5.0 : 6.0, sub, min(min(aa - front, side - aa) * ce, d_el), min(abs(aa - m) * ce, abs(el - me)));
+	}
+	float me = mid + (180.0 - aa) * 0.15;
+	float sub = (az < 0.0 ? 0.0 : 1.0) + (el < me ? 0.0 : 2.0);
+	return vec4(7.0, sub, min((aa - side) * ce, d_el), min((180.0 - aa) * ce, abs(el - me)));
 }
 
 float hole_like_noise(vec2 p) {
@@ -373,6 +364,7 @@ void fragment() {
 	float crack_dark = 0.0;
 	float crack_glint = 0.0;
 	float block_dead = 0.0;
+	float glass_broken = 0.0;
 	if (screen_hole_count > 0) {
 		float cel2 = cos(elevation);
 		vec3 dir_s = vec3(sin(azimuth) * cel2, sin(elevation), -cos(azimuth) * cel2);
@@ -398,6 +390,7 @@ void fragment() {
 				panel_dead = 1.0;
 			}
 			if (same_glass) {
+				glass_broken = 1.0;
 				// Spiderweb: radial cracks (wandering) and broken rings, thinning out.
 				float seed = float(i) * 3.7;
 				float reach = 1.0 - smoothstep(2.0, 7.0, ang);
@@ -495,13 +488,16 @@ void fragment() {
 		color = composite_zoom_frame(color, local_dir, hud_brightness, degrees(length(fwidth(local_dir))) * 0.7);
 	}
 
-	// The bezels: a frame between composite screens, a thin seam between sub-screens.
-	float fw = max(fwidth(el_deg), 0.02);
-	float frame = 1.0 - smoothstep(bezel_deg - fw, bezel_deg + fw, my_panel.z);
-	float seam = 1.0 - smoothstep(seam_deg - fw, seam_deg + fw, my_panel.w);
-	float edge_light = (1.0 - smoothstep(0.0, fw * 2.0, abs(my_panel.z - bezel_deg))) * 0.5;
-	color = mix(color, bezel_color, max(frame, seam * 0.85));
-	color += vec3(0.05, 0.055, 0.06) * edge_light;
+	// The seams are invisible while the screen is whole; a broken composite shows its frame
+	// and its sub-screens' seams (the glass gone dull around them, the edges catching light).
+	if (glass_broken > 0.5) {
+		float fw = max(fwidth(el_deg), 0.02);
+		float frame = 1.0 - smoothstep(bezel_deg - fw, bezel_deg + fw, my_panel.z);
+		float seam = 1.0 - smoothstep(seam_deg - fw, seam_deg + fw, my_panel.w);
+		float edge_light = (1.0 - smoothstep(0.0, fw * 2.0, abs(my_panel.z - bezel_deg))) * 0.5;
+		color = mix(color, bezel_color, max(frame, seam * 0.85));
+		color += vec3(0.05, 0.055, 0.06) * edge_light;
+	}
 	if (screen_hole_count > 0) {
 		// A dead panel is dark glass: a faint sheen of the cockpit's light across it.
 		float sheen = 0.02 + 0.025 * hole_like_noise(vec2(azimuth, elevation) * 6.0);

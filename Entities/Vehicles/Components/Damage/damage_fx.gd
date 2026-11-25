@@ -158,6 +158,16 @@ func burst(at: Vector3, velocity: Vector3, radius: float, kind: StringName) -> v
 			_vapour(at, Vector3.ZERO, velocity, 16, 180.0, radius * 2.0, radius * 12.0, 1.6, Color(0.92, 0.95, 1.0, 0.16), radius * 14.0)
 			_glints(at, velocity, 220, radius * 9.0, 2.4)
 			_spray(at, Vector3.ZERO, velocity, 60, 180.0, 25.0, 0.2, 0.7, radius * 0.05, 60.0)
+		&"minovsky":
+			# Ruptured Minovsky lines: a pink-white flash, a small fireball, arcs, the
+			# particles' glitter and heavy smoke rolling out (fiction: it lingers).
+			pm.flash(at, Color(1.0, 0.85, 0.95), radius * 0.3, radius * 1.6, 0.14, 9.0, 1.2, radius * 12.0, velocity, 1.0)
+			pm.explode(at, velocity, radius * 1.3, Color(1.0, 0.5, 0.35))
+			_arc(at, velocity, radius * 2.2, 0.45)
+			_arc(at, velocity, radius * 1.6, 0.6)
+			_spray(at, Vector3.ZERO, velocity, 70, 180.0, 30.0, 0.2, 0.9, 0.05, 90.0)
+			_glints(at, velocity, 120, radius * 6.0, 2.0, Color(1.0, 0.55, 0.85))
+			_smoke(at, velocity, radius, 3.5)
 		&"stores":
 			pm.explode(at, velocity, radius * 1.4, Color(1.0, 0.55, 0.25))
 			_spray(at, Vector3.ZERO, velocity, 140, 180.0, 60.0, 0.3, 1.4, radius * 0.06, 120.0)
@@ -183,7 +193,8 @@ func i_field(at: Vector3, outward: Vector3, velocity: Vector3, color: Color) -> 
 
 ## Water venting from a hole on `anchor` (it rides it): a jet of vapour and ice along
 ## `local_dir` for `seconds`; `strength` 1 = a cell emptying, ~0.2 = a leaking line.
-func vent(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float, strength: float) -> void:
+func vent(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float, strength: float,
+		color := Color(0.97, 0.98, 1.0)) -> void:
 	if strength > 0.5:
 		# The cell empties in a fraction of a second: one burst of mist and ice.
 		var at := anchor.global_transform * local_at
@@ -214,8 +225,8 @@ func vent(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float,
 	ct.curve = curve
 	m.scale_curve = ct
 	var g := Gradient.new()
-	g.set_color(0, Color(0.97, 0.98, 1.0, lerpf(0.65, 0.8, strength)))
-	g.set_color(1, Color(0.9, 0.93, 1.0, 0.0))
+	g.set_color(0, Color(color.r, color.g, color.b, lerpf(0.65, 0.8, strength)))
+	g.set_color(1, Color(color.r * 0.93, color.g * 0.95, color.b, 0.0))
 	var gt := GradientTexture1D.new()
 	gt.gradient = g
 	m.color_ramp = gt
@@ -241,6 +252,19 @@ func fragment_strike(at: Vector3, dir: Vector3, velocity: Vector3, delay: float)
 		go.call()
 	else:
 		get_tree().create_timer(delay).timeout.connect(go)
+
+
+## Smoke rolling out of a burst: dark, swelling and lingering for `life` s.
+func _smoke(at: Vector3, velocity: Vector3, radius: float, life: float) -> void:
+	_vapour(at, Vector3.ZERO, velocity, 22, 180.0, radius * 1.5, radius * 9.0, life,
+			Color(0.16, 0.14, 0.13, 0.7), radius * 5.0)
+	_vapour(at, Vector3.ZERO, velocity, 10, 180.0, radius * 1.0, radius * 5.0, life * 0.5,
+			Color(0.45, 0.32, 0.26, 0.5), radius * 3.0)
+
+
+## Smoke leaking from a cut line on `anchor` (it rides it) along `local_dir` for `seconds`.
+func smoke_leak(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float) -> void:
+	vent(anchor, local_at, local_dir, seconds, 0.35, Color(0.18, 0.16, 0.15))
 
 
 ## A limb tore off at `at`.
@@ -425,7 +449,7 @@ func _vapour(at: Vector3, dir: Vector3, velocity: Vector3, amount: int, spread: 
 
 
 ## Hydrogen / water ice crystals glittering in the light.
-func _glints(at: Vector3, velocity: Vector3, amount: int, reach: float, life: float) -> void:
+func _glints(at: Vector3, velocity: Vector3, amount: int, reach: float, life: float, tint := Color(1, 1, 1)) -> void:
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE * 0.05
 	var p := _emitter(at, amount, life, _glint_material, quad)
@@ -440,8 +464,8 @@ func _glints(at: Vector3, velocity: Vector3, amount: int, reach: float, life: fl
 	m.scale_min = 0.5
 	m.scale_max = 1.6
 	var g := Gradient.new()
-	g.set_color(0, Color(1, 1, 1, 1))
-	g.set_color(1, Color(0.8, 0.9, 1.0, 0.0))
+	g.set_color(0, Color(tint.r, tint.g, tint.b, 1))
+	g.set_color(1, Color(tint.r * 0.8, tint.g * 0.9, tint.b, 0.0))
 	var gt := GradientTexture1D.new()
 	gt.gradient = g
 	m.color_ramp = gt

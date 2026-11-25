@@ -890,7 +890,9 @@ func _advance(d: Drill, t: float) -> void:
 				var h := seg[3] as HoleSet.Hole
 				p.last_hole = h.origin + h.axis * (h.s_in + h.s_out) * 0.5
 				p.has_hole = true
-			_through_part(p, d, chord)
+			var mid_t := (float(seg[1]) + float(seg[2])) * 0.5
+			_through_part(p, d, chord, xf * (d.from_body + d.dir_body * mid_t),
+					xf * (d.from_body + d.dir_body * float(seg[2])))
 			var fx := DamageFx.of(self)
 			if fx != null and p.mesh != null:
 				fx.blow_out(xf * (d.from_body + d.dir_body * float(seg[2])), xf.basis * d.dir_body,
@@ -908,14 +910,27 @@ static func _hole_share(p: Part, radius: float, chord: float) -> float:
 
 
 ## The beam came out of `p`'s far side: the cross-section it took, its actuators.
-func _through_part(p: Part, d: Drill, chord: float) -> void:
+func _through_part(p: Part, d: Drill, chord: float, mid := Vector3.INF, exit := Vector3.INF) -> void:
 	_remove_section(p, _hole_share(p, d.radius, chord))
 	if p.equipment == null:
 		_hit_joints(p, 0.6)
-		if _rng.randf() < 0.45:
-			# Wiring and capacitor banks on the line: arcs, then a small burst.
-			var at: Vector3 = _part_frame(p) * p.aabb.get_center()
-			_later(0.05 + _rng.randf() * 0.15, func() -> void: _burst(at, _rng.randf_range(1e6, 1e7), &"electronics"))
+		if mid != Vector3.INF:
+			_minovsky_rupture(p, mid, exit, _body.global_basis * d.dir_body)
+
+
+## The beam cut the Minovsky lines in `p` (the generator's particles run through the whole
+## body as its high-power hydraulics and power): they rupture a moment later at `at` (world),
+## a burst with fire and smoke, and the cut line leaks smoke from `exit` for a while.
+func _minovsky_rupture(p: Part, at: Vector3, exit: Vector3, dir: Vector3) -> void:
+	var energy := _rng.randf_range(2e7, 6e7) * clampf(p.dry / 1500.0, 0.4, 1.6)
+	_later(0.03 + _rng.randf() * 0.12, func() -> void:
+		if reactor_gone or p.severed:
+			return
+		_burst(at, energy, &"minovsky", 1)
+		var fx := DamageFx.of(self)
+		if fx != null and exit != Vector3.INF and p.area != null:
+			var inv := p.area.global_transform.affine_inverse()
+			fx.smoke_leak(p.area, inv * exit, (inv.basis * dir).normalized(), _rng.randf_range(5.0, 9.0)))
 
 
 ## A drill that ended (no contact for a while): partial holes cost their share too.
@@ -927,6 +942,10 @@ func _finish(d: Drill) -> void:
 		var chord: float = seg[2] - seg[1]
 		var hh := seg[3] as HoleSet.Hole
 		var frac := hh.s_drill / maxf(chord, 0.01)
+		if frac > 0.3 and p.equipment == null:
+			# Stopped deep inside: the lines it reached still rupture there.
+			var face: Vector3 = _part_frame(p) * (hh.origin + hh.axis * hh.s_drill)
+			_minovsky_rupture(p, face, Vector3.INF, Vector3.ZERO)
 		p.last_hole = hh.origin + hh.axis * hh.s_drill * 0.5
 		p.has_hole = true
 		_remove_section(p, _hole_share(p, d.radius, chord) * frac)
@@ -1117,7 +1136,7 @@ func _vent(cell: Component, at: Vector3, beam_dir: Vector3) -> void:
 ## Something went off inside the suit at `at` (world) with `energy` J: what is within its
 ## blow-off radius is torn (parts lose section, thin components are destroyed). Steam from a
 ## tank cell, an E-pac, electronics.
-func _burst(at: Vector3, energy: float, kind: StringName) -> void:
+func _burst(at: Vector3, energy: float, kind: StringName, max_panels := 3) -> void:
 	if reactor_gone:
 		return
 	var r := BLAST_K * pow(energy, 1.0 / 3.0)
@@ -1161,7 +1180,7 @@ func _burst(at: Vector3, energy: float, kind: StringName) -> void:
 			if dist < r + p.width * 0.6:
 				near.append([dist, p, centre])
 		near.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
-		for k in mini(near.size(), 3):
+		for k in mini(near.size(), max_panels):
 			var p: Part = near[k][1]
 			var centre: Vector3 = near[k][2]
 			var out := (at - centre).normalized() if at.distance_to(centre) > 0.2 else (at - _body.global_position).normalized()
