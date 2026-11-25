@@ -325,3 +325,11 @@ out; the new faces sit inside joints and sockets. Left open on purpose: the nozz
 hatch doors, the doorways they close (chest, rear skirt) and the chest's airlock tunnel to the
 cockpit; one-sided panels (a single face's outline) too. Every part but the chest is now closed,
 so a cut face (stencil cap) and every hole close on real metal. Weapons are unchanged.
+
+**What sits on what (2026-11-27):** a thruster belongs to the most specific part on or under its
+mount bone whose box holds it (the main thrusters hang from the backpack bone but sit in their
+nozzles: losing a pod's nozzles now kills its mains and their plumes). Equipment can name the
+part that carries it while stowed (`MsEquipment.damage_part`): the fin funnels' rack sits on the
+left main pod and goes with it; the beam saber sits on the backpack itself. The fuzz checks that
+no live thruster sits inside a severed part.
+

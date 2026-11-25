@@ -219,6 +219,13 @@ func _check(log: Array[String]) -> void:
 		var p := c.part
 		if p != null and (p.severed or p.left < DamageModel.THRUSTER_LEFT) and c.alive:
 			_fail("thrust", "%s alive on %s (%s)" % [t.name, p.name, "severed" if p.severed else "%d%% left" % roundi(p.left * 100.0)], log)
+		# A live thruster may not sit in any part that is gone.
+		if c.alive:
+			for q in _model.parts:
+				if q.severed and q.equipment == null:
+					var local := (_skel.global_transform * FinalPoses.of(_skel).pose(q.bone)).affine_inverse() * t.global_position
+					if (local - local.clamp(q.aabb.position, q.aabb.end)).length() < 0.05 and _model._bone_is_under(q.bone, _model._bone_of_node(t)):
+						_fail("thrust", "%s alive inside severed %s" % [t.name, q.name], log)
 		if not c.alive:
 			t.set_command(1.0, Vector3.FORWARD, t)
 			if t.enabled or t.get_thrust() > 0.0 or t.get_available_thrust() > 0.0:

@@ -1571,6 +1571,7 @@ script = ExtResource("34_2q64x")
 equipment_name = "FIN FUNNELS"
 mass = 6000.0
 mount_bone = &"backpack"
+damage_part = &"main_pod.L"
 
 [node name="PoseAnimations" type="AnimationPlayer" parent="." unique_id=293755578]
 root_node = NodePath("../Model")

@@ -652,7 +652,7 @@ func _build_components() -> void:
 			if t == null:
 				continue
 			var attach := t.get_parent() as BoneAttachment3D
-			var part := find_part(attach.bone_name) if attach != null else null
+			var part := _part_at(_skel.find_bone(attach.bone_name), t.global_position) if attach != null else null
 			var c := _add_component(Kind.THRUSTER, t.name, part, t, Vector3.ZERO, 0.3 + 0.6 * sqrt(t.max_thrust / 1.6e6))
 			c.ref = t
 	# Head: the main camera's eyes and the vulcans.
@@ -2371,6 +2371,29 @@ func _prewarm_holes() -> void:
 			mi.queue_free())
 
 
+## The part something at `at` (world) on bone `bone` sits on: of the parts on that bone or below
+## it whose box holds the point, the most specific one (the main thrusters hang from the backpack
+## bone but sit in their nozzles); else the bone's own part.
+func _part_at(bone: int, at: Vector3) -> Part:
+	var best: Part = null
+	var depth := -1
+	for p in parts:
+		if p.equipment != null or not _bone_is_under(p.bone, bone):
+			continue
+		var local := (_skel.global_transform * FinalPoses.of(_skel).pose(p.bone)).affine_inverse() * at
+		if (local - local.clamp(p.aabb.position, p.aabb.end)).length() > 0.05:
+			continue
+		var d := 0
+		var b := p.bone
+		while b != bone and b >= 0:
+			d += 1
+			b = _skel.get_bone_parent(b)
+		if d > depth:
+			depth = d
+			best = p
+	return best if best != null else _part_of_bone(bone)
+
+
 ## The damage part a bone belongs to: itself or the nearest up its chain.
 func _part_of_bone(b: int) -> Part:
 	if _bone_part.has(b):
@@ -2530,9 +2553,15 @@ func _update_control() -> void:
 				eq.set_active(false)
 
 
-## The bone `eq` hangs from now (hand or stow point; its mount bone when not mounted).
+## The bone `eq` hangs from now (hand or stow point; its mount bone when not mounted), or the
+## part it is set to be carried by (`damage_part`).
 func _equipment_bone(eq: MsEquipment) -> int:
 	var b := _bone_of_node(eq)
+	var in_hand := b >= 0 and String(_skel.get_bone_name(b)).begins_with("hand")
+	if eq.damage_part != &"" and not in_hand:
+		var dp := find_part(eq.damage_part)
+		if dp != null:
+			return dp.bone
 	return b if b >= 0 else _skel.find_bone(eq.mount_bone)
 
 
@@ -2570,8 +2599,7 @@ func _bone_is_under(bone: int, ancestor: int) -> bool:
 ## from a bone under one (the shield's own mount bone under the forearm). `cut` cut through at
 ## `cut_y` (bone space): equipment on it beyond the cut goes too.
 func _equipment_on(eq: MsEquipment, bones: Dictionary, cut: Part, cut_y: float) -> bool:
-	var attach := eq.get_parent() as BoneAttachment3D
-	var b := _skel.find_bone(attach.bone_name if attach != null else String(eq.mount_bone))
+	var b := _equipment_bone(eq)
 	while b >= 0:
 		if bones.has(b):
 			return true

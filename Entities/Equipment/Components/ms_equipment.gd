@@ -18,6 +18,9 @@ signal active_changed(is_active: bool)
 @export var mass: float = 2000.0                   ## kg, added to the suit
 @export_group("Mount")
 @export var mount_bone: StringName = &""
+## The damage part that carries it while stowed, when that isn't the mount bone's own part
+## (the fin funnels hang from the backpack bone but sit on the left main pod): it goes with it.
+@export var damage_part: StringName = &""
 ## Equipment transform in the suit's body frame with the skeleton at rest.
 @export var mount_transform := Transform3D.IDENTITY
 @export_group("Use")
