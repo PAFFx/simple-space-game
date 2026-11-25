@@ -16,6 +16,9 @@ uniform int hole_count = 0;
 uniform vec4 hole_a[HOLE_MAX];   // origin.xyz (part space, m), radius
 uniform vec4 hole_b[HOLE_MAX];   // axis.xyz, s_in
 uniform vec4 hole_c[HOLE_MAX];   // s_drill, s_out, time it formed, peak temperature (K)
+// Where the part's real skin is along the axis (the hull is convex, a plate's is not): metal
+// where s <= x or s >= y; elsewhere the bore crosses the part's empty inside.
+uniform vec4 hole_d[HOLE_MAX];
 uniform mat4 part_to_model = mat4(1.0);
 uniform mat4 model_to_part = mat4(1.0);
 uniform float hole_now = 0.0;
@@ -321,9 +324,15 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				h.discard_it = true;
 				return h;
 			}
-			// The surface it stops on, in hole `last`'s terms.
+			// The surface it stops on, in hole `last`'s terms; none where there is no metal
+			// (a thin plate's bore ends at its back; past it the part is hollow or open).
 			vec3 lo = hole_a[last].xyz;
 			vec3 la = hole_b[last].xyz;
+			float l_hs = dot(p + rd * t_hit - lo, la);
+			if (l_hs > hole_d[last].x && l_hs < hole_d[last].y) {
+				h.discard_it = true;
+				return h;
+			}
 			float l_s_in = hole_b[last].w;
 			float l_dr = hole_c[last].x;
 			float l_out = hole_c[last].y;

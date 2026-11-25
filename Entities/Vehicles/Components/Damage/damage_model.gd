@@ -84,6 +84,7 @@ class Part:
 	var equipment: MsEquipment   ## equipment as a part: a box per mesh, not a hull
 	var box := AABB()
 	var boxes: Array = []        ## [MeshInstance3D, AABB in its own space]
+	var skin_faces := PackedVector3Array()   ## its mesh's triangles in bone space, outward wound
 
 class Component:
 	var kind := 0
@@ -262,6 +263,7 @@ func _build() -> void:
 			if String(p.name).begins_with(prefix):
 				p.limb = true
 		_make_area(p, points)
+		_make_skin_probe(p)
 		parts.append(p)
 	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
 	if loadout != null:
@@ -305,6 +307,82 @@ func _build() -> void:
 	for k in thrust:
 		_boost_accel = maxf(_boost_accel, float(thrust[k]) / maxf(_body.mass, 1.0))
 	_built = true
+
+
+## The part's skin as triangles in its bone's space, wound outward (for _skin_shells).
+func _make_skin_probe(p: Part) -> void:
+	var faces := PackedVector3Array()
+	var to_bone := FinalPoses.of(_skel).pose(p.bone).affine_inverse()
+	var mesh_in_skel := _skel.global_transform.affine_inverse() * p.mesh.global_transform
+	for si in p.mesh.mesh.get_surface_count():
+		var arrays := p.mesh.mesh.surface_get_arrays(si)
+		var skinned := skin_surface(p.mesh, _skel, arrays)
+		var v: PackedVector3Array = skinned[0]
+		var nrm: PackedVector3Array = skinned[1]
+		var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+		var n_tri := (idx.size() if not idx.is_empty() else v.size()) / 3
+		for t in n_tri:
+			var i0 := idx[t * 3] if not idx.is_empty() else t * 3
+			var i1 := idx[t * 3 + 1] if not idx.is_empty() else t * 3 + 1
+			var i2 := idx[t * 3 + 2] if not idx.is_empty() else t * 3 + 2
+			var a := to_bone * (mesh_in_skel * v[i0])
+			var b := to_bone * (mesh_in_skel * v[i1])
+			var c := to_bone * (mesh_in_skel * v[i2])
+			# Wound so its normal points out (as the vertex normals do).
+			if not nrm.is_empty():
+				var vn := nrm[i0] + nrm[i1] + nrm[i2]
+				if (b - a).cross(c - a).dot(to_bone.basis * (mesh_in_skel.basis * vn)) < 0.0:
+					var tmp := b
+					b = c
+					c = tmp
+			faces.append(a)
+			faces.append(b)
+			faces.append(c)
+	p.skin_faces = faces
+
+
+## Where `p`'s real skin is along a beam entering it at `entry` (world) going `dir` (`s` from the
+## entry, m): material where s <= x or s >= y. One shell: [.., x]; the outer and the far
+## shell of a hollow part: x = the first one's end, y = the last one's start. No skin probe:
+## all material.
+func _skin_shells(p: Part, entry: Vector3, dir: Vector3, length: float) -> Vector2:
+	if p.skin_faces.is_empty():
+		return Vector2(1e6, -1e6)
+	var to_bone := (_skel.global_transform * FinalPoses.of(_skel).pose(p.bone)).affine_inverse()
+	var d := (to_bone.basis * dir).normalized()
+	var o := to_bone * entry - d   # from 1 m before the entry
+	var f := p.skin_faces
+	var hits: Array = []   # [s, entering]
+	for t in range(0, f.size(), 3):
+		var x: Variant = Geometry3D.ray_intersects_triangle(o, d, f[t], f[t + 1], f[t + 2])
+		if x == null:
+			continue
+		var hs: float = ((x as Vector3) - o).dot(d) - 1.0
+		if hs > length + 0.5:
+			continue
+		hits.append([hs, (f[t + 1] - f[t]).cross(f[t + 2] - f[t]).dot(d) < 0.0])
+	hits.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	# Metal wherever the line is inside at least one shell (an armour plate around an inner
+	# piece nests them).
+	var spans: Array = []
+	var depth := 0
+	var start := -1.0
+	for h in hits:
+		if h[1]:
+			if depth == 0:
+				start = h[0]
+			depth += 1
+		elif depth > 0:
+			depth -= 1
+			if depth == 0:
+				spans.append([start, h[0]])
+		else:
+			spans.append([-1.0, h[0]])   # began inside (an open shell)
+	if spans.is_empty():
+		return Vector2(-1e6, 1e6)
+	if spans.size() == 1:
+		return Vector2(spans[0][1], 1e6)
+	return Vector2(spans[0][1], spans[-1][0])
 
 
 ## The mesh's vertices, skinned in the skeleton's current pose, in `bone`'s space.
@@ -951,6 +1029,7 @@ func _advance(d: Drill, t: float) -> void:
 		if seg[3] == null and p.mesh != null:
 			var entry: Vector3 = xf * (d.from_body + d.dir_body * float(seg[1]))
 			seg[3] = holes.add_hole(p.mesh, _skel, p.bone, entry, xf.basis * d.dir_body, d.radius, chord)
+			(seg[3] as HoleSet.Hole).shell = _skin_shells(p, entry, xf.basis * d.dir_body, chord)
 			part_damaged.emit(p.name)
 			var fx := DamageFx.of(self)
 			if fx != null:

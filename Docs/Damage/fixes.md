@@ -83,6 +83,18 @@ Still to do: real inner-frame meshes under the armour.
   slant, took more than a whole rifle shot. Now 250 kg/m², a slant at most doubles it: the
   beam goes through and on into the suit.
 
+- [x] **Cut faces glared white at some angles and floated outside the limb** (play-test). The
+  face is drawn in front of the back face it is on, so its depth is negative, and the bore's
+  depth dimming `exp(−depth/1.6)` brightened it instead (×10 looking down a long piece). And it
+  was drawn on any back face behind the plane, including open shells beyond the limb: now only
+  within the ellipse of the part's cross-section (bone space).
+- [x] **Bores drawn in empty space behind thin armour.** A hole's bore was drawn to the depth
+  of the part's convex hull, not its real skin: behind a thin plate it floated in the air. Each
+  part keeps its skin's triangles (bone space); a new hole records where the skin really is
+  along its line (nested shells counted), and the bore is drawn only in that metal.
+- [ ] **Not yet reproduced:** a smooth grey half-disc in a crater on the front skirt (play-test
+  screenshot); the torn hip socket and a skirt shot look right in renders.
+
 ## C. Power and hydraulics: the suit is a system, not a sack of tanks
 
 - [ ] **Generators.** Two big Minovsky reactors in the abdomen below the cockpit (separate, but

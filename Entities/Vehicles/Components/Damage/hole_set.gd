@@ -19,6 +19,7 @@ class Hole:
 	var s_drill := 0.0
 	var time := 0.0
 	var peak := 2200.0
+	var shell := Vector2(1e6, -1e6)   ## real skin along the axis: material where s <= x or s >= y
 
 class Surface:
 	var mesh: MeshInstance3D
@@ -149,6 +150,7 @@ func adopt(mesh: MeshInstance3D, holes: Array[Hole], part_in_mesh: Transform3D, 
 		h.s_drill = src.s_drill
 		h.time = src.time
 		h.peak = src.peak
+		h.shell = src.shell
 		s.holes.append(h)
 	if body_heat.x > 0.0:
 		s.body_heat = body_heat
@@ -221,6 +223,8 @@ func _upload(s: Surface) -> void:
 	var a := PackedVector4Array()
 	var b := PackedVector4Array()
 	var c := PackedVector4Array()
+	var dd := PackedVector4Array()
+	dd.resize(MAX_HOLES)
 	a.resize(MAX_HOLES)
 	b.resize(MAX_HOLES)
 	c.resize(MAX_HOLES)
@@ -229,6 +233,7 @@ func _upload(s: Surface) -> void:
 		a[i] = Vector4(h.origin.x, h.origin.y, h.origin.z, h.radius)
 		b[i] = Vector4(h.axis.x, h.axis.y, h.axis.z, h.s_in)
 		c[i] = Vector4(h.s_drill, h.s_out, h.time, h.peak)
+		dd[i] = Vector4(h.shell.x, h.shell.y, 0.0, 0.0)
 	var part_to_model := s.mesh.global_transform.affine_inverse() * part_frame(s.mesh, s.skeleton, s.bone)
 	var p2m := Projection(part_to_model)
 	var m2p := Projection(part_to_model.affine_inverse())
@@ -237,6 +242,7 @@ func _upload(s: Surface) -> void:
 		m.set_shader_parameter(&"hole_a", a)
 		m.set_shader_parameter(&"hole_b", b)
 		m.set_shader_parameter(&"hole_c", c)
+		m.set_shader_parameter(&"hole_d", dd)
 		m.set_shader_parameter(&"part_to_model", p2m)
 		m.set_shader_parameter(&"model_to_part", m2p)
 		m.set_shader_parameter(&"hole_now", now)
