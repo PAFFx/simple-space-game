@@ -20,18 +20,24 @@ uniform float lip_depth = 0.035;   // m of relief on the lip and the hot zone ar
 
 #include "res://Entities/Vehicles/Components/Damage/Shader/beam_hole.gdshaderinc"
 
-// Bump from a height field (m) over the surface at `pos` (view space), screen derivatives:
-// works on any mesh, tangents or not.
-vec3 melt_bump(vec3 n, vec3 pos, float height) {
-	vec3 dpdx = dFdx(pos);
-	vec3 dpdy = dFdy(pos);
-	float dhx = dFdx(height);
-	float dhy = dFdy(height);
+// Bump from a height field over the surface, from its screen derivatives (position, view
+// space, and height). The derivatives are taken once at the top of fragment(): inside a branch
+// that neighbouring pixels don't all take they are undefined (a broken line along every edge).
+vec3 melt_bump(vec3 n, vec3 dpdx, vec3 dpdy, float dhx, float dhy) {
 	vec3 r1 = cross(dpdy, n);
 	vec3 r2 = cross(n, dpdx);
 	float det = dot(dpdx, r1);
 	vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
 	return normalize(abs(det) * n - grad);
+}
+
+// Melt height on a bore, floor or cut face: triplanar in the hole's own frame (no seam, no
+// polar streaks, fixed to the hole whatever the view).
+float tri_melt(vec3 p, vec3 n, float k) {
+	vec3 w = pow(abs(n), vec3(4.0));
+	w /= w.x + w.y + w.z + 1e-5;
+	return texture(melt_height, p.yz * k).r * w.x + texture(melt_height, p.xz * k).r * w.y
+			+ texture(melt_height, p.xy * k).r * w.z;
 }
 
 void vertex() {
@@ -42,19 +48,26 @@ void vertex() {
 void fragment() {
 	vec4 base = texture(albedo_texture, UV) * albedo_color;
 	HoleHit h = hole_fragment(v_part_pos, v_part_cam, FRONT_FACING);
+	// Every sample and derivative first, for every pixel (before the discard and the
+	// branches): inside, in the hole's frame; outside, over the part (its own space, metres).
+	float melt_in = tri_melt(h.tex_p, h.tex_n, 1.1);
+	vec2 zone_uv = vec2(v_part_pos.x + v_part_pos.z * 0.62, v_part_pos.y + v_part_pos.z * 0.41) * 0.9;
+	float melt_out = texture(melt_height, zone_uv).r;
+	// Coarser patches of the same melt: slag crusts inside, beads on the lip.
+	float patches_in = tri_melt(h.tex_p * 0.4 + 3.7, h.tex_n, 1.0);
+	float patches_out = texture(melt_height, zone_uv * 2.6 + vec2(0.37, 0.71)).r;
+	float melt = h.inside ? melt_in : melt_out;
+	float relief = h.inside ? melt_depth : lip_depth * max(h.lip, clamp((h.temperature - 650.0) / 900.0, 0.0, 1.0) * 0.8);
+	vec3 bump_pos = VERTEX + normalize(VERTEX) * h.depth;
+	float bump_h = melt * relief;
+	vec3 dpdx = dFdx(bump_pos);
+	vec3 dpdy = dFdy(bump_pos);
+	float dhx = dFdx(bump_h);
+	float dhy = dFdy(bump_h);
 	if (h.discard_it) {
 		discard;
 	}
 	float depth = FRAGCOORD.z;
-	// One height per fragment, worked out before any branch (derivatives need every pixel):
-	// inside, in the wall's own coordinates; outside, around the hole's rim.
-	vec2 wall_uv = vec2(h.wall.x * 0.55, h.wall.y * 0.22);
-	// Outside, isotropic over the part (its own space, metres): no streaks round the hole.
-	vec2 zone_uv = vec2(v_part_pos.x + v_part_pos.z * 0.62, v_part_pos.y + v_part_pos.z * 0.41) * 0.9;
-	float melt = texture(melt_height, h.inside ? wall_uv : zone_uv).r;
-	float relief = h.inside ? melt_depth : lip_depth * max(h.lip, clamp((h.temperature - 650.0) / 900.0, 0.0, 1.0) * 0.8);
-	vec3 bump_pos = VERTEX + normalize(VERTEX) * h.depth;
-	float bump_h = melt * relief;
 	vec3 albedo = base.rgb;
 	float rough = roughness;
 	float metal = metallic;
@@ -66,31 +79,34 @@ void fragment() {
 		vec4 clip = PROJECTION_MATRIX * vec4(view_hit, 1.0);
 		depth = clip.z / clip.w;
 		NORMAL = normalize((VIEW_MATRIX * MODEL_MATRIX * part_to_model * vec4(h.normal_part, 0.0)).xyz);
-		NORMAL = melt_bump(NORMAL, bump_pos, bump_h);
-		// Broad melt runs along the axis, a little fine grain; deeper in the bore the wall is
-		// seen through a narrow opening and catches less light: it reads as a hole.
-		float runs = hole_noise(vec2(h.wall.x * 1.6, h.wall.y * 0.35)) * 0.7 + hole_noise(vec2(h.wall.x * 5.0, h.wall.y * 1.2)) * 0.3;
+		NORMAL = melt_bump(NORMAL, dpdx, dpdy, dhx, dhy);
+		// Melt and slag in patches, a little fine grain; deeper in the bore the wall is seen
+		// through a narrow opening and catches less light: it reads as a hole.
+		float runs = smoothstep(0.25, 0.75, patches_in) * 0.75 + melt * 0.25;
 		float deep = exp(-h.depth / 1.6);
 		float t = h.temperature * (0.82 + 0.2 * runs + 0.12 * melt);
 		albedo = mix(vec3(0.05, 0.045, 0.04), vec3(0.12, 0.105, 0.09), runs) * (0.4 + 0.6 * deep);
 		rough = 0.25 + 0.2 * runs;
 		metal = 0.9;
 		emit = hole_blackbody(t) * hole_glow(t) * (0.25 + 0.75 * deep);
-	} else if (!FRONT_FACING && (h.near_heat > 400.0 || h.interior)) {
-		// The shell's inside, seen through a hole: dark, lit by the hole's glow.
-		albedo = vec3(0.045, 0.045, 0.05);
-		rough = 0.8;
+	} else if (!FRONT_FACING) {
+		// The suit's inside (a back face: only ever seen through an opening): dark metal and
+		// frame members, not the paint of an empty shell; lit by a hole's glow nearby.
+		vec3 ip = v_part_pos * 1.25;
+		float rib = max(1.0 - smoothstep(0.03, 0.09, abs(fract(ip.y) - 0.5)),
+				1.0 - smoothstep(0.03, 0.09, abs(fract(ip.x * 0.8 + ip.z * 0.6) - 0.5)));
+		albedo = mix(vec3(0.025, 0.025, 0.03), vec3(0.09, 0.09, 0.1), rib) * (0.8 + 0.4 * melt_out);
+		rough = 0.75;
 		metal = 0.6;
 		emit = hole_blackbody(h.near_heat) * hole_glow(h.near_heat) * 0.25;
 	} else {
 		// Around a mouth: the molten lip (beaded, glossy), glowing metal fading out, a
 		// narrow band of heat tint, then soot fading smoothly into the paint.
-		if (relief > 0.0005) {
-			NORMAL = melt_bump(NORMAL, bump_pos, bump_h);
-		}
+		NORMAL = melt_bump(NORMAL, dpdx, dpdy, dhx, dhy);
 		float grain = hole_noise(UV * 160.0);
-		float soft = hole_noise(vec2(h.zone.x * 3.0, h.zone.y * 1.5));
-		float beads = smoothstep(0.45, 0.75, hole_noise(vec2(h.zone.x * 12.0, h.zone.y * 8.0)));
+		// Over the part, not around the hole: no rays out of the rim.
+		float soft = melt_out;
+		float beads = smoothstep(0.55, 0.8, patches_out);
 		float t = h.temperature * (0.9 + 0.15 * soft) * mix(1.0, 0.85 + 0.3 * beads, h.lip);
 		vec3 soot = vec3(0.035, 0.028, 0.022) * (0.75 + 0.5 * grain);
 		albedo = mix(albedo, soot, h.scorch * (0.85 + 0.15 * soft));

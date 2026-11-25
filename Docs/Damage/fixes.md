@@ -33,26 +33,36 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
 
 ## B. Beam holes: rendering bugs
 
-- [ ] **The glow and melt texture swims when the camera moves.** It changes with the view a lot.
+- [x] **The glow and melt texture swims when the camera moves.** It changes with the view a lot.
   To find: the bore and floor are ray-traced inside the shader (virtual surfaces), and the
   melt bump and noise are sampled at those virtual hit points; derivative bump mapping
   (`dFdx`/`dFdy`) on such points is view-dependent. Sample the texture in hole space at stable
   coordinates and take the bump from the texture's own gradient, not screen derivatives.
-- [ ] **Holes move back and forth when the suit moves or turns.** To find: the hole records'
+- [x] **Holes move back and forth when the suit moves or turns.** To find: the hole records'
   part frame (`part_to_model`) is uploaded in `HoleSet._process`; if the suit's transform is
   physics-interpolated or set after that, the holes lag a frame behind the mesh. Upload after the
   final transform, or compute the frame in the shader from the skinned vertex / bone.
-- [ ] **A one-sided melt texture floats where the hole isn't round.** Panel openings, cuts and
+- [x] **A one-sided melt texture floats where the hole isn't round.** Panel openings, cuts and
   holes through thin or slanted shells are not cylinders, but the lip and heat zone are drawn
   around the analytic cylinder, so a molten ring appears on surface that isn't next to any real
   opening. The zone must follow the real opening (only where the surface is within reach of
   the bore wall, both faces), or be dropped for non-cylindrical openings.
-- [ ] **The body looks hollow after hits.** A shot into the body leaves big see-through hollow
+- [x] **The body looks hollow after hits.** A shot into the body leaves big see-through hollow
   areas. *Cause:* render meshes are thin shells; the bore walls are drawn only within each hole
   record, so wide holes and torn panels show straight into an empty shell. Needs an inside: a
   dark interior fill (back faces drawn as internals: frame, piping, a darkened volume) and/or
   real inner-frame meshes under the armour (already listed as "inner frame under intact
   armour").
+
+*Done (2026-11-27):* the damage code read bone poses before the skeleton modifiers (AMBAC,
+limb reaction, aim): up to 2.4 m off what is drawn, so holes slid as the limbs swung; now
+`FinalPoses` caches the pose after them and the hole frames upload on `skeleton_updated`. The
+melt bump took screen derivatives inside branches (undefined where neighbouring pixels
+branch differently: the dashed line round every hole and the floating ring): they are taken
+once, before any branch or discard. Inside a hole the texture is triplanar in the hole's own
+frame (no polar pinwheel, nothing moves with the view); the rim is textured over the part.
+Back faces (the inside, only seen through openings) draw as dark metal and frame, not paint.
+Still to do: real inner-frame meshes under the armour.
 
 ## C. Power and hydraulics: the suit is a system, not a sack of tanks
 

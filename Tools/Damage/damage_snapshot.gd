@@ -442,6 +442,10 @@ func _drone() -> void:
 
 
 func _save(name: String) -> void:
+	# A death switches the game's view outside (ViewSwitcher): keep ours.
+	if root.get_camera_3d() != _cam:
+		_cam.make_current()
+		await process_frame
 	root.get_texture().get_image().save_png("%s/%s.png" % [_out, name])
 	print("saved ", name)
 

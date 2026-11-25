@@ -82,7 +82,8 @@ struct HoleHit {
 	float lip;          // 0..1 molten lip
 	float tint;         // 0..1 heat tint (cooled metal)
 	float near_heat;    // K of the hottest hole near a back face (interior light)
-	vec2 wall;          // inside: angle around the bore and depth (texture coordinates)
+	vec3 tex_p;         // inside: where on the bore / floor / cut face, in the hole's own frame
+	vec3 tex_n;         //   (e1, e2, axis; m) and its normal there: texture it triplanar
 	vec2 zone;          // around a mouth: angle and distance from the rim (in radii)
 	bool interior;      // a back face (the shell's inside) near a hole: seen through it
 };
@@ -111,7 +112,8 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 	h.lip = 0.0;
 	h.tint = 0.0;
 	h.near_heat = 290.0;
-	h.wall = vec2(0.0);
+	h.tex_p = vec3(0.0);
+	h.tex_n = vec3(0.0, 0.0, 1.0);
 	h.zone = vec2(0.0, 99.0);
 	h.interior = false;
 	vec3 rd = normalize(p - cam);
@@ -142,8 +144,9 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				h.normal_part = cut_plane.xyz * cut_side;
 				vec3 n = cut_plane.xyz;
 				vec3 e1 = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
-				h.wall = vec2(dot(q, e1), dot(q, cross(n, e1))) * 0.8;
-				h.temperature = hole_cool(cut_heat.x * (0.85 + 0.3 * hole_noise(h.wall * 2.0)), age);
+				h.tex_p = vec3(dot(q, e1), dot(q, cross(n, e1)), 0.0);
+				h.tex_n = vec3(0.0, 0.0, 1.0);
+				h.temperature = hole_cool(cut_heat.x * (0.85 + 0.3 * hole_noise(h.tex_p.xy * 1.6)), age);
 				return h;
 			}
 		} else if (f > -0.25) {
@@ -227,7 +230,8 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				vec3 hp = q + rd * t1;
 				vec3 hr = hp - a * dot(hp, a);
 				h.normal_part = -normalize(hr);
-				h.wall = vec2(atan(dot(hr, e2), dot(hr, e1)) + seed, s_hit / r);
+				h.tex_p = vec3(dot(hp, e1), dot(hp, e2), dot(hp, a)) + seed;
+				h.tex_n = vec3(dot(h.normal_part, e1), dot(h.normal_part, e2), dot(h.normal_part, a));
 				float along_f = clamp((s_hit - s_in) / max(s_out - s_in, 1e-3), 0.0, 1.0);
 				h.temperature = hole_cool(peak * (1.0 - 0.12 * along_f), age);
 				return h;
@@ -240,8 +244,8 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				vec3 fp = q + rd * h.depth;
 				float fr = length(fp - a * dot(fp, a)) / rr;
 				h.normal_part = normalize(-a + (fp - a * dot(fp, a)) / rr * fr * 0.8);
-				vec3 fr3 = fp - a * dot(fp, a);
-				h.wall = vec2(atan(dot(fr3, e2), dot(fr3, e1)) + seed, fr * 4.0 + 20.0);
+				h.tex_p = vec3(dot(fp, e1), dot(fp, e2), dot(fp, a)) + seed;
+				h.tex_n = vec3(dot(h.normal_part, e1), dot(h.normal_part, e2), dot(h.normal_part, a));
 				// The face the beam is still on is white-hot.
 				h.temperature = hole_cool(peak + 500.0 * exp(-age * 6.0), age) * mix(1.0, 0.85, fr * fr);
 			} else {
@@ -249,7 +253,8 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 				vec3 hp = q + rd * t1;
 				vec3 hr = hp - a * dot(hp, a);
 				h.normal_part = -normalize(hr);
-				h.wall = vec2(atan(dot(hr, e2), dot(hr, e1)) + seed, s_hit / r);
+				h.tex_p = vec3(dot(hp, e1), dot(hp, e2), dot(hp, a)) + seed;
+				h.tex_n = vec3(dot(h.normal_part, e1), dot(h.normal_part, e2), dot(h.normal_part, a));
 				h.temperature = hole_cool(peak * (0.9 + 0.1 * clamp((s_hit - s_in) / max(s_dr - s_in, 1e-3), 0.0, 1.0)), age);
 			}
 			return h;
