@@ -67,6 +67,10 @@ class Part:
 	var width := 2.0          ## of its cross-section, m
 	var section := 4.0        ## cross-section across its bone, m²
 	var limb := false
+	var last_hole := Vector3.ZERO   ## part space: where it was last holed / torn
+	var has_hole := false
+	var cut_y := INF                ## bone space: it was cut through here
+	var hull_points := PackedVector3Array()
 	var aabb := AABB()        ## bone space
 	var left := 1.0           ## share of its cross-section still there
 	var severed := false
@@ -323,6 +327,7 @@ func _make_area(p: Part, points: PackedVector3Array) -> void:
 	var shape := CollisionShape3D.new()
 	var hull := ConvexPolygonShape3D.new()
 	hull.points = points
+	p.hull_points = points
 	shape.shape = hull
 	area.add_child(shape)
 	attach.add_child(area)
@@ -814,6 +819,10 @@ func _advance(d: Drill, t: float) -> void:
 			(seg[3] as HoleSet.Hole).s_drill = chord if drilled >= chord - 1e-3 else drilled
 		if drilled >= chord - 1e-3 and not seg[4]:
 			seg[4] = true
+			if seg[3] is HoleSet.Hole:
+				var h := seg[3] as HoleSet.Hole
+				p.last_hole = h.origin + h.axis * (h.s_in + h.s_out) * 0.5
+				p.has_hole = true
 			_through_part(p, d, chord)
 			var fx := DamageFx.of(self)
 			if fx != null and p.mesh != null:
@@ -849,7 +858,10 @@ func _finish(d: Drill) -> void:
 			continue
 		var p: Part = seg[0]
 		var chord: float = seg[2] - seg[1]
-		var frac := (seg[3] as HoleSet.Hole).s_drill / maxf(chord, 0.01)
+		var hh := seg[3] as HoleSet.Hole
+		var frac := hh.s_drill / maxf(chord, 0.01)
+		p.last_hole = hh.origin + hh.axis * hh.s_drill * 0.5
+		p.has_hole = true
 		_remove_section(p, _hole_share(p, d.radius, chord) * frac)
 		if frac > 0.5 and p.equipment == null:
 			_hit_joints(p, 0.3)
@@ -990,6 +1002,10 @@ func _burst(at: Vector3, energy: float, kind: StringName) -> void:
 		var reach := r + p.width * 0.5
 		var dist := centre.distance_to(at)
 		if dist < reach:
+			if p.equipment == null:
+				var local := _part_frame(p).affine_inverse() * at
+				p.last_hole = local.clamp(p.aabb.position, p.aabb.end)
+				p.has_hole = true
 			# The blast tears what lies within it: about its swept disc of the section.
 			_remove_section(p, minf(PI * r * r * 0.35 / p.section, 1.2) * (1.0 - dist / reach))
 	for c in components:
@@ -1130,6 +1146,11 @@ func sever(p: Part) -> void:
 	if p.equipment != null:
 		_break_equipment(p.equipment)
 		return
+	if p.limb and p.has_hole and p.cut_y == INF:
+		var y := p.last_hole.y
+		if y > p.aabb.position.y + p.aabb.size.y * 0.18 and y < p.aabb.end.y - p.aabb.size.y * 0.08:
+			_cut_part(p, y)
+			return
 	var group: Array[Part] = []
 	for q in parts:
 		if q.equipment == null and not q.severed and _bone_is_under(q.bone, p.bone):
@@ -1174,6 +1195,75 @@ func sever(p: Part) -> void:
 			fx.sever(joint.origin, _body.linear_velocity)
 
 
+## `p` breaks across at `y` (bone space) where it was holed: the near side stays on with a
+## hot cut face, the far side and every part beyond fly off as one piece.
+func _cut_part(p: Part, y: float) -> void:
+	var frame := _part_frame(p)
+	var c0 := p.aabb.get_center()
+	var cut_local := Vector3(c0.x, y, c0.z)
+	var cut_world := frame * cut_local
+	var axis := frame.basis.y.normalized()
+	var share := clampf((p.aabb.end.y - y) / maxf(p.aabb.size.y, 0.1), 0.05, 0.95)
+	var group: Array[Part] = []
+	for q in parts:
+		if q != p and q.equipment == null and not q.severed and _bone_is_under(q.bone, p.bone):
+			group.append(q)
+	var bones := {}
+	for q in group:
+		bones[q.bone] = true
+	var equip: Array[MsEquipment] = []
+	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+	if loadout != null:
+		for eq in loadout.equipment:
+			if eq.equipped and eq.is_visible_in_tree() and _equipment_on(eq, bones):
+				equip.append(eq)
+	var body := _make_debris(group, equip, 3.0, cut_world, 0.0, p, share)
+	for eq in equip:
+		_lose_equipment(eq)
+		loadout.set_equipped(eq, false)
+		_unequipped.append(eq)
+	_remove_parts(group)
+	# The stub: cut on the mesh, its hull trimmed, its mass and what was beyond the cut gone.
+	p.cut_y = y
+	p.left = BREAK_LEFT + 0.1
+	holes.cut(p.mesh, _skel, p.bone, cut_local, Vector3.UP, true)
+	var kept := PackedVector3Array()
+	for v in p.hull_points:
+		if v.y < y:
+			kept.append(v)
+	for corner in [Vector3(p.aabb.position.x, y, p.aabb.position.z), Vector3(p.aabb.end.x, y, p.aabb.position.z),
+			Vector3(p.aabb.position.x, y, p.aabb.end.z), Vector3(p.aabb.end.x, y, p.aabb.end.z)]:
+		kept.append(corner)
+	((p.area.get_child(0) as CollisionShape3D).shape as ConvexPolygonShape3D).points = kept
+	var fill := _reaction.get_fill()
+	var orig: Array = _mass_removed.get(p.name, [p.dry, p.tank, 0.0, 0.0])
+	_mass_removed[p.name] = [orig[0], orig[1], float(orig[2]) + p.dry * share, float(orig[3]) + p.tank * share]
+	_reaction.set_part_mass(p.name, p.dry * (1.0 - share))
+	_reaction.set_part_tank(p.name, p.tank * (1.0 - share))
+	var fc := _flight()
+	if fc != null:
+		fc.add_payload_mass(-p.dry * share)
+		fc.propellant = maxf(fc.propellant - p.tank * share * fill, 0.0)
+		fc.propellant_capacity = maxf(fc.propellant_capacity - p.tank * share, 1.0)
+	var inv := frame.affine_inverse()
+	for c in components:
+		if c.part == p and c.alive and (inv * component_position(c)).y > y:
+			_kill_component(c)
+			if c.node != null and c.kind == Kind.THRUSTER:
+				c.node.visible = false
+				_hidden_nodes.append(c.node)
+	_capability_changed()
+	_event("%s CUT" % p.name)
+	part_severed.emit(p.name)
+	var radius := clampf(minf(p.aabb.size.x, p.aabb.size.z) * 0.36, 0.35, 1.1)
+	var fx := DamageFx.of(self)
+	if fx != null:
+		_stubs.append(fx.stump(p.area, cut_world, axis, radius, _velocity_at(cut_world)))
+		if body != null:
+			fx.stump(body, cut_world, -axis, radius, Vector3.ZERO)
+		fx.sever(cut_world, _body.linear_velocity)
+
+
 ## The nearest part up the skeleton from `p`.
 func _parent_part(p: Part) -> Part:
 	var b := _skel.get_bone_parent(p.bone)
@@ -1216,13 +1306,16 @@ func _remove_parts(group: Array[Part]) -> void:
 		q.mesh.visible = false
 		_hidden_nodes.append(q.mesh)
 		q.area.collision_layer = 0
-		_mass_removed[q.name] = [q.dry, q.tank]
+		var before: Array = _mass_removed.get(q.name, [q.dry, q.tank, 0.0, 0.0])
+		var left_dry := q.dry - float(before[2])
+		var left_tank := q.tank - float(before[3])
+		_mass_removed[q.name] = [q.dry, q.tank, q.dry, q.tank]
 		_reaction.set_part_mass(q.name, 0.0)
 		_reaction.set_part_tank(q.name, 0.0)
 		if fc != null:
-			fc.add_payload_mass(-q.dry)
-			fc.propellant = maxf(fc.propellant - q.tank * fill, 0.0)
-			fc.propellant_capacity = maxf(fc.propellant_capacity - q.tank, 1.0)
+			fc.add_payload_mass(-left_dry)
+			fc.propellant = maxf(fc.propellant - left_tank * fill, 0.0)
+			fc.propellant_capacity = maxf(fc.propellant_capacity - left_tank, 1.0)
 		if ambac != null:
 			for j in ambac.joints:
 				if j.bone_name == q.name and j.priority > 0.0:
@@ -1242,8 +1335,9 @@ func _remove_parts(group: Array[Part]) -> void:
 
 
 ## Bakes `group` (and `equip`) in their current pose into one free rigid body flying off.
-func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, from: Vector3, heat := 0.0) -> RigidBody3D:
-	if group.is_empty() and equip.is_empty():
+func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, from: Vector3, heat := 0.0,
+		cut: Part = null, cut_share := 0.0) -> RigidBody3D:
+	if group.is_empty() and equip.is_empty() and cut == null:
 		return null
 	var body := RigidBody3D.new()
 	body.name = "Debris"
@@ -1266,9 +1360,27 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		var bh := Vector2(heat, holes.now) if heat > 0.0 else Vector2.ZERO
 		if not holes_on.is_empty() or heat > 0.0:
 			holes.adopt(mi, holes_on, _skel.get_bone_global_pose(q.bone), bh)
+		if q.cut_y != INF:
+			var pose := _skel.get_bone_global_pose(q.bone)
+			var c0 := q.aabb.get_center()
+			holes.cut(mi, null, -1, pose * Vector3(c0.x, q.cut_y, c0.z), pose.basis.y, true)
 		var m := q.dry + q.tank * fill
 		mass += m
 		centre += (_skel.get_bone_global_pose(q.bone) * q.aabb.get_center()) * m
+	if cut != null:
+		# The far side of a part cut through: the whole mesh, cut the other way.
+		var mi := _bake(cut.mesh)
+		mi.name = "Baked_" + String(cut.name)
+		body.add_child(mi)
+		var pose := _skel.get_bone_global_pose(cut.bone)
+		holes.adopt(mi, holes.get_holes(cut.mesh), pose)
+		var c0 := cut.aabb.get_center()
+		holes.cut(mi, null, -1, pose * Vector3(c0.x, cut.cut_y if cut.cut_y != INF else cut.last_hole.y, c0.z),
+				pose.basis.y, false)
+		var m := (cut.dry + cut.tank * fill) * cut_share
+		mass += m
+		var far_y := cut.aabb.end.y - cut.aabb.size.y * cut_share * 0.5
+		centre += (pose * Vector3(c0.x, far_y, c0.z)) * m
 	for eq in equip:
 		for node in eq.find_children("*", "MeshInstance3D", true, false):
 			var src := node as MeshInstance3D
@@ -1416,14 +1528,18 @@ func repair() -> void:
 		_reaction.set_part_mass(pname, m[0])
 		_reaction.set_part_tank(pname, m[1])
 		if fc != null:
-			fc.add_payload_mass(m[0])
-			fc.propellant_capacity += m[1]
-			fc.propellant += m[1] * fill
+			fc.add_payload_mass(m[2])
+			fc.propellant_capacity += m[3]
+			fc.propellant += m[3] * fill
 	_mass_removed.clear()
 	for j: AmbacJoint in _saved_priority:
 		j.priority = _saved_priority[j]
 	_saved_priority.clear()
 	for p in parts:
+		if p.cut_y != INF and p.area != null:
+			((p.area.get_child(0) as CollisionShape3D).shape as ConvexPolygonShape3D).points = p.hull_points
+		p.cut_y = INF
+		p.has_hole = false
 		p.left = 1.0
 		p.severed = false
 		if p.area != null:

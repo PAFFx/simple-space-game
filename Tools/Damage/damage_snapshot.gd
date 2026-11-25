@@ -67,6 +67,7 @@ func _run(cases: PackedStringArray) -> void:
 			"hole": await _hole()
 			"sever": await _sever()
 			"screen": await _screen()
+			"cut": await _cut()
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
 			"drone": await _drone()
@@ -184,6 +185,39 @@ func _sever() -> void:
 			_look(at + basis * Vector3(-6.0, 3.0, -6.0), at)
 			await _frames(3)
 			_save("sever_piece")
+			break
+
+
+## A thigh cut through the middle (not at the hip): the stub's cut face and the piece.
+func _cut() -> void:
+	_model.repair()
+	await _frames(20)
+	var p := _model.find_part(&"thigh.R")
+	var frame := _skel.global_transform * _skel.get_bone_global_pose(p.bone)
+	var c0 := p.aabb.get_center()
+	var at := frame * Vector3(c0.x, p.aabb.position.y + p.aabb.size.y * 0.55, c0.z)
+	var basis := _suit.global_basis
+	_look(at + basis * Vector3(9.0, 2.0, -6.0), at)
+	p.last_hole = frame.affine_inverse() * at
+	p.has_hole = true
+	_model.sever(p)
+	await _frames(4)
+	_save("cut_1_now")
+	for i in 40:
+		await physics_frame
+	_save("cut_2_0.7s")
+	_look(at + basis * Vector3(3.5, 2.5, -2.5), at)
+	await _frames(3)
+	_save("cut_3_stub")
+	_look(at + basis * Vector3(3.0, -3.5, -2.0), at)
+	await _frames(3)
+	_save("cut_4_stub_below")
+	for child in current_scene.get_children():
+		if child is RigidBody3D and child.name.begins_with("Debris"):
+			var c := (child as RigidBody3D).global_transform * (child as RigidBody3D).center_of_mass
+			_look(c + basis * Vector3(5.0, 5.0, -5.0), c)
+			await _frames(3)
+			_save("cut_5_piece")
 			break
 
 

@@ -27,6 +27,9 @@ class Surface:
 	var holes: Array[Hole] = []
 	var materials: Array[ShaderMaterial] = []
 	var body_heat := Vector2(0.0, -1000.0)
+	var cut_plane := Vector4(0.0, 1.0, 0.0, 0.0)   ## part space normal, offset
+	var cut_side := 0.0
+	var cut_heat := Vector2(1800.0, -1000.0)
 
 var now := 0.0
 var _surfaces := {}   ## MeshInstance3D → Surface
@@ -73,6 +76,18 @@ func add_hole(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, entry: Vect
 func heat(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, kelvin: float) -> void:
 	var s := _surface(mesh, skeleton, bone)
 	s.body_heat = Vector2(kelvin, now)
+	_upload(s)
+
+
+## `mesh` was cut through: the plane (part space: point and normal); `keep_below` keeps the
+## side the normal points away from. Its cut face is drawn hot (`peak` K) and cools.
+func cut(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, point: Vector3, normal: Vector3,
+		keep_below: bool, peak := 1800.0) -> void:
+	var s := _surface(mesh, skeleton, bone)
+	var n := normal.normalized()
+	s.cut_plane = Vector4(n.x, n.y, n.z, n.dot(point))
+	s.cut_side = 1.0 if keep_below else -1.0
+	s.cut_heat = Vector2(peak, now)
 	_upload(s)
 
 
@@ -177,3 +192,6 @@ func _upload(s: Surface) -> void:
 		m.set_shader_parameter(&"model_to_part", m2p)
 		m.set_shader_parameter(&"hole_now", now)
 		m.set_shader_parameter(&"body_heat", s.body_heat)
+		m.set_shader_parameter(&"cut_plane", s.cut_plane)
+		m.set_shader_parameter(&"cut_side", s.cut_side)
+		m.set_shader_parameter(&"cut_heat", s.cut_heat)

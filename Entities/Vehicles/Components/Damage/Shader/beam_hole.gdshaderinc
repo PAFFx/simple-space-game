@@ -20,6 +20,13 @@ uniform mat4 model_to_part = mat4(1.0);
 uniform float hole_now = 0.0;
 // Whole-mesh heat (a part thrown off a breaching reactor): K above ambient, and when.
 uniform vec2 body_heat = vec2(0.0, -1000.0);
+// A cut through the part (it broke there): plane normal (part space) and offset; side +1
+// keeps where n·p < offset, -1 where it is greater, 0 = no cut. The cut surface is bumpy
+// (cut_bump m); back faces seen through the opening draw it at its place, hot and cooling.
+uniform vec4 cut_plane = vec4(0.0, 1.0, 0.0, 0.0);
+uniform float cut_side = 0.0;
+uniform vec2 cut_heat = vec2(1800.0, -1000.0);
+uniform float cut_bump = 0.22;
 
 varying vec3 v_part_pos;
 varying vec3 v_part_cam;
@@ -79,6 +86,19 @@ struct HoleHit {
 	vec2 zone;          // around a mouth: angle and distance from the rim (in radii)
 };
 
+// Height of the cut surface above its plane at `p` (torn, uneven).
+float cut_offset(vec3 p) {
+	vec3 n = cut_plane.xyz;
+	vec3 e1 = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+	vec2 uv = vec2(dot(p, e1), dot(p, cross(n, e1)));
+	return cut_bump * ((hole_noise(uv * 1.4) - 0.5) + 0.45 * (hole_noise(uv * 4.3 + 3.1) - 0.5));
+}
+
+// Signed distance-ish to the cut surface: > 0 on the side the cut removes.
+float cut_field(vec3 p) {
+	return (dot(p, cut_plane.xyz) - cut_plane.w - cut_offset(p)) * cut_side;
+}
+
 HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 	HoleHit h;
 	h.discard_it = false;
@@ -93,6 +113,45 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 	h.wall = vec2(0.0);
 	h.zone = vec2(0.0, 99.0);
 	vec3 rd = normalize(p - cam);
+	if (cut_side != 0.0) {
+		float f = cut_field(p);
+		if (f > 0.0) {
+			h.discard_it = true;
+			return h;
+		}
+		float age = hole_now - cut_heat.y;
+		if (!front_facing) {
+			// Seen through the opening: the cut surface, between the camera and this face.
+			float dist = length(p - cam);
+			float t = dist;
+			for (int k = 0; k < 4; k++) {
+				vec3 q = cam + rd * t;
+				float g = cut_field(q);
+				float slope = dot(rd, cut_plane.xyz) * cut_side;
+				if (abs(slope) < 1e-3) {
+					break;
+				}
+				t -= g / slope;
+			}
+			if (t > 0.0 && t < dist) {
+				vec3 q = cam + rd * t;
+				h.inside = true;
+				h.depth = t - dist;
+				h.normal_part = cut_plane.xyz * cut_side;
+				vec3 n = cut_plane.xyz;
+				vec3 e1 = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+				h.wall = vec2(dot(q, e1), dot(q, cross(n, e1))) * 0.8;
+				h.temperature = hole_cool(cut_heat.x * (0.85 + 0.3 * hole_noise(h.wall * 2.0)), age);
+				return h;
+			}
+		} else if (f > -0.25) {
+			// The torn rim along the cut.
+			float k = 1.0 - smoothstep(0.0, 0.25, -f);
+			h.lip = max(h.lip, k * 0.9);
+			h.scorch = max(h.scorch, 1.0 - smoothstep(0.0, 0.9, -f));
+			h.temperature = max(h.temperature, 290.0 + (hole_cool(cut_heat.x, age) - 290.0) * k);
+		}
+	}
 	if (body_heat.x > 0.0) {
 		float t = hole_cool(290.0 + body_heat.x, hole_now - body_heat.y);
 		h.temperature = max(h.temperature, t);
