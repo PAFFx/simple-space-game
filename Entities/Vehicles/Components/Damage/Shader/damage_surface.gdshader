@@ -56,8 +56,14 @@ void fragment() {
 	// Coarser patches of the same melt: slag crusts inside, beads on the lip.
 	float patches_in = tri_melt(h.tex_p * 0.4 + 3.7, h.tex_n, 1.0);
 	float patches_out = texture(melt_height, zone_uv * 2.6 + vec2(0.37, 0.71)).r;
-	float melt = h.inside ? melt_in : melt_out;
-	float relief = h.inside ? melt_depth : lip_depth * max(h.lip, clamp((h.temperature - 650.0) / 900.0, 0.0, 1.0) * 0.8);
+	// The inside (a back face, only seen through an opening): torn, re-melted metal all over,
+	// triplanar over the part by its own facing.
+	vec3 geo_n = normalize(cross(dFdx(v_part_pos), dFdy(v_part_pos)));
+	float melt_inner = tri_melt(v_part_pos * 0.9, geo_n, 1.1);
+	float patches_inner = tri_melt(v_part_pos * 0.35 + 5.3, geo_n, 1.0);
+	bool inner = !FRONT_FACING && !h.inside;
+	float melt = h.inside ? melt_in : (inner ? melt_inner : melt_out);
+	float relief = (h.inside || inner) ? melt_depth : lip_depth * max(h.lip, clamp((h.temperature - 650.0) / 900.0, 0.0, 1.0) * 0.8);
 	vec3 bump_pos = VERTEX + normalize(VERTEX) * h.depth;
 	float bump_h = melt * relief;
 	vec3 dpdx = dFdx(bump_pos);
@@ -94,14 +100,14 @@ void fragment() {
 		metal = 0.55;
 		emit = hole_blackbody(t) * hole_glow(t) * (0.25 + 0.75 * deep);
 	} else if (!FRONT_FACING) {
-		// The suit's inside (a back face: only ever seen through an opening): dark metal and
-		// frame members, not the paint of an empty shell; lit by a hole's glow nearby.
-		vec3 ip = v_part_pos * 1.25;
-		float rib = max(1.0 - smoothstep(0.03, 0.09, abs(fract(ip.y) - 0.5)),
-				1.0 - smoothstep(0.03, 0.09, abs(fract(ip.x * 0.8 + ip.z * 0.6) - 0.5)));
-		albedo = mix(vec3(0.025, 0.025, 0.03), vec3(0.09, 0.09, 0.1), rib) * (0.8 + 0.4 * melt_out);
-		rough = 0.75;
-		metal = 0.6;
+		// The suit's inside (a back face: only ever seen through an opening): rough torn and
+		// re-melted metal, as the bores are, never an empty painted shell; lit by a hole's
+		// glow nearby.
+		NORMAL = melt_bump(NORMAL, dpdx, dpdy, dhx, dhy);
+		float runs = smoothstep(0.25, 0.75, patches_inner) * 0.75 + melt_inner * 0.25;
+		albedo = mix(vec3(0.05, 0.045, 0.04), vec3(0.12, 0.105, 0.09), runs);
+		rough = 0.72 + 0.18 * runs;
+		metal = 0.55;
 		emit = hole_blackbody(h.near_heat) * hole_glow(h.near_heat) * 0.25;
 	} else {
 		// Around a mouth: the molten lip (beaded, glossy), glowing metal fading out, a

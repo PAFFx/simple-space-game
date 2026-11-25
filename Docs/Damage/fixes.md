@@ -153,6 +153,9 @@ Still to do: real inner-frame meshes under the armour.
   curved face, swam with the view and kept the shield's outline; now a scorch-only record
   (soot, no crater) and thick smoke off the face.
 
+- [x] **Insides look hollow** (play-test): every inside surface seen through an opening (back
+  faces) is now drawn as rough torn, re-melted metal (bump-mapped slag, triplanar over the
+  part), the same as the bores, instead of a smooth dark shell.
 - [ ] **The body (chest, waist) is the most hollow:** shots into it often open onto an empty
   shell. The render meshes are thin skins with nothing behind; the dark interior shading helps
   but there is no inside. Needs inner frame and machinery meshes under the torso armour
