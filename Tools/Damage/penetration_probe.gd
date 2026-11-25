@@ -189,7 +189,12 @@ func _twice() -> void:
 	var left_after_one := shin.left
 	var holes_one := _model.holes.get_hole_count(shin.mesh)
 	await _ticks(30)
-	var second := await _fire(RIFLE, target + forward * 300.0, -forward)
+	# Down the first hole's channel as it lies now (the burst after it pushed the suit round).
+	var bore: HoleSet.Hole = _model.holes.get_holes(shin.mesh)[0]
+	var frame := _skel.global_transform * _skel.get_bone_global_pose(shin.bone)
+	var axis := (frame.basis * bore.axis).normalized()
+	var start := frame * bore.origin
+	var second := await _fire(RIFLE, start - axis * 300.0, axis)
 	print("%-22s first: stalled %3.0f ms, %s, head %d%% | second: stalled %3.0f ms, %s, head %d%%, holes %d → %d" % [
 			"same line twice", first[1] * 1000.0, "through" if first[2] else "stopped", roundi(left_after_one * 100.0),
 			second[1] * 1000.0, "through" if second[2] else "stopped", roundi(shin.left * 100.0),
