@@ -33,6 +33,8 @@ uniform vec2 cut_heat = vec2(1800.0, -1000.0);
 // The cut's outline in its plane (where it meets the part's skin): half-planes nx·u + ny·v <= c in
 // the plane's coordinates; the face is only drawn inside it. 0 = no outline (anywhere).
 uniform int cut_edge_count = 0;
+// The cut face is drawn by a stencil cap (cut_cap.gdshaderinc), not traced here.
+uniform bool cut_capped = false;
 uniform vec4 cut_edges[24];
 uniform float cut_bump = 0.22;
 
@@ -189,7 +191,7 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 			return h;
 		}
 		float age = hole_now - cut_heat.y;
-		if (!front_facing) {
+		if (!front_facing && !cut_capped) {
 			// Seen through the opening: the cut surface, between the camera and this face.
 			float dist = length(p - cam);
 			float t = dist;

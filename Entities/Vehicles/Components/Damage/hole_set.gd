@@ -32,6 +32,9 @@ class Surface:
 	var cut_side := 0.0
 	var cut_heat := Vector2(1800.0, -1000.0)
 	var cut_edges := PackedVector4Array()   ## the cut's outline: (nx, ny, c) half-planes in its plane
+	var cap: MeshInstance3D                  ## the cut's face (stencil cap), if cut
+	var cap_root: Node3D                     ## what holds it (a bone attachment for a skinned part)
+	var writers: Array[ShaderMaterial] = []  ## next passes marking the cross-section
 	var dirty := true
 
 var now := 0.0
@@ -50,11 +53,15 @@ func _process(delta: float) -> void:
 			if now - h.time < 0.6:
 				fresh = true
 				break
+		if s.cap != null and is_instance_valid(s.cap):
+			s.cap.visible = s.mesh.is_visible_in_tree()
 		if s.dirty or fresh:
 			_upload(s)
 		else:
 			for m in s.materials:
 				m.set_shader_parameter(&"hole_now", now)
+			if s.cap != null and is_instance_valid(s.cap):
+				(s.cap.material_override as ShaderMaterial).set_shader_parameter(&"hole_now", now)
 
 
 ## A skeleton has its final pose for this frame (after its modifiers): its skinned parts' frames
@@ -66,7 +73,7 @@ func _on_final_pose(skeleton: Skeleton3D) -> void:
 		var part_to_model := s.mesh.global_transform.affine_inverse() * part_frame(s.mesh, s.skeleton, s.bone)
 		var p2m := Projection(part_to_model)
 		var m2p := Projection(part_to_model.affine_inverse())
-		for m in s.materials:
+		for m in s.materials + s.writers:
 			m.set_shader_parameter(&"part_to_model", p2m)
 			m.set_shader_parameter(&"model_to_part", m2p)
 
@@ -120,7 +127,107 @@ func cut(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: int, point: Vector3, 
 	s.cut_side = 1.0 if keep_below else -1.0
 	s.cut_heat = Vector2(peak, now)
 	s.cut_edges = _outline(n, section)
+	_make_cap(s, n, point, section)
 	_upload(s)
+
+
+const CUT_STENCIL := "res://Entities/Vehicles/Components/Damage/Shader/cut_stencil.gdshaderinc"
+const CUT_CAP := "res://Entities/Vehicles/Components/Damage/Shader/cut_cap.gdshaderinc"
+const STENCIL_REFS := 8
+static var _next_ref := 0
+static var _stencil_shaders := {}   ## [kind, ref] → Shader
+
+
+static func _stencil_shader(kind: String, ref: int) -> Shader:
+	var key := [kind, ref]
+	if _stencil_shaders.has(key):
+		return _stencil_shaders[key]
+	var sh := Shader.new()
+	if kind == "write":
+		sh.code = "shader_type spatial;\nrender_mode cull_front, diffuse_burley;\nstencil_mode write, compare_always, %d;\n#include \"%s\"\n" % [ref, CUT_STENCIL]
+	else:
+		sh.code = "shader_type spatial;\nrender_mode cull_disabled, depth_draw_always, diffuse_burley, specular_schlick_ggx;\nstencil_mode read, compare_equal, %d;\n#include \"%s\"\n" % [ref, CUT_CAP]
+	_stencil_shaders[key] = sh
+	return sh
+
+
+## The cut's face: back faces seen through the cut mark the stencil (a next pass on each
+## surface), a grid across the cut plane draws the face where they did: the real cross-section,
+## concave or not, never outside it.
+func _make_cap(s: Surface, n: Vector3, point: Vector3, section: PackedVector3Array) -> void:
+	_drop_cap(s)
+	_next_ref = _next_ref % STENCIL_REFS + 1
+	var ref := _next_ref
+	for m in s.materials:
+		var w := ShaderMaterial.new()
+		w.shader = _stencil_shader("write", ref)
+		m.next_pass = w
+		s.writers.append(w)
+	# A grid over the section's extent on the plane, part space (the shader lifts it onto the
+	# torn surface).
+	var e1 := n.cross(Vector3.UP if absf(n.y) < 0.9 else Vector3.RIGHT).normalized()
+	var e2 := n.cross(e1)
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for p in section:
+		var uv := Vector2((p - point).dot(e1), (p - point).dot(e2))
+		lo = lo.min(uv)
+		hi = hi.max(uv)
+	if section.size() < 3:
+		lo = Vector2(-2.0, -2.0)
+		hi = Vector2(2.0, 2.0)
+	lo -= Vector2(0.3, 0.3)
+	hi += Vector2(0.3, 0.3)
+	var steps := 24
+	var verts := PackedVector3Array()
+	var idx := PackedInt32Array()
+	for j in steps + 1:
+		for i in steps + 1:
+			var u := lerpf(lo.x, hi.x, float(i) / steps)
+			var v := lerpf(lo.y, hi.y, float(j) / steps)
+			verts.append(point + e1 * u + e2 * v)
+	for j in steps:
+		for i in steps:
+			var a := j * (steps + 1) + i
+			idx.append_array([a, a + 1, a + steps + 1, a + 1, a + steps + 2, a + steps + 1])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var cap := MeshInstance3D.new()
+	cap.name = "CutCap"
+	cap.mesh = mesh
+	cap.layers = s.mesh.layers
+	cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Never culled away by its own (flat) bounds while the torn offset lifts it.
+	cap.extra_cull_margin = 1.0
+	var mat := ShaderMaterial.new()
+	mat.shader = _stencil_shader("cap", ref)
+	mat.set_shader_parameter(&"melt_height", melt_texture())
+	cap.material_override = mat
+	if s.skeleton != null and s.bone >= 0:
+		var attach := BoneAttachment3D.new()
+		attach.name = "CutCapMount"
+		attach.bone_name = s.skeleton.get_bone_name(s.bone)
+		s.skeleton.add_child(attach)
+		attach.add_child(cap)
+		s.cap_root = attach
+	else:
+		s.mesh.add_child(cap)
+		s.cap_root = cap
+	s.cap = cap
+
+
+func _drop_cap(s: Surface) -> void:
+	if s.cap_root != null and is_instance_valid(s.cap_root):
+		s.cap_root.queue_free()
+	s.cap = null
+	s.cap_root = null
+	for m in s.materials:
+		m.next_pass = null
+	s.writers.clear()
 
 
 ## The convex outline of `points` (on the plane of normal `n`) in the plane's own coordinates
@@ -184,12 +291,16 @@ func adopt(mesh: MeshInstance3D, holes: Array[Hole], part_in_mesh: Transform3D, 
 
 
 func forget(mesh: MeshInstance3D) -> void:
+	var s: Surface = _surfaces.get(mesh)
+	if s != null:
+		_drop_cap(s)
 	_surfaces.erase(mesh)
 
 
 ## Every hole gone, every mesh back on its own material.
 func clear() -> void:
 	for s: Surface in _surfaces.values():
+		_drop_cap(s)
 		if not is_instance_valid(s.mesh):
 			continue
 		for i in s.mesh.get_surface_override_material_count():
@@ -281,3 +392,15 @@ func _upload(s: Surface) -> void:
 		edges.resize(24)
 		m.set_shader_parameter(&"cut_edge_count", count)
 		m.set_shader_parameter(&"cut_edges", edges)
+		m.set_shader_parameter(&"cut_capped", s.cap != null)
+	# The writers and the cap need the cut (and the writers the part's frame) too.
+	var users: Array = s.writers.duplicate()
+	if s.cap != null and is_instance_valid(s.cap):
+		users.append(s.cap.material_override)
+	for w: ShaderMaterial in users:
+		w.set_shader_parameter(&"cut_plane", s.cut_plane)
+		w.set_shader_parameter(&"cut_side", s.cut_side)
+		w.set_shader_parameter(&"cut_heat", s.cut_heat)
+		w.set_shader_parameter(&"hole_now", now)
+		w.set_shader_parameter(&"part_to_model", p2m)
+		w.set_shader_parameter(&"model_to_part", m2p)

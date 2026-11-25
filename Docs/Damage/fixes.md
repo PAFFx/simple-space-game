@@ -304,3 +304,17 @@ plates built from arrays with box colliders; component lookups cached; particle 
 hole lights pooled (creating them flooded the render thread: 40–50 ms stalls); effects and the
 hole material warmed up after load. Fuzz, 12 rounds: worst damage frame 54 → ~18 ms
 (reactor breach), frames over 12 ms 94 → ~25, p99 19 → 12 ms (headless, editor build).
+
+**Cut faces by stencil (step 3, 2026-11-27):** a cut no longer traces its face in the mesh's
+shader (convex-outline guesses, negative-depth glare, slabs on thin parts). The cut part's back
+faces seen through the cut write the stencil (a next pass, `cut_stencil.gdshaderinc`), and a grid
+across the cut plane, lifted onto the same torn offset, draws the face only there
+(`cut_cap.gdshaderinc`, read after the opaque pass): the real cross-section, concave or not.
+Eight stencil values cycle so neighbouring cuts don't share marks. All variants are compiled and
+drawn once (a box too small to see, in front of the camera) after load: drawing them first on a
+real cut cost ~100 ms. Debris hulls come from cached vertices (asking a mesh for its hull reads
+it back from the render thread, ~9 ms per piece) and are made after load too.
+Known limit: where a part's mesh is open behind the cut (no back face along the line of sight)
+the stencil is not marked there and the face has a gap.
+Windowed combat bench with hits (12 s): average 4.5 ms (was 5.4–6.5), worst 23–25 ms (was 62–73).
+

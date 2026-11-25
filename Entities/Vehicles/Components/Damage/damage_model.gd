@@ -321,6 +321,10 @@ func _build() -> void:
 	_build_components()
 	_place_cameras()
 	_build_followers()
+	for node in _vehicle.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh != null and not _prep_meshes.has(mi.mesh):
+			_prep_meshes.append(mi.mesh)
 	var fx := DamageFx.of(self)
 	if fx != null:
 		fx.prewarm()
@@ -487,6 +491,27 @@ static func skin_surface(mesh: MeshInstance3D, skeleton: Skeleton3D, arrays: Arr
 
 
 static var _hulls := {}    ## Mesh instance id → its convex hull (debris collision)
+
+
+## A mesh's convex hull for debris collision, from its cached vertices (asking the mesh reads it
+## back from the render thread, ~9 ms), at most ~256 points; kept.
+static func hull_of(mesh: Mesh) -> Shape3D:
+	var key := mesh.get_instance_id()
+	if _hulls.has(key):
+		return _hulls[key]
+	var pts := PackedVector3Array()
+	for si in mesh.get_surface_count():
+		pts.append_array(arrays_of(mesh, si)[Mesh.ARRAY_VERTEX])
+	var step := maxi(1, pts.size() / 256)
+	if step > 1:
+		var few := PackedVector3Array()
+		for i in range(0, pts.size(), step):
+			few.append(pts[i])
+		pts = few
+	var hull := ConvexPolygonShape3D.new()
+	hull.points = pts
+	_hulls[key] = hull
+	return hull
 static var _arrays := {}   ## Mesh instance id → its surfaces' arrays (static data, read once)
 static var _rigid := {}    ## bones array hash → its single bind, or -1
 
@@ -1734,6 +1759,16 @@ func _panel_pieces_small(p: Part, inside: Vector3, out: Vector3, radius: float) 
 ## Splits the parts' skins into small triangles (bone space), within `budget_us` per tick.
 func _prep_small(budget_us: int) -> void:
 	var t0 := Time.get_ticks_usec()
+	# The meshes that may fly off (parts, equipment): their data read once and their hulls made,
+	# a few per tick, so the first hit doesn't wait for the render thread.
+	while not _prep_meshes.is_empty():
+		var mesh: Mesh = _prep_meshes.pop_back()
+		if is_instance_valid(mesh):
+			for si in mesh.get_surface_count():
+				arrays_of(mesh, si)
+			hull_of(mesh)
+		if Time.get_ticks_usec() - t0 > budget_us:
+			return
 	for p in parts:
 		if p.small_done or p.mesh == null or p.equipment != null:
 			continue
@@ -1753,6 +1788,7 @@ func _prep_small(budget_us: int) -> void:
 		_skin_tri_cache.erase(p)
 
 
+var _prep_meshes: Array = []   ## meshes still to read and hull (after build)
 var _skin_tri_cache := {}   ## Part → [[[pos, normal, uv] × 3], material] in bone space
 
 
@@ -2308,16 +2344,33 @@ func _knock_stubs(_p: Part, at: Vector3, dir: Vector3, length: float, radius: fl
 ## A hole on a box far off, once: the first hole's material (the damage shader) would
 ## otherwise be set up on the first hit, a ~40 ms stall.
 func _prewarm_holes() -> void:
-	var mi := MeshInstance3D.new()
-	mi.name = "HolePrewarm"
-	mi.mesh = BoxMesh.new()
-	mi.layers = Layers.VEHICLE_EXT
-	add_child(mi)
-	mi.global_position = Vector3(0.0, -1.0e6, 0.0)
-	holes.add_hole(mi, null, -1, mi.global_position + Vector3(0, 0, 0.5), Vector3.BACK, 0.3, 1.0)
-	get_tree().create_timer(4.0).timeout.connect(func() -> void:
-		holes.forget(mi)
-		mi.queue_free())
+	for ref in range(1, HoleSet.STENCIL_REFS + 1):
+		HoleSet._stencil_shader("write", ref)
+		HoleSet._stencil_shader("cap", ref)
+	# Drawn, not just made: the GPU builds a material's pipelines the first time it draws it
+	# (the cut face's stencil passes cost ~100 ms on the first real cut). A box too small to see,
+	# just in front of the camera, holed and cut, for a few frames.
+	var cam := get_viewport().get_camera_3d() if get_viewport() != null else null
+	for k in HoleSet.STENCIL_REFS:
+		var mi := MeshInstance3D.new()
+		mi.name = "HolePrewarm"
+		var box := BoxMesh.new()
+		box.size = Vector3.ONE * 0.002
+		mi.mesh = box
+		mi.layers = 0xFFFFF
+		if cam != null:
+			cam.add_child(mi)
+			mi.position = Vector3(0.0, 0.0, -0.5)
+		else:
+			add_child(mi)
+			mi.global_position = Vector3(0.0, -1.0e6, 0.0)
+		var at := mi.global_position
+		holes.add_hole(mi, null, -1, at + mi.global_basis.z * 0.001, -mi.global_basis.z, 0.0005, 0.002)
+		holes.cut(mi, null, -1, Vector3.ZERO, Vector3.UP, k % 2 == 0,
+				PackedVector3Array([Vector3(-0.001, 0, -0.001), Vector3(0.001, 0, -0.001), Vector3(0, 0, 0.001)]))
+		get_tree().create_timer(0.5).timeout.connect(func() -> void:
+			holes.forget(mi)
+			mi.queue_free())
 
 
 ## The damage part a bone belongs to: itself or the nearest up its chain.
@@ -2729,10 +2782,7 @@ func _solidify(body: RigidBody3D) -> void:
 			shape = box
 		else:
 			# Baked parts share their mesh with the suit: one hull per mesh, kept.
-			shape = _hulls.get(mi.mesh.get_instance_id())
-			if shape == null:
-				shape = mi.mesh.create_convex_shape(true, false)
-				_hulls[mi.mesh.get_instance_id()] = shape
+			shape = hull_of(mi.mesh)
 		if shape == null:
 			continue
 		var cs := CollisionShape3D.new()
