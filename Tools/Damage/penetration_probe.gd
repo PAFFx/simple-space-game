@@ -68,6 +68,7 @@ func _run() -> void:
 			"twice": await _twice()
 			"panel": await _panel()
 			"timing": await _timing()
+			"faults": await _faults()
 			"cockpit": await _shot_at_point("cockpit (pilot)", _pilot_eye())
 			"head": await _shot_at("head", &"head", Vector3.ZERO)
 			"chest": await _shot_at("chest (cockpit)", &"chest", Vector3(0.0, 0.6, 0.0))
@@ -83,6 +84,48 @@ func _run() -> void:
 			"repair": await _repair()
 	print("RESULT: %s" % ("PASS" if _failed == 0 else "%d FAILED" % _failed))
 	quit()
+
+
+## A main's valve stuck open (FCS on: the rest fight it; off: it spins the suit), and a
+## tank cell venting (the push it gives).
+func _faults() -> void:
+	for fcs_on in [true, false]:
+		_model.repair()
+		await _ticks(30)
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		_fc.fcs_enabled = fcs_on
+		var v0 := _suit.linear_velocity
+		var start := _suit.global_basis
+		var main: Thruster = _suit.get_node("Thrusters/Attach_backpack/MainRU")
+		main.enabled = false
+		main.stuck_open = 0.4
+		var peak := 0.0
+		for i in 120:
+			await physics_frame
+			peak = maxf(peak, rad_to_deg(_suit.angular_velocity.length()))
+		var turned := rad_to_deg(start.get_rotation_quaternion().angle_to(_suit.global_basis.get_rotation_quaternion()))
+		print("faults: main valve stuck open 40%%, FCS %s: 2 s later Δv %.1f m/s, turned %.1f° (peak %.1f°/s)" % [
+				"on" if fcs_on else "off", (_suit.linear_velocity - v0).length(), turned, peak])
+		main.stuck_open = -1.0
+		main.enabled = true
+	_fc.fcs_enabled = true
+	_model.repair()
+	await _ticks(30)
+	_fc.fcs_enabled = false
+	_suit.linear_velocity = Vector3.ZERO
+	_suit.angular_velocity = Vector3.ZERO
+	var cell: DamageModel.Component
+	for c in _model.components:
+		if c.kind == DamageModel.Kind.TANK and c.part.name == &"backpack":
+			cell = c
+			break
+	var at := _model.component_position(cell)
+	_model._vent(cell, at, _suit.global_basis.z)
+	await _ticks(60)
+	print("faults: a backpack cell vents: Δv %.2f m/s, spin %.1f°/s after 1 s" % [_suit.linear_velocity.length(), rad_to_deg(_suit.angular_velocity.length())])
+	_fc.fcs_enabled = true
+	_model.repair()
 
 
 ## What one hit costs on the CPU: starting a drill (hull rays, column, components), tearing

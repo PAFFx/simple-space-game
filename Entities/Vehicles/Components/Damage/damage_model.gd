@@ -150,6 +150,8 @@ var _rng := RandomNumberGenerator.new()
 var _hull_layers: Array = []
 var _stubs: Array[Node] = []
 var _opaque: Array[Node] = []
+var _thruster_saved := {}     ## Thruster → [max thrust, gimbal limits ×3] as built
+var _leaks: Array = []        ## [node, local point, local jet direction, N, until]
 
 
 func _ready() -> void:
@@ -177,6 +179,16 @@ func _physics_process(delta: float) -> void:
 			call.call()
 		else:
 			i += 1
+	for li in range(_leaks.size() - 1, -1, -1):
+		var lk: Array = _leaks[li]
+		if _clock > float(lk[4]) or not is_instance_valid(lk[0]) or reactor_gone:
+			_leaks.remove_at(li)
+			continue
+		var xf := (lk[0] as Node3D).global_transform
+		var at: Vector3 = xf * (lk[1] as Vector3)
+		var jet: Vector3 = (xf.basis * (lk[2] as Vector3)).normalized()
+		# The jet goes out; the suit is pushed the other way.
+		_body.apply_force(-jet * float(lk[3]), at - _body.global_position)
 	if _capability_dirty and _clock >= _capability_due:
 		_capability_dirty = false
 		var fc := _flight()
@@ -917,14 +929,15 @@ func _hit_component(c: Component, d: Drill) -> void:
 			_break_equipment(c.ref as MsEquipment)
 
 
-func _kill_component(c: Component) -> void:
+func _kill_component(c: Component, dead := false) -> void:
 	if not c.alive:
 		return
 	c.alive = false
 	match c.kind:
 		Kind.THRUSTER:
-			(c.ref as Thruster).enabled = false
+			_hit_thruster(c, dead)
 			_capability_changed()
+			return
 		Kind.EYES:
 			var sensors := _vehicle.find_component(SensorSuite) as SensorSuite
 			if sensors != null:
@@ -939,6 +952,33 @@ func _kill_component(c: Component) -> void:
 
 
 ## Equipment that went with a severed part: gone, but its stores didn't go off.
+## A thruster hit: dead, weaker, its nozzle stuck at rest, or its valve stuck open (it fires
+## on its own; the flight computer has to fight it). `dead`: it went with a severed part.
+func _hit_thruster(c: Component, dead: bool) -> void:
+	var t := c.ref as Thruster
+	if not _thruster_saved.has(t):
+		_thruster_saved[t] = [t.max_thrust, t.gimbal_limit_deg, t.gimbal_pitch_limit_deg, t.gimbal_yaw_limit_deg]
+	var roll := 0.0 if dead else _rng.randf()
+	var what := "dead"
+	if roll < 0.45:
+		t.enabled = false
+		t.stuck_open = -1.0
+	elif roll < 0.65:
+		t.max_thrust *= _rng.randf_range(0.35, 0.7)
+		what = "derated to %d%%" % roundi(t.max_thrust / float(_thruster_saved[t][0]) * 100.0)
+	elif roll < 0.85:
+		t.gimbal_limit_deg = 0.0
+		t.gimbal_pitch_limit_deg = 0.0
+		t.gimbal_yaw_limit_deg = 0.0
+		what = "nozzle stuck"
+	else:
+		t.enabled = false
+		t.stuck_open = _rng.randf_range(0.15, 0.45)
+		what = "valve stuck open at %d%%" % roundi(t.stuck_open * 100.0)
+	_event("%s %s" % [c.name, what])
+	component_destroyed.emit(&"thruster", StringName("%s %s" % [c.name, what]))
+
+
 func _lose_equipment(eq: MsEquipment) -> void:
 	for c in components:
 		if c.kind == Kind.EQUIPMENT and c.ref == eq:
@@ -981,10 +1021,39 @@ func _burst_cell_later(d: Drill, cell: Component) -> void:
 		var e: float = d.deposited.get(cell, 0.0)
 		_event("%s burst" % cell.name)
 		component_destroyed.emit(&"tank", cell.name)
-		_burst(component_position(cell), maxf(e, 5e7), &"steam"))
+		var at := component_position(cell)
+		_burst(at, maxf(e, 5e7), &"steam")
+		_vent(cell, at, _body.global_basis * d.dir_body))
 
 
 # --- Bursts, reactor, pilot ---
+
+## A tank cell holed at `at`: it empties through the hole like a nozzle, F ≈ 2·Cd·P·A
+## (~0.4 MN, physics.md §5) for the fraction of a second the water lasts, out along the side
+## the beam came out of; then the cut feed line leaks weakly for a while.
+func _vent(cell: Component, at: Vector3, beam_dir: Vector3) -> void:
+	if cell.part == null or cell.part.area == null:
+		return
+	var anchor := cell.part.area
+	var centre := _part_frame(cell.part) * cell.part.aabb.get_center()
+	var out := (beam_dir.normalized() + (at - centre).normalized() * 0.5).normalized()
+	var surface := _surface_toward(cell.part, at, out)
+	if surface != Vector3.INF:
+		at = surface
+	var inv := anchor.global_transform.affine_inverse()
+	var local_at := inv * at
+	var local_dir := (inv.basis * out).normalized()
+	var fill := _reaction.get_fill() if _reaction != null else 1.0
+	var cell_kg := cell.part.tank * fill / 4.0
+	var force := 2.0 * 0.6 * 3.0e5 * 1.13
+	var lasts := clampf(cell_kg * 25.0 / force, 0.02, 0.5)
+	_leaks.append([anchor, local_at, local_dir, force, _clock + lasts])
+	_leaks.append([anchor, local_at, local_dir, 4000.0, _clock + 15.0])
+	var fx := DamageFx.of(self)
+	if fx != null:
+		fx.vent(anchor, local_at, local_dir, lasts, 1.0)
+		fx.vent(anchor, local_at, local_dir, 15.0, 0.2)
+
 
 ## Something went off inside the suit at `at` (world) with `energy` J: what is within its
 ## blow-off radius is torn (parts lose section, thin components are destroyed). Steam from a
@@ -1533,7 +1602,7 @@ func _cut_part(p: Part, y: float) -> void:
 	var inv := frame.affine_inverse()
 	for c in components:
 		if c.part == p and c.alive and (inv * component_position(c)).y > y:
-			_kill_component(c)
+			_kill_component(c, true)
 			if c.node != null and c.kind == Kind.THRUSTER:
 				c.node.visible = false
 				_hidden_nodes.append(c.node)
@@ -1611,7 +1680,7 @@ func _remove_parts(group: Array[Part]) -> void:
 				c.alive = false
 				if c.kind in [Kind.EYES, Kind.BODY_CAMERA, Kind.VULCAN, Kind.THRUSTER]:
 					c.alive = true
-					_kill_component(c)
+					_kill_component(c, true)
 		var attach := _vehicle.get_node_or_null(NodePath("Thrusters/Attach_" + String(q.name).replace(".", "_")))
 		if attach != null and attach is Node3D:
 			(attach as Node3D).visible = false
@@ -1836,6 +1905,15 @@ func repair() -> void:
 		elif c.kind == Kind.VULCAN:
 			(c.ref as MsWeapon).broken = false
 	_set_all_thrusters(true)
+	for t: Thruster in _thruster_saved:
+		var sv: Array = _thruster_saved[t]
+		t.max_thrust = sv[0]
+		t.gimbal_limit_deg = sv[1]
+		t.gimbal_pitch_limit_deg = sv[2]
+		t.gimbal_yaw_limit_deg = sv[3]
+		t.stuck_open = -1.0
+	_thruster_saved.clear()
+	_leaks.clear()
 	var sensors := _vehicle.find_component(SensorSuite) as SensorSuite
 	if sensors != null:
 		sensors.main_camera_alive = true

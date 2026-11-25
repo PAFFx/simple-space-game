@@ -181,6 +181,57 @@ func i_field(at: Vector3, outward: Vector3, velocity: Vector3, color: Color) -> 
 	_vapour(at, outward, velocity, 26, 60.0, 1.5, 9.0, 2.6, Color(0.42, 0.4, 0.38, 0.55), 8.0)
 
 
+## Water venting from a hole on `anchor` (it rides it): a jet of vapour and ice along
+## `local_dir` for `seconds`; `strength` 1 = a cell emptying, ~0.2 = a leaking line.
+func vent(anchor: Node3D, local_at: Vector3, local_dir: Vector3, seconds: float, strength: float) -> void:
+	if strength > 0.5:
+		# The cell empties in a fraction of a second: one burst of mist and ice.
+		var at := anchor.global_transform * local_at
+		var dir := (anchor.global_basis * local_dir).normalized()
+		_vapour(at, dir, Vector3.ZERO, 30, 25.0, 1.2, 9.0, 1.8, Color(0.96, 0.98, 1.0, 0.55), 40.0)
+		_glints(at, Vector3.ZERO, 200, 14.0, 2.2)
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE * lerpf(0.9, 1.8, strength)
+	var p := GPUParticles3D.new()
+	p.amount = roundi(lerpf(90.0, 160.0, strength))
+	p.lifetime = lerpf(0.7, 1.2, strength)
+	p.local_coords = false
+	p.draw_pass_1 = quad
+	p.material_override = _vapour_material
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.visibility_aabb = AABB(Vector3(-100, -100, -100), Vector3(200, 200, 200))
+	var m := ParticleProcessMaterial.new()
+	m.direction = Vector3.FORWARD
+	m.spread = lerpf(6.0, 14.0, strength)
+	m.initial_velocity_min = lerpf(8.0, 22.0, strength)
+	m.initial_velocity_max = lerpf(15.0, 40.0, strength)
+	m.gravity = Vector3.ZERO
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.3))
+	curve.add_point(Vector2(1.0, 3.0))
+	curve.max_value = 3.0
+	var ct := CurveTexture.new()
+	ct.curve = curve
+	m.scale_curve = ct
+	var g := Gradient.new()
+	g.set_color(0, Color(0.97, 0.98, 1.0, lerpf(0.65, 0.8, strength)))
+	g.set_color(1, Color(0.9, 0.93, 1.0, 0.0))
+	var gt := GradientTexture1D.new()
+	gt.gradient = g
+	m.color_ramp = gt
+	p.process_material = m
+	anchor.add_child(p)
+	p.position = local_at
+	p.basis = Basis.looking_at(local_dir, Vector3.UP if absf(local_dir.y) < 0.95 else Vector3.RIGHT)
+	p.emitting = true
+	get_tree().create_timer(seconds).timeout.connect(func() -> void:
+		if is_instance_valid(p):
+			p.emitting = false)
+	get_tree().create_timer(seconds + p.lifetime + 0.5).timeout.connect(func() -> void:
+		if is_instance_valid(p):
+			p.queue_free())
+
+
 ## A limb tore off at `at`.
 func sever(at: Vector3, velocity: Vector3) -> void:
 	_spray(at, Vector3.ZERO, velocity, 120, 180.0, 30.0, 0.3, 1.5, 0.12, 40.0)
