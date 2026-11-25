@@ -89,8 +89,11 @@ Still to do: real inner-frame meshes under the armour.
   whatever is near, not a small burst.
 - [ ] **The I-field covers the front only.** A shot into the shield from behind bypasses the field
   and destroys the shield.
-- [ ] **An I-field block doesn't melt.** It leaves black soot on the hit point and a lot of
+- [x] **An I-field block doesn't melt.** It leaves black soot on the hit point and a lot of
   smoke, no molten lip.
+  *Done:* it used to leave a 2.2 m, 2 cm deep crater whose flat floor, ray-traced behind the
+  curved face, swam with the view and kept the shield's outline; now a scorch-only record
+  (soot, no crater) and thick smoke off the face.
 
 ## E. Smoke and fire
 

@@ -425,6 +425,13 @@ func _shield(charged: bool) -> void:
 	_look(target + basis * Vector3(-18, 4, -16), target)
 	await _frames(3)
 	await _fire(target - dir * 300.0, dir, "shield" if charged else "bareshield", [0.02, 0.06, 0.15, 0.5, 1.5])
+	# Close up on the mark from two sides (anything that moves with the view shows here).
+	var normal := -dir
+	for k in 2:
+		var side := basis * Vector3(-1.0 if k == 0 else 1.0, 0.3, 0.0)
+		_look(target + normal * 7.0 + side * 3.0, target)
+		await _frames(3)
+		_save("%s_mark_%d" % ["shield" if charged else "bareshield", k])
 
 
 func _drone() -> void:

@@ -190,6 +190,8 @@ func i_field(at: Vector3, outward: Vector3, velocity: Vector3, color: Color) -> 
 	pm.flash(at, color, 3.0, 9.0, 0.6, 3.0, 0.8, 0.0, velocity)
 	_spray(at, outward, velocity, 220, 80.0, 60.0, 0.15, 0.7, 0.05, 220.0)
 	_vapour(at, outward, velocity, 26, 60.0, 1.5, 9.0, 2.6, Color(0.42, 0.4, 0.38, 0.55), 8.0)
+	# The coating burning off: a lot of thick smoke rolling off the face.
+	_smoke(at, velocity, 2.2, 5.0)
 
 
 ## Water venting from a hole on `anchor` (it rides it): a jet of vapour and ice along

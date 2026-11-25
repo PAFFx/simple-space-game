@@ -4,7 +4,8 @@
 // been drilled (s_drill). Inside the mouth the view ray is cast into the cylinder: the bore's
 // wall or the crater floor is drawn at its true depth, and through holes are open.
 // Around the mouth: a ragged molten lip, a heat-affected zone glowing by blackbody
-// temperature, scorch. Everything cools with the hole's age.
+// temperature, scorch. Everything cools with the hole's age. A record with s_drill < 0 is a
+// scorch mark only (a beam an I-field took): soot round the point, no crater, no melt.
 //
 // Use: in vertex(), `v_part_pos = hole_part_pos(VERTEX); v_part_cam = hole_part_cam(MODELVIEW_MATRIX);`
 // in fragment(), `HoleHit h = hole_fragment(v_part_pos, v_part_cam, FRONT_FACING);` and apply it
@@ -179,6 +180,15 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 		float s = dot(q, a);
 		vec3 radial = q - a * s;
 		float d = length(radial);
+		if (s_dr < 0.0) {
+			if (d < r * 1.4 && abs(s - s_in) < r * 0.6) {
+				vec3 m1 = normalize(cross(a, abs(a.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+				vec2 c = vec2(dot(radial, m1), dot(radial, cross(a, m1))) / r;
+				float edge = 0.75 + 0.3 * hole_noise(c * 2.3 + float(i) * 3.1);
+				h.scorch = max(h.scorch, (1.0 - smoothstep(edge * 0.35, edge, d / r)) * 0.95);
+			}
+			continue;
+		}
 		if (d > r * 7.0 || s < s_in - r * 3.0 || s > s_out + r * 3.0) {
 			continue;
 		}

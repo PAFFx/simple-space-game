@@ -802,6 +802,8 @@ static func _channel_share(info: Array, at: Vector3, r: float) -> float:
 	var q: Vector3 = (info[0] as Transform3D) * at
 	var best := 0.0
 	for h: HoleSet.Hole in info[1]:
+		if h.s_drill < 0.0:
+			continue   # a scorch mark, not a channel
 		var rel := q - h.origin
 		var s := rel.dot(h.axis)
 		if s < h.s_in - r or s > h.s_drill + r * 0.25:

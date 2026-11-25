@@ -114,9 +114,9 @@ func beam_contact(contact: ProjectileManager.BeamContact) -> void:
 			if fx != null:
 				fx.i_field(contact.point - contact.direction * 2.5, -contact.direction, _velocity(vehicle), contact.spec.color)
 			if model != null and d[3] != null:
-				var h := model.holes.add_hole(d[3], null, -1, contact.point, contact.direction,
-						2.2, 0.4, 820.0 + 1200.0 * field_leak * contact.spec.energy / 4e9)
-				h.s_drill = 0.02
+				# The field held: no melt, soot where the beam's edge reached the coating.
+				var h := model.holes.add_hole(d[3], null, -1, contact.point, contact.direction, 1.6, 0.4, 290.0)
+				h.s_drill = -1.0
 			if fcs != null:
 				fcs.register_hit(true)
 		return
