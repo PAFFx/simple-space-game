@@ -188,11 +188,16 @@ Still to do: real inner-frame meshes under the armour.
   open hole (user, 2026-11-27: capping through holes looked wrong). With the parts closed shells,
   the bore is drawn solid from where the beam entered the skin to where it left it for good
   (machinery inside, never an empty skin) and is open past that.
-- [ ] **The body (chest, waist) is the most hollow:** shots into it often open onto an empty
+- [x] **The body (chest, waist) is the most hollow:** shots into it often open onto an empty
   shell. The render meshes are thin skins with nothing behind; the dark interior shading helps
   but there is no inside. Needs inner frame and machinery meshes under the torso armour
   (frame, reactor housing, cockpit block, ducts), drawn only where the armour is opened (or
-  always: they cost little).
+  always: they cost little). *Done (2026-11-28):* `INNER_FRAME`, built at load on the chest and
+  pelvis bones: a spine and a shoulder beam, hydraulic ducts, the two reactor housings (the
+  reactors sit in them now, lower in the pelvis), hip actuators. Always drawn, fitted under the
+  armour (damage_snapshot `insides` paints them and looks from eight sides: no pixel may show),
+  holed with the armour along a beam (`_hole_inner`). The cockpit's dark screen sphere is the
+  block a chest opening shows.
 - [x] **The cockpit's panoramic screen shows through a hole in the chest** before the cockpit
   is breached. *Cause:* the cockpit shell is on the cockpit-only render layer (not drawn by the
   outside camera), but the screen mesh is also on the outside layer (`VEHICLE_EXT | COCKPIT`):

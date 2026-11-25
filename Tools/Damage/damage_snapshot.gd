@@ -67,6 +67,8 @@ func _run(cases: PackedStringArray) -> void:
 			"cool": await _cool()
 			"fire": await _fire_case()
 			"breach": await _breach_case()
+			"chest_panel": await _chest_panel()
+			"insides": await _insides_case()
 			"backpack_breach": await _backpack_breach_case()
 			"hole": await _hole()
 			"sever": await _sever()
@@ -416,6 +418,82 @@ func _panel() -> void:
 	for i in 120:
 		await physics_frame
 	_save("panel_opening")
+
+
+## The torso's insides painted magenta, the suit seen from eight sides: any magenta pixel is a
+## piece showing outside the armour. Prints the count per view.
+func _insides_case() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var paint := StandardMaterial3D.new()
+	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	paint.albedo_color = Color(1, 0, 1)
+	var saved := {}
+	for p in _model._inner:
+		for mi: MeshInstance3D in _model._inner[p]:
+			saved[mi] = mi.material_override
+			mi.material_override = paint
+	var basis := _suit.global_basis
+	var centre := _suit.global_position + basis.y * 14.0
+	var total := 0
+	for k in 8:
+		var az := k * TAU / 8.0
+		var el := 0.35 if k % 2 == 0 else -0.25
+		var d := (basis * Vector3(sin(az) * cos(el), sin(el), cos(az) * cos(el))).normalized()
+		_look(centre + d * 22.0, centre)
+		await _frames(3)
+		var img := root.get_texture().get_image()
+		var n := 0
+		for y in range(0, img.get_height(), 2):
+			for x in range(0, img.get_width(), 2):
+				var c := img.get_pixel(x, y)
+				# Tonemapped: pure magenta comes out near (0.8, 0, 0.8).
+				if c.r > 0.55 and c.b > 0.55 and c.g < 0.25:
+					n += 1
+		total += n
+		print("insides view %d: %d magenta" % [k, n])
+		await _save("insides_%d" % k)
+	print("insides total magenta: %d" % total)
+	for mi: MeshInstance3D in saved:
+		mi.material_override = saved[mi]
+	# X-ray: the chest's and pelvis's armour hidden, their insides as they are.
+	var hidden: Array[Node3D] = []
+	for n in [&"chest", &"pelvis"]:
+		var p := _model.find_part(n)
+		p.mesh.visible = false
+		hidden.append(p.mesh)
+	_look(centre + basis * Vector3(-9.0, -1.0, -12.0), centre - basis.y * 0.5)
+	await _frames(3)
+	await _save("insides_xray")
+	for m in hidden:
+		m.visible = true
+
+
+## Panels torn off the chest's side and back: the frame and ducts inside show.
+func _chest_panel() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var basis := _suit.global_basis
+	var body := _suit.global_transform
+	var at := body * Vector3(1.5, 17.6, 0.4)
+	_model._blow_panel(_model.find_part(&"chest"), at, basis.x, 1.3, 20.0)
+	_model._blow_panel(_model.find_part(&"chest"), body * Vector3(0.6, 17.4, 0.9), basis.z, 1.2, 20.0)
+	for i in 150:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	_look(at + basis * Vector3(9.0, 2.0, 2.0), at)
+	await _frames(3)
+	await _save("chest_panel_opening")
+	_look(at + basis * Vector3(2.5, 6.0, 7.0), at)
+	await _frames(3)
+	await _save("chest_panel_close")
 
 
 ## A thigh cut through the middle (not at the hip): the stub's cut face and the piece.

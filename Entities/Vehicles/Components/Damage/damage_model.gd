@@ -216,6 +216,7 @@ var _opaque: Array[Node] = []
 var _body_shown := false   ## the feed draws the suit's body (it has been damaged)
 var _breaching: Component   ## the reactor going up
 var _power_dirty := false
+var _inner := {}            ## Part → [MeshInstance3D]: its insides (INNER_FRAME)
 var _thrust_built := {}     ## Thruster → its max_thrust as built (power derates it)
 var _sensor: SensorHead
 var _glow_slots := {}   ## CameraMarker → [overlay ShaderMaterial, lens index]
@@ -349,6 +350,7 @@ func _build() -> void:
 			c.ref = eq
 	_build_components()
 	_place_cameras()
+	_build_inner_frame()
 	_build_followers()
 	for node in _vehicle.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
@@ -374,6 +376,101 @@ func _build() -> void:
 	part_damaged.connect(_on_damaged)
 	part_severed.connect(_on_damaged)
 	component_destroyed.connect(func(_k: StringName, _n: StringName) -> void: _on_damaged(&""))
+
+
+## The torso's insides (body frame, m; −z forward): its frame, the reactor housings, hydraulic
+## ducts, fitted inside the armour (damage_snapshot `insides`: painted, seen from eight sides,
+## none may show). Under the armour, seen only where it is opened (a torn panel, a
+## breach), and holed with the armour along a beam. [part, shape, centre, size (box) or
+## (radius, length, axis 0/1/2) (cylinder), material]
+const INNER_FRAME := [
+	[&"chest", "box", Vector3(0.0, 17.3, 0.85), Vector3(0.7, 2.6, 0.3), "frame"],        # spine beam
+	[&"chest", "box", Vector3(0.0, 18.35, 0.8), Vector3(3.2, 0.5, 0.4), "frame"],        # shoulder beam
+	[&"chest", "cyl", Vector3(1.5, 17.4, 0.3), Vector3(0.15, 2.4, 1.0), "duct"],
+	[&"chest", "cyl", Vector3(-1.5, 17.4, 0.3), Vector3(0.15, 2.4, 1.0), "duct"],
+	[&"chest", "cyl", Vector3(1.05, 17.4, 0.95), Vector3(0.1, 2.4, 1.0), "duct"],
+	[&"chest", "cyl", Vector3(-1.05, 17.4, 0.95), Vector3(0.1, 2.4, 1.0), "duct"],
+	[&"chest", "cyl", Vector3(0.9, 15.1, 0.3), Vector3(0.12, 1.8, 1.0), "duct"],
+	[&"chest", "cyl", Vector3(-0.9, 15.1, 0.3), Vector3(0.12, 1.8, 1.0), "duct"],
+	[&"pelvis", "cyl", Vector3(-0.8, 12.6, -0.25), Vector3(0.38, 0.9, 2.0), "reactor"],
+	[&"pelvis", "cyl", Vector3(0.8, 12.6, -0.25), Vector3(0.38, 0.9, 2.0), "reactor"],
+	[&"pelvis", "cyl", Vector3(1.55, 12.4, 0.0), Vector3(0.35, 0.6, 0.0), "frame"],      # hip actuators
+	[&"pelvis", "cyl", Vector3(-1.55, 12.4, 0.0), Vector3(0.35, 0.6, 0.0), "frame"],
+	[&"pelvis", "cyl", Vector3(1.0, 12.35, 0.55), Vector3(0.14, 0.9, 1.0), "duct"],
+	[&"pelvis", "cyl", Vector3(-1.0, 12.35, 0.55), Vector3(0.14, 0.9, 1.0), "duct"],
+]
+
+
+## Builds INNER_FRAME on the torso's bones (BoneAttachment3Ds, so they ride the pose and count
+## as what rides their part).
+func _build_inner_frame() -> void:
+	var mats := {
+		"frame": _inner_material(Color(0.16, 0.165, 0.17), 0.85, 0.45),
+		"duct": _inner_material(Color(0.55, 0.42, 0.12), 0.5, 0.5),
+		"reactor": _inner_material(Color(0.32, 0.33, 0.35), 0.9, 0.3),
+	}
+	var to_body := _body.global_transform.affine_inverse()
+	var attach := {}
+	for spec: Array in INNER_FRAME:
+		var p := find_part(spec[0])
+		if p == null:
+			continue
+		if not attach.has(p):
+			var a := BoneAttachment3D.new()
+			a.name = "InnerFrame_%s" % p.name
+			a.bone_name = _skel.get_bone_name(p.bone)
+			_skel.add_child(a)
+			attach[p] = a
+		var a: BoneAttachment3D = attach[p]
+		var bone_in_body := to_body * _skel.global_transform * _skel.get_bone_global_pose(p.bone)
+		var mi := MeshInstance3D.new()
+		var size: Vector3 = spec[3]
+		if spec[1] == "box":
+			var box := BoxMesh.new()
+			box.size = size
+			mi.mesh = box
+		else:
+			var cyl := CylinderMesh.new()
+			cyl.top_radius = size.x
+			cyl.bottom_radius = size.x
+			cyl.height = size.y
+			cyl.radial_segments = 20
+			cyl.rings = 1
+			mi.mesh = cyl
+			if size.z == 0.0:
+				mi.rotation = Vector3(0.0, 0.0, PI * 0.5)    # along x
+			elif size.z == 2.0:
+				mi.rotation = Vector3(PI * 0.5, 0.0, 0.0)    # along z
+		mi.material_override = null
+		mi.set_surface_override_material(0, mats[spec[4]])
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.layers = Layers.VEHICLE_EXT
+		a.add_child(mi)
+		mi.position = bone_in_body.affine_inverse() * (spec[2] as Vector3)
+		if not _inner.has(p):
+			_inner[p] = [] as Array[MeshInstance3D]
+		(_inner[p] as Array[MeshInstance3D]).append(mi)
+
+
+static func _inner_material(color: Color, metallic: float, roughness: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = color
+	m.metallic = metallic
+	m.roughness = roughness
+	return m
+
+
+## A beam into `p` from `entry` along `dir`: its insides on the line are holed with it (their own
+## frame; through, a solid bore in them).
+func _hole_inner(p: Part, entry: Vector3, dir: Vector3, radius: float, chord: float) -> void:
+	for mi: MeshInstance3D in _inner.get(p, []):
+		if not is_instance_valid(mi) or not mi.is_visible_in_tree():
+			continue
+		var t := _ray_box(mi.global_transform, mi.get_aabb().grow(radius), entry, dir)
+		if t.x < 0.0 or t.x > chord:
+			continue
+		var h := holes.add_hole(mi, null, -1, entry + dir * t.x, dir, radius, maxf(t.y - t.x, 0.1), 1700.0)
+		h.s_drill = h.s_out
 
 
 ## The part's skin as triangles in its bone's space, wound outward (for _skin_shells).
@@ -645,9 +742,10 @@ func _build_components() -> void:
 	# Reactors: two side by side in the abdomen below the cockpit (top of the pelvis), a smaller
 	# one in the backpack.
 	if pelvis != null:
-		var at := pelvis.aabb.get_center() + Vector3(0.0, pelvis.aabb.size.y * 0.22, 0.0)
-		_bone_component(Kind.REACTOR, &"reactor L", pelvis, at + Vector3(-0.8, 0.0, 0.0), 0.6)
-		_bone_component(Kind.REACTOR, &"reactor R", pelvis, at + Vector3(0.8, 0.0, 0.0), 0.6)
+		# Where INNER_FRAME draws their housings (pelvis bone at body y 11.33).
+		var at := Vector3(0.0, 12.6 - 11.33, -0.25)
+		_bone_component(Kind.REACTOR, &"reactor L", pelvis, at + Vector3(-0.8, 0.0, 0.0), 0.45)
+		_bone_component(Kind.REACTOR, &"reactor R", pelvis, at + Vector3(0.8, 0.0, 0.0), 0.45)
 	var backpack := find_part(&"backpack")
 	if backpack != null:
 		_bone_component(Kind.REACTOR, &"backpack reactor", backpack, backpack.aabb.get_center(), 0.45)
@@ -1261,6 +1359,7 @@ func _advance(d: Drill, t: float) -> void:
 		if seg[3] == null and p.mesh != null:
 			var entry: Vector3 = xf * (d.from_body + d.dir_body * float(seg[1]))
 			seg[3] = holes.add_hole(p.mesh, _skel, p.bone, entry, xf.basis * d.dir_body, d.radius * HoleSet.BEAM_GROW, chord)
+			_hole_inner(p, entry, xf.basis * d.dir_body, d.radius * HoleSet.BEAM_GROW, chord)
 			_knock_stubs(p, entry, xf.basis * d.dir_body, chord, d.radius)
 			(seg[3] as HoleSet.Hole).shell = _skin_shells(p, entry, xf.basis * d.dir_body, chord)
 			part_damaged.emit(p.name)
