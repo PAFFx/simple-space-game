@@ -430,7 +430,6 @@ func _shield(charged: bool) -> void:
 func _drone() -> void:
 	var drone := TargetDrone.new()
 	drone.behaviour = TargetDrone.Behaviour.STATIC
-	drone.control_chance = 0.0
 	current_scene.add_child(drone)
 	var at := _suit.global_position + _suit.global_basis * Vector3(60, 25, -160)
 	drone.global_position = at
@@ -438,7 +437,7 @@ func _drone() -> void:
 	var dir := (_suit.global_basis * Vector3(0.4, 0, -1)).normalized()
 	var aim := at + _suit.global_basis * Vector3(0, 2.5, 0)
 	_look(at + _suit.global_basis * Vector3(-12, 7, 26), at)
-	await _fire(aim - dir * 300.0, dir, "drone", [0.02, 0.08, 0.3, 1.0])
+	await _fire(aim - dir * 300.0, dir, "drone", [0.02, 0.08, 0.3, 1.0, 4.0])
 	drone.queue_free()
 
 

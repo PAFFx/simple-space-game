@@ -141,7 +141,7 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
 
 ## J. Drones (target drones, hunters)
 
-- [ ] **A beam through a drone barely hurts it.** Most rifle hits on hunters (and likely the
+- [x] **A beam through a drone barely hurts it.** Most rifle hits on hunters (and likely the
   other drones) leave them flying and shooting. *Cause* (`target_drone.gd beam_contact`): a beam
   that goes through without touching the core or the gun only takes ~40% of its section
   (`_left`) and loses control with `control_chance`; nothing else happens. A rifle beam is far
@@ -149,6 +149,11 @@ Suggested order: **A** (nothing may be left floating), **B** (the holes themselv
   it goes dead, drifts and tumbles, sparking and smoking, no thrust, no gun); **only a hit through
   the core explodes it**. A grazing hit that doesn't go through still costs it systems by where
   it hit (gun, sensors, thrusters).
+
+  *Done (2026-11-27):* through → disabled (tumbles, smoke leak, arcing for 12 s); stopped
+  inside ≥ 1 m deep → disabled; shallower → thrusters wrecked (jink and dodge at half);
+  losing its section no longer explodes it; the core still does. Its smoke barely shows
+  against space (E).
 
 ## I. Notes
 
