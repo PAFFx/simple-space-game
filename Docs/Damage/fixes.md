@@ -207,6 +207,13 @@ Still to do: real inner-frame meshes under the armour.
   stuck to the suit's attitude.
 - [ ] **Holes much bigger.** Beam holes through the cockpit are far too small, and holes
   everywhere should be bigger (the beam's size stays).
+  **What this means (user, 2026-11-26):** the cockpit's holes look scripted: what the pilot
+  sees from inside doesn't match what the beam did to the suit outside. The inside must be the
+  same damage seen from the other side: the same beam line, the same width and melt as the
+  chest's hole, its glow and cooling in step, and where the beam burned away part of the
+  cockpit (the shell, a screen block, the seat rail, the hatch), that part is gone or melted in
+  the cockpit view too, not just a round hole punched in the screen. One damage record drives
+  both views.
 - [ ] **Every pierced screen breaks.** One shot kills several screens but only one shows cracks;
   every composite screen a beam passes through cracks (each crossing is a break).
 - [ ] **Make a cockpit hit terrifying** even when the pilot lives. Sequence: the beam right in
