@@ -28,8 +28,9 @@ extends MsEquipment
 ## The detector sees beams arriving within this angle of the face's normal, deg.
 @export var detector_cone_deg: float = 80.0
 @export_group("Plate")
-## Kg per m² a beam has to remove to get through (plate × anti-beam coating).
-@export var areal_density: float = 450.0
+## Kg per m² a beam has to remove to get through (plate × anti-beam coating). A rifle shot
+## melts ~800 kg in all: 250 takes ~35% of it head-on, ~70% at a steep slant.
+@export var areal_density: float = 250.0
 @export var plate_width: float = 4.0
 
 var charges := 3
@@ -98,7 +99,8 @@ func beam_contact(contact: ProjectileManager.BeamContact) -> void:
 		d = [0.0, 0.0, null, mesh, contact.point, contact.point, false, _clock, caught]
 		if not caught:
 			var area := PI * contact.radius * contact.radius
-			d[0] = areal_density * area / maxf(absf(contact.normal.dot(contact.direction)), 0.3)
+			# A slanted hit crosses more plate, at most twice it (a glancing one bites in steeply).
+			d[0] = areal_density * area / maxf(absf(contact.normal.dot(contact.direction)), 0.5)
 			d[5] = _exit_point(contact)
 		elif not is_field_up():
 			charges -= 1
