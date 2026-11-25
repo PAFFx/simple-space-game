@@ -96,9 +96,6 @@ const DIAMOND_SPACING := 1.7
 const FX_CORE_LENGTH := 0.6
 
 var throttle: float = 0.0                         ## Actual spooled throttle [0, 1]
-## Damage (DamageModel): a valve stuck open fires at this throttle whatever it is told
-## (with `enabled` off the allocator no longer counts on it); < 0 = working valve.
-var stuck_open: float = -1.0
 ## Throat factor the pintle may open to now (FlightComputer, burst): the thruster can give
 ## this many times its rating, and throttle is a share of that. 1 = rated throat only.
 var throat_factor: float = 1.0
@@ -168,7 +165,7 @@ func _setup_fx() -> void:
 
 ## Current thrust in Newtons.
 func get_thrust() -> float:
-	return throttle * max_thrust * throat_factor if enabled or stuck_open >= 0.0 else 0.0
+	return throttle * max_thrust * throat_factor if enabled else 0.0
 
 
 ## Actual nozzle deflection, each axis in [-1, 1] of the gimbal limit.
@@ -324,7 +321,7 @@ func set_throttle_now(wanted: float, delta: float) -> void:
 
 ## Advances actuator dynamics and applies the resulting force to `body`.
 func step(delta: float, body: RigidBody3D, has_propellant: bool) -> void:
-	var target := (stuck_open if stuck_open >= 0.0 else _cmd_throttle) if has_propellant else 0.0
+	var target := _cmd_throttle if has_propellant else 0.0
 	var tau := spool_up_time if target > throttle else spool_down_time
 	throttle += (target - throttle) * (1.0 - exp(-delta / maxf(tau, 0.001)))
 	if target < min_throttle and throttle < min_throttle:

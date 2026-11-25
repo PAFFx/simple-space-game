@@ -1157,29 +1157,24 @@ func _kill_component(c: Component, dead := false) -> void:
 
 
 ## Equipment that went with a severed part: gone, but its stores didn't go off.
-## A thruster hit: dead, weaker, its nozzle stuck at rest, or its valve stuck open (it fires
-## on its own; the flight computer has to fight it). `dead`: it went with a severed part.
+## A thruster hit: dead, weaker, or its nozzle stuck at rest. `dead`: it went with a severed
+## part.
 func _hit_thruster(c: Component, dead: bool) -> void:
 	var t := c.ref as Thruster
 	if not _thruster_saved.has(t):
 		_thruster_saved[t] = [t.max_thrust, t.gimbal_limit_deg, t.gimbal_pitch_limit_deg, t.gimbal_yaw_limit_deg]
 	var roll := 0.0 if dead else _rng.randf()
 	var what := "dead"
-	if roll < 0.45:
+	if roll < 0.5:
 		t.enabled = false
-		t.stuck_open = -1.0
-	elif roll < 0.65:
+	elif roll < 0.75:
 		t.max_thrust *= _rng.randf_range(0.35, 0.7)
 		what = "derated to %d%%" % roundi(t.max_thrust / float(_thruster_saved[t][0]) * 100.0)
-	elif roll < 0.85:
+	else:
 		t.gimbal_limit_deg = 0.0
 		t.gimbal_pitch_limit_deg = 0.0
 		t.gimbal_yaw_limit_deg = 0.0
 		what = "nozzle stuck"
-	else:
-		t.enabled = false
-		t.stuck_open = _rng.randf_range(0.15, 0.45)
-		what = "valve stuck open at %d%%" % roundi(t.stuck_open * 100.0)
 	_event("%s %s" % [c.name, what])
 	component_destroyed.emit(&"thruster", StringName("%s %s" % [c.name, what]))
 
@@ -1591,8 +1586,8 @@ func _kill_pilot() -> void:
 		return
 	pilot_dead = true
 	destroyed = true
-	# The flight computer outlives the pilot: it stops taking input and holds the suit (a
-	# valve stuck open by the same hit would otherwise spin it up for as long as it burns).
+	# The flight computer outlives the pilot: it stops taking input and holds the suit (a tank
+	# venting or a thruster lost to the same hit would otherwise leave it tumbling).
 	var fc := _flight()
 	if fc != null:
 		fc.pilot_lost = true
@@ -2280,7 +2275,6 @@ func repair() -> void:
 		t.gimbal_limit_deg = sv[1]
 		t.gimbal_pitch_limit_deg = sv[2]
 		t.gimbal_yaw_limit_deg = sv[3]
-		t.stuck_open = -1.0
 	_thruster_saved.clear()
 	_leaks.clear()
 	var sensors := _vehicle.find_component(SensorSuite) as SensorSuite

@@ -103,7 +103,7 @@ Authored per vehicle, generated where possible:
 | Joint actuator | one per AMBAC joint / animated DOF | ok, weak (torque × k), jammed (locked where it is), limp (no drive) |
 | Power line | reactor → torso bus → limb buses | ok, cut (everything downstream unpowered) |
 | Propellant line / tank cell | tanks from the mass model, split into cells; feed lines to thruster groups | ok, leaking (venting force), empty, cut |
-| Thruster | nozzle, gimbal actuator, valve per `Thruster` | ok, derated (max thrust × k), gimbal stuck (at its current angle), valve stuck open (uncommanded thrust), dead |
+| Thruster | nozzle, gimbal actuator, valve per `Thruster` | ok, derated (max thrust × k), gimbal stuck (at its current angle), dead |
 | Camera / sensor | eyes, forehead telescope, body cameras, rangefinder, equipment cameras | ok, degraded (noise ×k), dead |
 | Weapon internals | rifle barrel / condenser, e-pack, vulcan magazine, missile cells, I-field charges | ok, dead, breached (secondary explosion) |
 | Reactor and power plant | the core (waist, below the cockpit); lines, conditioning, coolant around it | core: ok or **breached** (any hit, `physics.md` §7); plant: ok, reduced (power ×k), lost (batteries only) |
@@ -310,10 +310,9 @@ Differences from the design above:
   cockpit mesh on its line (through-holes in their own frame, so they ride the gimbal); with the
   chest holed by the drill the pilot sees space through it (`damage_snapshot cockpit`: a beam
   1.2 m in front of the pilot, the station seen through the hole, the pilot alive).
-- **Thruster hits**: 45% dead, 20% derated to 35–70%, 20% nozzle stuck at rest, 15% valve stuck
-  open at 15–45% (it fires on its own, burning propellant; `enabled` off so the allocator works
-  around it). A main stuck open at 40%: FCS on, the suit holds its attitude (0.3°) and drifts
-  2.5 m/s in 2 s; FCS off it spins up to 112°/s. Parts torn off take their thrusters dead.
+- **Thruster hits**: 50% dead, 25% derated to 35–70%, 25% nozzle stuck at rest. Parts torn off
+  take their thrusters dead. (A valve stuck open, firing on its own, was tried and dropped
+  2026-11-27: it spun the suit up and burned its propellant.)
 - **Venting**: a burst cell empties through the hole at 2·Cd·P·A ≈ 0.41 MN for cell mass ×
   25 m/s ÷ that (~0.07 s), pushing from where the line meets the hull, then the cut feed line
   leaks 4 kN for 15 s; both show as icy jets. A backpack cell: 0.8 m/s and 14°/s (FCS off).
@@ -331,8 +330,8 @@ Differences from the design above:
   fair-fight. Drones with hit points ≥ 1e8 can't be destroyed (probes already used 1e9+).
 - **Damage page** (`CockpitDisplays/damage_page.gd`): the left display flips to it for 10 s after
   each new damage, P holds it. The suit from the front, parts filled green / amber / red by the
-  section left (gone: dashed), thrusters as dots (red dead, amber derated or stuck nozzle,
-  flashing red valve stuck open), cameras as squares; reactor, pilot, I-field charges, counts,
+  section left (gone: dashed), thrusters as dots (red dead, amber derated or stuck nozzle),
+  cameras as squares; reactor, pilot, I-field charges, counts,
   the last 7 events.
 - **Camera lights** (2026-11-27): every camera sits on a `CameraMarker` in the suit scene
   (`Cameras/Attach_<bone>/<name>`): its position, its facing (−Z, turning with the bone) and its

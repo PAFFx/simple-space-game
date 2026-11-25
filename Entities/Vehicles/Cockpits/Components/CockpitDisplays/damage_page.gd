@@ -4,7 +4,7 @@ extends MfdPage
 ## Damage control (DamageModel), as the suit's own diagnostics report it: the suit seen from
 ## the front, each part filled by how much of its cross-section is left (green, amber, red;
 ## a part gone is a dashed outline), its thrusters as dots (red dead, amber derated or nozzle
-## stuck, flashing red valve stuck open) and its cameras as squares (green live, red out).
+## stuck) and its cameras as squares (green live, red out).
 ## On the right: reactor, pilot, I-field charges, thrusters and cameras out, the last events.
 ## CockpitDisplays shows it on the left display for a while after each new damage, and on P.
 
@@ -78,9 +78,7 @@ func draw_page() -> void:
 			var at: Vector2 = to_page.call(inv * t.global_position)
 			var col := GOOD
 			if not comp.alive:
-				if t.stuck_open >= 0.0:
-					col = WARNING if fmod(_clock, 0.5) < 0.25 else BACKGROUND
-				elif t.enabled:
+				if t.enabled:
 					col = CAUTION
 				else:
 					col = WARNING

@@ -86,29 +86,8 @@ func _run() -> void:
 	quit()
 
 
-## A main's valve stuck open (FCS on: the rest fight it; off: it spins the suit), and a
-## tank cell venting (the push it gives).
+## A tank cell venting (the push it gives).
 func _faults() -> void:
-	for fcs_on in [true, false]:
-		_model.repair()
-		await _ticks(30)
-		_suit.linear_velocity = Vector3.ZERO
-		_suit.angular_velocity = Vector3.ZERO
-		_fc.fcs_enabled = fcs_on
-		var v0 := _suit.linear_velocity
-		var start := _suit.global_basis
-		var main: Thruster = _suit.get_node("Thrusters/Attach_backpack/MainRU")
-		main.enabled = false
-		main.stuck_open = 0.4
-		var peak := 0.0
-		for i in 120:
-			await physics_frame
-			peak = maxf(peak, rad_to_deg(_suit.angular_velocity.length()))
-		var turned := rad_to_deg(start.get_rotation_quaternion().angle_to(_suit.global_basis.get_rotation_quaternion()))
-		print("faults: main valve stuck open 40%%, FCS %s: 2 s later Δv %.1f m/s, turned %.1f° (peak %.1f°/s)" % [
-				"on" if fcs_on else "off", (_suit.linear_velocity - v0).length(), turned, peak])
-		main.stuck_open = -1.0
-		main.enabled = true
 	_fc.fcs_enabled = true
 	_model.repair()
 	await _ticks(30)

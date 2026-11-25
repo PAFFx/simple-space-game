@@ -148,7 +148,7 @@ Still to do: real inner-frame meshes under the armour.
   smoke in the cabin. Then through the hole you see the inside of the suit (needs B: the body
   isn't hollow).
 
-- [ ] **After the pilot dies the suit spins up, faster and faster.** *Cause* (measured): the
+- [x] **After the pilot dies the suit spins up, faster and faster.** *Cause* (measured): the
   pilot's death switches the flight computer's stabilisation off (`_kill_pilot`:
   `fcs_enabled = false`), but the beam that killed the pilot usually also left a thruster valve
   stuck open (or a tank venting). Nothing counters it: one main stuck at 18% spins the suit up
@@ -157,6 +157,9 @@ Still to do: real inner-frame meshes under the armour.
   computer is automatic and outlives the pilot: on the pilot's death it switches to a hold
   mode (null rotation and drift, no new commands) and keeps running until its power, its
   thrusters or its propellant are gone; it only shuts down when the suit has no reactor left.
+  *Done (2026-11-27):* the flight computer keeps holding the suit after the pilot dies
+  (`FlightComputer.pilot_lost`: no input, stabilisation on), and the stuck-open valve is gone
+  from the thruster damage altogether.
 
 ## H. Panoramic screen feeds
 

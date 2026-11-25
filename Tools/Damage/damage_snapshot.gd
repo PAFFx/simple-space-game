@@ -282,7 +282,7 @@ func _lens() -> void:
 	_save("lens_head_shot_out")
 
 
-## A thigh cell venting (the push, the icy jet) and a calf nozzle's valve stuck open.
+## A thigh cell venting (the push, the icy jet).
 func _vent() -> void:
 	_model.repair()
 	await _frames(20)
@@ -294,17 +294,12 @@ func _vent() -> void:
 			break
 	var at := _model.component_position(cell)
 	_look(at + basis * Vector3(16.0, 3.0, -10.0), at)
-	var calf: Thruster = _suit.get_node("Thrusters/Attach_shin_R/CalfR")
-	calf.enabled = false
-	calf.stuck_open = 0.4
 	_model._vent(cell, at, basis * Vector3(1.0, 0.0, -0.3))
 	for t in [0.05, 0.3, 1.0, 4.0]:
 		var target := roundi(t * 60.0)
 		for i in target - (0 if t == 0.05 else roundi([0.05, 0.3, 1.0, 4.0][[0.05, 0.3, 1.0, 4.0].find(t) - 1] * 60.0)):
 			await physics_frame
 		_save("vent_%04dms" % roundi(t * 1000.0))
-	calf.stuck_open = -1.0
-	calf.enabled = true
 
 
 ## A tank cell bursting in the backpack (steam): armour plates torn off and thrown out.
