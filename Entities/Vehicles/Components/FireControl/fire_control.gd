@@ -542,7 +542,7 @@ func _physics_process(delta: float) -> void:
 			_show_body_on_screen()
 	for weapon: MsWeapon in weapons.values():
 		weapon.held = weapon.equipment == null or weapon.equipment.is_drawn()
-		if weapon.broken:
+		if weapon.broken or weapon.limp:
 			weapon.wanted = false
 			weapon.triggered = false
 		elif weapon == guard:

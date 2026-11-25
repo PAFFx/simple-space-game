@@ -36,6 +36,9 @@ signal active_changed(is_active: bool)
 var active: bool = false
 ## False while stowed off the suit (MsLoadout.set_equipped): hidden, massless, unusable.
 var equipped: bool = true
+## The limb it is on can't be controlled (DamageModel: cut off, or its joint shot): it can't
+## be used, raised or drawn.
+var disabled := false
 ## Draw progress (MsLoadout): 0 = stowed, 1 = the hand takes it, 2 = held.
 var draw_progress := 0.0
 ## Wanted in the hand (FireControl sets it); MsLoadout draws or stows it to match.
@@ -51,7 +54,7 @@ func _ready() -> void:
 
 
 func set_active(value: bool) -> void:
-	value = value and equipped
+	value = value and equipped and not disabled
 	if value == active:
 		return
 	active = value

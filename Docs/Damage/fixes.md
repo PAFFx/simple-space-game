@@ -278,3 +278,29 @@ Still to do: real inner-frame meshes under the armour.
 - Probes: `penetration_probe.gd` keeps passing; each visual fix gets a `damage_snapshot.gd` case
   (render and look at it before calling it done).
 - Cost: profile with `Tools/Profiling/combat_bench.gd` after A (debris collision) and E (smoke).
+
+## K. Automatic checks (branch feat/damage-v2, 2026-11-27)
+
+`Tools/Damage/damage_fuzz.gd` (headless) lands random damage (real rifle beams at random parts
+from random directions, severs, joint hits) round after round and checks rules after each:
+
+- **own**: nothing shows on a part that is gone or past a cut. Ownership is generic now: every
+  bone attachment and non-part skinned mesh belongs to the part up its bone chain
+  (`DamageModel._followers`), copied onto the flying piece and hidden on the suit; smoke and
+  sparks anchored on a lost part go with it.
+- **thrust**: a hit thruster is out (no derated or stuck-nozzle outcomes any more, user's call):
+  `Thruster.shut_down()` cuts thrust and plume at once; a part under 30% of its section loses
+  its thrusters.
+- **control**: a severed part, or one with a joint shot anywhere between it and the torso, is
+  limp (`DamageModel.limp`): its AMBAC joints out, its weapons `limp` (can't aim or fire), its
+  equipment `disabled` (can't be used, raised or drawn).
+- **equip**, **sane** (no NaN, no runaway spin) and **frame** (slowest frames, attributed to
+  the damage entry points that ran in them).
+
+Frame cost found and fixed this way: part meshes are rigid (one bone each), so skinning is one
+transform and baked debris shares the suit's mesh; mesh arrays read once (a read waits for the
+render thread); torn panels use skins split ahead of time (a little each frame after load);
+plates built from arrays with box colliders; component lookups cached; particle emitters and
+hole lights pooled (creating them flooded the render thread: 40–50 ms stalls); effects and the
+hole material warmed up after load. Fuzz, 12 rounds: worst damage frame 54 → ~18 ms
+(reactor breach), frames over 12 ms 94 → ~25, p99 19 → 12 ms (headless, editor build).

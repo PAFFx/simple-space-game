@@ -93,11 +93,14 @@ func _init() -> void:
 
 
 func _process(delta: float) -> void:
+	_now += delta
+	if not _warm.is_empty():
+		_warm.pop_front().call()
 	for i in range(_lights.size() - 1, -1, -1):
 		var h := _lights[i]
 		h.age += delta
 		if h.age >= h.life or not is_instance_valid(h.anchor):
-			h.light.queue_free()
+			_free_light(h.light)
 			_lights.remove_at(i)
 			continue
 		var k := 1.0 - h.age / h.life
@@ -134,6 +137,46 @@ func _process(delta: float) -> void:
 
 ## A beam drilling in at `at`, going `direction`: white contact spray across the surface,
 ## a vapour jet blowing back along the beam, a light on the hole.
+var _warm: Array[Callable] = []
+var _warm_anchor: Node3D
+
+
+## Plays every effect once, far off where nobody sees it, one per frame: the first of each kind
+## builds its particle materials and shaders, 40–50 ms, which would otherwise land on the
+## first hit that uses it.
+func prewarm() -> void:
+	if _warm_anchor != null:
+		return
+	_warm_anchor = Node3D.new()
+	_warm_anchor.name = "Prewarm"
+	add_child(_warm_anchor)
+	var at := Vector3(0.0, -1.0e6, 0.0)
+	_warm_anchor.global_position = at
+	var v := Vector3.ZERO
+	for i in MAX_LIGHTS:
+		_free_light(_take_light())
+	_warm = [
+		func() -> void: drill_in(at, Vector3.FORWARD, v, 0.6, _warm_anchor),
+		func() -> void: blow_out(at, Vector3.FORWARD, v, 0.6, _warm_anchor),
+		func() -> void: burst(at, v, 1.0, &"steam"),
+		func() -> void: burst(at, v, 1.0, &"minovsky"),
+		func() -> void: burst(at, v, 1.0, &"stores"),
+		func() -> void: burst(at, v, 1.0, &"electronics"),
+		func() -> void: i_field(at, Vector3.UP, v, Color(1.0, 0.4, 0.7)),
+		func() -> void: vent(_warm_anchor, Vector3.ZERO, Vector3.FORWARD, 0.2, 1.0),
+		func() -> void: smoke_leak(_warm_anchor, Vector3.ZERO, Vector3.FORWARD, 0.2),
+		func() -> void: creak(at, v, 1.0),
+		func() -> void: sever(at, v),
+		func() -> void: stump(_warm_anchor, at, Vector3.UP, 0.8, v),
+		func() -> void: fragment_strike(at, Vector3.FORWARD, v, 0.0),
+		func() -> void: reactor_flash_small(at, v, 5.0),
+		func() -> void:
+			var tw := create_tween()
+			tw.tween_interval(4.0)
+			tw.tween_callback(_warm_anchor.queue_free),
+	]
+
+
 func drill_in(at: Vector3, direction: Vector3, velocity: Vector3, radius: float, anchor: Node3D) -> void:
 	var back := -direction.normalized()
 	_spray(at, back, velocity, 45, 70.0, 60.0, 0.15, 0.55, radius * 0.05, 180.0)
@@ -384,115 +427,167 @@ func reactor_flash_small(at: Vector3, velocity: Vector3, size: float) -> void:
 
 # --- Pieces ---
 
-func _emitter(at: Vector3, amount: int, lifetime: float, material: Material, mesh: Mesh) -> GPUParticles3D:
+## Pooled one-shot emitters, by kind and particle-count bucket: a hit used to make new
+## particle nodes, process materials, gradient textures and quads for every puff, a flood of
+## render-thread work that stalled frames for tens of ms. Each pooled emitter owns its
+## material, ramp and curve textures and is reconfigured in place.
+class Pooled:
+	var node: GPUParticles3D
+	var mat: ParticleProcessMaterial
+	var ramp: Gradient
+	var curve: Curve
+	var busy_until := 0.0
+	var tween: Tween
+
+const BUCKETS := [16, 32, 64, 128, 256, 512]
+var _pool := {}   ## [kind, bucket] → Array[Pooled]
+var _now := 0.0
+
+
+func _emitter(kind: StringName, at: Vector3, amount: int, lifetime: float) -> Pooled:
+	var bucket: int = BUCKETS[-1]
+	for b in BUCKETS:
+		if amount <= b:
+			bucket = b
+			break
+	var key := [kind, bucket]
+	var list: Array = _pool.get(key, [])
+	var e: Pooled = null
+	for c: Pooled in list:
+		if c.busy_until <= _now:
+			e = c
+			break
+	if e == null:
+		e = _new_emitter(kind, bucket)
+		list.append(e)
+		_pool[key] = list
+	var p := e.node
+	if e.tween != null and e.tween.is_valid():
+		e.tween.kill()
+	e.tween = null
+	p.local_coords = false
+	p.amount_ratio = clampf(float(amount) / bucket, 0.0, 1.0)
+	p.lifetime = lifetime
+	p.global_position = at
+	p.visible = true
+	p.restart()
+	p.emitting = true
+	e.busy_until = _now + lifetime + 0.5
+	return e
+
+
+func _new_emitter(kind: StringName, bucket: int) -> Pooled:
+	var e := Pooled.new()
 	var p := GPUParticles3D.new()
 	p.one_shot = true
 	p.explosiveness = 0.92
-	p.amount = amount
-	p.lifetime = lifetime
-	p.local_coords = false
-	p.draw_pass_1 = mesh
-	p.material_override = material
+	p.amount = bucket
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	p.visibility_aabb = AABB(Vector3(-300, -300, -300), Vector3(600, 600, 600))
+	p.emitting = false
+	var quad := QuadMesh.new()
+	var m := ParticleProcessMaterial.new()
+	m.gravity = Vector3.ZERO
+	e.ramp = Gradient.new()
+	var gt := GradientTexture1D.new()
+	gt.gradient = e.ramp
+	m.color_ramp = gt
+	match kind:
+		&"spray":
+			quad.size = Vector2(1.0, 12.0)
+			p.material_override = _spark_material
+			p.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY
+			m.inherit_velocity_ratio = 0.0
+			m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+			var cool := _cooling_ramp().gradient
+			e.ramp.offsets = cool.offsets
+			e.ramp.colors = cool.colors
+		&"vapour":
+			quad.size = Vector2.ONE
+			p.material_override = _vapour_material
+			e.curve = Curve.new()
+			var ct := CurveTexture.new()
+			ct.curve = e.curve
+			m.scale_curve = ct
+			m.angle_min = 0.0
+			m.angle_max = 360.0
+		_:
+			quad.size = Vector2.ONE * 0.05
+			p.material_override = _glint_material
+			m.direction = Vector3.UP
+			m.spread = 180.0
+			m.scale_min = 0.5
+			m.scale_max = 1.6
+	p.draw_pass_1 = quad
+	p.process_material = m
+	e.node = p
+	e.mat = m
 	add_child(p)
-	p.global_position = at
-	p.emitting = true
-	get_tree().create_timer(lifetime + 0.5).timeout.connect(p.queue_free)
-	return p
+	return e
 
 
 ## Molten droplets: streaks that cool white → orange → red and go dark.
 func _spray(at: Vector3, dir: Vector3, velocity: Vector3, amount: int, spread: float, speed: float,
 		life_min: float, life_max: float, size: float, speed_max: float) -> void:
-	var quad := QuadMesh.new()
-	quad.size = Vector2(maxf(size, 0.02), maxf(size, 0.02) * 12.0)
-	var p := _emitter(at, amount, life_max, _spark_material, quad)
-	p.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY
-	var m := ParticleProcessMaterial.new()
+	var e := _emitter(&"spray", at, amount, life_max)
+	var m := e.mat
+	var w := maxf(size, 0.02)
 	m.direction = dir if dir.length_squared() > 0.0 else Vector3.UP
 	m.spread = spread
 	m.initial_velocity_min = speed
 	m.initial_velocity_max = speed_max
-	m.gravity = Vector3.ZERO
-	m.inherit_velocity_ratio = 0.0
 	m.lifetime_randomness = 1.0 - life_min / life_max
-	m.scale_min = 0.3
-	m.scale_max = 1.0
-	m.color_ramp = _cooling_ramp()
-	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	m.scale_min = 0.3 * w
+	m.scale_max = 1.0 * w
 	m.emission_sphere_radius = maxf(size * 2.0, 0.1)
-	p.process_material = m
-	_carry(p, velocity)
+	_carry(e, velocity)
 
 
 ## Vapour or steam: soft puffs that swell and thin out fast (vacuum).
 func _vapour(at: Vector3, dir: Vector3, velocity: Vector3, amount: int, spread: float,
 		size_from: float, size_to: float, life: float, color: Color, speed: float) -> void:
-	var quad := QuadMesh.new()
-	quad.size = Vector2.ONE * size_from
-	var p := _emitter(at, amount, life, _vapour_material, quad)
-	var m := ParticleProcessMaterial.new()
+	var e := _emitter(&"vapour", at, amount, life)
+	var m := e.mat
 	m.direction = dir if dir.length_squared() > 0.0 else Vector3.UP
 	m.spread = spread
 	m.initial_velocity_min = speed * 0.3
 	m.initial_velocity_max = speed
-	m.gravity = Vector3.ZERO
 	m.damping_min = speed * 0.4
 	m.damping_max = speed * 0.9
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 1.0))
-	curve.add_point(Vector2(1.0, size_to / maxf(size_from, 0.01)))
-	curve.max_value = maxf(size_to / maxf(size_from, 0.01), 1.0)
-	var ct := CurveTexture.new()
-	ct.curve = curve
-	m.scale_curve = ct
-	var g := Gradient.new()
-	g.set_color(0, color)
-	g.set_color(1, Color(color.r, color.g, color.b, 0.0))
-	g.add_point(0.25, Color(color.r, color.g, color.b, color.a * 0.6))
-	var gt := GradientTexture1D.new()
-	gt.gradient = g
-	m.color_ramp = gt
-	m.angle_min = 0.0
-	m.angle_max = 360.0
-	p.process_material = m
-	_carry(p, velocity)
+	m.scale_min = size_from
+	m.scale_max = size_from
+	var grow := size_to / maxf(size_from, 0.01)
+	e.curve.clear_points()
+	e.curve.max_value = maxf(grow, 1.0)
+	e.curve.add_point(Vector2(0.0, 1.0))
+	e.curve.add_point(Vector2(1.0, grow))
+	e.ramp.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	e.ramp.colors = PackedColorArray([color, Color(color.r, color.g, color.b, color.a * 0.6), Color(color.r, color.g, color.b, 0.0)])
+	_carry(e, velocity)
 
 
 ## Hydrogen / water ice crystals glittering in the light.
 func _glints(at: Vector3, velocity: Vector3, amount: int, reach: float, life: float, tint := Color(1, 1, 1)) -> void:
-	var quad := QuadMesh.new()
-	quad.size = Vector2.ONE * 0.05
-	var p := _emitter(at, amount, life, _glint_material, quad)
-	var m := ParticleProcessMaterial.new()
-	m.direction = Vector3.UP
-	m.spread = 180.0
+	var e := _emitter(&"glints", at, amount, life)
+	var m := e.mat
 	m.initial_velocity_min = reach * 0.15
 	m.initial_velocity_max = reach * 0.6
-	m.gravity = Vector3.ZERO
 	m.damping_min = reach * 0.1
 	m.damping_max = reach * 0.3
-	m.scale_min = 0.5
-	m.scale_max = 1.6
-	var g := Gradient.new()
-	g.set_color(0, Color(tint.r, tint.g, tint.b, 1))
-	g.set_color(1, Color(tint.r * 0.8, tint.g * 0.9, tint.b, 0.0))
-	var gt := GradientTexture1D.new()
-	gt.gradient = g
-	m.color_ramp = gt
-	p.process_material = m
-	_carry(p, velocity)
+	e.ramp.offsets = PackedFloat32Array([0.0, 1.0])
+	e.ramp.colors = PackedColorArray([Color(tint.r, tint.g, tint.b, 1), Color(tint.r * 0.8, tint.g * 0.9, tint.b, 0.0)])
+	_carry(e, velocity)
 
 
 ## Particles keep the velocity of whatever threw them: they ride an emitter that flies on at
 ## that velocity (local coordinates), so a suit that boosts away leaves them behind.
-func _carry(p: GPUParticles3D, velocity: Vector3) -> void:
+func _carry(e: Pooled, velocity: Vector3) -> void:
 	if velocity.length_squared() < 0.01:
 		return
+	var p := e.node
 	p.local_coords = true
-	var tw := p.create_tween()
-	tw.tween_property(p, "global_position", p.global_position + velocity * (p.lifetime + 0.5), p.lifetime + 0.5)
+	e.tween = p.create_tween()
+	e.tween.tween_property(p, "global_position", p.global_position + velocity * (p.lifetime + 0.5), p.lifetime + 0.5)
 
 
 static func _cooling_ramp() -> GradientTexture1D:
@@ -533,21 +628,42 @@ static func _puff_texture() -> Texture2D:
 
 func _add_light(anchor: Node3D, at: Vector3, light_range: float, energy: float, life: float) -> void:
 	if _lights.size() >= MAX_LIGHTS:
-		_lights[0].light.queue_free()
+		_free_light(_lights[0].light)
 		_lights.remove_at(0)
 	var h := HoleLight.new()
-	h.light = OmniLight3D.new()
+	h.light = _take_light()
 	h.light.omni_range = light_range
 	h.light.light_energy = energy
-	h.light.shadow_enabled = false
-	h.light.omni_attenuation = 1.5
-	add_child(h.light)
 	h.anchor = anchor
 	h.local = anchor.global_transform.affine_inverse() * at
 	h.energy = energy
 	h.life = life
 	h.light.global_position = at
 	_lights.append(h)
+
+
+var _spare_lights: Array[OmniLight3D] = []
+
+
+## Hole lights are kept and reused: making and freeing lights on every hit stalled the
+## render thread for ~35 ms at a time.
+func _take_light() -> OmniLight3D:
+	var l: OmniLight3D
+	if not _spare_lights.is_empty():
+		l = _spare_lights.pop_back()
+	else:
+		l = OmniLight3D.new()
+		l.shadow_enabled = false
+		l.omni_attenuation = 1.5
+		add_child(l)
+	l.visible = true
+	return l
+
+
+func _free_light(l: OmniLight3D) -> void:
+	l.visible = false
+	l.light_energy = 0.0
+	_spare_lights.append(l)
 
 
 func _arc(at: Vector3, velocity: Vector3, size: float, life: float) -> void:

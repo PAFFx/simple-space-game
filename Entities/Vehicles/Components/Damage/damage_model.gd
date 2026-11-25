@@ -41,6 +41,8 @@ const BREAK_LEFT := 0.35
 ## A limb with less than this left snaps off by itself (after a moment); between it and
 ## STRESS_LEFT it holds until the suit's acceleration at the wound is too much for what is left.
 const SNAP_LEFT := 0.5
+## Below this share of its section left a part's thrusters are dead (lines and mounts gone).
+const THRUSTER_LEFT := 0.3
 ## Parts with a real joint inside (frame, actuators, cables): torn off they leave a frame stub.
 ## The rest (skirts, pods, nozzles, guards, shoulder armour) are bolted on: only a socket crater.
 const JOINTED := ["head", "upper_arm", "forearm", "hand", "thigh", "shin", "foot"]
@@ -93,6 +95,14 @@ class Part:
 	var box := AABB()
 	var boxes: Array = []        ## [MeshInstance3D, AABB in its own space]
 	var skin_faces := PackedVector3Array()   ## its mesh's triangles in bone space, outward wound
+	## Its skin split into small triangles (edges ≤ 0.45 m), bone space, for torn panels; built a
+	## little each frame after load (`small_done`).
+	var small_pos := PackedVector3Array()    ## 3 per triangle
+	var small_nrm := PackedVector3Array()    ## 3 per triangle
+	var small_uv := PackedVector2Array()     ## 3 per triangle
+	var small_mat: Array = []                ## 1 per triangle
+	var small_done := false
+	var small_next := 0                      ## next skin triangle to split
 
 class Component:
 	var kind := 0
@@ -167,6 +177,11 @@ var _rng := RandomNumberGenerator.new()
 var _hull_layers: Array = []
 var _stubs: Array[Node] = []
 var _snapping := {}          ## Part → true: about to snap off
+var _joint_out := {}         ## bone name → true: its joint (to its parent) was shot
+var limp := {}               ## Part → true: can't be controlled (severed, or a joint up its chain out)
+## Time spent per damage function (µs): [calls, total, worst]. Read by the fuzz test.
+static var timings := {}
+var _followers := {}         ## Part → [Node3D]: what rides its bone (attachments, props)
 var _dangles: Array = []     ## [joint, piece body, part it hangs from, suit-local anchor, piece-local anchor, cables mesh, smoothed accel, last velocity]
 var _last_v := Vector3.INF
 var _last_w := Vector3.ZERO
@@ -219,6 +234,7 @@ func _physics_process(delta: float) -> void:
 		_body.apply_force(-jet * float(lk[3]), at - _body.global_position)
 	_stress(delta)
 	_hold_dangles(delta)
+	_prep_small(1500)
 	if _capability_dirty and _clock >= _capability_due:
 		_capability_dirty = false
 		var fc := _flight()
@@ -275,7 +291,7 @@ func _build() -> void:
 		_make_area(p, points)
 		_make_skin_probe(p)
 		parts.append(p)
-	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+	var loadout := _comp(MsLoadout) as MsLoadout
 	if loadout != null:
 		for eq in loadout.equipment:
 			if eq is MsShield:
@@ -304,6 +320,11 @@ func _build() -> void:
 			c.ref = eq
 	_build_components()
 	_place_cameras()
+	_build_followers()
+	var fx := DamageFx.of(self)
+	if fx != null:
+		fx.prewarm()
+	_prewarm_holes()
 	var fcb := _flight()
 	if fcb != null:
 		_capacity_built = fcb.propellant_capacity
@@ -325,7 +346,7 @@ func _make_skin_probe(p: Part) -> void:
 	var to_bone := FinalPoses.of(_skel).pose(p.bone).affine_inverse()
 	var mesh_in_skel := _skel.global_transform.affine_inverse() * p.mesh.global_transform
 	for si in p.mesh.mesh.get_surface_count():
-		var arrays := p.mesh.mesh.surface_get_arrays(si)
+		var arrays := arrays_of(p.mesh.mesh, si)
 		var skinned := skin_surface(p.mesh, _skel, arrays)
 		var v: PackedVector3Array = skinned[0]
 		var nrm: PackedVector3Array = skinned[1]
@@ -415,7 +436,7 @@ static func bone_space_points(mesh: MeshInstance3D, skeleton: Skeleton3D, bone: 
 	var to_bone := FinalPoses.of(skeleton).pose(bone).affine_inverse()
 	var mesh_in_skel := skeleton.global_transform.affine_inverse() * mesh.global_transform
 	for s in mesh.mesh.get_surface_count():
-		var arrays := mesh.mesh.surface_get_arrays(s)
+		var arrays := arrays_of(mesh.mesh, s)
 		var skinned: PackedVector3Array = skin_surface(mesh, skeleton, arrays)[0]
 		for v in skinned:
 			out.append(to_bone * (mesh_in_skel * v))
@@ -432,6 +453,11 @@ static func skin_surface(mesh: MeshInstance3D, skeleton: Skeleton3D, arrays: Arr
 	var skin := mesh.skin
 	if skin == null or bones_arr.is_empty() or skeleton == null:
 		return [verts.duplicate(), normals.duplicate()]
+	# Rigid (every vertex on one bind): one transform for all, done natively.
+	var rigid := rigid_bind(bones_arr, weights, verts.size())
+	if rigid >= 0:
+		var xf := bind_transform(mesh, skeleton, rigid)
+		return [xf * verts, Transform3D(xf.basis.orthonormalized(), Vector3.ZERO) * normals]
 	var mats: Array[Transform3D] = []
 	for b in skin.get_bind_count():
 		var bone := skin.get_bind_bone(b)
@@ -458,6 +484,53 @@ static func skin_surface(mesh: MeshInstance3D, skeleton: Skeleton3D, arrays: Arr
 		if not normals.is_empty():
 			nout[i] = n.normalized()
 	return [out, nout]
+
+
+static var _hulls := {}    ## Mesh instance id → its convex hull (debris collision)
+static var _arrays := {}   ## Mesh instance id → its surfaces' arrays (static data, read once)
+static var _rigid := {}    ## bones array hash → its single bind, or -1
+
+
+## A mesh surface's arrays, read from the renderer once (with the render thread on, a read
+## waits for it) and kept. Don't change what it returns.
+static func arrays_of(mesh: Mesh, si: int) -> Array:
+	var key := mesh.get_instance_id()
+	var surfaces: Array = _arrays.get(key, [])
+	if surfaces.is_empty():
+		for i in mesh.get_surface_count():
+			surfaces.append(mesh.surface_get_arrays(i))
+		_arrays[key] = surfaces
+	return surfaces[si]
+
+
+## The one bind every vertex is fully weighted to, or -1 (skinned across bones).
+static func rigid_bind(bones_arr: PackedInt32Array, weights: PackedFloat32Array, count: int) -> int:
+	var key := hash(bones_arr) ^ hash(weights)
+	if _rigid.has(key):
+		return _rigid[key]
+	var per := bones_arr.size() / maxi(count, 1)
+	var found := -1
+	for i in count:
+		for k in per:
+			var w := weights[i * per + k]
+			if w <= 1e-3:
+				continue
+			var b := bones_arr[i * per + k]
+			if w < 0.999 or (found >= 0 and b != found):
+				_rigid[key] = -1
+				return -1
+			found = b
+	_rigid[key] = found
+	return found
+
+
+## Mesh space → skeleton space for a mesh rigidly on bind `b`, in the pose as drawn.
+static func bind_transform(mesh: MeshInstance3D, skeleton: Skeleton3D, b: int) -> Transform3D:
+	var skin := mesh.skin
+	var bone := skin.get_bind_bone(b)
+	if bone < 0:
+		bone = skeleton.find_bone(skin.get_bind_name(b))
+	return FinalPoses.of(skeleton).pose(maxi(bone, 0)) * skin.get_bind_pose(b)
 
 
 func _make_area(p: Part, points: PackedVector3Array) -> void:
@@ -561,7 +634,7 @@ func _build_components() -> void:
 			var c := _add_component(Kind.THRUSTER, t.name, part, t, Vector3.ZERO, 0.3 + 0.6 * sqrt(t.max_thrust / 1.6e6))
 			c.ref = t
 	# Head: the main camera's eyes and the vulcans.
-	var sensors := _vehicle.find_component(SensorSuite) as SensorSuite
+	var sensors := _comp(SensorSuite) as SensorSuite
 	if head != null:
 		var eye := head.aabb.get_center() + Vector3(0.0, 0.0, -head.aabb.size.z * 0.3)
 		var eyes := _bone_component(Kind.EYES, &"main camera", head, eye, 0.6)
@@ -569,7 +642,7 @@ func _build_components() -> void:
 		eyes.half_deg = 105.0   # the head turns
 		eyes.grade = 0
 		_panoramic_camera(&"rear head camera", head, Vector3(0.0, 0.5, 1.0), 75.0)
-	var fcs := _vehicle.find_component(FireControl) as FireControl
+	var fcs := _comp(FireControl) as FireControl
 	if fcs != null:
 		for w: MsWeapon in fcs.weapons.values():
 			if w.equipment == null and head != null and String(w.mount_bone).begins_with("head"):
@@ -601,7 +674,7 @@ const GLOW_SHADER := preload("res://Entities/Vehicles/Components/Damage/Shader/s
 ## paint on the part's mesh glow (an overlay), instead of a light.
 func _place_cameras() -> void:
 	_glow_slots.clear()
-	var sensors := _vehicle.find_component(SensorSuite) as SensorSuite
+	var sensors := _comp(SensorSuite) as SensorSuite
 	var to_body := _body.global_transform.affine_inverse()
 	for node in _vehicle.find_children("*", "Marker3D", true, false):
 		var m := node as CameraMarker
@@ -765,6 +838,12 @@ func component_position(c: Component) -> Vector3:
 
 ## One tick of a beam on the suit (ProjectileManager.BeamContact).
 func beam_contact(contact: ProjectileManager.BeamContact) -> void:
+	var __t := Time.get_ticks_usec()
+	beam_contact_body(contact)
+	_time(&"beam_contact", __t)
+
+
+func beam_contact_body(contact: ProjectileManager.BeamContact) -> void:
 	if not enabled:
 		if not _drills.has(contact.key):
 			_drills[contact.key] = Drill.new()
@@ -1135,6 +1214,11 @@ func _remove_section(p: Part, share: float) -> void:
 	if p.severed:
 		return
 	p.left -= share
+	# Too little left to feed or hold them: the part's thrusters go with it.
+	if p.left < THRUSTER_LEFT:
+		for c in components:
+			if c.part == p and c.kind == Kind.THRUSTER and c.alive:
+				_kill_component(c, true)
 	if p.equipment != null:
 		if p.left < BREAK_LEFT:
 			_break_equipment(p.equipment)
@@ -1199,14 +1283,16 @@ func _groan(p: Part) -> void:
 
 
 func _hit_joints(p: Part, chance: float) -> void:
-	var ambac := _vehicle.find_component(AmbacController) as AmbacController
+	var ambac := _comp(AmbacController) as AmbacController
 	if ambac == null:
 		return
 	for j in ambac.joints:
 		if j.bone_name == p.name and j.priority > 0.0 and _rng.randf() < chance:
 			_saved_priority[j] = j.priority
 			j.priority = 0.0
+			_joint_out[p.name] = true
 			_event("%s actuator out" % p.name)
+	_update_control()
 
 
 func _hit_component(c: Component, d: Drill) -> void:
@@ -1248,7 +1334,7 @@ func _kill_component(c: Component, dead := false) -> void:
 			_capability_changed()
 			return
 		Kind.EYES:
-			var sensors := _vehicle.find_component(SensorSuite) as SensorSuite
+			var sensors := _comp(SensorSuite) as SensorSuite
 			if sensors != null:
 				sensors.main_camera_alive = false
 		Kind.BODY_CAMERA:
@@ -1261,24 +1347,15 @@ func _kill_component(c: Component, dead := false) -> void:
 
 
 ## Equipment that went with a severed part: gone, but its stores didn't go off.
-## A thruster hit: dead, weaker, or its nozzle stuck at rest. `dead`: it went with a severed
-## part.
-func _hit_thruster(c: Component, dead: bool) -> void:
+## A thruster hit (or gone with its part): out, it can't be fired.
+func _hit_thruster(c: Component, _dead: bool) -> void:
 	var t := c.ref as Thruster
 	if not _thruster_saved.has(t):
 		_thruster_saved[t] = [t.max_thrust, t.gimbal_limit_deg, t.gimbal_pitch_limit_deg, t.gimbal_yaw_limit_deg]
-	var roll := 0.0 if dead else _rng.randf()
+	# A hit thruster is out: it can't be fired (user's call, 2026-11-27; derated and stuck-nozzle
+	# outcomes dropped).
+	t.shut_down()
 	var what := "dead"
-	if roll < 0.5:
-		t.enabled = false
-	elif roll < 0.75:
-		t.max_thrust *= _rng.randf_range(0.35, 0.7)
-		what = "derated to %d%%" % roundi(t.max_thrust / float(_thruster_saved[t][0]) * 100.0)
-	else:
-		t.gimbal_limit_deg = 0.0
-		t.gimbal_pitch_limit_deg = 0.0
-		t.gimbal_yaw_limit_deg = 0.0
-		what = "nozzle stuck"
 	_event("%s %s" % [c.name, what])
 	component_destroyed.emit(&"thruster", StringName("%s %s" % [c.name, what]))
 
@@ -1290,7 +1367,7 @@ func _lose_equipment(eq: MsEquipment) -> void:
 	for p in parts:
 		if p.equipment == eq:
 			p.severed = true
-	var fcs := _vehicle.find_component(FireControl) as FireControl
+	var fcs := _comp(FireControl) as FireControl
 	if fcs != null:
 		for w: MsWeapon in fcs.weapons.values():
 			if w.equipment == eq:
@@ -1303,7 +1380,7 @@ func _break_equipment(eq: MsEquipment) -> void:
 			if not c.alive:
 				return
 			c.alive = false
-	var fcs := _vehicle.find_component(FireControl) as FireControl
+	var fcs := _comp(FireControl) as FireControl
 	if fcs != null:
 		for w: MsWeapon in fcs.weapons.values():
 			if w.equipment == eq:
@@ -1456,6 +1533,12 @@ func _hole_cockpit(origin: Vector3, dir: Vector3, radius: float) -> void:
 ## the mesh inside that outline is cut out, split into 2-3 jagged plates with thickness, and
 ## thrown off at `speed`.
 func _blow_panel(p: Part, inside: Vector3, out: Vector3, radius: float, speed: float) -> void:
+	var __t := Time.get_ticks_usec()
+	_blow_panel_body(p, inside, out, radius, speed)
+	_time(&"_blow_panel", __t)
+
+
+func _blow_panel_body(p: Part, inside: Vector3, out: Vector3, radius: float, speed: float) -> void:
 	var found := _panel_pieces(p, inside, out, radius)
 	if found.is_empty():
 		return
@@ -1490,6 +1573,8 @@ func _surface_toward(p: Part, inside: Vector3, dir: Vector3) -> Vector3:
 ## nearest seed. Returns [how far out along the line the skin lies, plate, plate, …], each
 ## plate [triangles (world), normals, uvs, material]; empty if there is no skin there.
 func _panel_pieces(p: Part, inside: Vector3, out: Vector3, radius: float) -> Array:
+	if p.small_done:
+		return _panel_pieces_small(p, inside, out, radius)
 	var mesh_in_world := p.mesh.global_transform
 	var e1 := out.cross(Vector3.UP if absf(out.y) < 0.9 else Vector3.RIGHT).normalized()
 	var e2 := out.cross(e1)
@@ -1497,7 +1582,7 @@ func _panel_pieces(p: Part, inside: Vector3, out: Vector3, radius: float) -> Arr
 	var cand: Array = []
 	var max_along := -INF
 	for si in p.mesh.mesh.get_surface_count():
-		var arrays := p.mesh.mesh.surface_get_arrays(si)
+		var arrays := arrays_of(p.mesh.mesh, si)
 		var skinned := skin_surface(p.mesh, _skel, arrays)
 		var verts: PackedVector3Array = skinned[0]
 		var norms: PackedVector3Array = skinned[1]
@@ -1580,6 +1665,123 @@ func _panel_pieces(p: Part, inside: Vector3, out: Vector3, radius: float) -> Arr
 	return out_list
 
 
+## _panel_pieces from the part's ready-split skin: the same choice, no splitting at the hit.
+func _panel_pieces_small(p: Part, inside: Vector3, out: Vector3, radius: float) -> Array:
+	var bone_xf := _skel.global_transform * FinalPoses.of(_skel).pose(p.bone)
+	var to_bone := bone_xf.affine_inverse()
+	var in_b := to_bone * inside
+	var out_b := (to_bone.basis * out).normalized()
+	var e1 := out_b.cross(Vector3.UP if absf(out_b.y) < 0.9 else Vector3.RIGHT).normalized()
+	var e2 := out_b.cross(e1)
+	var pos := p.small_pos
+	var nrm := p.small_nrm
+	var cand: Array = []   # [triangle index, centre (bone space), along]
+	var max_along := -INF
+	for t in p.small_mat.size():
+		var a := pos[t * 3]
+		var c := (a + pos[t * 3 + 1] + pos[t * 3 + 2]) / 3.0
+		var rel := c - in_b
+		var along := rel.dot(out_b)
+		if along < -0.3:
+			continue
+		var flat := rel - out_b * along
+		var fl := flat.length()
+		if fl > radius * 1.17:
+			continue
+		var ang := atan2(flat.dot(e2), flat.dot(e1))
+		if fl > radius * (1.0 + 0.11 * sin(5.0 * ang) + 0.06 * sin(11.0 * ang)):
+			continue
+		if (nrm[t * 3] + nrm[t * 3 + 1] + nrm[t * 3 + 2]).normalized().dot(out_b) < 0.15:
+			continue
+		cand.append([t, c, along])
+		max_along = maxf(max_along, along)
+	if cand.is_empty():
+		return []
+	var skin_at := max_along
+	var centre := in_b + out_b * skin_at
+	var seeds: Array[Vector3] = []
+	for k in _rng.randi_range(2, 3):
+		var ang := TAU * (k + _rng.randf() * 0.6) / 3.0
+		seeds.append(centre + (e1 * cos(ang) + e2 * sin(ang)) * radius * _rng.randf_range(0.3, 0.7))
+	# Plain arrays while filling (a packed array taken out of an Array is a copy).
+	var groups: Array = []
+	for k in seeds.size():
+		groups.append([[], [], [], null])
+	var nb := bone_xf.basis
+	for cd in cand:
+		if float(cd[2]) < skin_at - 0.9:
+			continue   # an inner layer behind the outer skin
+		var c: Vector3 = cd[1]
+		var best := 0
+		for k in seeds.size():
+			if c.distance_to(seeds[k]) < c.distance_to(seeds[best]):
+				best = k
+		var g: Array = groups[best]
+		var t: int = cd[0]
+		for j in 3:
+			(g[0] as Array).append(bone_xf * pos[t * 3 + j])
+			(g[1] as Array).append((nb * nrm[t * 3 + j]).normalized())
+			(g[2] as Array).append(p.small_uv[t * 3 + j])
+		if g[3] == null:
+			g[3] = p.small_mat[t]
+	var out_list: Array = [skin_at]
+	for g in groups:
+		if (g[0] as Array).size() >= 9:
+			out_list.append([PackedVector3Array(g[0]), PackedVector3Array(g[1]), PackedVector2Array(g[2]), g[3]])
+	return out_list
+
+
+## Splits the parts' skins into small triangles (bone space), within `budget_us` per tick.
+func _prep_small(budget_us: int) -> void:
+	var t0 := Time.get_ticks_usec()
+	for p in parts:
+		if p.small_done or p.mesh == null or p.equipment != null:
+			continue
+		var tris := _skin_tris(p)
+		while p.small_next < tris.size():
+			var tri: Array = tris[p.small_next]
+			p.small_next += 1
+			for small in _split(tri[0], 0.45, 4):
+				for v in small:
+					p.small_pos.append(v[0])
+					p.small_nrm.append(v[1])
+					p.small_uv.append(v[2])
+				p.small_mat.append(tri[1])
+			if Time.get_ticks_usec() - t0 > budget_us:
+				return
+		p.small_done = true
+		_skin_tri_cache.erase(p)
+
+
+var _skin_tri_cache := {}   ## Part → [[[pos, normal, uv] × 3], material] in bone space
+
+
+func _skin_tris(p: Part) -> Array:
+	if _skin_tri_cache.has(p):
+		return _skin_tri_cache[p]
+	var out: Array = []
+	var to_bone := FinalPoses.of(_skel).pose(p.bone).affine_inverse() \
+			* (_skel.global_transform.affine_inverse() * p.mesh.global_transform)
+	for si in p.mesh.mesh.get_surface_count():
+		var arrays := arrays_of(p.mesh.mesh, si)
+		var skinned := skin_surface(p.mesh, _skel, arrays)
+		var verts: PackedVector3Array = to_bone * (skinned[0] as PackedVector3Array)
+		var norms: PackedVector3Array = Transform3D(to_bone.basis, Vector3.ZERO) * (skinned[1] as PackedVector3Array)
+		var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV] if arrays[Mesh.ARRAY_TEX_UV] != null else PackedVector2Array()
+		var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+		var n_idx := idx.size() if not idx.is_empty() else verts.size()
+		var mat := p.mesh.mesh.surface_get_material(si)
+		for t in range(0, n_idx, 3):
+			var tri: Array = []
+			for j in 3:
+				var vi := idx[t + j] if not idx.is_empty() else t + j
+				tri.append([verts[vi], norms[vi].normalized() if vi < norms.size() else Vector3.UP,
+						uvs[vi] if vi < uvs.size() else Vector2.ZERO])
+			out.append([tri, mat])
+	_skin_tri_cache[p] = out
+	return out
+
+
 ## Splits a triangle ([[pos, normal, uv] × 3]) until its edges are shorter than `edge`.
 static func _split(tri: Array, edge: float, depth: int) -> Array:
 	var a: Array = tri[0]
@@ -1613,45 +1815,51 @@ func _launch_plate(piece: Array, out: Vector3, speed: float) -> void:
 		centre += v
 	centre /= pos.size()
 	var thick := 0.14
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in pos.size():
-		st.set_normal(nrm[i])
-		st.set_uv(uv[i])
-		st.add_vertex(pos[i] - centre)
-	var outer := st.commit()
+	var local := Transform3D(Basis.IDENTITY, -centre) * pos
+	var outer := ArrayMesh.new()
+	var a1 := []
+	a1.resize(Mesh.ARRAY_MAX)
+	a1[Mesh.ARRAY_VERTEX] = local
+	a1[Mesh.ARRAY_NORMAL] = nrm
+	a1[Mesh.ARRAY_TEX_UV] = uv
+	outer.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a1)
 	if piece[3] != null:
 		outer.surface_set_material(0, piece[3])
-	# Inner face and the torn edges (edges used by one triangle only).
-	var edges := {}
-	for t in range(0, pos.size(), 3):
-		for j in 3:
-			var a := pos[t + j]
-			var b := pos[t + (j + 1) % 3]
-			var key := _edge_key(a, b)
-			edges[key] = edges.get(key, []) + [[a, b]]
-	var st2 := SurfaceTool.new()
-	st2.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for t in range(0, pos.size(), 3):
-		for j in [0, 2, 1]:
-			st2.set_normal(-nrm[t + j])
-			st2.add_vertex(pos[t + j] - nrm[t + j] * thick - centre)
+	# Inner face (the outer one pushed in, wound back) and the torn edges (edges used by one
+	# triangle only), as one surface.
+	var count := {}
+	for t in range(0, local.size(), 3):
+		for k in 3:
+			var a := local[t + k]
+			var b := local[t + (k + 1) % 3]
+			var key := [a, b] if a < b else [b, a]
+			count[key] = int(count.get(key, 0)) + 1
+	var v2 := PackedVector3Array()
+	var n2 := PackedVector3Array()
+	for t in range(0, local.size(), 3):
+		for k in [0, 2, 1]:
+			v2.append(local[t + k] - nrm[t + k] * thick)
+			n2.append(-nrm[t + k])
+	for t in range(0, local.size(), 3):
+		for k in 3:
+			var a := local[t + k]
+			var b := local[t + (k + 1) % 3]
+			if int(count[[a, b] if a < b else [b, a]]) != 1:
+				continue
+			var n := (b - a).cross(out).normalized()
+			var a2 := a - out * thick
+			var b2 := b - out * thick
+			for v in [a, b, b2, a, b2, a2]:
+				v2.append(v)
+				n2.append(n)
 	var area := 0.0
-	for key in edges:
-		var list: Array = edges[key]
-		if list.size() != 1:
-			continue
-		var a: Vector3 = list[0][0]
-		var b: Vector3 = list[0][1]
-		var n := (b - a).cross(out).normalized()
-		var a2 := a - out * thick
-		var b2 := b - out * thick
-		for v in [a, b, b2, a, b2, a2]:
-			st2.set_normal(n)
-			st2.add_vertex(v - centre)
 	for t in range(0, pos.size(), 3):
 		area += (pos[t + 1] - pos[t]).cross(pos[t + 2] - pos[t]).length() * 0.5
-	st2.commit(outer)
+	var a2s := []
+	a2s.resize(Mesh.ARRAY_MAX)
+	a2s[Mesh.ARRAY_VERTEX] = v2
+	a2s[Mesh.ARRAY_NORMAL] = n2
+	outer.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a2s)
 	var edge_mat := StandardMaterial3D.new()
 	edge_mat.albedo_color = Color(0.07, 0.06, 0.055)
 	edge_mat.metallic = 0.8
@@ -1681,12 +1889,6 @@ func _launch_plate(piece: Array, out: Vector3, speed: float) -> void:
 	_debris.append(body)
 
 
-static func _edge_key(a: Vector3, b: Vector3) -> String:
-	var ka := "%.3f,%.3f,%.3f" % [a.x, a.y, a.z]
-	var kb := "%.3f,%.3f,%.3f" % [b.x, b.y, b.z]
-	return ka + "|" + kb if ka < kb else kb + "|" + ka
-
-
 func _kill_pilot() -> void:
 	if pilot_dead:
 		return
@@ -1697,7 +1899,7 @@ func _kill_pilot() -> void:
 	var fc := _flight()
 	if fc != null:
 		fc.pilot_lost = true
-	var fcs := _vehicle.find_component(FireControl) as FireControl
+	var fcs := _comp(FireControl) as FireControl
 	if fcs != null:
 		for w: MsWeapon in fcs.weapons.values():
 			w.broken = true
@@ -1713,6 +1915,12 @@ func _reactor_position() -> Vector3:
 
 
 func _breach_reactor() -> void:
+	var __t := Time.get_ticks_usec()
+	_breach_reactor_body()
+	_time(&"_breach_reactor", __t)
+
+
+func _breach_reactor_body() -> void:
 	if reactor_gone:
 		return
 	var at := _reactor_position()
@@ -1816,6 +2024,12 @@ func apply_impact(spec: ProjectileSpec, at: Vector3, relative_velocity: Vector3,
 ## `p` breaks off at its joint, with every part beyond it: a free body in the pose it had.
 ## `may_dangle`: shot off (it may stay hanging); false when torn off under load.
 func sever(p: Part, may_dangle := true) -> void:
+	var __t := Time.get_ticks_usec()
+	sever_body(p, may_dangle)
+	_time(&"sever", __t)
+
+
+func sever_body(p: Part, may_dangle := true) -> void:
 	if p.severed or reactor_gone:
 		return
 	if p.equipment != null:
@@ -1834,7 +2048,7 @@ func sever(p: Part, may_dangle := true) -> void:
 	for q in group:
 		bones[q.bone] = true
 	var equip: Array[MsEquipment] = []
-	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+	var loadout := _comp(MsLoadout) as MsLoadout
 	if loadout != null:
 		for eq in loadout.equipment:
 			if eq.equipped and eq.is_visible_in_tree() and _equipment_on(eq, bones, null, INF):
@@ -1843,6 +2057,8 @@ func sever(p: Part, may_dangle := true) -> void:
 	var axis := joint.basis.y.normalized()          # from the joint out along the severed part
 	var radius := clampf(minf(p.aabb.size.x, p.aabb.size.z) * 0.36, 0.35, 1.1)
 	var body := _make_debris(group, equip, 3.0, joint.origin)
+	for q in group:
+		_take_followers(q, body)
 	for eq in equip:
 		_lose_equipment(eq)
 		loadout.set_equipped(eq, false)
@@ -1878,6 +2094,12 @@ func sever(p: Part, may_dangle := true) -> void:
 ## `p` breaks across at `y` (bone space) where it was holed: the near side stays on with a
 ## hot cut face, the far side and every part beyond fly off as one piece.
 func _cut_part(p: Part, y: float, may_dangle := true) -> void:
+	var __t := Time.get_ticks_usec()
+	_cut_part_body(p, y, may_dangle)
+	_time(&"_cut_part", __t)
+
+
+func _cut_part_body(p: Part, y: float, may_dangle := true) -> void:
 	var frame := _part_frame(p)
 	var c0 := p.aabb.get_center()
 	var cut_local := Vector3(c0.x, y, c0.z)
@@ -1892,12 +2114,15 @@ func _cut_part(p: Part, y: float, may_dangle := true) -> void:
 	for q in group:
 		bones[q.bone] = true
 	var equip: Array[MsEquipment] = []
-	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+	var loadout := _comp(MsLoadout) as MsLoadout
 	if loadout != null:
 		for eq in loadout.equipment:
 			if eq.equipped and eq.is_visible_in_tree() and _equipment_on(eq, bones, p, y):
 				equip.append(eq)
 	var body := _make_debris(group, equip, 3.0, cut_world, 0.0, p, share)
+	for q in group:
+		_take_followers(q, body)
+	_take_followers(p, body, y)
 	for eq in equip:
 		_lose_equipment(eq)
 		loadout.set_equipped(eq, false)
@@ -2080,6 +2305,192 @@ func _knock_stubs(_p: Part, at: Vector3, dir: Vector3, length: float, radius: fl
 			fx.creak(body.global_position, body.linear_velocity, 1.2)
 
 
+## A hole on a box far off, once: the first hole's material (the damage shader) would
+## otherwise be set up on the first hit, a ~40 ms stall.
+func _prewarm_holes() -> void:
+	var mi := MeshInstance3D.new()
+	mi.name = "HolePrewarm"
+	mi.mesh = BoxMesh.new()
+	mi.layers = Layers.VEHICLE_EXT
+	add_child(mi)
+	mi.global_position = Vector3(0.0, -1.0e6, 0.0)
+	holes.add_hole(mi, null, -1, mi.global_position + Vector3(0, 0, 0.5), Vector3.BACK, 0.3, 1.0)
+	get_tree().create_timer(4.0).timeout.connect(func() -> void:
+		holes.forget(mi)
+		mi.queue_free())
+
+
+## The damage part a bone belongs to: itself or the nearest up its chain.
+func _part_of_bone(b: int) -> Part:
+	if _bone_part.has(b):
+		return _bone_part[b]
+	var start := b
+	var found: Part = null
+	while b >= 0 and found == null:
+		for q in parts:
+			if q.bone == b and q.equipment == null:
+				found = q
+				break
+		b = _skel.get_bone_parent(b)
+	_bone_part[start] = found
+	return found
+
+
+var _bone_part := {}   ## bone → its part (cache; the parts don't change after build)
+
+
+func _bone_of_node(n: Node) -> int:
+	while n != null and n != _vehicle:
+		if n is BoneAttachment3D:
+			return _skel.find_bone((n as BoneAttachment3D).bone_name)
+		n = n.get_parent()
+	return -1
+
+
+## Everything that rides a part's bone and is not handled on its own (the part's mesh, its
+## damage hull, equipment): thruster and camera mounts, stow arms, props, skinned meshes that
+## are not parts. It goes (hidden, and copied onto the piece) when the part does.
+func _build_followers() -> void:
+	_followers.clear()
+	var part_meshes := {}
+	for p in parts:
+		if p.mesh != null:
+			part_meshes[p.mesh] = true
+	for node in _vehicle.find_children("*", "BoneAttachment3D", true, false):
+		var a := node as BoneAttachment3D
+		if String(a.name).begins_with("DamageHull_"):
+			continue
+		if a.find_children("*", "MsEquipment", true, false).size() > 0 or a.get_parent() is BoneAttachment3D:
+			continue
+		var p := _part_of_bone(_skel.find_bone(a.bone_name))
+		if p != null:
+			_followers[p] = _followers.get(p, []) + [a]
+	for node in _skel.get_children():
+		var mi := node as MeshInstance3D
+		if mi == null or part_meshes.has(mi) or mi.skin == null or mi.mesh == null:
+			continue
+		var b := _dominant_bone(mi)
+		var p := _part_of_bone(b)
+		if p != null:
+			_followers[p] = _followers.get(p, []) + [mi]
+
+
+func _dominant_bone(mi: MeshInstance3D) -> int:
+	var arr := arrays_of(mi.mesh, 0)
+	var bones: PackedInt32Array = arr[Mesh.ARRAY_BONES] if arr[Mesh.ARRAY_BONES] != null else PackedInt32Array()
+	var w: PackedFloat32Array = arr[Mesh.ARRAY_WEIGHTS] if arr[Mesh.ARRAY_WEIGHTS] != null else PackedFloat32Array()
+	var count := {}
+	for i in bones.size():
+		if w[i] > 0.5:
+			count[bones[i]] = int(count.get(bones[i], 0)) + 1
+	var best := -1
+	var most := -1
+	for k in count:
+		if count[k] > most:
+			most = count[k]
+			best = k
+	if best < 0:
+		return -1
+	var b := mi.skin.get_bind_bone(best)
+	return b if b >= 0 else _skel.find_bone(mi.skin.get_bind_name(best))
+
+
+## Copies `p`'s followers that are showing onto the flying piece `body` (beyond `cut_y`, bone
+## space, when the part was cut through), then hides them on the suit.
+func _take_followers(p: Part, body: RigidBody3D, cut_y := -INF) -> void:
+	var to_bone := (_skel.global_transform * FinalPoses.of(_skel).pose(p.bone)).affine_inverse()
+	for f: Node3D in _followers.get(p, []):
+		if not is_instance_valid(f) or not f.is_visible_in_tree():
+			continue
+		if cut_y > -INF and (to_bone * f.global_position).y < cut_y:
+			continue
+		if body != null:
+			var meshes: Array = [f] if f is MeshInstance3D else f.find_children("*", "MeshInstance3D", true, false)
+			for m in meshes:
+				var mi := m as MeshInstance3D
+				if mi.mesh == null or not mi.is_visible_in_tree() or _is_fx(mi):
+					continue
+				var copy: MeshInstance3D
+				if mi.skin != null:
+					copy = _bake(mi)
+					body.add_child(copy)
+					copy.transform = (body.global_transform.affine_inverse() * _skel.global_transform) * copy.transform
+				else:
+					copy = MeshInstance3D.new()
+					copy.mesh = mi.mesh
+					for i in mi.get_surface_override_material_count():
+						copy.set_surface_override_material(i, mi.get_active_material(i))
+					copy.layers = mi.layers
+					body.add_child(copy)
+					copy.global_transform = mi.global_transform
+		f.visible = false
+		_hidden_nodes.append(f)
+
+
+## A thruster's plume or glow (not hardware).
+static func _is_fx(n: Node) -> bool:
+	var c: Node = n
+	while c != null:
+		if c.name == &"PlumePivot" or c.name == &"Glow":
+			return true
+		if c is Thruster:
+			return false
+		c = c.get_parent()
+	return false
+
+
+## Which parts can be moved: not severed, and no joint out on the way to the torso. A limp part's
+## AMBAC joints are out, its weapons can't aim or fire, its equipment can't be used or raised.
+func _update_control() -> void:
+	limp.clear()
+	for p in parts:
+		if p.equipment != null:
+			continue
+		var b := p.bone
+		while b >= 0:
+			var q := _part_of_bone(b)
+			if q == null:
+				break
+			if q.severed or _joint_out.has(q.name):
+				limp[p] = true
+				break
+			b = _skel.get_bone_parent(q.bone)
+	var ambac := _comp(AmbacController) as AmbacController
+	if ambac != null:
+		for j in ambac.joints:
+			var jp := _part_of_bone(_skel.find_bone(j.bone_name))
+			if jp != null and limp.has(jp) and j.priority > 0.0:
+				_saved_priority[j] = j.priority
+				j.priority = 0.0
+	var fcs := _comp(FireControl) as FireControl
+	if fcs != null:
+		for w: MsWeapon in fcs.weapons.values():
+			var wb := _skel.find_bone(w.equipment.mount_bone if w.equipment != null else w.mount_bone)
+			if w.equipment != null:
+				wb = _equipment_bone(w.equipment)
+			var wp := _part_of_bone(wb)
+			w.limp = wp != null and limp.has(wp)
+	var loadout := _comp(MsLoadout) as MsLoadout
+	if loadout != null:
+		for eq in loadout.equipment:
+			var ep := _part_of_bone(_equipment_bone(eq))
+			eq.disabled = ep != null and limp.has(ep)
+			if eq.disabled and eq.active:
+				eq.set_active(false)
+
+
+## The bone `eq` hangs from now (hand or stow point; its mount bone when not mounted).
+func _equipment_bone(eq: MsEquipment) -> int:
+	var b := _bone_of_node(eq)
+	return b if b >= 0 else _skel.find_bone(eq.mount_bone)
+
+
+## Whether the part (by name) can be controlled.
+func is_controllable(part_name: StringName) -> bool:
+	var p := find_part(part_name)
+	return p != null and not p.severed and not limp.has(p)
+
+
 ## The nearest part up the skeleton from `p`.
 func _parent_part(p: Part) -> Part:
 	var b := _skel.get_bone_parent(p.bone)
@@ -2128,7 +2539,7 @@ func _equipment_on(eq: MsEquipment, bones: Dictionary, cut: Part, cut_y: float) 
 func _remove_parts(group: Array[Part]) -> void:
 	var fc := _flight()
 	var fill := _reaction.get_fill()
-	var ambac := _vehicle.find_component(AmbacController) as AmbacController
+	var ambac := _comp(AmbacController) as AmbacController
 	for i in range(_dangles.size() - 1, -1, -1):
 		if group.has(_dangles[i][2]):
 			_drop_dangle(i, true)
@@ -2165,11 +2576,28 @@ func _remove_parts(group: Array[Part]) -> void:
 			if attach != null and attach is Node3D:
 				(attach as Node3D).visible = false
 				_hidden_nodes.append(attach)
+		for f: Node3D in _followers.get(q, []):
+			if is_instance_valid(f) and f.visible:
+				f.visible = false
+				_hidden_nodes.append(f)
+		# Smoke leaking from it, sparks on it: they went with it.
+		for fx in q.area.get_children():
+			if fx is GPUParticles3D:
+				fx.queue_free()
+	_update_control()
 	_capability_changed()
 
 
 ## Bakes `group` (and `equip`) in their current pose into one free rigid body flying off.
 func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, from: Vector3, heat := 0.0,
+		cut: Part = null, cut_share := 0.0) -> RigidBody3D:
+	var __t := Time.get_ticks_usec()
+	var __r := _make_debris_body(group, equip, push, from, heat, cut, cut_share)
+	_time(&"_make_debris", __t)
+	return __r
+
+
+func _make_debris_body(group: Array[Part], equip: Array[MsEquipment], push: float, from: Vector3, heat := 0.0,
 		cut: Part = null, cut_share := 0.0) -> RigidBody3D:
 	if group.is_empty() and equip.is_empty() and cut == null:
 		return null
@@ -2190,12 +2618,14 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		body.add_child(mi)
 		var holes_on := holes.get_holes(q.mesh)
 		var bh := Vector2(heat, holes.now) if heat > 0.0 else Vector2.ZERO
+		# The baked mesh's own space: the skeleton's, moved by where it sits on the piece.
+		var to_mesh := mi.transform.affine_inverse()
 		if not holes_on.is_empty() or heat > 0.0:
-			holes.adopt(mi, holes_on, FinalPoses.of(_skel).pose(q.bone), bh)
+			holes.adopt(mi, holes_on, to_mesh * FinalPoses.of(_skel).pose(q.bone), bh)
 		if q.cut_y != INF:
-			var pose := FinalPoses.of(_skel).pose(q.bone)
+			var pose := to_mesh * FinalPoses.of(_skel).pose(q.bone)
 			var c0 := q.aabb.get_center()
-			holes.cut(mi, null, -1, pose * Vector3(c0.x, q.cut_y, c0.z), pose.basis.y, true, _section(q, q.cut_y, pose))
+			holes.cut(mi, null, -1, pose * Vector3(c0.x, q.cut_y, c0.z), (pose.basis * Vector3.UP).normalized(), true, _section(q, q.cut_y, pose))
 		var m := q.dry + q.tank * fill
 		mass += m
 		centre += (FinalPoses.of(_skel).pose(q.bone) * q.aabb.get_center()) * m
@@ -2224,7 +2654,7 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 			arm.visible = false
 			_hidden_nodes.append(arm)
 			# What it held can't be stowed any more.
-			var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+			var loadout := _comp(MsLoadout) as MsLoadout
 			if loadout != null:
 				for eq: MsEquipment in loadout.equipment:
 					if arm.name == "StowArm_%s" % eq.name:
@@ -2235,15 +2665,15 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		var mi := _bake(cut.mesh)
 		mi.name = "Baked_" + String(cut.name)
 		body.add_child(mi)
-		var pose := FinalPoses.of(_skel).pose(cut.bone)
+		var pose := mi.transform.affine_inverse() * FinalPoses.of(_skel).pose(cut.bone)
 		holes.adopt(mi, holes.get_holes(cut.mesh), pose)
 		var c0 := cut.aabb.get_center()
 		holes.cut(mi, null, -1, pose * Vector3(c0.x, cut.cut_y if cut.cut_y != INF else cut.last_hole.y, c0.z),
-				pose.basis.y, false, _section(cut, cut.cut_y if cut.cut_y != INF else cut.last_hole.y, pose))
+				(pose.basis * Vector3.UP).normalized(), false, _section(cut, cut.cut_y if cut.cut_y != INF else cut.last_hole.y, pose))
 		var m := (cut.dry + cut.tank * fill) * cut_share
 		mass += m
 		var far_y := cut.aabb.end.y - cut.aabb.size.y * cut_share * 0.5
-		centre += (pose * Vector3(c0.x, far_y, c0.z)) * m
+		centre += (FinalPoses.of(_skel).pose(cut.bone) * Vector3(c0.x, far_y, c0.z)) * m
 	for eq in equip:
 		for node in eq.find_children("*", "MeshInstance3D", true, false):
 			var src := node as MeshInstance3D
@@ -2293,12 +2723,16 @@ func _solidify(body: RigidBody3D) -> void:
 				verts += am.surface_get_array_len(si)
 		# A hull of a dense mesh costs tens of ms: a box for those.
 		var shape: Shape3D
-		if verts > 2000:
+		if verts > 2000 or body.name.begins_with("DebrisPlate"):
 			var box := BoxShape3D.new()
 			box.size = mi.mesh.get_aabb().size
 			shape = box
 		else:
-			shape = mi.mesh.create_convex_shape(true, false)
+			# Baked parts share their mesh with the suit: one hull per mesh, kept.
+			shape = _hulls.get(mi.mesh.get_instance_id())
+			if shape == null:
+				shape = mi.mesh.create_convex_shape(true, false)
+				_hulls[mi.mesh.get_instance_id()] = shape
 		if shape == null:
 			continue
 		var cs := CollisionShape3D.new()
@@ -2322,10 +2756,26 @@ func _solidify(body: RigidBody3D) -> void:
 
 ## A copy of `mesh` in the skeleton's current pose (skeleton space), its own materials.
 func _bake(mesh: MeshInstance3D) -> MeshInstance3D:
-	var am := ArrayMesh.new()
 	var mesh_in_skel := _skel.global_transform.affine_inverse() * mesh.global_transform
+	# Rigid on one bone: the same mesh, placed where the bone holds it (no copy).
+	if mesh.skin != null and mesh.mesh.get_surface_count() > 0:
+		var a0 := arrays_of(mesh.mesh, 0)
+		var rb := -1
+		if a0[Mesh.ARRAY_BONES] != null:
+			rb = rigid_bind(a0[Mesh.ARRAY_BONES], a0[Mesh.ARRAY_WEIGHTS], (a0[Mesh.ARRAY_VERTEX] as PackedVector3Array).size())
+		for si in range(1, mesh.mesh.get_surface_count()):
+			var ai := arrays_of(mesh.mesh, si)
+			if ai[Mesh.ARRAY_BONES] == null or rigid_bind(ai[Mesh.ARRAY_BONES], ai[Mesh.ARRAY_WEIGHTS], (ai[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()) != rb:
+				rb = -1
+		if rb >= 0:
+			var fast := MeshInstance3D.new()
+			fast.mesh = mesh.mesh
+			fast.layers = mesh.layers
+			fast.transform = mesh_in_skel * bind_transform(mesh, _skel, rb)
+			return fast
+	var am := ArrayMesh.new()
 	for s in mesh.mesh.get_surface_count():
-		var arrays := mesh.mesh.surface_get_arrays(s)
+		var arrays := arrays_of(mesh.mesh, s)
 		var skinned := skin_surface(mesh, _skel, arrays)
 		var verts: PackedVector3Array = skinned[0]
 		var normals: PackedVector3Array = skinned[1]
@@ -2350,7 +2800,7 @@ func _bake(mesh: MeshInstance3D) -> MeshInstance3D:
 
 ## The reactor took the suit apart: every part and piece of equipment flies off, glowing.
 func _blow_apart(at: Vector3) -> void:
-	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+	var loadout := _comp(MsLoadout) as MsLoadout
 	var all: Array[Part] = []
 	for p in parts:
 		if p.equipment == null and not p.severed:
@@ -2476,7 +2926,7 @@ func _sweep_leftovers(at: Vector3) -> void:
 
 ## The shield has too little plate left: it breaks off and drifts away.
 func break_shield(shield: MsShield) -> void:
-	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+	var loadout := _comp(MsLoadout) as MsLoadout
 	if loadout == null or not shield.equipped:
 		return
 	_make_debris([], [shield], 4.0, shield.global_position)
@@ -2487,7 +2937,7 @@ func break_shield(shield: MsShield) -> void:
 
 
 func _shield() -> MsShield:
-	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+	var loadout := _comp(MsLoadout) as MsLoadout
 	if loadout == null:
 		return null
 	for eq in loadout.equipment:
@@ -2514,7 +2964,7 @@ func repair() -> void:
 			stub.queue_free()
 	_stubs.clear()
 	_snapping.clear()
-	var lo := _vehicle.find_component(MsLoadout) as MsLoadout
+	var lo := _comp(MsLoadout) as MsLoadout
 	if lo != null:
 		lo.stow_lost.clear()
 	for i in range(_dangles.size() - 1, -1, -1):
@@ -2547,6 +2997,8 @@ func repair() -> void:
 	for j: AmbacJoint in _saved_priority:
 		j.priority = _saved_priority[j]
 	_saved_priority.clear()
+	_joint_out.clear()
+	limp.clear()
 	for p in parts:
 		if p.cut_y != INF and p.area != null:
 			((p.area.get_child(0) as CollisionShape3D).shape as ConvexPolygonShape3D).points = p.hull_points
@@ -2572,19 +3024,23 @@ func repair() -> void:
 		t.gimbal_yaw_limit_deg = sv[3]
 	_thruster_saved.clear()
 	_leaks.clear()
-	var sensors := _vehicle.find_component(SensorSuite) as SensorSuite
+	var sensors := _comp(SensorSuite) as SensorSuite
 	if sensors != null:
 		sensors.main_camera_alive = true
 		sensors.body_camera_dead.clear()
-	var loadout := _vehicle.find_component(MsLoadout) as MsLoadout
+	var loadout := _comp(MsLoadout) as MsLoadout
 	if loadout != null:
 		for eq in _unequipped:
 			loadout.set_equipped(eq, true)
 	_unequipped.clear()
-	var fcs := _vehicle.find_component(FireControl) as FireControl
+	var fcs := _comp(FireControl) as FireControl
 	if fcs != null:
 		for w: MsWeapon in fcs.weapons.values():
 			w.broken = false
+			w.limp = false
+	if loadout != null:
+		for eq in loadout.equipment:
+			eq.disabled = false
 	var shield := _shield()
 	if shield != null:
 		shield.repair()
@@ -2615,7 +3071,10 @@ func _set_all_thrusters(on: bool) -> void:
 		return
 	for node in root.find_children("*", "", true, false):
 		if node is Thruster:
-			(node as Thruster).enabled = on
+			if on:
+				(node as Thruster).enabled = true
+			else:
+				(node as Thruster).shut_down()
 
 
 func _capability_changed() -> void:
@@ -2633,7 +3092,18 @@ func _event(text: String) -> void:
 
 
 func _flight() -> FlightComputer:
-	return _vehicle.find_component(FlightComputer) as FlightComputer
+	return _comp(FlightComputer) as FlightComputer
+
+
+var _comps := {}   ## component class → the vehicle's instance (find_component walks the whole suit)
+
+
+func _comp(cls: Variant) -> Node:
+	var n: Node = _comps.get(cls)
+	if n == null or not is_instance_valid(n):
+		n = _vehicle.find_component(cls)
+		_comps[cls] = n
+	return n
 
 
 ## State of every part for a panel: [name, share of section left (0 = gone)].
@@ -2651,3 +3121,12 @@ func count_dead(kind: int) -> int:
 		if c.kind == kind and not c.alive:
 			n += 1
 	return n
+
+
+static func _time(what: StringName, t0: int) -> void:
+	var us := Time.get_ticks_usec() - t0
+	var e: Array = timings.get(what, [0, 0, 0])
+	e[0] += 1
+	e[1] += us
+	e[2] = maxi(e[2], us)
+	timings[what] = e
