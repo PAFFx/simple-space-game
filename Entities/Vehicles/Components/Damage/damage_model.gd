@@ -1477,8 +1477,6 @@ func _launch_plate(piece: Array, out: Vector3, speed: float) -> void:
 	mi.mesh = outer
 	var body := RigidBody3D.new()
 	body.name = "DebrisPlate"
-	body.collision_layer = 0
-	body.collision_mask = 0
 	body.gravity_scale = 0.0
 	body.mass = maxf(area * 400.0, 20.0)
 	body.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
@@ -1491,6 +1489,7 @@ func _launch_plate(piece: Array, out: Vector3, speed: float) -> void:
 	body.angular_velocity = Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 2.5
 	var tw := body.create_tween()
 	tw.tween_property(edge_mat, "emission_energy_multiplier", 0.0, 18.0)
+	_solidify(body)
 	_debris.append(body)
 
 
@@ -1827,8 +1826,6 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 		return null
 	var body := RigidBody3D.new()
 	body.name = "Debris"
-	body.collision_layer = 0
-	body.collision_mask = 0
 	body.gravity_scale = 0.0
 	body.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
 	body.angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
@@ -1893,8 +1890,37 @@ func _make_debris(group: Array[Part], equip: Array[MsEquipment], push: float, fr
 	body.linear_velocity = _body.linear_velocity + _body.angular_velocity.cross(com_world - suit_com) + out * push \
 			+ Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * push * 0.2
 	body.angular_velocity = _body.angular_velocity + Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 0.6
+	_solidify(body)
 	_debris.append(body)
 	return body
+
+
+## Gives a piece knocked off a convex shape per mesh it carries, on the debris layer. It is born
+## inside the suit's own collision shape and next to the other pieces of the same hit, so for
+## its first second it ignores the suit and other debris.
+func _solidify(body: RigidBody3D) -> void:
+	for child in body.get_children():
+		var mi := child as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var shape := mi.mesh.create_convex_shape(true, true)
+		if shape == null:
+			continue
+		var cs := CollisionShape3D.new()
+		cs.shape = shape
+		cs.transform = mi.transform
+		body.add_child(cs)
+	body.collision_layer = Layers.PHYS_DEBRIS
+	body.collision_mask = Layers.WORLD
+	body.continuous_cd = true
+	body.add_collision_exception_with(_body)
+	var suit := _body
+	get_tree().create_timer(1.0).timeout.connect(func() -> void:
+		if not is_instance_valid(body):
+			return
+		body.collision_mask |= Layers.PHYS_DEBRIS
+		if is_instance_valid(suit):
+			body.remove_collision_exception_with(suit))
 
 
 ## A copy of `mesh` in the skeleton's current pose (skeleton space), its own materials.

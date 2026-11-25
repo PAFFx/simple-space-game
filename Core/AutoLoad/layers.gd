@@ -27,6 +27,8 @@ const PHYS_SHIELD := 1 << 1
 ## Damage hulls (DamageModel): an Area3D per part, posed with the skeleton, found only by
 ## the damage model's own ray queries (nothing else casts against areas on this layer).
 const PHYS_DAMAGE := 1 << 2
+## Pieces knocked off a suit (DamageModel debris): they hit the world, suits and each other.
+const PHYS_DEBRIS := 1 << 3
 
 const MASK_THIRD_PERSION := WORLD | VEHICLE_EXT | FX
 const MASK_FIRST_PERSON  := WORLD | VEHICLE_FP | COCKPIT | PILOT | FX | HUD_3D
