@@ -1039,7 +1039,10 @@ func _burst(at: Vector3, energy: float, kind: StringName) -> void:
 			var out := (at - centre).normalized() if at.distance_to(centre) > 0.2 else (at - _body.global_position).normalized()
 			var radius := clampf(r * (1.0 - float(near[k][0]) / (r + p.width * 0.6)), 0.3, p.width * 0.45)
 			var speed := clampf(sqrt(energy / 2.0e5), 8.0, 120.0)
-			_blow_panel(p, at, out, radius, speed)
+			# One panel per physics tick: each costs several ms to cut.
+			_later(k * 0.017, func() -> void:
+				if not p.severed and not reactor_gone:
+					_blow_panel(p, at, out, radius, speed))
 	# Panels blown off carry momentum out: the suit gets the opposite, small.
 	var push := sqrt(2.0 * 150.0 * energy) * 0.15
 	var away := (_body.global_transform * _body.center_of_mass - at)
@@ -1130,20 +1133,33 @@ func _panel_pieces(p: Part, inside: Vector3, out: Vector3, radius: float) -> Arr
 			for i in verts.size():
 				idx[i] = i
 		var mat := p.mesh.mesh.surface_get_material(si)
+		var world := PackedVector3Array()
+		world.resize(verts.size())
+		for i in verts.size():
+			world[i] = mesh_in_world * verts[i]
 		for t in range(0, idx.size(), 3):
-			var tri: Array = []
-			var near := false
+			# Whole triangles first: facing out, in front of the burst, touching the circle.
+			var a0 := world[idx[t]]
+			var a1 := world[idx[t + 1]]
+			var a2 := world[idx[t + 2]]
+			var facing := 0.0
 			for j in 3:
 				var vi := idx[t + j]
-				var w := mesh_in_world * verts[vi]
-				tri.append([w, (mesh_in_world.basis * (norms[vi] if vi < norms.size() else out)).normalized(),
-						uvs[vi] if vi < uvs.size() else Vector2.ZERO])
-				var rel := w - inside
-				if (rel - out * rel.dot(out)).length() < radius + 2.5:
-					near = true
-			if not near:
+				facing += (mesh_in_world.basis * (norms[vi] if vi < norms.size() else out)).dot(out)
+			if facing < 0.0:
 				continue
-			for small in _split(tri, 0.35, 5):
+			var c3 := (a0 + a1 + a2) / 3.0
+			var reach := maxf(c3.distance_to(a0), maxf(c3.distance_to(a1), c3.distance_to(a2)))
+			var rel3 := c3 - inside
+			var along3 := rel3.dot(out)
+			if along3 < -0.3 - reach or (rel3 - out * along3).length() > radius * 1.2 + reach:
+				continue
+			var tri: Array = []
+			for j in 3:
+				var vi := idx[t + j]
+				tri.append([world[vi], (mesh_in_world.basis * (norms[vi] if vi < norms.size() else out)).normalized(),
+						uvs[vi] if vi < uvs.size() else Vector2.ZERO])
+			for small in _split(tri, 0.45, 4):
 				var c: Vector3 = ((small[0][0] as Vector3) + (small[1][0] as Vector3) + (small[2][0] as Vector3)) / 3.0
 				var n: Vector3 = (small[0][1] as Vector3) + (small[1][1] as Vector3) + (small[2][1] as Vector3)
 				var rel := c - inside

@@ -217,9 +217,17 @@ func _build_game_over() -> void:
 	add_child(_game_over)
 
 
+var _damage: DamageModel
+var _damage_of: Node
+
+
 func _process(_delta: float) -> void:
 	var suit := _vehicle()
-	var damage := suit.find_component(DamageModel) as DamageModel if suit != null else null
+	if suit != _damage_of:
+		# Looked up once per suit: find_component walks its whole tree.
+		_damage_of = suit
+		_damage = suit.find_component(DamageModel) as DamageModel if suit != null else null
+	var damage := _damage
 	var over := damage != null and damage.pilot_dead
 	if over != _game_over.visible:
 		_game_over.visible = over

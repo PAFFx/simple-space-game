@@ -67,6 +67,7 @@ func _run() -> void:
 			"layout": _layout()
 			"twice": await _twice()
 			"panel": await _panel()
+			"timing": await _timing()
 			"cockpit": await _shot_at_point("cockpit (pilot)", _pilot_eye())
 			"head": await _shot_at("head", &"head", Vector3.ZERO)
 			"chest": await _shot_at("chest (cockpit)", &"chest", Vector3(0.0, 0.6, 0.0))
@@ -84,6 +85,35 @@ func _run() -> void:
 	quit()
 
 
+## What one hit costs on the CPU: starting a drill (hull rays, column, components), tearing
+## a panel off, cutting a limb through.
+func _timing() -> void:
+	_model.repair()
+	await _ticks(20)
+	var c := ProjectileManager.BeamContact.new()
+	var target := _part_centre(&"chest")
+	c.direction = _suit.global_basis.z
+	c.point = target - c.direction * 4.0
+	c.radius = 0.6
+	var t0 := Time.get_ticks_usec()
+	for i in 10:
+		c.key = 1000 + i
+		_model._start_drill(c)
+	var drill := (Time.get_ticks_usec() - t0) / 10.0
+	var p := _model.find_part(&"backpack")
+	var at := _part_centre(&"backpack") + _suit.global_basis * Vector3(1.0, 0.5, 0.4)
+	t0 = Time.get_ticks_usec()
+	_model._blow_panel(p, at, (at - _part_centre(&"backpack")).normalized(), 1.2, 30.0)
+	var panel := Time.get_ticks_usec() - t0
+	var thigh := _model.find_part(&"thigh.L")
+	thigh.last_hole = thigh.aabb.get_center()
+	thigh.has_hole = true
+	t0 = Time.get_ticks_usec()
+	_model.sever(thigh)
+	var cut := Time.get_ticks_usec() - t0
+	print("timing: drill start %.2f ms, panel off %.2f ms, limb cut through %.2f ms" % [drill / 1000.0, panel / 1000.0, cut / 1000.0])
+
+
 ## A burst in the backpack: the surface it finds, the plates it cuts, what flies off.
 func _panel() -> void:
 	_model.repair()
@@ -99,7 +129,7 @@ func _panel() -> void:
 	print("panel: skin %.2f m out, %d plates, triangles %s" % [found[0] if not found.is_empty() else -1.0, sizes.size(), sizes])
 	var before := current_scene.get_children().filter(func(n: Node) -> bool: return n.name.begins_with("DebrisPlate")).size()
 	_model._burst(at, 6e8, &"steam")
-	await _ticks(2)
+	await _ticks(5)
 	var after := current_scene.get_children().filter(func(n: Node) -> bool: return String(n.name).begins_with("DebrisPlate")).size()
 	print("panel: plates flying %d → %d" % [before, after])
 	_check("a burst blows armour plates off", after > before)

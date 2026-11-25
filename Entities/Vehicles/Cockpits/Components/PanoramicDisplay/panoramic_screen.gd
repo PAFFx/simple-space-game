@@ -51,6 +51,7 @@ const _SHADER := preload("res://Entities/Vehicles/Cockpits/Components/PanoramicD
 
 var _material: ShaderMaterial
 var _damage: DamageModel
+var _damage_searched := false
 var _screen_holes: Array[Vector4] = []
 var _hud_texture: Texture2D
 var _hud_parameters := {}
@@ -182,6 +183,10 @@ func clear_screen_holes() -> void:
 ## only the body cameras see comes through coarser. Without a damage model: everything.
 func _push_coverage() -> void:
 	if _damage == null:
+		if _damage_searched:
+			return
+		# Looked up once: find_component walks the whole suit.
+		_damage_searched = true
 		var vehicle := VehicleBase.find_vehicle(self)
 		_damage = vehicle.find_component(DamageModel) as DamageModel if vehicle != null else null
 		if _damage == null:

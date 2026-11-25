@@ -6,13 +6,15 @@ extends SceneTree
 #
 #   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off state=floating
 #   godot-double --path . --resolution 1280x720 -s Tools/Profiling/combat_bench.gd -- \
-#       [drones=6] [lock=1] [seconds=8] [silence=<path>] [viewports=1]
+#       [drones=6] [lock=1] [seconds=8] [silence=<path>] [viewports=1] [damage=1]
 #
 # silence: a node path under the suit (e.g. FireControl, CockpitMount, or a HUD widget as
 # CockpitMount/<cockpit>/PanoramicHud/HudViewport/Contacts), Stage/<child> or drones; that subtree's
 # process and physics processing are turned off for the measurement, so its cost is the
 # difference to a run without it. Prints one BENCH line; viewports=1 adds each viewport's
-# measured render time (CPU submission and GPU), the busiest first.
+# measured render time (CPU submission and GPU), the busiest first. damage=1: the suit is badly
+# holed first (24 holes over 12 parts, the head's eyes out, two holes in the screen), so the
+# damage shaders and the body-camera screen path are in the frame.
 
 const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
 
@@ -30,6 +32,9 @@ var _lock := true
 var _seconds := 8.0
 var _silence := ""
 var _viewports := false
+var _damage := false
+var _nohulls := false
+var _nodamage := false
 var _vps: Array[Viewport] = []
 var _vp_time := {}
 var _suit: RigidBody3D
@@ -52,6 +57,9 @@ func _initialize() -> void:
 			"seconds": _seconds = float(value)
 			"silence": _silence = value
 			"viewports": _viewports = value != "0"
+			"damage": _damage = value != "0"
+			"nohulls": _nohulls = value != "0"
+			"nodamage": _nodamage = value != "0"
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
 	_run.call_deferred()
@@ -61,6 +69,8 @@ func _run() -> void:
 	await process_frame
 	var stage: Node = (load(STAGE) as PackedScene).instantiate()
 	for node in stage.find_children("*", "", true, false):
+		if _nodamage and node is MobileSuitBody:
+			(node as MobileSuitBody).damage_model = false
 		if "capture_on_ready" in node:
 			node.set("capture_on_ready", false)
 	root.add_child(stage)
@@ -124,6 +134,11 @@ func _run() -> void:
 			n.set_physics_process(false)
 			n.set_process_internal(false)
 			n.set_physics_process_internal(false)
+	if _damage:
+		_apply_damage()
+	if _nohulls:
+		for n in _suit.find_children("DamageHull_*", "BoneAttachment3D", true, false):
+			n.queue_free()
 	await _frames(120)
 	if _viewports:
 		_vps.append(root)
@@ -196,3 +211,27 @@ func _on_post() -> void:
 func _frames(count: int) -> void:
 	for i in count:
 		await process_frame
+
+
+func _apply_damage() -> void:
+	var model := (_suit as Node as VehicleBase).find_component(DamageModel) as DamageModel
+	if model == null or not model.is_built():
+		return
+	var skel := (_suit as Node as VehicleBase).find_component(LimbReaction).skeleton as Skeleton3D
+	var n := 0
+	for p in model.parts:
+		if p.mesh == null or n >= 12:
+			continue
+		n += 1
+		var frame := skel.global_transform * skel.get_bone_global_pose(p.bone)
+		for k in 2:
+			var dir := Vector3(randf_range(-1, 1), randf_range(-0.3, 0.3), randf_range(-1, 1)).normalized()
+			var c := frame * p.aabb.get_center()
+			var h := model.holes.add_hole(p.mesh, skel, p.bone, c - dir * p.width, dir, 0.6, p.width * 2.0)
+			h.s_drill = h.s_out
+	for c in model.components:
+		if c.kind == DamageModel.Kind.EYES:
+			model._kill_component(c)
+	var screen := (_suit as Node as VehicleBase).get_cockpit().get_panoramic_screen()
+	screen.add_screen_hole(-_suit.global_basis.z + _suit.global_basis.x, deg_to_rad(16.0))
+	screen.add_screen_hole(_suit.global_basis.z - _suit.global_basis.x, deg_to_rad(16.0))

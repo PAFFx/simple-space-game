@@ -30,6 +30,7 @@ class Surface:
 	var cut_plane := Vector4(0.0, 1.0, 0.0, 0.0)   ## part space normal, offset
 	var cut_side := 0.0
 	var cut_heat := Vector2(1800.0, -1000.0)
+	var dirty := true
 
 var now := 0.0
 var _surfaces := {}   ## MeshInstance3D → Surface
@@ -40,7 +41,28 @@ func _process(delta: float) -> void:
 	for s: Surface in _surfaces.values():
 		if not is_instance_valid(s.mesh):
 			continue
-		_upload(s)
+		# Records only when they changed or a hole is still being drilled; the clock always;
+		# the part's pose only for skinned parts (it moves with the limb).
+		var fresh := false
+		for h in s.holes:
+			if now - h.time < 0.6:
+				fresh = true
+				break
+		if s.dirty or fresh:
+			_upload(s)
+		else:
+			var skinned := s.skeleton != null and s.bone >= 0
+			var p2m := Projection()
+			var m2p := Projection()
+			if skinned:
+				var part_to_model := s.mesh.global_transform.affine_inverse() * part_frame(s.mesh, s.skeleton, s.bone)
+				p2m = Projection(part_to_model)
+				m2p = Projection(part_to_model.affine_inverse())
+			for m in s.materials:
+				m.set_shader_parameter(&"hole_now", now)
+				if skinned:
+					m.set_shader_parameter(&"part_to_model", p2m)
+					m.set_shader_parameter(&"model_to_part", m2p)
 
 
 ## The part frame of `mesh` in the world: its bone posed (skinned) or the mesh itself.
@@ -169,6 +191,7 @@ static func _convert(source: Material) -> ShaderMaterial:
 
 
 func _upload(s: Surface) -> void:
+	s.dirty = false
 	var a := PackedVector4Array()
 	var b := PackedVector4Array()
 	var c := PackedVector4Array()
