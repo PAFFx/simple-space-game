@@ -68,6 +68,7 @@ func _run(cases: PackedStringArray) -> void:
 			"sever": await _sever()
 			"screen": await _screen()
 			"cut": await _cut()
+			"panel": await _panel()
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
 			"drone": await _drone()
@@ -186,6 +187,24 @@ func _sever() -> void:
 			await _frames(3)
 			_save("sever_piece")
 			break
+
+
+## A tank cell bursting in the backpack (steam): armour plates torn off and thrown out.
+func _panel() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var at := _part_centre(&"backpack") + basis * Vector3(1.0, 0.5, 0.4)
+	_look(at + basis * Vector3(14.0, 6.0, 14.0), at)
+	_model._burst(at, 6e8, &"steam")
+	for t in [0.05, 0.25, 0.6, 1.5]:
+		for i in roundi(t * 60.0) - (0 if t == 0.05 else 0):
+			await physics_frame
+		_save("panel_%03dms" % roundi(t * 1000.0))
+	_look(at + basis * Vector3(7.0, 3.0, 7.0), at)
+	for i in 120:
+		await physics_frame
+	_save("panel_opening")
 
 
 ## A thigh cut through the middle (not at the hip): the stub's cut face and the piece.

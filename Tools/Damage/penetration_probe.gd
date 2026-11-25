@@ -66,6 +66,7 @@ func _run() -> void:
 		match c:
 			"layout": _layout()
 			"twice": await _twice()
+			"panel": await _panel()
 			"cockpit": await _shot_at_point("cockpit (pilot)", _pilot_eye())
 			"head": await _shot_at("head", &"head", Vector3.ZERO)
 			"chest": await _shot_at("chest (cockpit)", &"chest", Vector3(0.0, 0.6, 0.0))
@@ -81,6 +82,27 @@ func _run() -> void:
 			"repair": await _repair()
 	print("RESULT: %s" % ("PASS" if _failed == 0 else "%d FAILED" % _failed))
 	quit()
+
+
+## A burst in the backpack: the surface it finds, the plates it cuts, what flies off.
+func _panel() -> void:
+	_model.repair()
+	await _ticks(20)
+	var p := _model.find_part(&"backpack")
+	var at := _part_centre(&"backpack") + _suit.global_basis * Vector3(1.0, 0.5, 0.4)
+	var centre := _part_centre(&"backpack")
+	var out := (at - centre).normalized()
+	var found := _model._panel_pieces(p, at, out, 1.2)
+	var sizes := []
+	for k in range(1, found.size()):
+		sizes.append((found[k][0] as PackedVector3Array).size() / 3)
+	print("panel: skin %.2f m out, %d plates, triangles %s" % [found[0] if not found.is_empty() else -1.0, sizes.size(), sizes])
+	var before := current_scene.get_children().filter(func(n: Node) -> bool: return n.name.begins_with("DebrisPlate")).size()
+	_model._burst(at, 6e8, &"steam")
+	await _ticks(2)
+	var after := current_scene.get_children().filter(func(n: Node) -> bool: return String(n.name).begins_with("DebrisPlate")).size()
+	print("panel: plates flying %d → %d" % [before, after])
+	_check("a burst blows armour plates off", after > before)
 
 
 ## The same line twice: the second shot goes through the first one's channel.

@@ -1021,11 +1021,251 @@ func _burst(at: Vector3, energy: float, kind: StringName) -> void:
 				_break_equipment(c.ref as MsEquipment)
 			else:
 				_kill_component(c)
+	# Armour panels torn off by it: the nearest few parts, facing the burst.
+	if energy >= 5e6:
+		var near: Array = []
+		for p in parts:
+			if p.severed or p.equipment != null or p.mesh == null:
+				continue
+			var centre := _part_frame(p) * p.aabb.get_center()
+			var dist := centre.distance_to(at)
+			if dist < r + p.width * 0.6:
+				near.append([dist, p, centre])
+		near.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
+		for k in mini(near.size(), 3):
+			var p: Part = near[k][1]
+			var centre: Vector3 = near[k][2]
+			var out := (at - centre).normalized() if at.distance_to(centre) > 0.2 else (at - _body.global_position).normalized()
+			var radius := clampf(r * (1.0 - float(near[k][0]) / (r + p.width * 0.6)), 0.3, p.width * 0.45)
+			var speed := clampf(sqrt(energy / 2.0e5), 8.0, 120.0)
+			_blow_panel(p, at, out, radius, speed)
 	# Panels blown off carry momentum out: the suit gets the opposite, small.
 	var push := sqrt(2.0 * 150.0 * energy) * 0.15
 	var away := (_body.global_transform * _body.center_of_mass - at)
 	if away.length() > 0.01:
 		_body.apply_impulse(away.normalized() * push, at - _body.global_position)
+
+
+## Tears an armour panel off `p`: the hull surface from `inside` toward `out`, `radius` m
+## across. The part gets a short through-hole there (the opening, with the plate's torn edge);
+## the mesh inside that outline is cut out, split into 2-3 jagged plates with thickness, and
+## thrown off at `speed`.
+func _blow_panel(p: Part, inside: Vector3, out: Vector3, radius: float, speed: float) -> void:
+	var found := _panel_pieces(p, inside, out, radius)
+	if found.is_empty():
+		return
+	var skin: float = found[0]
+	var thickness := 0.35
+	var h := holes.add_hole(p.mesh, _skel, p.bone, inside + out * (skin + thickness), -out, radius, thickness * 2.0, 1150.0)
+	h.s_drill = h.s_out
+	for k in range(1, found.size()):
+		_launch_plate(found[k], out, speed)
+
+
+## Where the line from `inside` along `dir` leaves `p`'s hull (world), or INF.
+func _surface_toward(p: Part, inside: Vector3, dir: Vector3) -> Vector3:
+	var space := _body.get_world_3d().direct_space_state
+	var far := inside + dir * (p.width * 2.0 + 4.0)
+	var q := PhysicsRayQueryParameters3D.create(far, inside, Layers.PHYS_DAMAGE)
+	q.collide_with_areas = true
+	q.collide_with_bodies = false
+	var others: Array[RID] = []
+	for rid in _area_rids:
+		if rid != p.area.get_rid():
+			others.append(rid)
+	q.exclude = others
+	var r := space.intersect_ray(q)
+	return r.position if not r.is_empty() else Vector3.INF
+
+
+## The outer skin of `p` around the line from `inside` along `out` (world), inside a ragged
+## circle of `radius`, cut from the current pose, finely split, grouped into plates by
+## nearest seed. Returns [how far out along the line the skin lies, plate, plate, …], each
+## plate [triangles (world), normals, uvs, material]; empty if there is no skin there.
+func _panel_pieces(p: Part, inside: Vector3, out: Vector3, radius: float) -> Array:
+	var mesh_in_world := p.mesh.global_transform
+	var e1 := out.cross(Vector3.UP if absf(out.y) < 0.9 else Vector3.RIGHT).normalized()
+	var e2 := out.cross(e1)
+	# Candidate skin: outward-facing, around the line, in front of the burst.
+	var cand: Array = []
+	var max_along := -INF
+	for si in p.mesh.mesh.get_surface_count():
+		var arrays := p.mesh.mesh.surface_get_arrays(si)
+		var skinned := skin_surface(p.mesh, _skel, arrays)
+		var verts: PackedVector3Array = skinned[0]
+		var norms: PackedVector3Array = skinned[1]
+		var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV] if arrays[Mesh.ARRAY_TEX_UV] != null else PackedVector2Array()
+		var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+		if idx.is_empty():
+			idx.resize(verts.size())
+			for i in verts.size():
+				idx[i] = i
+		var mat := p.mesh.mesh.surface_get_material(si)
+		for t in range(0, idx.size(), 3):
+			var tri: Array = []
+			var near := false
+			for j in 3:
+				var vi := idx[t + j]
+				var w := mesh_in_world * verts[vi]
+				tri.append([w, (mesh_in_world.basis * (norms[vi] if vi < norms.size() else out)).normalized(),
+						uvs[vi] if vi < uvs.size() else Vector2.ZERO])
+				var rel := w - inside
+				if (rel - out * rel.dot(out)).length() < radius + 2.5:
+					near = true
+			if not near:
+				continue
+			for small in _split(tri, 0.35, 5):
+				var c: Vector3 = ((small[0][0] as Vector3) + (small[1][0] as Vector3) + (small[2][0] as Vector3)) / 3.0
+				var n: Vector3 = (small[0][1] as Vector3) + (small[1][1] as Vector3) + (small[2][1] as Vector3)
+				var rel := c - inside
+				var along := rel.dot(out)
+				var flat := rel - out * along
+				var ang := atan2(flat.dot(e2), flat.dot(e1))
+				var wob := 1.0 + 0.11 * sin(5.0 * ang) + 0.06 * sin(11.0 * ang)
+				if along < -0.3 or flat.length() > radius * wob or n.normalized().dot(out) < 0.15:
+					continue
+				cand.append([small, c, along, mat])
+				max_along = maxf(max_along, along)
+	if cand.is_empty():
+		return []
+	var skin_at := max_along
+	var seeds: Array[Vector3] = []
+	var centre := inside + out * skin_at
+	for k in _rng.randi_range(2, 3):
+		var ang := TAU * (k + _rng.randf() * 0.6) / 3.0
+		seeds.append(centre + (e1 * cos(ang) + e2 * sin(ang)) * radius * _rng.randf_range(0.3, 0.7))
+	# Plain arrays while filling (packed arrays inside an Array are copies).
+	var groups: Array = []
+	for k in seeds.size():
+		groups.append([[], [], [], null])
+	for cd in cand:
+		if float(cd[2]) < skin_at - 0.9:
+			continue   # an inner layer behind the outer skin
+		var c: Vector3 = cd[1]
+		var best := 0
+		for k in seeds.size():
+			if c.distance_to(seeds[k]) < c.distance_to(seeds[best]):
+				best = k
+		var g: Array = groups[best]
+		for v in cd[0]:
+			(g[0] as Array).append(v[0])
+			(g[1] as Array).append(v[1])
+			(g[2] as Array).append(v[2])
+		if g[3] == null:
+			g[3] = cd[3]
+	var out_list: Array = [skin_at]
+	for g in groups:
+		if (g[0] as Array).size() >= 9:
+			out_list.append([PackedVector3Array(g[0]), PackedVector3Array(g[1]), PackedVector2Array(g[2]), g[3]])
+	return out_list
+
+
+## Splits a triangle ([[pos, normal, uv] × 3]) until its edges are shorter than `edge`.
+static func _split(tri: Array, edge: float, depth: int) -> Array:
+	var a: Array = tri[0]
+	var b: Array = tri[1]
+	var c: Array = tri[2]
+	var lab := (a[0] as Vector3).distance_to(b[0])
+	var lbc := (b[0] as Vector3).distance_to(c[0])
+	var lca := (c[0] as Vector3).distance_to(a[0])
+	if depth <= 0 or maxf(lab, maxf(lbc, lca)) <= edge:
+		return [tri]
+	var mid := func(u: Array, v: Array) -> Array:
+		return [((u[0] as Vector3) + (v[0] as Vector3)) * 0.5, ((u[1] as Vector3) + (v[1] as Vector3)).normalized(),
+				((u[2] as Vector2) + (v[2] as Vector2)) * 0.5]
+	var ab: Array = mid.call(a, b)
+	var bc: Array = mid.call(b, c)
+	var ca: Array = mid.call(c, a)
+	var out: Array = []
+	for t in [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]:
+		out.append_array(_split(t, edge, depth - 1))
+	return out
+
+
+## One torn plate: its outer skin with the part's material, an inner face and torn side
+## walls glowing hot, flying off.
+func _launch_plate(piece: Array, out: Vector3, speed: float) -> void:
+	var pos: PackedVector3Array = piece[0]
+	var nrm: PackedVector3Array = piece[1]
+	var uv: PackedVector2Array = piece[2]
+	var centre := Vector3.ZERO
+	for v in pos:
+		centre += v
+	centre /= pos.size()
+	var thick := 0.14
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in pos.size():
+		st.set_normal(nrm[i])
+		st.set_uv(uv[i])
+		st.add_vertex(pos[i] - centre)
+	var outer := st.commit()
+	if piece[3] != null:
+		outer.surface_set_material(0, piece[3])
+	# Inner face and the torn edges (edges used by one triangle only).
+	var edges := {}
+	for t in range(0, pos.size(), 3):
+		for j in 3:
+			var a := pos[t + j]
+			var b := pos[t + (j + 1) % 3]
+			var key := _edge_key(a, b)
+			edges[key] = edges.get(key, []) + [[a, b]]
+	var st2 := SurfaceTool.new()
+	st2.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for t in range(0, pos.size(), 3):
+		for j in [0, 2, 1]:
+			st2.set_normal(-nrm[t + j])
+			st2.add_vertex(pos[t + j] - nrm[t + j] * thick - centre)
+	var area := 0.0
+	for key in edges:
+		var list: Array = edges[key]
+		if list.size() != 1:
+			continue
+		var a: Vector3 = list[0][0]
+		var b: Vector3 = list[0][1]
+		var n := (b - a).cross(out).normalized()
+		var a2 := a - out * thick
+		var b2 := b - out * thick
+		for v in [a, b, b2, a, b2, a2]:
+			st2.set_normal(n)
+			st2.add_vertex(v - centre)
+	for t in range(0, pos.size(), 3):
+		area += (pos[t + 1] - pos[t]).cross(pos[t + 2] - pos[t]).length() * 0.5
+	st2.commit(outer)
+	var edge_mat := StandardMaterial3D.new()
+	edge_mat.albedo_color = Color(0.07, 0.06, 0.055)
+	edge_mat.metallic = 0.8
+	edge_mat.roughness = 0.5
+	edge_mat.emission_enabled = true
+	edge_mat.emission = Color(1.0, 0.32, 0.05)
+	edge_mat.emission_energy_multiplier = 2.5
+	edge_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	outer.surface_set_material(1, edge_mat)
+	var mi := MeshInstance3D.new()
+	mi.mesh = outer
+	var body := RigidBody3D.new()
+	body.name = "DebrisPlate"
+	body.collision_layer = 0
+	body.collision_mask = 0
+	body.gravity_scale = 0.0
+	body.mass = maxf(area * 400.0, 20.0)
+	body.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
+	body.inertia = Vector3.ONE * body.mass * 0.5
+	body.add_child(mi)
+	_vehicle.get_parent().add_child(body)
+	body.global_position = centre
+	body.linear_velocity = _velocity_at(centre) + (out + (centre - _body.global_position).normalized() * 0.2).normalized() * speed \
+			* _rng.randf_range(0.6, 1.2)
+	body.angular_velocity = Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 2.5
+	var tw := body.create_tween()
+	tw.tween_property(edge_mat, "emission_energy_multiplier", 0.0, 18.0)
+	_debris.append(body)
+
+
+static func _edge_key(a: Vector3, b: Vector3) -> String:
+	var ka := "%.3f,%.3f,%.3f" % [a.x, a.y, a.z]
+	var kb := "%.3f,%.3f,%.3f" % [b.x, b.y, b.z]
+	return ka + "|" + kb if ka < kb else kb + "|" + ka
 
 
 func _kill_pilot() -> void:
