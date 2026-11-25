@@ -75,6 +75,14 @@ Still to do: real inner-frame meshes under the armour.
   a wall where the other hole had removed the metal). The view ray now goes through the union
   of every hole it is in, to the first wall or floor still standing.
 
+- [x] **The cut face of a stump still "moved" with the view** (play-test, the right forearm cut
+  off). The re-solidified metal (bores, cut faces, lips) was nearly mirror-smooth and very
+  metallic: its bumps mirrored the planet and the sun in specks that slid as the camera moved.
+  Now matte slag (roughness ~0.75, metallic 0.55).
+- [x] **A bare shield stopped the beam** after melting a big crater: 450 kg/m², ×3.3 on a
+  slant, took more than a whole rifle shot. Now 250 kg/m², a slant at most doubles it: the
+  beam goes through and on into the suit.
+
 ## C. Power and hydraulics: the suit is a system, not a sack of tanks
 
 - [ ] **Generators.** Two big Minovsky reactors in the abdomen below the cockpit (separate, but

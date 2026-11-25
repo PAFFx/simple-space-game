@@ -86,8 +86,10 @@ void fragment() {
 		float deep = exp(-h.depth / 1.6);
 		float t = h.temperature * (0.82 + 0.2 * runs + 0.12 * melt);
 		albedo = mix(vec3(0.05, 0.045, 0.04), vec3(0.12, 0.105, 0.09), runs) * (0.4 + 0.6 * deep);
-		rough = 0.25 + 0.2 * runs;
-		metal = 0.9;
+		// Re-solidified slag is rough: glossy, its bumps mirrored the planet and sun in
+		// specks that slid with the view.
+		rough = 0.72 + 0.18 * runs;
+		metal = 0.55;
 		emit = hole_blackbody(t) * hole_glow(t) * (0.25 + 0.75 * deep);
 	} else if (!FRONT_FACING) {
 		// The suit's inside (a back face: only ever seen through an opening): dark metal and
@@ -112,8 +114,8 @@ void fragment() {
 		albedo = mix(albedo, soot, h.scorch * (0.85 + 0.15 * soft));
 		vec3 tint = mix(vec3(0.5, 0.36, 0.16), vec3(0.2, 0.22, 0.4), soft);
 		albedo = mix(albedo, tint * 0.5, h.tint * (1.0 - clamp(h.temperature / 1000.0, 0.0, 1.0)) * 0.3);
-		rough = mix(rough, mix(0.15, 0.45, beads), h.lip);
-		metal = mix(metal, 0.9, h.lip);
+		rough = mix(rough, mix(0.5, 0.75, beads), h.lip);
+		metal = mix(metal, 0.6, h.lip);
 		albedo = mix(albedo, vec3(0.07, 0.06, 0.05) * (0.7 + 0.6 * beads), h.lip);
 		emit += hole_blackbody(t) * hole_glow(t);
 	}
