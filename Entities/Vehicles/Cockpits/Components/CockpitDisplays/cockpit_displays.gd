@@ -17,11 +17,21 @@ extends Node
 	"ScreenLeft": [preload("res://Entities/Vehicles/Cockpits/Components/CockpitDisplays/engine_page.gd"), Vector2i(704, 512)],
 	"ScreenRight": [preload("res://Entities/Vehicles/Cockpits/Components/CockpitDisplays/target_page.gd"), Vector2i(704, 512)],
 }
+## Pages a screen switches to: after each new damage for `damage_page_time` s, and on the
+## `mfd_left_page` action (P) until pressed again.
+@export var alternates := {
+	"ScreenLeft": preload("res://Entities/Vehicles/Cockpits/Components/CockpitDisplays/damage_page.gd"),
+}
+@export var damage_page_time: float = 10.0
 ## Where to look for the screen meshes (the cockpit model). Default: the parent.
 @export var model_root: Node
 @export var brightness: float = 1.15
 
 var pages := {}
+var _primary := {}      ## mesh name → its own page
+var _alternate := {}    ## mesh name → its alternate page
+var _alt_until := {}    ## mesh name → time the alternate shows until (INF: held by the key)
+var _time := 0.0
 
 var _viewports := {}
 # Seconds until each page is due, by mesh name.
@@ -52,6 +62,17 @@ func _ready() -> void:
 		if fcs != null:
 			fcs.register_soi_display(page, StringName(mesh_name.trim_prefix("Screen").to_lower()))
 		pages[mesh_name] = page
+		_primary[mesh_name] = page
+		if alternates.has(mesh_name):
+			var alt: MfdPage = (alternates[mesh_name] as GDScript).new()
+			alt.name = mesh_name.trim_prefix("Screen") + "AltPage"
+			alt.size = Vector2(spec[1])
+			alt.visible = false
+			vp.add_child(alt)
+			alt.setup(vehicle)
+			_alternate[mesh_name] = alt
+			_alt_until[mesh_name] = -1.0
+			_hook_damage.call_deferred(vehicle, mesh_name)
 		_viewports[mesh_name] = vp
 		_due[mesh_name] = 0.0
 		var mat := ShaderMaterial.new()
@@ -61,7 +82,52 @@ func _ready() -> void:
 		mesh.material_override = mat
 
 
+## The suit makes its damage model after its cockpit is ready: hook up then.
+func _hook_damage(vehicle: VehicleBase, mesh_name: String) -> void:
+	var damage := vehicle.find_component(DamageModel) as DamageModel if vehicle != null else null
+	if damage == null:
+		return
+	var show := func(_a = null, _b = null) -> void: _flash_alternate(mesh_name)
+	damage.component_destroyed.connect(show)
+	damage.part_severed.connect(show)
+	damage.cockpit_holed.connect(show)
+
+
+const PAGE_ACTION := &"mfd_left_page"
+
+
+func _input(event: InputEvent) -> void:
+	if not InputMap.has_action(PAGE_ACTION):
+		InputMap.add_action(PAGE_ACTION)
+		var key := InputEventKey.new()
+		key.physical_keycode = KEY_P
+		InputMap.action_add_event(PAGE_ACTION, key)
+	if event.is_action_pressed(PAGE_ACTION):
+		for mesh_name: String in _alternate:
+			_alt_until[mesh_name] = -1.0 if float(_alt_until[mesh_name]) == INF else INF
+			_show(mesh_name)
+
+
+func _flash_alternate(mesh_name: String) -> void:
+	if float(_alt_until[mesh_name]) != INF:
+		_alt_until[mesh_name] = _time + damage_page_time
+	_show(mesh_name)
+
+
+func _show(mesh_name: String) -> void:
+	var alt_on := _time < float(_alt_until[mesh_name])
+	var want: MfdPage = _alternate[mesh_name] if alt_on else _primary[mesh_name]
+	if pages[mesh_name] != want:
+		(pages[mesh_name] as MfdPage).visible = false
+		want.visible = true
+		pages[mesh_name] = want
+		_due[mesh_name] = 0.0
+
+
 func _process(delta: float) -> void:
+	_time += delta
+	for mesh_name: String in _alternate:
+		_show(mesh_name)
 	# At most one page per frame: the most overdue one.
 	var next := ""
 	for mesh_name: String in _due:

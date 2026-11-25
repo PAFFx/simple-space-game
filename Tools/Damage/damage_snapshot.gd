@@ -72,6 +72,7 @@ func _run(cases: PackedStringArray) -> void:
 			"cockpit": await _cockpit_view()
 			"vent": await _vent()
 			"lens": await _lens()
+			"page": await _page()
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
 			"drone": await _drone()
@@ -214,6 +215,25 @@ func _cockpit_view() -> void:
 	await _frames(5)
 	_save("cockpit_4_other_side")
 	print("pilot alive: ", not _model.pilot_dead)
+	_cam.make_current()
+
+
+## The left display's damage page after a forearm shot, a thruster fault and a camera out.
+func _page() -> void:
+	_model.repair()
+	await _frames(20)
+	var fp := _vehicle.get_cockpit().get_player_camera() as PilotCamera
+	fp.make_current()
+	fp.set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(-38.0), deg_to_rad(28.0), 0.0)))
+	var basis := _suit.global_basis
+	var dir := (basis * Vector3(-0.5, 0.0, 1.0)).normalized()
+	var target := _part_centre(&"forearm.R")
+	await _fire(target - dir * 300.0, dir, "page_shot", [0.5])
+	_kill(&"camera 2")
+	for i in 60:
+		await physics_frame
+	_save("page_left_display")
+	fp.set_look_rotation(Basis.IDENTITY)
 	_cam.make_current()
 
 
