@@ -110,6 +110,13 @@ Still to do: real inner-frame meshes under the armour.
   tanks: hits there should catch fire, arc and explode (sized by what is there), not only the
   tank cells. Ties into the network above (a ruptured line feeds a fire for a while).
 
+- [ ] **Thrusters on a destroyed part keep working** (play-test: backpack and chest shot to
+  pieces, their thrusters still fire and show plumes). *Cause:* a thruster dies only when a
+  beam's drilled line reaches it or its part is severed; the chest, spine and pelvis never
+  sever, and a part shot down to nothing doesn't take its thrusters with it. *Fix:* a part's
+  thrusters (and their feed lines) fail with the section lost: derated as it goes, dead below
+  ~30% left; torn panels and bursts near a nozzle hit it too.
+
 ## D. Equipment: weapons and the shield
 
 - [ ] **Weapons have no hitbox and no destruction mesh.** The rifle, bazooka and funnels must be
@@ -125,6 +132,19 @@ Still to do: real inner-frame meshes under the armour.
   *Done:* it used to leave a 2.2 m, 2 cm deep crater whose flat floor, ray-traced behind the
   curved face, swam with the view and kept the shield's outline; now a scorch-only record
   (soot, no crater) and thick smoke off the face.
+
+- [ ] **The body (chest, waist) is the most hollow:** shots into it often open onto an empty
+  shell. The render meshes are thin skins with nothing behind; the dark interior shading helps
+  but there is no inside. Needs inner frame and machinery meshes under the torso armour
+  (frame, reactor housing, cockpit block, ducts), drawn only where the armour is opened (or
+  always: they cost little).
+- [ ] **The cockpit's panoramic screen shows through a hole in the chest** before the cockpit
+  is breached. *Cause:* the cockpit shell is on the cockpit-only render layer (not drawn by the
+  outside camera), but the screen mesh is also on the outside layer (`VEHICLE_EXT | COCKPIT`):
+  through any hole in the chest skin the outside view sees the screen floating inside, no shell
+  around it. *Fix:* the screen only on the cockpit layer (the sensor view excludes it already),
+  and the cockpit shell's outside drawn for the outside camera, so a chest hole shows the
+  cockpit block, and only a breach shows the screen.
 
 ## E. Smoke and fire
 
