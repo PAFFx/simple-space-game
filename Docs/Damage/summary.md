@@ -341,6 +341,9 @@ Differences from the design above:
   paint glow (`sensor_glow.gdshader`, an overlay on the Head / Chest mesh, by atlas UV rect);
   the rest show a dim green dot (1.2). Dark once the camera is shot out: the enemy sees the
   blind spots too.
+  The dots were placed by hand from pictures with `Tools/Damage/camera_dot_tool.gd` (one view
+  per camera with the thrusters marked; a picked pixel is cast onto the posed skin): on the
+  armour, ≥ 1.4 m from any nozzle, clear of the stowed rifle, bazooka and shield.
 - **Missile fragments**: the strikes that land show as spark splashes on the facing parts.
 - **Not built yet**: limp joints swinging (a hit joint is taken out of AMBAC, held), fault
   detection from motion, vulcan pits, inner frame under intact armour, loose model pieces
