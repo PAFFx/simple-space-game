@@ -317,6 +317,12 @@ Differences from the design above:
 - **Venting**: a burst cell empties through the hole at 2·Cd·P·A ≈ 0.41 MN for cell mass ×
   25 m/s ÷ that (~0.07 s), pushing from where the line meets the hull, then the cut feed line
   leaks 4 kN for 15 s; both show as icy jets. A backpack cell: 0.8 m/s and 14°/s (FCS off).
+- **Minovsky lines** (2026-11-26): the reactor's Minovsky particles run through the whole body
+  as the high-power hydraulics, so every part a beam goes through (and a drill face that stops
+  inside a part after taking > 30% of it) ruptures its lines 0.03–0.15 s later: a burst of
+  20–60 MJ × the part's mass (fire, arcs, the plate torn off nearest the hole, 1 panel max),
+  then smoke leaking from the exit hole for 5–9 s. Not after a reactor breach or once the part
+  is severed.
 - **Pilot**: a capsule (torso and legs) on the cockpit camera; any drilled cylinder that
   reaches it kills (no extra margin yet). GAME OVER via the range panel.
 - **Reactor breach**: flash and fluence on everything in the `damageable` group; the suit is

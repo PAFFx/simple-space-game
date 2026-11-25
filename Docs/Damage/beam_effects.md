@@ -159,6 +159,11 @@ Checked frame by frame with `Tools/Damage/damage_snapshot.gd` (`hole`, `cool`, `
   melt runs along the axis, dimmer the deeper the view ray goes into it (`exp(−depth/1.6 m)`),
   so it reads as a hole, not a glowing plug. UV-based noise gave concentric banding; strong
   anisotropic noise looked like wood grain.
+- **Melt texture** (2026-11-26): bump-mapped from one shared tiling height map
+  (`HoleSet.melt_texture`, warped simplex FBM, 512²), so the bore, the lip and the cut face read
+  as lumpy re-melted dross, glowing pockets cooling first. The bore samples it in its own
+  coordinates, the zone around the mouth in a continuous oblique projection of part space (a
+  UV seam there showed as a line), depth 0.07 m in the bore, 0.035 m at the lip.
 - **Around the mouth**: molten lip (beaded, glossy), glow fading in ~0.4 radii, a narrow heat
   tint, soot to ~1.6 radii. Patchy noise there read as camouflage: kept soft.
 - **Spray**: 45 streaks in (blow-back), 90 out (blow-out), 60–240 m/s, 0.15–0.8 s, thin and

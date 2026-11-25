@@ -131,11 +131,14 @@ cockpit.
   gone gets the bit and is drawn on the screen (`DamageModel.set_opaque`). The shield's camera
   dies with a through-hole (60%); broken equipment turns opaque. Rearm clears it.
 - **Composite screens** (2026-11-26): the screen is built from big composite screens, each of a
-  few sub-screens behind one glass, with bezels drawn on it (a 0.55° frame between composites,
-  a 0.16° seam between sub-screens): the **door** (centre front, ±19°, full height; its lower
-  sub-screen is the hatch), the **front left / right** (19–75°, 2×2), the **sides** (75–145°,
-  2×2), the **rear** (2×2), the **top** (above 45°, 4 quarters) and the **bottom** (below −61°,
-  4 quarters). Edges in `panel_layout` / `panel_caps` on the screen shader.
+  few sub-screens behind one glass: the **door** (centre front, a trapezoid narrowing above the
+  hatch, its lower sub-screen the hatch), the **front left / right** (out to ~75°, leaning
+  edges, sub-screens split on slants), the **sides** (to ~145°), the **rear**, the **top** (above
+  45 + 7·cos(az)°, rotated quarters) and the **bottom** (below −61° at the front, −52° at the
+  sides). No grid, no circles. **While the glass is whole the pilot sees no seams at all**:
+  the bezels (0.55° between composites, 0.16° between sub-screens) are drawn only on a
+  composite whose glass has broken. Edges in `screen_panel` / `panel_layout` / `panel_caps` on
+  the screen shader.
 - **Screen holes**: where a beam's line crosses the cockpit sphere (1.6 m), up to 8 holes in the
   screen's frame: burned open (ragged, molten rim). The sub-screen a hole is in dies whole (dark
   glass with a faint sheen); the glass of that composite cracks from the hole (hairline radial
