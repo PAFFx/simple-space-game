@@ -264,10 +264,22 @@ func _lens() -> void:
 	_look(at + basis * Vector3(7.0, 2.0, -16.0), at)
 	await _frames(5)
 	_save("lens_1_live")
+	var head := _part_centre(&"head")
+	for v in [["lens_head", head, Vector3(1.2, -0.5, -5.0)], ["lens_head_back", head, Vector3(-0.8, 4.0, 3.0)],
+			["lens_chest", at + basis * Vector3(-1.4, -0.4, -0.8), Vector3(-1.5, 0.5, -4.5)],
+			["lens_body_back", at + basis * Vector3(0.0, -4.0, 0.0), Vector3(-6.0, 3.0, 22.0)],
+			["lens_body_front", at + basis * Vector3(0.0, -6.0, 0.0), Vector3(4.0, 2.0, -26.0)]]:
+		_look(v[1] + basis * v[2], v[1])
+		await _frames(3)
+		_save(v[0])
+	_look(at + basis * Vector3(7.0, 2.0, -16.0), at)
 	for n in [&"main camera", &"camera 0", &"camera 2"]:
 		_kill(n)
 	await _frames(5)
 	_save("lens_2_shot_out")
+	_look(head + basis * Vector3(1.2, -0.5, -5.0), head)
+	await _frames(3)
+	_save("lens_head_shot_out")
 
 
 ## A thigh cell venting (the push, the icy jet) and a calf nozzle's valve stuck open.

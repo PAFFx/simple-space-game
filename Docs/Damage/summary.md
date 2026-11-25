@@ -334,8 +334,13 @@ Differences from the design above:
   section left (gone: dashed), thrusters as dots (red dead, amber derated or stuck nozzle,
   flashing red valve stuck open), cameras as squares; reactor, pilot, I-field charges, counts,
   the last 7 events.
-- **Camera lights**: a small green light on each camera's lens (on its part's surface toward
-  where it looks), dark once it is shot out: the enemy sees the blind spots too.
+- **Camera lights** (2026-11-27): every camera sits on a `CameraMarker` in the suit scene
+  (`Cameras/Attach_<bone>/<name>`): its position, its facing (−Z, turning with the bone) and its
+  light. Move them in the editor; `build_rx93_scene.gd` keeps them when it regenerates. The
+  painted sensors (eyes 8, left chest 8, forehead 3, back of the head 3) make their own green
+  paint glow (`sensor_glow.gdshader`, an overlay on the Head / Chest mesh, by atlas UV rect);
+  the rest show a dim green dot (1.2). Dark once the camera is shot out: the enemy sees the
+  blind spots too.
 - **Missile fragments**: the strikes that land show as spark splashes on the facing parts.
 - **Not built yet**: limp joints swinging (a hit joint is taken out of AMBAC, held), fault
   detection from motion, vulcan pits, inner frame under intact armour, loose model pieces

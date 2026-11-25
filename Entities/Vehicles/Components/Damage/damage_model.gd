@@ -96,7 +96,7 @@ class Component:
 	var facing := Vector3.ZERO   ## cameras: which way it looks (body frame)
 	var half_deg := 65.0         ## cameras: half its field, deg
 	var grade := 1               ## cameras: 0 the head's main camera, 1 a body camera
-	var lens: MeshInstance3D     ## cameras: its green lens light
+	var markers: Array[CameraMarker] = []   ## cameras: where it sits, its lens light(s)
 
 class Drill:
 	var key := 0
@@ -151,7 +151,7 @@ var _rng := RandomNumberGenerator.new()
 var _hull_layers: Array = []
 var _stubs: Array[Node] = []
 var _opaque: Array[Node] = []
-var _lens_dead_material: Material
+var _glow_slots := {}   ## CameraMarker → [overlay ShaderMaterial, lens index]
 var _thruster_saved := {}     ## Thruster → [max thrust, gimbal limits ×3] as built
 var _leaks: Array = []        ## [node, local point, local jet direction, N, until]
 
@@ -274,7 +274,7 @@ func _build() -> void:
 			c.box = p.box
 			c.ref = eq
 	_build_components()
-	_build_lens_lights()
+	_place_cameras()
 	_built = true
 
 
@@ -462,56 +462,95 @@ func _build_components() -> void:
 			_panoramic_camera(StringName("%s camera" % spec[0]), part, spec[1], spec[2])
 
 
-func _lens_live_material() -> Material:
-	for c in components:
-		if c.alive and c.lens != null and is_instance_valid(c.lens) and c.lens.material_override != _lens_dead_material:
-			return c.lens.material_override
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(0.35, 1.0, 0.45)
-	return mat
+const GLOW_SHADER := preload("res://Entities/Vehicles/Components/Damage/Shader/sensor_glow.gdshader")
 
 
-## A small green light on every camera's lens (riding its part): dark once the camera is gone.
-func _build_lens_lights() -> void:
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(0.35, 1.0, 0.45)
-	var dead_mat := StandardMaterial3D.new()
-	dead_mat.albedo_color = Color(0.03, 0.05, 0.035)
-	dead_mat.roughness = 0.3
-	_lens_dead_material = dead_mat
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.09
-	sphere.height = 0.18
-	sphere.radial_segments = 8
-	sphere.rings = 4
-	for c in components:
-		if c.kind != Kind.EYES and c.kind != Kind.BODY_CAMERA:
+## The cameras sit where the suit scene's CameraMarkers put them (Cameras/Attach_<bone>/…):
+## the camera's position, its facing (−Z) and its lens light. A painted lens makes its green
+## paint on the part's mesh glow (an overlay), instead of a light.
+func _place_cameras() -> void:
+	_glow_slots.clear()
+	var sensors := _vehicle.find_component(SensorSuite) as SensorSuite
+	var to_body := _body.global_transform.affine_inverse()
+	for node in _vehicle.find_children("*", "Marker3D", true, false):
+		var m := node as CameraMarker
+		if m == null:
 			continue
-		var anchor: Node3D = c.part.area if c.part != null and c.part.area != null else _body as Node as Node3D
-		var lens := MeshInstance3D.new()
-		lens.name = "Lens"
-		lens.mesh = sphere
-		lens.material_override = mat
-		lens.layers = Layers.VEHICLE_EXT
-		lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		anchor.add_child(lens)
-		# On the part's surface toward where the camera looks.
-		var at := component_position(c)
-		var dir := (_body.global_basis * c.facing).normalized() if c.facing != Vector3.ZERO else _body.global_basis * Vector3.FORWARD
-		if c.part != null:
-			var surface := _surface_toward(c.part, at, dir)
-			if surface != Vector3.INF:
-				at = surface + dir * 0.05
-		lens.global_position = at
-		var light := OmniLight3D.new()
-		light.light_color = Color(0.4, 1.0, 0.5)
-		light.light_energy = 0.6
-		light.omni_range = 0.9
-		light.shadow_enabled = false
-		lens.add_child(light)
-		c.lens = lens
+		var c := _find_component(m.camera)
+		if c == null:
+			push_warning("CameraMarker %s: no camera '%s'" % [m.name, m.camera])
+			continue
+		c.markers.append(m)
+		var attach := m.get_parent() as BoneAttachment3D
+		var part := find_part(attach.bone_name) if attach != null else null
+		if not m.glow_only:
+			c.node = m
+			c.local = Vector3.ZERO
+			c.bone = -1
+			if part != null:
+				c.part = part
+			if c.kind != Kind.EYES:
+				c.facing = (to_body.basis * -m.global_basis.z).normalized()
+			if c.kind == Kind.BODY_CAMERA and c.ref is SensorSuite and c.index >= 0:
+				sensors.body_camera_positions[c.index] = to_body * m.global_position
+				if c.index < sensors.body_camera_facings.size():
+					sensors.body_camera_facings[c.index] = c.facing
+		if m.is_painted() and part != null and part.mesh != null:
+			_add_glow(part.mesh, m)
+		m.set_alive(c.alive)
+
+
+func _add_glow(mesh: MeshInstance3D, m: CameraMarker) -> void:
+	var mat := mesh.material_overlay as ShaderMaterial
+	if mat == null or mat.shader != GLOW_SHADER:
+		mat = ShaderMaterial.new()
+		mat.shader = GLOW_SHADER
+		var src := mesh.get_active_material(0) as BaseMaterial3D
+		if src != null:
+			mat.set_shader_parameter(&"albedo_texture", src.albedo_texture)
+		mat.set_meta(&"rects", PackedVector4Array())
+		mat.set_meta(&"energy", PackedFloat32Array())
+		mesh.material_overlay = mat
+	var rects: PackedVector4Array = mat.get_meta(&"rects")
+	var energy: PackedFloat32Array = mat.get_meta(&"energy")
+	for r in m.painted_uv:
+		if rects.size() >= 8:
+			break
+		_glow_slots[m] = _glow_slots.get(m, []) + [[mat, rects.size()]]
+		rects.append(Vector4(r.position.x, r.position.y, r.end.x, r.end.y))
+		energy.append(m.brightness)
+	mat.set_meta(&"rects", rects)
+	mat.set_meta(&"energy", energy)
+	_upload_glow(mat)
+
+
+func _upload_glow(mat: ShaderMaterial) -> void:
+	var rects: PackedVector4Array = mat.get_meta(&"rects")
+	var energy: PackedFloat32Array = mat.get_meta(&"energy")
+	mat.set_shader_parameter(&"lens_count", rects.size())
+	mat.set_shader_parameter(&"lens_rect", rects)
+	mat.set_shader_parameter(&"lens_energy", energy)
+
+
+## A camera's lens lights (and painted lenses) lit or dark.
+func _light_camera(c: Component, alive: bool) -> void:
+	for m in c.markers:
+		if not is_instance_valid(m):
+			continue
+		m.set_alive(alive)
+		for slot in _glow_slots.get(m, []):
+			var mat: ShaderMaterial = slot[0]
+			var energy: PackedFloat32Array = mat.get_meta(&"energy")
+			energy[slot[1]] = m.brightness if alive else 0.0
+			mat.set_meta(&"energy", energy)
+			_upload_glow(mat)
+
+
+func _find_component(cname: StringName) -> Component:
+	for c in components:
+		if c.name == cname:
+			return c
+	return null
 
 
 func _panoramic_camera(cname: StringName, part: Part, facing: Vector3, half_deg: float) -> Component:
@@ -533,7 +572,11 @@ func get_camera_cones() -> Array:
 			continue
 		if c.kind != Kind.EYES and c.kind != Kind.BODY_CAMERA:
 			continue
-		out.append([(basis * c.facing).normalized(), cos(deg_to_rad(c.half_deg)), c.grade])
+		# A camera on a marker turns with its bone (a forearm camera with the arm).
+		var dir := (basis * c.facing).normalized()
+		if c.kind != Kind.EYES and c.node is CameraMarker:
+			dir = -c.node.global_basis.z
+		out.append([dir, cos(deg_to_rad(c.half_deg)), c.grade])
 	return out
 
 
@@ -1007,10 +1050,7 @@ func _kill_component(c: Component, dead := false) -> void:
 	if not c.alive:
 		return
 	c.alive = false
-	if c.lens != null and is_instance_valid(c.lens):
-		c.lens.material_override = _lens_dead_material
-		for light in c.lens.get_children():
-			(light as Node3D).visible = false
+	_light_camera(c, false)
 	match c.kind:
 		Kind.THRUSTER:
 			_hit_thruster(c, dead)
@@ -1772,10 +1812,11 @@ func _remove_parts(group: Array[Part]) -> void:
 				if c.kind in [Kind.EYES, Kind.BODY_CAMERA, Kind.VULCAN, Kind.THRUSTER]:
 					c.alive = true
 					_kill_component(c, true)
-		var attach := _vehicle.get_node_or_null(NodePath("Thrusters/Attach_" + String(q.name).replace(".", "_")))
-		if attach != null and attach is Node3D:
-			(attach as Node3D).visible = false
-			_hidden_nodes.append(attach)
+		for root in ["Thrusters", "Cameras"]:
+			var attach := _vehicle.get_node_or_null(NodePath(root + "/Attach_" + String(q.name).replace(".", "_")))
+			if attach != null and attach is Node3D:
+				(attach as Node3D).visible = false
+				_hidden_nodes.append(attach)
 	_capability_changed()
 
 
@@ -1991,10 +2032,7 @@ func repair() -> void:
 			p.area.collision_layer = Layers.PHYS_DAMAGE
 	for c in components:
 		c.alive = true
-		if c.lens != null and is_instance_valid(c.lens):
-			c.lens.material_override = _lens_live_material()
-			for light in c.lens.get_children():
-				(light as Node3D).visible = true
+		_light_camera(c, true)
 		if c.kind == Kind.THRUSTER:
 			(c.ref as Thruster).enabled = true
 		elif c.kind == Kind.VULCAN:

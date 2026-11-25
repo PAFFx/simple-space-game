@@ -378,6 +378,7 @@ func _initialize() -> void:
 	library = load(ANIM_PATH)
 
 	var root := _build_scene(library)
+	_keep_cameras(root)
 	var packed := PackedScene.new()
 	var err := packed.pack(root)
 	if err != OK:
@@ -387,6 +388,26 @@ func _initialize() -> void:
 	model.free()
 	root.free()
 	quit()
+
+
+## The camera markers (CameraMarker, placed by hand in the editor) carry over from the
+## scene being replaced.
+func _keep_cameras(root: Node) -> void:
+	if not ResourceLoader.exists(SCENE_PATH):
+		return
+	var old := (load(SCENE_PATH) as PackedScene).instantiate(PackedScene.GEN_EDIT_STATE_MAIN)
+	var cams := old.get_node_or_null(^"Cameras")
+	if cams != null:
+		old.remove_child(cams)
+		root.add_child(cams)
+		_own(cams, root)
+	old.free()
+
+
+func _own(node: Node, owner: Node) -> void:
+	node.owner = owner
+	for child in node.get_children():
+		_own(child, owner)
 
 
 # --- Scene ---

@@ -119,6 +119,10 @@ cockpit.
 
 ## As built (2026-11-25)
 
+- **Where they sit**: `CameraMarker` nodes under `Cameras` in `mobile_suit_rx93.tscn`, one per
+  camera (`camera` names the DamageModel camera; `glow_only` adds a second painted lens, the
+  forehead telescope's, to the main camera). The body cameras' SensorSuite positions are taken
+  from them too. The chest camera is the green sensor on the left chest.
 - **Cameras** (`DamageModel.get_camera_cones`): the head's main camera (105° half field, the head
   turns), a rear head camera (75°), the six SensorSuite body cameras (65–70°), and new ones on
   the rear skirts (65°), feet (70°) and forearms (60°). All alive they cover the whole sphere;

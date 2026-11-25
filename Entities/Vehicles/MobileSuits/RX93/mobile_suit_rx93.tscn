@@ -45,6 +45,7 @@
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/Sensors/sensor_suite.gd" id="43_wt230"]
 [ext_resource type="Script" path="res://Common/Controls/OrbitCamera/orbit_camera.gd" id="44_wpch5"]
 [ext_resource type="Script" path="res://Entities/Vehicles/Components/ViewSwitcher/view_switcher.gd" id="45_tlyjy"]
+[ext_resource type="Script" path="res://Entities/Vehicles/Components/Damage/camera_marker.gd" id="40_pdjua"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_ekny4"]
 size = Vector3(4, 4.96, 4.7)
@@ -1625,3 +1626,187 @@ distance = 45.0
 [node name="ViewSwitcher" type="Node" parent="." unique_id=781346790 node_paths=PackedStringArray("external_camera")]
 script = ExtResource("45_tlyjy")
 external_camera = NodePath("../ExternalCamera")
+
+[node name="Cameras" type="Node3D" parent="." unique_id=99246301]
+
+[node name="Attach_head" type="BoneAttachment3D" parent="Cameras" unique_id=1863527101]
+bone_name = "head"
+bone_idx = 5
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="Eyes" type="Marker3D" parent="Cameras/Attach_head" unique_id=710412486]
+transform = Transform3D(1, 0, 0, 0, 0.9999999999999982, -5.960468740795472e-08, 0, 5.960468740795472e-08, 0.9999999999999982, 0, 0.5109967961908204, -0.8879988077279087)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"main camera"
+brightness = 8.0
+painted_uv = Array[Rect2]([Rect2(0.0055, 0.135, 0.034, 0.014)])
+
+[node name="Forehead" type="Marker3D" parent="Cameras/Attach_head" unique_id=1686742642]
+transform = Transform3D(1, 0, 0, 0, 0.9889363440265095, -0.14834051187548658, 0, 0.14834051187548658, 0.9889363440265095, 0, 1.554996874928566, -1.1649987620110986)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"main camera"
+glow_only = true
+brightness = 3.0
+painted_uv = Array[Rect2]([Rect2(0.2955, 0.0935, 0.0175, 0.0133)])
+
+[node name="BackOfHead" type="Marker3D" parent="Cameras/Attach_head" unique_id=1973737328]
+transform = Transform3D(-1, 0, 0, 0, 0.8944272176559409, -0.44721354218790405, 0, -0.44721354218790405, -0.8944272176559409, 0, 1.3349967199563828, 1.2150013667349282)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"rear head camera"
+brightness = 3.0
+painted_uv = Array[Rect2]([Rect2(0.584, 0.01, 0.014, 0.017)])
+
+[node name="Attach_chest" type="BoneAttachment3D" parent="Cameras" unique_id=93379866]
+bone_name = "chest"
+bone_idx = 3
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="LeftChest" type="Marker3D" parent="Cameras/Attach_chest" unique_id=336242799]
+transform = Transform3D(0.9889363541653802, 8.743961339961702e-09, 0.148340444283027, 0, 0.9999999999999983, -5.894522820275903e-08, -0.14834044428302726, 5.829307907428286e-08, 0.9889363541653784, -1.407, 4.662998117148939, -0.8629988862868776)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"camera 0"
+brightness = 8.0
+painted_uv = Array[Rect2]([Rect2(0.4195, 0.1442, 0.0086, 0.0183)])
+
+[node name="Attach_backpack" type="BoneAttachment3D" parent="Cameras" unique_id=169028151]
+bone_name = "backpack"
+bone_idx = 6
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="Backpack" type="Marker3D" parent="Cameras/Attach_backpack" unique_id=537511804]
+transform = Transform3D(-1, 0, 0, 0, 0.9999999999999982, 5.960468030252739e-08, 0, 5.960468030252739e-08, -0.9999999999999982, 0, 2.6399984216688495, 2.1200011229518907)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"camera 1"
+brightness = 1.2
+
+[node name="Attach_shoulder_R" type="BoneAttachment3D" parent="Cameras" unique_id=1174447967]
+bone_name = "shoulder.R"
+bone_idx = 14
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="ShoulderR" type="Marker3D" parent="Cameras/Attach_shoulder_R" unique_id=949983842]
+transform = Transform3D(0.7071068022599715, -2.980233659855021e-08, -0.7071067601131225, 0, 0.9999999999999992, -4.2146869864152384e-08, 0.707106760113123, 2.980233837490795e-08, 0.7071068022599709, 1.2924998044966571, 1.5149957177348696, -0.18499898309804053)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"camera 2"
+brightness = 1.2
+
+[node name="Attach_shoulder_L" type="BoneAttachment3D" parent="Cameras" unique_id=1749947625]
+bone_name = "shoulder.L"
+bone_idx = 19
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="ShoulderL" type="Marker3D" parent="Cameras/Attach_shoulder_L" unique_id=1393471248]
+transform = Transform3D(0.7071068022599715, 2.980233659855021e-08, 0.7071067601131225, 0, 0.9999999999999992, -4.2146869864152384e-08, -0.707106760113123, 2.980233837490795e-08, 0.7071068022599709, -1.2924998044966571, 1.5149957177348554, -0.18499898309806895)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"camera 3"
+brightness = 1.2
+
+[node name="Attach_skirt_front_L" type="BoneAttachment3D" parent="Cameras" unique_id=2017205688]
+bone_name = "skirt_front.L"
+bone_idx = 26
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="WaistFront" type="Marker3D" parent="Cameras/Attach_skirt_front_L" unique_id=741311027]
+transform = Transform3D(-1, 0, 0, 0, 0.836575272561101, -0.5478519994846414, 0, -0.5478519994846414, -0.836575272561101, 1.3324999809264853, 2.469418604602083, 0.024004499980804894)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"camera 4"
+brightness = 1.2
+
+[node name="Attach_skirt_rear_L" type="BoneAttachment3D" parent="Cameras" unique_id=391268101]
+bone_name = "skirt_rear.L"
+bone_idx = 31
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="WaistRear" type="Marker3D" parent="Cameras/Attach_skirt_rear_L" unique_id=1900107436]
+transform = Transform3D(0.9999787685148039, 0.0037087664296860836, 0.005357944679271341, 0, 0.822233836675326, -0.5691498201933947, -0.006516327156926556, 0.5691377362974129, 0.822216379429795, 1.6204792116395197, 2.143839983997715, -0.16645224799168545)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"camera 5"
+brightness = 1.2
+
+[node name="SkirtRearL" type="Marker3D" parent="Cameras/Attach_skirt_rear_L" unique_id=2067657334]
+transform = Transform3D(0.8742810865237912, 0.25500756724934365, 0.41304203465549444, 0, 0.8508961929242527, -0.5253338641921088, -0.4854200055073742, 0.45928946157361866, 0.7439224480687731, -0.2755929524493581, 2.470777969307484, -0.3478587492038798)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"skirt_rear.L camera"
+brightness = 1.2
+
+[node name="Attach_skirt_rear_R" type="BoneAttachment3D" parent="Cameras" unique_id=960412173]
+bone_name = "skirt_rear.R"
+bone_idx = 29
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="SkirtRearR" type="Marker3D" parent="Cameras/Attach_skirt_rear_R" unique_id=1973251125]
+transform = Transform3D(0.8742810865237911, -0.2550075672493437, -0.4130420346554946, 0, 0.8508961929242528, -0.5253338641921088, 0.4854200055073743, 0.4592894615736186, 0.7439224480687731, 0.29455533558851243, 2.470955949308454, -0.34742932514939184)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"skirt_rear.R camera"
+brightness = 1.2
+
+[node name="Attach_foot_R" type="BoneAttachment3D" parent="Cameras" unique_id=909537951]
+bone_name = "foot.R"
+bone_idx = 34
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="FootR" type="Marker3D" parent="Cameras/Attach_foot_R" unique_id=547176092]
+transform = Transform3D(0.9599019426314589, -0.23570432338717068, -0.1517620916729448, 0, 0.541357883435196, -0.8407922704464907, 0.28033597794851667, 0.8070781337511014, 0.5196504839682996, 0.25218964265872046, 3.209259934076215, -1.916068990008128)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"foot.R camera"
+brightness = 1.2
+
+[node name="Attach_foot_L" type="BoneAttachment3D" parent="Cameras" unique_id=1619616440]
+bone_name = "foot.L"
+bone_idx = 38
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="FootL" type="Marker3D" parent="Cameras/Attach_foot_L" unique_id=1824888081]
+transform = Transform3D(0.9599019426314589, 0.23570432338717073, 0.15176209167294474, 0, 0.5413578834351958, -0.8407922704464907, -0.2803359779485167, 0.8070781337511014, 0.5196504839682994, -0.23367612734463705, 3.2065217719413397, -1.9173685662444058)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"foot.L camera"
+brightness = 1.2
+
+[node name="Attach_forearm_R" type="BoneAttachment3D" parent="Cameras" unique_id=1763067981]
+bone_name = "forearm.R"
+bone_idx = 16
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="ForearmR" type="Marker3D" parent="Cameras/Attach_forearm_R" unique_id=1561093836]
+transform = Transform3D(0.045727689286659164, -0.544895339674919, -0.8372562613877887, 0, 0.8381329970325264, -0.5454659286199962, 0.9989539420976838, 0.024942896500394194, 0.0383258852691998, 0.9615722256673109, 2.069245833827381, 0.05452540772856196)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"forearm.R camera"
+brightness = 1.2
+
+[node name="Attach_forearm_L" type="BoneAttachment3D" parent="Cameras" unique_id=1948332477]
+bone_name = "forearm.L"
+bone_idx = 21
+use_external_skeleton = true
+external_skeleton = NodePath("../../Model/Armature/Skeleton3D")
+
+[node name="ForearmL" type="Marker3D" parent="Cameras/Attach_forearm_L" unique_id=431369871]
+transform = Transform3D(0.04572768928665917, 0.5448953396749191, 0.8372562613877889, 0, 0.8381329970325265, -0.5454659286199963, -0.9989539420976838, 0.0249428965003942, 0.03832588526919981, -0.9654435314723742, 1.514337596174073, -0.17769973397227545)
+gizmo_extents = 0.4
+script = ExtResource("40_pdjua")
+camera = &"forearm.L camera"
+brightness = 1.2
