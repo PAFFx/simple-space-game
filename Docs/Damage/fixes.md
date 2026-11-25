@@ -259,9 +259,9 @@ Still to do: real inner-frame meshes under the armour.
 
 ## H. Panoramic screen feeds
 
-- [ ] **The camera-lost effect is bad.** Remove the block static and edge; a dead area is just
-  black.
-- [ ] **Losing a sub camera must not black out its sector.** The picture comes from the head's
+- [x] **The camera-lost effect is bad.** Remove the block static and edge; a dead area is just
+  black. *Done:* directions no live camera covers are plain black.
+- [x] **Losing a sub camera must not black out its sector.** The picture comes from the head's
   cameras (eyes; the back of the head for the rear); the sub cameras only make the suit's own
   body and equipment see-through. A sub camera lost means: whatever it saw past is no longer
   see-through, so **you see that part of your own suit** in the feed, from the head's viewpoint.
@@ -279,6 +279,13 @@ Still to do: real inner-frame meshes under the armour.
   - **Head's cameras gone**: the view comes from the chest camera (the left chest sensor).
     That gone too: no full front view any more; only what the remaining sub cameras cover,
     black elsewhere.
+
+  *Done (2026-11-28):* the first damage (`part_damaged`, `part_severed`, `component_destroyed`)
+  puts every part's mesh and what rides it on `SENSOR_OPAQUE` (`DamageModel._on_damaged`), all
+  but the head the camera sits in and the plumes; the shield and fin funnels only once they are
+  hit (a part of theirs damaged, a broken item, the shield's camera lost). Without the main
+  camera (shot or the head gone) the SensorHead takes the picture from the left chest camera's
+  place (`SensorHead.move_to`); repair puts it all back.
 
 ## J. Drones (target drones, hunters)
 

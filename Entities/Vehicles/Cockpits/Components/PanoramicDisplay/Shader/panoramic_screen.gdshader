@@ -500,14 +500,8 @@ void fragment() {
 				float cov = coverage_on == 1 ? coverage(world_dir) : 1.0;
 				color = texture(sensor_viewport, sample_uv).rgb * screen_brightness;
 				color = composite_overlay(color, sample_uv);
-				if (cov < 1.0) {
-					// No camera sees here: dark, a faint shifting block noise, a thin edge.
-					vec2 cell = floor(vec2(azimuth, elevation) * 60.0);
-					float noise = cov_hash(cell + floor(TIME * 12.0));
-					vec3 dead = no_signal_color.rgb + vec3(0.05, 0.08, 0.12) * noise * noise;
-					float edge = smoothstep(0.0, 0.35, cov) * (1.0 - smoothstep(0.35, 0.95, cov));
-					color = mix(dead, color, smoothstep(0.6, 1.0, cov)) + vec3(0.2, 0.35, 0.5) * edge * 0.6;
-				}
+				// No camera sees here: black.
+				color *= smoothstep(0.6, 1.0, cov);
 			}
 		}
 

@@ -75,6 +75,8 @@ var _zoom_camera: Camera3D
 var _zoom_wanted := 0.0
 var _zoom_point := Vector3.ZERO
 
+var _home := Vector3.INF   ## where it sat before `move_to`
+
 var _dbg_last_vfov: float = 0.0
 var _dbg_last_hfov: float = 0.0
 var _dbg_last_viewport: Vector2i = Vector2i.ZERO
@@ -377,6 +379,23 @@ func _update_camera_fallback(viewer: Camera3D) -> void:
 
 
 # --- Sensor data accessors (called by PanoramicScreen each frame) ---
+
+## The picture is taken from `world` instead (the head's cameras are gone: a camera on the
+## chest), until `move_home`.
+func move_to(world: Vector3) -> void:
+	if _home == Vector3.INF:
+		_home = position
+	global_position = world
+	reset_physics_interpolation()
+
+
+func move_home() -> void:
+	if _home == Vector3.INF:
+		return
+	position = _home
+	_home = Vector3.INF
+	reset_physics_interpolation()
+
 
 func get_viewport_texture() -> ViewportTexture:
 	return _viewport.get_texture()

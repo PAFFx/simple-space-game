@@ -193,6 +193,8 @@ var _boost_accel := 0.0
 var _breach_v := Vector3.ZERO   ## the suit's velocity when its reactor went
 var _breach_w := Vector3.ZERO      ## the suit's full thrust / mass, m/s² (set when built)
 var _opaque: Array[Node] = []
+var _body_shown := false   ## the feed draws the suit's body (it has been damaged)
+var _sensor: SensorHead
 var _glow_slots := {}   ## CameraMarker → [overlay ShaderMaterial, lens index]
 var _thruster_saved := {}     ## Thruster → [max thrust, gimbal limits ×3] as built
 var _leaks: Array = []        ## [node, local point, local jet direction, N, until]
@@ -343,6 +345,9 @@ func _build() -> void:
 	for k in thrust:
 		_boost_accel = maxf(_boost_accel, float(thrust[k]) / maxf(_body.mass, 1.0))
 	_built = true
+	part_damaged.connect(_on_damaged)
+	part_severed.connect(_on_damaged)
+	component_destroyed.connect(func(_k: StringName, _n: StringName) -> void: _on_damaged(&""))
 
 
 ## The part's skin as triangles in its bone's space, wound outward (for _skin_shells).
@@ -807,13 +812,80 @@ func get_camera_cones() -> Array:
 	return out
 
 
-## `node`'s meshes show on the panoramic screen (no camera sees past it any more), or not.
+## `node`'s meshes (it too) show on the panoramic screen (no camera sees past it any more), or
+## not. Plumes and glows never do.
 func set_opaque(node: Node, opaque: bool) -> void:
-	for child in node.find_children("*", "VisualInstance3D", true, false):
+	var list := node.find_children("*", "VisualInstance3D", true, false)
+	if node is VisualInstance3D:
+		list.append(node)
+	for child in list:
+		if _is_fx(child):
+			continue
 		var vi := child as VisualInstance3D
 		vi.layers = (vi.layers | Layers.SENSOR_OPAQUE) if opaque else (vi.layers & ~Layers.SENSOR_OPAQUE)
 	if opaque:
 		_opaque.append(node)
+
+
+## Seeing your own body is how you judge the damage: once the suit is hurt the feed draws it
+## (from the cameras' viewpoint, holes and all), all but the head the cameras sit in; the shield
+## and fin funnels (they would block the view) only once they are hit themselves.
+func _on_damaged(part_name: StringName) -> void:
+	if not _body_shown:
+		_body_shown = true
+		for p in parts:
+			if p.equipment != null:
+				if not _see_through(p.equipment):
+					set_opaque(p.equipment, true)
+				continue
+			if _in_head(p.bone):
+				continue
+			if p.mesh != null:
+				set_opaque(p.mesh, true)
+			for f: Node in _followers.get(p, []):
+				set_opaque(f, true)
+	var hit := find_part(part_name) if part_name != &"" else null
+	if hit != null and hit.equipment != null:
+		set_opaque(hit.equipment, true)
+	_update_feed_origin()
+
+
+## Equipment the feed keeps see-through until it is hit: it would block the view.
+static func _see_through(eq: MsEquipment) -> bool:
+	return eq is MsShield or eq.name == &"FinFunnels"
+
+
+func _in_head(bone: int) -> bool:
+	var head := _skel.find_bone(&"head")
+	while bone >= 0:
+		if bone == head:
+			return true
+		bone = _skel.get_bone_parent(bone)
+	return false
+
+
+## The feed's viewpoint: the head's cameras; with them gone the left chest camera; with that
+## gone too it stays at the head's place (only what the sub cameras still see has a picture).
+func _update_feed_origin() -> void:
+	var head := _sensor_head()
+	if head == null:
+		return
+	var eyes := _find_component(&"main camera")
+	if eyes == null or (eyes.alive and not (eyes.part != null and eyes.part.severed)):
+		head.move_home()
+		return
+	var chest := _find_component(&"camera 0")
+	if chest != null and chest.alive and chest.node is Node3D:
+		head.move_to((chest.node as Node3D).global_position)
+	else:
+		head.move_home()
+
+
+func _sensor_head() -> SensorHead:
+	if _sensor == null:
+		var found := _vehicle.find_children("*", "SensorHead", true, false)
+		_sensor = found[0] as SensorHead if not found.is_empty() else null
+	return _sensor
 
 
 ## The shield's camera was shot out: the shield stops being see-through.
@@ -3102,6 +3174,7 @@ func repair() -> void:
 		if is_instance_valid(node):
 			set_opaque(node, false)
 	_opaque.clear()
+	_body_shown = false
 	for node in _hidden_nodes:
 		if is_instance_valid(node):
 			node.visible = true
@@ -3194,6 +3267,8 @@ func repair() -> void:
 		fc.fcs_enabled = true
 		fc.pilot_lost = false
 	_capability_changed()
+	if _sensor_head() != null:
+		_sensor.move_home()
 	repaired.emit()
 
 

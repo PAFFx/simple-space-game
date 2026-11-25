@@ -384,21 +384,30 @@ func _screen() -> void:
 	_view = fp
 	var look := func(yaw_deg: float, pitch_deg: float) -> void:
 		(fp as PilotCamera).set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(pitch_deg), deg_to_rad(yaw_deg), 0.0)))
-	look.call(0.0, 0.0)
+	look.call(30.0, -35.0)
 	await _frames(10)
-	_save("screen_1_all")
+	_save("screen_1_whole")
+	# Any damage: the feed draws the suit (not the shield or the funnels, until they are hit).
+	_model.part_damaged.emit(&"forearm.L")
+	await _frames(10)
+	_save("screen_2_body_shown")
+	look.call(-60.0, -30.0)
+	await _frames(10)
+	_save("screen_3_body_left")
+	# The head's cameras gone: the picture comes from the left chest camera.
 	_kill(&"main camera")
+	look.call(0.0, -10.0)
 	await _frames(10)
-	_save("screen_2_no_eyes")
+	_save("screen_4_chest_camera")
 	for n in [&"rear head camera", &"camera 1", &"skirt_rear.R camera", &"skirt_rear.L camera", &"camera 5"]:
 		_kill(n)
-	look.call(180.0, 10.0)
+	look.call(-120.0, 25.0)
 	await _frames(10)
-	_save("screen_3_back_dark")
-	look.call(60.0, -10.0)
+	_save("screen_5_back_dark")
+	look.call(-60.0, -30.0)
 	_model.shield_camera_lost(_suit.find_children("*", "MsShield", true, false)[0])
 	await _frames(10)
-	_save("screen_4_shield_opaque")
+	_save("screen_6_shield_shown")
 	# A beam through the cockpit's edge (the pilot lives): the screen holed front and back.
 	_model.repair()
 	await _frames(5)
@@ -409,7 +418,7 @@ func _screen() -> void:
 	screen.add_beam_hole(screen.global_position + right * 0.6, line_dir, 0.6 * HoleSet.BEAM_GROW, _model.holes.now)
 	look.call(-30.0, 0.0)
 	await _frames(10)
-	_save("screen_5_holed")
+	_save("screen_7_holed")
 	_model.repair()
 	_cam.make_current()
 	_view = _cam
