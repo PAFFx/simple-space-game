@@ -44,6 +44,9 @@ uniform vec2 body_camera_px = vec2(320.0, 180.0);
 // Holes a beam burned through the screen (screen space directions, angular radius).
 uniform int screen_hole_count = 0;
 uniform vec4 screen_holes[8];
+// The screen is tiled from flat panels this many degrees across (azimuth, elevation): a panel
+// a beam goes through dies whole; its glass and its neighbours' crack.
+uniform vec2 panel_deg = vec2(15.0, 15.0);
 
 // HUD overlay drawn in equirectangular panoramic space:
 // x = azimuth (forward at 0.5, wraps at the back), y = elevation (top = +90°).
@@ -264,6 +267,14 @@ float cov_hash(vec2 p) {
 	return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.7);
 }
 
+float hole_like_noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(cov_hash(i), cov_hash(i + vec2(1.0, 0.0)), f.x),
+			mix(cov_hash(i + vec2(0.0, 1.0)), cov_hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
 void fragment() {
 	// --- Step 1: Recover azimuth and elevation from UV2 ---
 	// UV2.x = azimuth / TAU  (absolute angle, may be negative or > 1 due to arc_offset)
@@ -290,12 +301,21 @@ void fragment() {
 	}
 
 	// --- Step 2b: Beam holes in the screen ---
+	// The panel the hole is in goes black; cracks spider out from the hole over it and into
+	// the panels around (thin dark breaks with a glint where the glass catches the light);
+	// the neighbours keep their picture under the cracks, with a few dead blocks.
 	float panel_dead = 0.0;
-	float panel_flicker = 0.0;
 	float panel_hot = 0.0;
+	float crack_dark = 0.0;
+	float crack_glint = 0.0;
+	float block_dead = 0.0;
 	if (screen_hole_count > 0) {
 		float cel2 = cos(elevation);
 		vec3 dir_s = vec3(sin(azimuth) * cel2, sin(elevation), -cos(azimuth) * cel2);
+		vec2 pw = radians(panel_deg);
+		float az0 = fract(UV2.x) * TAU;
+		vec2 my_panel = floor(vec2(az0, elevation) / pw);
+		float cols = floor(TAU / pw.x + 0.5);
 		for (int i = 0; i < 8; i++) {
 			if (i >= screen_hole_count) {
 				break;
@@ -310,15 +330,43 @@ void fragment() {
 			if (ang < ragged) {
 				discard;
 			}
-			// Panels: dead within ~2 radii (blocky edge), flickering further out, a scorched
-			// molten rim at the hole, cracks running out.
-			vec2 cell = floor(vec2(azimuth, elevation) * 40.0);
-			float jitter = cov_hash(cell + float(i) * 7.0);
-			panel_dead = max(panel_dead, step(ang, 1.1 + jitter * 0.6));
-			panel_flicker = max(panel_flicker, (1.0 - smoothstep(1.6, 2.4, ang)) * step(0.65, cov_hash(cell + floor(TIME * 9.0))));
-			panel_hot = max(panel_hot, 1.0 - smoothstep(ragged, ragged + 0.25, ang));
-			float crack = 1.0 - smoothstep(0.0, 0.025, abs(fract(around * 1.6 + 0.13 * sin(ang * 3.0)) - 0.5) - 0.47);
-			panel_dead = max(panel_dead, crack * (1.0 - smoothstep(1.2, 2.6, ang)));
+			panel_hot = max(panel_hot, 1.0 - smoothstep(ragged, ragged + 0.22, ang));
+			// Which panel the hole is in, and how far this one is from it (wrapping round).
+			float h_az = atan(hd.x, -hd.z);
+			if (h_az < 0.0) {
+				h_az += TAU;
+			}
+			vec2 h_panel = floor(vec2(h_az, asin(clamp(hd.y, -1.0, 1.0))) / pw);
+			vec2 dp = abs(my_panel - h_panel);
+			dp.x = min(dp.x, cols - dp.x);
+			bool same = dp.x < 0.5 && dp.y < 0.5;
+			bool near = dp.x < 1.5 && dp.y < 1.5;
+			if (same) {
+				panel_dead = 1.0;
+			}
+			if (near) {
+				// Spiderweb: radial cracks (wandering) and broken rings, thinning out.
+				float seed = float(i) * 3.7;
+				float reach = same ? 1.0 : 1.0 - smoothstep(1.2, 4.0, ang);
+				float wob = 0.18 * (cov_hash(vec2(floor(ang * 3.0), seed)) - 0.5) + 0.08 * sin(ang * 4.0 + seed);
+				float rays = abs(fract(around / TAU * 13.0 + wob + seed) - 0.5);
+				// Hairlines: a pixel or two wide wherever they are (screen-space width).
+				float ray_d = 0.5 - rays;
+				float ray_line = 1.0 - smoothstep(0.0, fwidth(ray_d) * 1.3, ray_d) * 1.0;
+				ray_line *= step(0.6, ang) * step(0.35, cov_hash(vec2(floor(around / TAU * 13.0 + wob + seed), seed)) + 0.4);
+				float ring_n = ang * 1.7 + 0.25 * (cov_hash(vec2(floor(around * 5.0), seed)) - 0.5);
+				float ring_d = abs(fract(ring_n) - 0.5);
+				float ring_line = (1.0 - smoothstep(0.0, fwidth(ring_n) * 1.3, 0.5 - ring_d))
+						* step(0.5, cov_hash(vec2(floor(around * 4.0), floor(ring_n) + seed)));
+				float c = max(ray_line, ring_line * (1.0 - smoothstep(0.8, 2.6, ang))) * reach;
+				crack_dark = max(crack_dark, c);
+				// A glint along stretches of each break, catching the cockpit light.
+				crack_glint = max(crack_glint, c * smoothstep(0.55, 0.9, hole_like_noise(vec2(around * 3.0, ang * 1.5) + seed)));
+				if (!same) {
+					vec2 cell = floor(vec2(azimuth, elevation) * 50.0);
+					block_dead = max(block_dead, step(0.9, cov_hash(cell + seed)) * (1.0 - smoothstep(1.5, 3.5, ang)));
+				}
+			}
 		}
 	}
 
@@ -397,8 +445,13 @@ void fragment() {
 	}
 
 	if (screen_hole_count > 0) {
-		color = mix(color, color.gbr * 1.3 + vec3(0.02), panel_flicker * 0.6);
-		color = mix(color, vec3(0.0), panel_dead);
+		// A dead panel is dark glass: a faint sheen of the cockpit's light across it.
+		float sheen = 0.02 + 0.025 * hole_like_noise(vec2(azimuth, elevation) * 6.0);
+		color = mix(color, vec3(0.004), block_dead);
+		color = mix(color, vec3(sheen, sheen * 1.05, sheen * 1.15), panel_dead);
+		color = mix(color, color * 0.1, crack_dark * 0.9 * (1.0 - panel_dead));
+		color += vec3(0.6, 0.65, 0.72) * crack_glint * (0.5 + 1.2 * panel_dead);
+		color += vec3(0.05, 0.055, 0.06) * crack_dark * panel_dead;
 		color = mix(color, vec3(1.0, 0.32, 0.05) * 1.6, panel_hot);
 	}
 	ALBEDO   = color;
