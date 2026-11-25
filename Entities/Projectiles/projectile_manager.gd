@@ -1005,6 +1005,14 @@ func _make_sparks() -> GPUParticles3D:
 	curve.add_point(Vector2(1.0, 0.0))
 	shrink.curve = curve
 	process.scale_curve = shrink
+	# They cool: bright at first, gone well before they stop (a lingering bright point blooms
+	# into a soft ball).
+	var cool := Gradient.new()
+	cool.offsets = PackedFloat32Array([0.0, 0.25, 0.6])
+	cool.colors = PackedColorArray([Color(1, 1, 1, 1), Color(0.55, 0.3, 0.12, 1), Color(0, 0, 0, 1)])
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = cool
+	process.color_ramp = ramp
 	sparks.process_material = process
 	var quad := QuadMesh.new()
 	quad.size = Vector2(1.0, 1.0)
@@ -1049,8 +1057,10 @@ func _emit_sparks(at: Vector3, velocity: Vector3, color: Color, size: float) -> 
 	process.initial_velocity_max = size * 9.0
 	process.damping_min = size * 2.0
 	process.damping_max = size * 5.0
-	process.scale_min = size * 0.005
-	process.scale_max = size * 0.018
+	# Sparks stay spark-sized however big the blast (only their spread grows with it): scaled
+	# up they read as soft glowing balls.
+	process.scale_min = minf(size * 0.005, 0.012)
+	process.scale_max = minf(size * 0.018, 0.035)
 	sparks.position = at
 	sparks.set_meta(&"velocity", velocity)
 	sparks.custom_aabb = AABB(Vector3.ONE * -size * 12.0, Vector3.ONE * size * 24.0)

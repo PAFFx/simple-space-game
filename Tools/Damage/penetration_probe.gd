@@ -19,7 +19,7 @@ var _fcs: FireControl
 var _skel: Skeleton3D
 var _failed := 0
 var _cases := PackedStringArray(["cockpit", "head", "chest", "waist", "forearm", "thigh", "shin", "backpack",
-		"shield", "bareshield", "drone", "vulcan", "repair"])
+		"shield", "bareshield", "shieldback", "drone", "vulcan", "repair"])
 var _log: PackedStringArray = []
 
 
@@ -88,6 +88,7 @@ func _run() -> void:
 			"backpack": await _shot_at("backpack from behind", &"backpack", Vector3.ZERO, true)
 			"shield": await _shield(true)
 			"bareshield": await _shield(false)
+			"shieldback": await _shield_behind()
 			"drone": await _drone()
 			"vulcan": await _vulcan()
 			"repair": await _repair()
@@ -312,6 +313,22 @@ func _shield(charged: bool) -> void:
 		_check("a charged shield's I-field takes the beam", shield.charges == 2 and not timing[2])
 	else:
 		_check("without a charge the beam goes through the shield", not timing[2] or _log.size() > 0 or shield.left < 1.0)
+
+
+## A shot into the shield's back: the field covers the
+## face only, so it drills the plate, sets off the field's charges and wrecks the shield.
+func _shield_behind() -> void:
+	_model.repair()
+	await _still(60)
+	_log.clear()
+	var shield := _suit.find_children("*", "MsShield", true, false)[0] as MsShield
+	var target := shield.global_transform * MsLoadout.local_box(shield).get_center()
+	# From between the arm and the shield straight out through its back (nothing else on the line).
+	var dir := shield.get_front()
+	var timing := await _fire(RIFLE, target - dir * 1.5, dir)
+	print("%-22s field %s, charges left %d, equipped %s | %s" % ["shield (from behind)",
+			"UP" if shield.is_field_up() else "-", shield.charges, shield.equipped, ", ".join(_log) if not _log.is_empty() else "-"])
+	_check("a shot from behind gets past the field and wrecks the shield", not shield.equipped and not shield.is_field_up())
 
 
 func _drone() -> void:

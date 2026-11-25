@@ -15,7 +15,7 @@ extends MsEquipment
 ## shell `detector_range` ahead; if that leaves the field time to rise (`field_rise`) and the
 ## beam comes onto the face (not past its edge), the field takes the beam: it disperses in a
 ## flash, a little of its heat (`field_leak`) boils the anti-beam coating (the smoke). With
-## no charge left the beam drills the plate (`areal_density` kg/m², coating included) in a
+## no charge left, or from behind (the field covers the face only), the beam drills the plate (`areal_density` kg/m², coating included) in a
 ## few hundredths of a second and goes on into whatever is behind. Holes that leave too
 ## little of the plate break it off.
 
@@ -79,6 +79,16 @@ func is_field_up() -> bool:
 	return _clock < _field_until
 
 
+## The face the I-field covers (world): the shield's −X, away from the arm.
+func get_front() -> Vector3:
+	return -global_basis.x
+
+
+## Whether a beam going `direction` comes onto the face: the field only covers that side.
+func from_front(direction: Vector3) -> bool:
+	return direction.dot(get_front()) < -0.17
+
+
 ## A beam on the shield, one tick (ProjectileManager).
 func beam_contact(contact: ProjectileManager.BeamContact) -> void:
 	var vehicle := VehicleBase.find_vehicle(self)
@@ -94,7 +104,7 @@ func beam_contact(contact: ProjectileManager.BeamContact) -> void:
 		# warning; the field needs field_rise of it. Beams past the edge it doesn't see.
 		var onto_face := contact.normal.dot(-contact.direction) >= cos(deg_to_rad(detector_cone_deg))
 		var warned := detector_range / maxf(contact.spec.speed, 1.0) >= field_rise
-		var caught := is_field_up() or (charges > 0 and onto_face and warned)
+		var caught := (is_field_up() or (charges > 0 and onto_face and warned)) and from_front(contact.direction)
 		var mesh := contact.collider.get_parent() as MeshInstance3D if contact.collider != null else null
 		d = [0.0, 0.0, null, mesh, contact.point, contact.point, false, _clock, caught]
 		if not caught:
@@ -152,7 +162,10 @@ func beam_contact(contact: ProjectileManager.BeamContact) -> void:
 		left -= 2.0 * contact.radius / plate_width
 		if model != null and randf() < 0.6:
 			model.shield_camera_lost(self)
-		if left < 0.35 and model != null:
+		# From behind the beam goes through the field's E-pac charges under the face: they go off.
+		if model != null and not from_front(contact.direction) and charges > 0:
+			model.shield_charges_burst(self, d[5])
+		elif left < 0.35 and model != null:
 			model.break_shield(self)
 
 

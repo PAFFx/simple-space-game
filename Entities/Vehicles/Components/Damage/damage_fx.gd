@@ -366,7 +366,7 @@ func burn(anchor: Node3D, local_at: Vector3, local_axis: Vector3, seconds: float
 	flames.mat.emission_sphere_radius = 0.35 * size
 	flames.ramp.offsets = PackedFloat32Array([0.0, 0.3, 1.0])
 	flames.ramp.colors = PackedColorArray([Color(1.0, 0.8, 0.45, 0.85), Color(1.0, 0.38, 0.07, 0.55), Color(0.35, 0.04, 0.0, 0.0)])
-	flames.node.local_coords = false
+	# The flames ride the part (a burning piece blown off takes them along); its smoke trails.
 	_stop_later(flames.node, seconds)
 	for side in [1.0, -1.0]:
 		# Grey: lit by the sun it shows against space, in shadow it is dark.

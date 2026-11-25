@@ -138,23 +138,32 @@ Still to do: real inner-frame meshes under the armour.
   tanks: hits there should catch fire, arc and explode (sized by what is there), not only the
   tank cells. Ties into the network above (a ruptured line feeds a fire for a while).
 
-- [ ] **Thrusters on a destroyed part keep working** (play-test: backpack and chest shot to
+- [x] **Thrusters on a destroyed part keep working** (play-test: backpack and chest shot to
   pieces, their thrusters still fire and show plumes). *Cause:* a thruster dies only when a
   beam's drilled line reaches it or its part is severed; the chest, spine and pelvis never
   sever, and a part shot down to nothing doesn't take its thrusters with it. *Fix:* a part's
   thrusters (and their feed lines) fail with the section lost: derated as it goes, dead below
-  ~30% left; torn panels and bursts near a nozzle hit it too.
+  ~30% left; torn panels and bursts near a nozzle hit it too. *Done (d6df243):* a part's
+  thrusters die below 30% of its section left (`THRUSTER_LEFT`); the fuzz checks it.
 
 ## D. Equipment: weapons and the shield
 
-- [ ] **Weapons have no hitbox and no destruction mesh.** The rifle, bazooka and funnels must be
+- [x] **Weapons have no hitbox and no destruction mesh.** The rifle, bazooka and funnels must be
   hit by beams and fragments (their own hull boxes), be holed like any part (hole records on
-  their meshes) and break apart.
-- [ ] **Stored energy and ammunition blow up big.** The hyper bazooka and its rounds, the rifle's
+  their meshes) and break apart. *Done (2026-11-28):* they were already hit through their
+  meshes' boxes; now every mesh on the beam's line gets an open through-hole
+  (`_hole_equipment`, with the drill-in and blow-out effects), and a weapon its own stores blow
+  up leaves the hand in pieces (`_tear_apart`: each mesh thrown off, a one-mesh weapon whole).
+- [x] **Stored energy and ammunition blow up big.** The hyper bazooka and its rounds, the rifle's
   E-pac, spare E-pacs: hit, they go off as real explosions (bazooka: its warheads), damaging
-  whatever is near, not a small burst.
-- [ ] **The I-field covers the front only.** A shot into the shield from behind bypasses the field
-  and destroys the shield.
+  whatever is near, not a small burst. *Done:* `_stores_blast` tears 2.2× a burst's reach
+  (rifle E-pac ~4.4 m, a bazooka warhead ~3.6 m), kicks the suit, throws loose debris and flashes
+  nearby suits; the bazooka's four warheads cook off one after another along it. The explosion's
+  sparks stay spark-sized and cool (they used to bloom into glowing balls that hung around).
+- [x] **The I-field covers the front only.** A shot into the shield from behind bypasses the field
+  and destroys the shield. *Done:* the field only takes beams coming onto its face (the shield's
+  −X, `MsShield.get_front`); from behind the beam drills the plate, sets off the field's E-pac
+  charges (`shield_charges_burst`) and wrecks the shield (probe `shieldback`).
 - [x] **An I-field block doesn't melt.** It leaves black soot on the hit point and a lot of
   smoke, no molten lip.
   *Done:* it used to leave a 2.2 m, 2 cm deep crater whose flat floor, ray-traced behind the

@@ -72,6 +72,10 @@ const CORE_PARTS: Array[StringName] = [&"chest", &"spine", &"pelvis"]
 const LIMB_PREFIXES := ["upper_arm", "forearm", "hand", "thigh", "shin", "foot", "main_pod",
 		"main_nozzle", "calf_guard"]
 ## Secondary yield of each piece of equipment's stores, J (physics.md §6).
+## Bazooka rounds cooking off one after another when it is hit.
+const WARHEADS := 4
+## A stores blast tears this much farther than a burst of the same energy.
+const STORES_REACH := 2.2
 const STORES := {
 	&"BeamRifle": 5.0e8, &"HyperBazooka": 8.4e8, &"FinFunnels": 1.0e8, &"BeamSaber": 5.0e7,
 }
@@ -1241,9 +1245,15 @@ func _advance(d: Drill, t: float) -> void:
 			var fx := DamageFx.of(self)
 			if fx != null:
 				fx.drill_in(entry, xf.basis * d.dir_body, _body.linear_velocity, d.radius, p.area)
+		if seg[3] == null and p.equipment != null:
+			seg[3] = _hole_equipment(p, xf * (d.from_body + d.dir_body * float(seg[1])), xf.basis * d.dir_body,
+					d.radius * HoleSet.BEAM_GROW)
 		var drilled := clampf(t - float(seg[1]), 0.0, chord)
-		if seg[3] != null:
+		if seg[3] is HoleSet.Hole:
 			(seg[3] as HoleSet.Hole).s_drill = chord if drilled >= chord - 1e-3 else drilled
+		elif seg[3] is Array:
+			for h: HoleSet.Hole in seg[3]:
+				h.s_drill = h.s_out * clampf(drilled / maxf(chord, 1e-3), 0.0, 1.0)
 		if drilled >= chord - 1e-3 and not seg[4]:
 			seg[4] = true
 			if seg[3] is HoleSet.Hole:
@@ -1254,14 +1264,36 @@ func _advance(d: Drill, t: float) -> void:
 			_through_part(p, d, chord, xf * (d.from_body + d.dir_body * mid_t),
 					xf * (d.from_body + d.dir_body * float(seg[2])))
 			var fx := DamageFx.of(self)
-			if fx != null and p.mesh != null:
+			if fx != null and (p.mesh != null or p.equipment != null):
 				fx.blow_out(xf * (d.from_body + d.dir_body * float(seg[2])), xf.basis * d.dir_body,
-						_body.linear_velocity, d.radius, p.area)
+						_body.linear_velocity, d.radius, p.area if p.area != null else p.equipment)
 	while d.next_event < d.events.size() and d.events[d.next_event][0] <= t:
 		var c: Component = d.events[d.next_event][1]
 		d.next_event += 1
 		if c.alive:
 			_hit_component(c, d)
+
+
+## A beam into a piece of equipment (rifle, bazooka, funnels) from `at` along `dir`: every one
+## of its meshes on the line gets a hole through it (in its own frame; they are thin casings
+## around machinery, so open all through, no bore). Returns the holes.
+func _hole_equipment(p: Part, at: Vector3, dir: Vector3, radius: float) -> Array[HoleSet.Hole]:
+	var out: Array[HoleSet.Hole] = []
+	for entry in p.boxes:
+		var mi := entry[0] as MeshInstance3D
+		if not is_instance_valid(mi) or not mi.is_visible_in_tree():
+			continue
+		var t := _ray_box(mi.global_transform, (entry[1] as AABB).grow(radius), at - dir * 0.5, dir)
+		if t.x < 0.0:
+			continue
+		var h := holes.add_hole(mi, null, -1, at - dir * 0.5 + dir * t.x, dir, radius, maxf(t.y - t.x, 0.1), 2000.0)
+		h.shell = Vector2.ZERO
+		out.append(h)
+	part_damaged.emit(p.name)
+	var fx := DamageFx.of(self)
+	if fx != null:
+		fx.drill_in(at, dir, _body.linear_velocity, radius / HoleSet.BEAM_GROW, p.equipment)
+	return out
 
 
 ## Share of `p`'s cross-section a hole of `radius` takes over `chord` m of it.
@@ -1311,6 +1343,12 @@ func _finish(d: Drill) -> void:
 			continue
 		var p: Part = seg[0]
 		var chord: float = seg[2] - seg[1]
+		if seg[3] is Array:
+			# Equipment: its holes' share of the drilling.
+			var list: Array = seg[3]
+			var done := (list[0] as HoleSet.Hole).s_drill / maxf((list[0] as HoleSet.Hole).s_out, 0.01) if not list.is_empty() else 0.0
+			_remove_section(p, _hole_share(p, d.radius, chord) * done)
+			continue
 		var hh := seg[3] as HoleSet.Hole
 		var frac := hh.s_drill / maxf(chord, 0.01)
 		if frac > 0.3 and p.equipment == null:
@@ -1501,8 +1539,20 @@ func _break_equipment(eq: MsEquipment) -> void:
 	set_opaque(eq, true)   # its camera went with it: it shows on the screen now
 	var stores: float = STORES.get(StringName(eq.name), 0.0)
 	if stores > 0.0:
-		var at := eq.global_transform * MsLoadout.local_box(eq).get_center()
-		_later(0.05, func() -> void: _burst(at, stores, &"stores"))
+		# The bazooka's warheads cook off one after another along it; an E-pac goes at once.
+		var box := MsLoadout.local_box(eq)
+		var rounds := WARHEADS if eq.name == &"HyperBazooka" else 1
+		var axis := Vector3.ZERO
+		axis[box.size.max_axis_index()] = box.size[box.size.max_axis_index()] * 0.4
+		for i in rounds:
+			var local := box.get_center() + axis * (_rng.randf_range(-1.0, 1.0) if rounds > 1 else 0.0)
+			var at := eq.global_transform * local
+			var last := i == rounds - 1
+			_later(0.05 + 0.09 * i + _rng.randf() * 0.04, func() -> void:
+				var where := eq.global_transform * local if is_instance_valid(eq) and eq.is_inside_tree() else at
+				_stores_blast(where, stores / rounds)
+				if last:
+					_tear_apart(eq, where))
 
 
 func _burst_cell_later(d: Drill, cell: Component) -> void:
@@ -1550,10 +1600,30 @@ func _vent(cell: Component, at: Vector3, beam_dir: Vector3) -> void:
 ## Something went off inside the suit at `at` (world) with `energy` J: what is within its
 ## blow-off radius is torn (parts lose section, thin components are destroyed). Steam from a
 ## tank cell, an E-pac, electronics.
-func _burst(at: Vector3, energy: float, kind: StringName, max_panels := 3) -> void:
+## Stored energy or ammunition going off at `at` (`energy` J): a real explosion, not a puff. It
+## tears what is around it (twice a burst's reach), kicks the suit, throws loose debris and
+## flashes whatever else is near.
+func _stores_blast(at: Vector3, energy: float) -> void:
 	if reactor_gone:
 		return
-	var r := BLAST_K * pow(energy, 1.0 / 3.0)
+	_burst(at, energy, &"stores", 4, STORES_REACH)
+	var away := _body.global_transform * _body.center_of_mass - at
+	if away.length() > 0.01:
+		_body.apply_impulse(away.normalized() * energy * 1e-4, at - _body.global_position)
+	_throw_debris(at, 60.0, 90.0 * pow(energy / 5e8, 1.0 / 3.0))
+	for node in get_tree().get_nodes_in_group(ProjectileManager.DAMAGEABLE):
+		var target := node as Node3D
+		if target == null or target == (_vehicle as Node) or not target.has_method(&"apply_radiation"):
+			continue
+		var dist := maxf(target.global_position.distance_to(at), 3.0)
+		if dist < 80.0:
+			target.call(&"apply_radiation", energy / (4.0 * PI * dist * dist), at)
+
+
+func _burst(at: Vector3, energy: float, kind: StringName, max_panels := 3, reach_scale := 1.0) -> void:
+	if reactor_gone:
+		return
+	var r := BLAST_K * pow(energy, 1.0 / 3.0) * reach_scale
 	var fx := DamageFx.of(self)
 	if fx != null:
 		fx.burst(at, _body.linear_velocity, r, kind)
@@ -3022,19 +3092,19 @@ func _add_debris(body: RigidBody3D) -> void:
 	body.add_to_group(DEBRIS_GROUP)
 
 
-## The blast throws whatever already floats around (pieces shot off before, other suits'
+## A blast at `at` throws whatever already floats around (pieces shot off before, other suits'
 ## wreckage) outward: as fast as the suit's own parts at the same distance, spinning.
-func _throw_debris(at: Vector3) -> void:
+func _throw_debris(at: Vector3, reach := BLAST_REACH, k := 900.0) -> void:
 	for node in get_tree().get_nodes_in_group(DEBRIS_GROUP):
 		var body := node as RigidBody3D
 		if body == null or not body.is_inside_tree():
 			continue
 		var away := body.global_position - at
 		var dist := away.length()
-		if dist > BLAST_REACH:
+		if dist > reach:
 			continue
 		var dir := away / dist if dist > 0.01 else Vector3.UP
-		var speed := clampf(900.0 / maxf(dist, 2.0), 10.0, 160.0) * clampf(1.2 - dist / BLAST_REACH, 0.2, 1.0)
+		var speed := minf(k / maxf(dist, 2.0), 160.0) * clampf(1.2 - dist / reach, 0.2, 1.0)
 		body.linear_velocity += dir * speed
 		body.angular_velocity += Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * clampf(speed / 40.0, 0.3, 3.0)
 
@@ -3113,6 +3183,60 @@ func _blow_apart(at: Vector3) -> void:
 		fc.process_mode = Node.PROCESS_MODE_DISABLED
 
 
+## `mi` flies off as a piece of its own (a copy: holes and all), away from a blast at `at` at
+## k / distance m/s (at least `slowest`, at most 160), `heat` K above ambient.
+func _mesh_debris(mi: MeshInstance3D, at: Vector3, k: float, slowest: float, heat: float) -> RigidBody3D:
+	var body := RigidBody3D.new()
+	body.name = "Debris"
+	body.gravity_scale = 0.0
+	_vehicle.get_parent().add_child(body)
+	var copy: MeshInstance3D
+	if mi.skin != null:
+		copy = _bake(mi)
+		body.global_transform = _skel.global_transform
+	else:
+		copy = MeshInstance3D.new()
+		copy.mesh = mi.mesh
+		for i in mi.get_surface_override_material_count():
+			copy.set_surface_override_material(i, mi.get_active_material(i))
+		copy.layers = mi.layers
+		body.global_transform = mi.global_transform
+	body.add_child(copy)
+	var centre := body.global_transform * copy.get_aabb().get_center()
+	body.mass = clampf(copy.get_aabb().get_volume() * 150.0, 20.0, 3000.0)
+	var speed := clampf(k / maxf(centre.distance_to(at), 2.0), slowest, 160.0)
+	var away := centre - at
+	if away.length() < 0.05:
+		away = Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn())
+	body.linear_velocity = _body.linear_velocity + away.normalized() * speed
+	body.angular_velocity = Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 1.5
+	if heat > 0.0:
+		holes.heat(copy, null, -1, heat)
+	_solidify(body)
+	_add_debris(body)
+	return body
+
+
+## A weapon blown up by its own stores at `at`: it leaves the hand in pieces, each of its
+## meshes thrown off on its own (one casing: thrown whole, holes and all).
+func _tear_apart(eq: MsEquipment, at: Vector3) -> void:
+	var loadout := _comp(MsLoadout) as MsLoadout
+	if loadout == null or not eq.equipped or not eq.is_visible_in_tree():
+		return
+	var meshes: Array[MeshInstance3D] = []
+	for node in eq.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh != null and mi.is_visible_in_tree() and mi.layers & Layers.VEHICLE_EXT:
+			meshes.append(mi)
+	if meshes.size() <= 1:
+		_make_debris([], [eq], 35.0, at)
+	else:
+		for mi in meshes:
+			_mesh_debris(mi, at, 150.0, 15.0, 900.0)
+	loadout.set_equipped(eq, false)
+	_unequipped.append(eq)
+
+
 ## Whatever is still showing on the suit after it came apart (meshes that aren't parts: the
 ## rifle's stow arm, hatches, props) flies off as debris too, one piece per mesh.
 func _sweep_leftovers(at: Vector3) -> void:
@@ -3126,32 +3250,8 @@ func _sweep_leftovers(at: Vector3) -> void:
 		var mi := node as MeshInstance3D
 		if mi.mesh != null and mi.is_visible_in_tree() and mi.layers & (Layers.VEHICLE_EXT | Layers.WORLD):
 			left.append(mi)
-	var scene := _vehicle.get_parent()
 	for mi in left:
-		var body := RigidBody3D.new()
-		body.name = "Debris"
-		body.gravity_scale = 0.0
-		scene.add_child(body)
-		var copy: MeshInstance3D
-		if mi.skin != null:
-			copy = _bake(mi)
-			body.global_transform = _skel.global_transform
-		else:
-			copy = MeshInstance3D.new()
-			copy.mesh = mi.mesh
-			for i in mi.get_surface_override_material_count():
-				copy.set_surface_override_material(i, mi.get_active_material(i))
-			copy.layers = mi.layers
-			body.global_transform = mi.global_transform
-		body.add_child(copy)
-		var centre := body.global_transform * copy.get_aabb().get_center()
-		body.mass = clampf(copy.get_aabb().get_volume() * 150.0, 20.0, 3000.0)
-		var speed := clampf(900.0 / maxf(centre.distance_to(at), 2.0), 40.0, 160.0)
-		body.linear_velocity = _body.linear_velocity + (centre - at).normalized() * speed
-		body.angular_velocity = Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()) * 1.5
-		holes.heat(copy, null, -1, 1400.0)
-		_solidify(body)
-		_add_debris(body)
+		_mesh_debris(mi, at, 900.0, 40.0, 1400.0)
 		# A stow arm sets its parts' visibility every frame: hide the arm itself.
 		var hide: Node3D = mi
 		var up := mi.get_parent()
@@ -3175,6 +3275,15 @@ func break_shield(shield: MsShield) -> void:
 	loadout.set_equipped(shield, false)
 	_unequipped.append(shield)
 	_event("SHIELD BROKEN")
+
+
+## A beam from behind went through the shield's I-field charges: they go off and the shield
+## is wrecked.
+func shield_charges_burst(shield: MsShield, at: Vector3) -> void:
+	var charges := shield.charges
+	shield.charges = 0
+	_stores_blast(at, 1.5e7 * charges)
+	break_shield(shield)
 
 
 func _shield() -> MsShield:
