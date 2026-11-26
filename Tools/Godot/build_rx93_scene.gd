@@ -190,8 +190,9 @@ const AMBAC := [
 # Mass model (LimbReaction, body frame): every part of the model, its solid volume
 # (Tools/Godot/measure_part_volumes.gd, 0.2 m voxels), a density factor for what's inside
 # it, and the share of that volume given to propellant tanks. The dry mass is split by
-# volume × density, the propellant by volume × tank share. Dense: the chest (cockpit,
-# generator), main pods (engines), waist frame, hands. Light: armour plates (skirts, calf
+# volume × density, the propellant by volume × tank share. Dense: the pelvis (the
+# reactor, ~2 t, below the cockpit around the waist), main pods (engines), waist frame,
+# hands; the chest (cockpit, frame) is average. Light: armour plates (skirts, calf
 # plates, shoulder armour) and the big, mostly hollow feet. Tanks are spread around the
 # body like a fighter's, most around the torso (chest, waist, backpack, skirts) and some in
 # the thighs and shins, so the centre of mass barely moves as they drain (13.37 m full,
@@ -202,7 +203,7 @@ const DRY_MASS := 27900.0
 const PROPELLANT := 25200.0
 const PARTS := [
 	# bone, volume m³, density, tank share
-	["chest", 59.38, 1.6, 0.2], ["spine", 5.52, 1.4, 0.0], ["pelvis", 27.90, 1.2, 0.4],
+	["chest", 59.38, 1.0, 0.2], ["spine", 5.52, 1.4, 0.0], ["pelvis", 27.90, 2.5, 0.4],
 	["hatch", 0.44, 1.0, 0.0], ["head", 10.18, 1.0, 0.0],
 	["backpack", 20.77, 1.3, 0.6], ["main_pod.R", 12.24, 1.6, 0.0], ["main_pod.L", 11.50, 1.6, 0.0],
 	["main_nozzle_up.R", 0.72, 1.6, 0.0], ["main_nozzle_low.R", 0.71, 1.6, 0.0],
@@ -377,6 +378,7 @@ func _initialize() -> void:
 	library = load(ANIM_PATH)
 
 	var root := _build_scene(library)
+	_keep_cameras(root)
 	var packed := PackedScene.new()
 	var err := packed.pack(root)
 	if err != OK:
@@ -386,6 +388,26 @@ func _initialize() -> void:
 	model.free()
 	root.free()
 	quit()
+
+
+## The camera markers (CameraMarker, placed by hand in the editor) carry over from the
+## scene being replaced.
+func _keep_cameras(root: Node) -> void:
+	if not ResourceLoader.exists(SCENE_PATH):
+		return
+	var old := (load(SCENE_PATH) as PackedScene).instantiate(PackedScene.GEN_EDIT_STATE_MAIN)
+	var cams := old.get_node_or_null(^"Cameras")
+	if cams != null:
+		old.remove_child(cams)
+		root.add_child(cams)
+		_own(cams, root)
+	old.free()
+
+
+func _own(node: Node, owner: Node) -> void:
+	node.owner = owner
+	for child in node.get_children():
+		_own(child, owner)
 
 
 # --- Scene ---
@@ -771,6 +793,7 @@ func _build_limb_reaction(root: Node3D) -> void:
 		seg.bone_name = p[0]
 		seg.mass = snappedf(DRY_MASS * p[1] * p[2] / weight, 0.1)
 		seg.propellant_capacity = snappedf(PROPELLANT * p[1] * p[3] / tank, 0.1)
+		seg.volume = p[1]
 		list.append(seg)
 	node.segments = list
 

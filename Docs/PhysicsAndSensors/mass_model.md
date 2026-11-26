@@ -26,9 +26,9 @@ the official 63.0 t max weight together with the equipment) by volume × a tank 
 
 | Part | Volume m³ | Density | Tank share | Dry kg | Propellant kg |
 |---|---|---|---|---|---|
-| Chest (cockpit, generator) | 59.4 | 1.6 | 0.2 | 5,330 | 4,520 |
+| Chest (cockpit, frame) | 59.4 | 1.0 | 0.2 | 3,330 | 4,520 |
 | Waist (spine) | 5.5 | 1.4 | — | 430 | — |
-| Pelvis | 27.9 | 1.2 | 0.4 | 1,880 | 4,240 |
+| Pelvis (the reactor, ~2 t) | 27.9 | 2.5 | 0.4 | 3,910 | 4,240 |
 | Head | 10.2 | 1.0 | — | 570 | — |
 | Backpack | 20.8 | 1.3 | 0.6 | 1,520 | 4,740 |
 | Main pods (engines) | 12.2 / 11.5 | 1.6 | — | 1,100 / 1,030 | — |
@@ -59,7 +59,15 @@ From `Tools/Flight/mass_model_probe.gd -- report` (rest pose):
 | Before (fixed) | 69.0 t | (0, 14.26, 0.80) | 3.68, 0.73, 3.70 (from the collision boxes) |
 | Full | 69.0 t | (−0.60, 13.10, 0.74) | 2.62, 1.42, 2.98 |
 | Empty | 43.8 t | (−0.97, 13.16, 0.86) | 2.01, 1.18, 2.32 |
+| Full, reactor in the pelvis (2026-11-25, current) | 69.0 t | (−0.46, 12.98, 1.12) | 2.42, 1.11, 2.67 |
+| Empty, reactor in the pelvis | 43.8 t | (−0.75, 12.95, 1.48) | 1.78, 0.86, 2.03 |
 
+- **The reactor moved** (2026-11-25, `Docs/Damage/`): it sits below the cockpit around the
+  waist, so ~2 t of dry mass went from the chest (density 1.6 → 1.0) to the pelvis (1.2 → 2.5).
+  The centre of mass is 0.10 m lower full, 0.17 m empty (measured against the rows before it,
+  which had already drifted from the first table with later loadout changes). Flight barely
+  changes: forward capability 7.66 → 7.57 G, `fbw_probe full_fwd` t90 0.67 → 0.73 s and
+  31.9 → 31.3 m in 1 s; boost forward, back, up and the clean torque the same.
 - The centre of mass is ~1.2 m lower than the old guess: the legs are 45% of the model's
   volume (big shins and feet), ~8.8 t per leg full. It sits 0.6 m left of the centreline
   (shield on the left forearm, fin funnels on the left of the backpack), 1.0 m empty.

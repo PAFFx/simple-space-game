@@ -131,6 +131,8 @@ var guarded := false
 var masked := false
 ## The part carrying it was shot away (SuitDamage): it stows and can't fire.
 var broken := false
+## The limb carrying it can't be controlled (DamageModel: its joint shot): it can't aim or fire.
+var limp := false
 ## How far along the line of fire the suit looks for itself, m.
 const MASK_CHECK_DISTANCE := 40.0
 var _lead_smooth := Vector2.ZERO

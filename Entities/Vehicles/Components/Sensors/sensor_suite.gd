@@ -67,6 +67,11 @@ enum RangeSource { NONE, LASER, STEREO, SIZE }
 @export var body_camera_facings: PackedVector3Array = [
 	Vector3(0, 0, -1), Vector3(0, 0, 1), Vector3(0.71, 0, -0.71), Vector3(-0.71, 0, -0.71), Vector3(0, -0.5, -1), Vector3(0, -0.5, 1)]
 
+## Damage (DamageModel): the head's main camera (telescope, wide field, stereo and the
+## rangefinder with it) and each body camera can be shot out.
+var main_camera_alive := true
+var body_camera_dead := {}   ## index → true
+
 @export_group("Search")
 ## Scans per second of the other contacts.
 @export var search_hz: float = 10.0
@@ -241,6 +246,7 @@ func _measure(delta: float) -> void:
 	var sigma := 0.0
 	var latency := camera_latency
 	source = Source.NONE
+	clear = clear and main_camera_alive
 	if clear and off <= narrow_half_fov_deg:
 		source = Source.NARROW
 		sigma = narrow_sigma_mrad * 1e-3
@@ -319,6 +325,8 @@ func _deliver() -> void:
 func _body_camera_sees(at: Vector3, node: Node3D = null) -> bool:
 	var basis := _body_basis()
 	for i in body_camera_positions.size():
+		if body_camera_dead.has(i):
+			continue
 		var cam := _body.global_transform * body_camera_positions[i]
 		var facing := (basis * body_camera_facings[i]).normalized()
 		if facing.dot(at - cam) > 0.0 and _line_clear(cam, at, node):
@@ -420,7 +428,8 @@ func _look(contact: Node3D) -> void:
 	var dir := rel / dist
 	var sigma := 0.0
 	var latency := camera_latency
-	if rad_to_deg(dir.angle_to(get_head_direction())) <= wide_half_fov_deg and _line_clear(eye, truth, contact):
+	if main_camera_alive and rad_to_deg(dir.angle_to(get_head_direction())) <= wide_half_fov_deg \
+			and _line_clear(eye, truth, contact):
 		sigma = wide_sigma_mrad * 1e-3
 	elif _body_camera_sees(truth, contact):
 		sigma = body_sigma_mrad * 1e-3

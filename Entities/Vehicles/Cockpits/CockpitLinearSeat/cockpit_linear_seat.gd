@@ -12,6 +12,7 @@ extends CockpitBase
 
 var _hatch: CockpitHatch
 var _outside_visible := false
+var _gimbal: CockpitGimbal
 
 
 func _ready() -> void:
@@ -20,13 +21,17 @@ func _ready() -> void:
 	# poke through the hull as it turns), and never for the sensor (which would see it on
 	# the screen).
 	_apply_layers()
+	var gimbals := find_children("*", "CockpitGimbal", true, false)
+	_gimbal = gimbals[0] as CockpitGimbal if not gimbals.is_empty() else null
 	var vehicle := VehicleBase.find_vehicle(self)
 	if vehicle != null:
 		_hatch = vehicle.find_component(CockpitHatch) as CockpitHatch
 
 
 func _process(_delta: float) -> void:
-	var outside := _hatch != null and _hatch.is_unsealed()
+	# Breached by a beam its gimbal is jammed (it can't turn into the hull): the wreck is
+	# seen through the holes.
+	var outside := (_hatch != null and _hatch.is_unsealed()) or _jammed()
 	if outside != _outside_visible:
 		_outside_visible = outside
 		_apply_layers()
@@ -38,6 +43,10 @@ func _apply_layers() -> void:
 	var panel := get_node_or_null("SwitchPanel")
 	if panel != null:
 		_set_layers(panel, layers)
+
+
+func _jammed() -> bool:
+	return _gimbal != null and _gimbal.jammed
 
 
 func get_camera_mount() -> Marker3D:

@@ -280,6 +280,15 @@ func get_position_in(frame: Node3D) -> Vector3:
 	return frame.to_local(_gimbal.global_position)
 
 
+## Off now (damage): no thrust, no plume, at once (a thruster the flight computer no longer
+## steps would otherwise keep its last plume).
+func shut_down() -> void:
+	enabled = false
+	_cmd_throttle = 0.0
+	throttle = 0.0
+	_update_visuals()
+
+
 ## throttle_cmd in [0, 1]; direction is the desired thrust direction in `frame`'s axes.
 func set_command(throttle_cmd: float, direction: Vector3, frame: Node3D) -> void:
 	_cmd_throttle = clampf(throttle_cmd, 0.0, 1.0) if enabled else 0.0

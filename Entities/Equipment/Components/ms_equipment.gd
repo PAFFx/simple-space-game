@@ -18,6 +18,9 @@ signal active_changed(is_active: bool)
 @export var mass: float = 2000.0                   ## kg, added to the suit
 @export_group("Mount")
 @export var mount_bone: StringName = &""
+## The damage part that carries it while stowed, when that isn't the mount bone's own part
+## (the fin funnels hang from the backpack bone but sit on the left main pod): it goes with it.
+@export var damage_part: StringName = &""
 ## Equipment transform in the suit's body frame with the skeleton at rest.
 @export var mount_transform := Transform3D.IDENTITY
 @export_group("Use")
@@ -36,6 +39,9 @@ signal active_changed(is_active: bool)
 var active: bool = false
 ## False while stowed off the suit (MsLoadout.set_equipped): hidden, massless, unusable.
 var equipped: bool = true
+## The limb it is on can't be controlled (DamageModel: cut off, or its joint shot): it can't
+## be used, raised or drawn.
+var disabled := false
 ## Draw progress (MsLoadout): 0 = stowed, 1 = the hand takes it, 2 = held.
 var draw_progress := 0.0
 ## Wanted in the hand (FireControl sets it); MsLoadout draws or stows it to match.
@@ -51,7 +57,7 @@ func _ready() -> void:
 
 
 func set_active(value: bool) -> void:
-	value = value and equipped
+	value = value and equipped and not disabled
 	if value == active:
 		return
 	active = value

@@ -30,6 +30,9 @@ const G0 := 9.80665
 @export var limb_disturbance_smoothing: float = 0.03
 ## Master FCS switch. Off = all thrusters commanded to zero.
 @export var fcs_enabled: bool = true
+## Nobody at the controls (the pilot was killed): no input is read, the stabilisation keeps
+## holding the suit (rates nulled) for as long as it has power, thrusters and propellant.
+var pilot_lost := false
 ## Force the FBW may ask for in a direction is capped at what the thrusters that can aim
 ## within acos(this) of it deliver; more would come from pairs cancelling each other.
 ## 0 = no cap.
@@ -233,7 +236,7 @@ func _physics_process(delta: float) -> void:
 		_capability_map = _map_build
 		state.capability_map = _capability_map
 		_map_build = null
-	var command := input_source.get_command() if input_source != null else PilotCommand.new()
+	var command := input_source.get_command() if input_source != null and not pilot_lost else PilotCommand.new()
 	for toggle: StringName in _pending_toggles:
 		command.set(toggle, true)
 	_pending_toggles.clear()

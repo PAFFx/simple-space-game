@@ -16,6 +16,7 @@ const SENSOR_BODY_PARTS := 1 << 7  # The suit's own body and carried weapons (sh
 const SENSOR_WEAPONS    := 1 << 8  # Weapons (beam rifles, missile pods, etc.)
 const SENSOR_SHIELDS    := 1 << 9  # Shields and armour panels
 const SENSOR_COMBAT     := 1 << 10 # Outlines of the arms and the gun, shown in DGFT / BVR
+const SENSOR_OPAQUE     := 1 << 11 # Own parts no live camera sees past (DamageModel): drawn on the screen
 
 const DEBUG := 1 << 19
 
@@ -23,6 +24,11 @@ const DEBUG := 1 << 19
 ## Shields: shot and sensor rays hit them, nothing collides with them (the suit carrying
 ## one never touches it).
 const PHYS_SHIELD := 1 << 1
+## Damage hulls (DamageModel): an Area3D per part, posed with the skeleton, found only by
+## the damage model's own ray queries (nothing else casts against areas on this layer).
+const PHYS_DAMAGE := 1 << 2
+## Pieces knocked off a suit (DamageModel debris): they hit the world, suits and each other.
+const PHYS_DEBRIS := 1 << 3
 
 const MASK_THIRD_PERSION := WORLD | VEHICLE_EXT | FX
 const MASK_FIRST_PERSON  := WORLD | VEHICLE_FP | COCKPIT | PILOT | FX | HUD_3D

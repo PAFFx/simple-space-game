@@ -103,7 +103,17 @@ func _process(_delta: float) -> void:
 ## Shows these layers (Layers.SENSOR_COMBAT, SENSOR_BODY_PARTS; 0 = none) as the suit's own
 ## overlay. A change breaks the old one up first, then resolves the new one in.
 func set_overlay(layers: int) -> void:
-	_overlay_target = layers
+	_overlay_wanted = layers
+	_overlay_target = 0 if body_shown else layers
+
+
+## The feed draws the suit's own body (it is damaged, DamageModel): its outlines would only
+## double it, so the overlay goes.
+var body_shown := false:
+	set(v):
+		body_shown = v
+		_overlay_target = 0 if v else _overlay_wanted
+var _overlay_wanted := 0
 
 
 func get_overlay_texture() -> ViewportTexture:
@@ -191,7 +201,7 @@ func _create_camera() -> void:
 	# Hide the mech body and all equipment from the sensor by default.
 	# Use set_group_visible() to selectively re-enable layers once individual
 	# body parts have been assigned their own sensor sub-layers.
-	_camera.cull_mask = Layers.WORLD | Layers.FX
+	_camera.cull_mask = Layers.WORLD | Layers.FX | Layers.SENSOR_OPAQUE
 	_camera.near = 0.5
 	# Placed every frame from interpolated transforms; never interpolate it again.
 	_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF

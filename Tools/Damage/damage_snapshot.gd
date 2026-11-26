@@ -1,0 +1,758 @@
+extends SceneTree
+
+## Renders beam damage on the RX-93 to PNGs: the drilling, the hole from in front and from
+## behind, how it cools, a severed limb, the shield's I-field, the drone, the reactor.
+## Frames are at exact sim times (run with --fixed-fps 60); cooling is shown by moving the
+## holes' clock on (HoleSet.now), not by waiting.
+##
+##   bspc rule -a 'Simple Space Game:Godot_Engine' -o desktop=^7 follow=off focus=off state=floating rectangle=1280x720+0+0
+##   godot-double --path . --resolution 1280x720 --fixed-fps 60 -s Tools/Damage/damage_snapshot.gd -- <out_dir> [cases]
+##
+## cases: comma list of hole,forearm,shin,chest,thigh,back,cool,shield,bareshield,drone,reactor
+
+const STAGE := "res://Stages/RX93TestRange/rx93_test_range.tscn"
+const RIFLE := preload("res://Entities/Projectiles/Specs/nu_beam_rifle.tres")
+
+var _out := "user://damage_snapshot"
+var _suit: RigidBody3D
+var _vehicle: VehicleBase
+var _model: DamageModel
+var _skel: Skeleton3D
+var _cam: Camera3D
+
+
+func _initialize() -> void:
+	var args := OS.get_cmdline_user_args()
+	if args.size() > 0:
+		_out = args[0]
+	var cases := PackedStringArray(["forearm", "shin", "chest", "thigh", "back", "cool", "shield", "bareshield", "drone", "reactor"])
+	if args.size() > 1:
+		cases = args[1].split(",")
+	DirAccess.make_dir_recursive_absolute(_out)
+	_run.call_deferred(cases)
+
+
+func _run(cases: PackedStringArray) -> void:
+	await process_frame
+	var stage: Node = (load(STAGE) as PackedScene).instantiate()
+	for node in stage.find_children("*", "", true, false):
+		if "capture_on_ready" in node:
+			node.set("capture_on_ready", false)
+	root.add_child(stage)
+	current_scene = stage
+	await _frames(30)
+	for node in stage.find_children("*", "", true, false):
+		if node is VehicleBase:
+			_vehicle = node
+			break
+	_suit = _vehicle as Node as RigidBody3D
+	_model = _vehicle.find_component(DamageModel) as DamageModel
+	_skel = (_vehicle.find_component(LimbReaction) as LimbReaction).skeleton
+	(_vehicle.find_component(FireControl) as FireControl).sensors.enabled = false
+	_cam = Camera3D.new()
+	_cam.cull_mask = Layers.MASK_THIRD_PERSION
+	_cam.fov = 40.0
+	_cam.far = 20000.0
+	_cam.near = 0.1
+	current_scene.add_child(_cam)
+	_cam.make_current()
+	_view = _cam
+	for c in cases:
+		match c:
+			"forearm": await _case("forearm", &"forearm.R", Vector3.ZERO, Vector3(-0.5, 0.0, 1.0), Vector3(14, 2, -10), [0.02, 0.05, 0.12, 0.4, 1.5])
+			"shin": await _case("shin", &"shin.R", Vector3(0.3, 1.0, 0.0), Vector3(-0.3, 0.1, 1.0), Vector3(12, 3, -16), [0.02, 0.06, 0.15, 0.5, 2.0])
+			"chest": await _case("chest", &"chest", Vector3(0.0, 0.4, 0.0), Vector3(0.15, -0.05, 1.0), Vector3(-14, 4, -22), [0.02, 0.06, 0.15, 0.5, 2.0])
+			"thigh": await _case("thigh", &"thigh.L", Vector3.ZERO, Vector3(0.3, 0.0, 1.0), Vector3(-22, 2, -24), [0.03, 0.1, 0.3, 1.0, 3.0])
+			"back": await _case("back", &"forearm.L", Vector3.ZERO, Vector3(0.6, 0.0, 1.0), Vector3(-12, 3, 14), [0.02, 0.06, 0.2, 0.6, 1.5])
+			"cool": await _cool()
+			"fire": await _fire_case()
+			"breach": await _breach_case()
+			"chest_panel": await _chest_panel()
+			"overlap": await _overlap()
+			"overlap_clean": await _overlap_clean()
+			"pods": await _pods()
+			"insides": await _insides_case()
+			"backpack_breach": await _backpack_breach_case()
+			"hole": await _hole()
+			"sever": await _sever()
+			"screen": await _screen()
+			"cut": await _cut()
+			"panel": await _panel()
+			"cockpit": await _cockpit_view()
+			"vent": await _vent()
+			"lens": await _lens()
+			"page": await _page()
+			"bezels": await _bezels()
+			"shield": await _shield(true)
+			"bareshield": await _shield(false)
+			"drone": await _drone()
+			"reactor": await _case("reactor", &"pelvis", Vector3(0.0, 0.75, 0.0), Vector3(0.0, 0.0, 1.0), Vector3(-260, 120, -420), [0.05, 0.12, 0.3, 0.8, 2.0])
+	quit()
+
+
+func _part_centre(part_name: StringName) -> Vector3:
+	var p := _model.find_part(part_name)
+	return _skel.global_transform * _skel.get_bone_global_pose(p.bone) * p.aabb.get_center()
+
+
+## Fires at `part` (+ offset, body frame) along `dir_body` (body frame; +z = from the front
+## going back), camera at `view` (body frame, from the target), frames `times` s after contact.
+func _case(tag: String, part: StringName, offset: Vector3, dir_body: Vector3, view: Vector3, times: Array) -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var target := _part_centre(part) + basis * offset
+	var dir := (basis * dir_body).normalized()
+	_look(target + basis * view, target)
+	await _frames(3)
+	_save("%s_0before" % tag)
+	await _fire(target - dir * 300.0, dir, tag, times)
+
+
+func _look(from: Vector3, at: Vector3) -> void:
+	_cam.global_position = from
+	_cam.look_at(at, _suit.global_basis.y)
+
+
+func _fire(at: Vector3, dir: Vector3, tag: String, times: Array) -> void:
+	var pm := ProjectileManager.of(current_scene)
+	var muzzle := Marker3D.new()
+	current_scene.add_child(muzzle)
+	muzzle.global_position = at
+	var shot := pm.spawn(RIFLE, at, _suit.linear_velocity + dir * RIFLE.speed, dir, [], current_scene)
+	pm.stream_from(shot, muzzle, func() -> Array: return [muzzle.global_position, _suit.linear_velocity + dir * RIFLE.speed, dir])
+	var t := 0.0
+	var dt := 1.0 / Engine.physics_ticks_per_second
+	var contact := 300.0 / RIFLE.speed
+	var i := 0
+	while i < times.size():
+		await physics_frame
+		t += dt
+		if t >= contact + float(times[i]):
+			await process_frame
+			_save("%s_%d_%03dms" % [tag, i + 1, roundi(float(times[i]) * 1000.0)])
+			i += 1
+	muzzle.queue_free()
+
+
+## The chest's side shot through and burning inside: flames in the hole, smoke pouring out and drifting.
+func _fire_case() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var target := _part_centre(&"chest") + basis * Vector3(2.2, 0.3, 0.0)
+	var dir := (basis * Vector3(0.0, 0.0, 1.0)).normalized()
+	_look(target + basis * Vector3(14, 4, -20), target)
+	await _fire(target - dir * 300.0, dir, "fire", [0.3])
+	_model._start_fire(_model.find_part(&"chest"), target, dir, 12.0)
+	var waited := 0.0
+	for t: float in [0.5, 2.0, 5.0]:
+		for i in roundi((t - waited) * 60.0):
+			await physics_frame
+		waited = t
+		_save("fire_burning_%.1fs" % t)
+
+
+## A forearm shot off floats near; then the reactor goes: the old piece is thrown with the rest,
+## and the blast keeps its size in the world from 500 m and from 1500 m (taken back to back).
+func _breach_case() -> void:
+	_model.repair()
+	await _frames(20)
+	_model.sever(_model.find_part(&"forearm.L"))
+	for i in 60:
+		await physics_frame
+	var piece: RigidBody3D = null
+	for n in get_nodes_in_group(DamageModel.DEBRIS_GROUP):
+		piece = n as RigidBody3D
+	var before := piece.linear_velocity.length() if piece != null else -1.0
+	var at := _suit.global_position
+	_model._breach_reactor()
+	for i in 18:
+		await physics_frame
+	print("old piece: %.1f m/s before the blast, %.1f m/s after" % [before, piece.linear_velocity.length() if is_instance_valid(piece) else -1.0])
+	var basis := _suit.global_basis
+	var away := (basis * Vector3(-260, 120, -420)).normalized()
+	_view = _cam
+	_cam.make_current()
+	# Time stopped: the same moment from both distances (a few frames each, the first after a
+	# jump can be stale).
+	Engine.time_scale = 0.0
+	for d in [500.0, 1500.0]:
+		_look(at + away * d, at)
+		await _frames(3)
+		await _save("breach_%dm" % int(d))
+	Engine.time_scale = 1.0
+	for i in 30:
+		await physics_frame
+	_look(at + away * 500.0, at)
+	await _frames(3)
+	await _save("breach_500m_later")
+
+
+## The backpack reactor going up, from behind and to the side.
+func _backpack_breach_case() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var at := _suit.global_position
+	_look(at + _suit.global_basis * Vector3(-45, 25, 60), at + _suit.global_basis.y * 14.0)
+	await _frames(3)
+	for c in _model.components:
+		if c.name == &"backpack reactor":
+			_model._backpack_breach(c)
+	var waited := 0.0
+	for t: float in [0.1, 0.4, 1.5]:
+		for i in roundi((t - waited) * 60.0):
+			await physics_frame
+		waited = t
+		await _save("backpack_breach_%.1fs" % t)
+
+
+## One hole seen close up as it cools: frames at hole ages 0.1 … 60 s.
+func _cool() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var target := _part_centre(&"shin.L") + basis * Vector3(-0.4, 1.5, 0.0)
+	var dir := (basis * Vector3(0.0, 0.0, 1.0)).normalized()
+	_look(target + basis * Vector3(-6, 1.5, -7), target)
+	await _fire(target - dir * 300.0, dir, "cool", [0.1, 0.5])
+	# Let the flash and the spray clear, then move the holes' clock on.
+	for i in 150:
+		await physics_frame
+	for age in [3.0, 8.0, 15.0, 30.0, 60.0]:
+		_model.holes.now = _hole_birth() + age
+		await _frames(3)
+		_save("cool_%02ds" % age)
+
+
+## A through-hole in a shin, close up: drilling from the entry side, then both faces as it
+## cools (hole ages 3 … 45 s).
+func _hole() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var target := _part_centre(&"shin.R") + basis * Vector3(0.2, 0.8, 0.0)
+	var dir := (basis * Vector3(-0.25, 0.0, 1.0)).normalized()
+	var entry_view := target + basis * Vector3(5.5, 1.5, -7.5)
+	var exit_view := target + basis * Vector3(6.5, 1.2, 8.0)
+	_look(entry_view, target)
+	await _fire(target - dir * 300.0, dir, "hole", [0.03, 0.12, 0.5])
+	for i in 150:
+		await physics_frame
+	for age in [3.0, 8.0, 20.0, 45.0]:
+		_model.holes.now = _hole_birth() + age
+		_look(entry_view, target)
+		await _frames(3)
+		_save("hole_in_%02ds" % age)
+		_look(exit_view, target)
+		await _frames(3)
+		_save("hole_out_%02ds" % age)
+
+
+## A forearm shot off: the torn socket at the elbow and the piece tumbling away.
+func _sever() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var p := _model.find_part(&"forearm.R")
+	var joint := _skel.global_transform * _skel.get_bone_global_pose(p.bone)
+	var dir := (basis * Vector3(-0.2, 0.0, 1.0)).normalized()
+	var target := _part_centre(&"forearm.R")
+	var view := joint.origin + basis * Vector3(10.0, 3.0, -7.0)
+	_look(view, joint.origin)
+	await _fire(target - dir * 300.0, dir, "sever", [0.1, 0.6, 1.5])
+	for i in 60:
+		await physics_frame
+	_look(joint.origin + basis * Vector3(4.5, 1.0, -3.0), joint.origin)
+	await _frames(3)
+	_save("sever_stump_close")
+	for child in current_scene.get_children():
+		if child is RigidBody3D and child.name.begins_with("Debris"):
+			var at := (child as RigidBody3D).global_transform * (child as RigidBody3D).center_of_mass
+			_look(at + basis * Vector3(-6.0, 3.0, -6.0), at)
+			await _frames(3)
+			_save("sever_piece")
+			break
+
+
+## A beam through the cockpit 1.2 m in front of the pilot (he lives): from the seat, the
+## screen, the shell and the chest holed, space through them.
+func _cockpit_view() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	await _frames(2)
+	var fp := _vehicle.get_cockpit().get_player_camera() as PilotCamera
+	var eye := fp.global_position
+	var basis := _suit.global_basis
+	var target := eye + basis * Vector3(0.0, 0.1, -1.2)
+	var dir := (basis * Vector3(-1.0, 0.0, 0.0)).normalized()
+	fp.make_current()
+	_view = fp
+	fp.set_look_rotation(Basis.from_euler(Vector3(0.0, deg_to_rad(-60.0), 0.0)))
+	await _frames(5)
+	_save("cockpit_0_before")
+	await _fire(target - dir * 300.0, dir, "cockpit", [0.03, 0.12, 0.4, 1.0, 3.0])
+	for i in 90:
+		await physics_frame
+	_save("cockpit_3_after")
+	fp.set_look_rotation(Basis.from_euler(Vector3(0.0, deg_to_rad(60.0), 0.0)))
+	await _frames(5)
+	_save("cockpit_4_other_side")
+	fp.set_look_rotation(Basis.from_euler(Vector3(0.0, deg_to_rad(-100.0), 0.0)))
+	await _frames(5)
+	_save("cockpit_5_entry")
+	# The same hole from outside: the chest's entry, and through it the cockpit.
+	_cam.make_current()
+	_view = _cam
+	_look(target - dir * 9.0 + basis.y * 1.0, target)
+	await _frames(5)
+	_save("cockpit_6_outside")
+	# Into the hole at the pilot.
+	var hole_at := target - dir * 2.6
+	_look(hole_at + (hole_at - eye).normalized() * 5.0 + basis.y * 0.5, eye)
+	await _frames(5)
+	_save("cockpit_7_pilot_through_hole")
+	for i in 600:
+		await physics_frame
+	# Effects hidden: just what is in the hole.
+	for n in get_nodes_in_group(DamageFx.ATTACHED_GROUP):
+		(n as Node3D).visible = false
+	var dfx := DamageFx.of(_suit)
+	if dfx != null:
+		dfx.visible = false
+	_look(hole_at + (hole_at - eye).normalized() * 5.0 + basis.y * 0.5, eye)
+	await _frames(5)
+	_save("cockpit_8_pilot_after_fire")
+	if dfx != null:
+		dfx.visible = true
+	print("pilot alive: ", not _model.pilot_dead)
+	_cam.make_current()
+	_view = _cam
+
+
+## The composite screens and their bezels from the seat: front, front left, left side, up,
+## down at the door, behind.
+func _bezels() -> void:
+	_model.repair()
+	await _frames(20)
+	var fp := _vehicle.get_cockpit().get_player_camera() as PilotCamera
+	fp.make_current()
+	_view = fp
+	for v in [["front", 0.0, 5.0], ["front_left", 45.0, 5.0], ["side_left", 105.0, 5.0], ["up", 0.0, 60.0],
+			["door", 0.0, -40.0], ["back", 180.0, 10.0]]:
+		fp.set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(v[2]), deg_to_rad(v[1]), 0.0)))
+		await _frames(6)
+		_save("bezels_%s" % v[0])
+	fp.set_look_rotation(Basis.IDENTITY)
+	_cam.make_current()
+	_view = _cam
+
+
+## The left display's damage page after a forearm shot, a thruster fault and a camera out.
+func _page() -> void:
+	_model.repair()
+	await _frames(20)
+	var fp := _vehicle.get_cockpit().get_player_camera() as PilotCamera
+	fp.make_current()
+	_view = fp
+	fp.set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(-38.0), deg_to_rad(28.0), 0.0)))
+	var basis := _suit.global_basis
+	var dir := (basis * Vector3(-0.5, 0.0, 1.0)).normalized()
+	var target := _part_centre(&"forearm.R")
+	await _fire(target - dir * 300.0, dir, "page_shot", [0.5])
+	_kill(&"camera 2")
+	for i in 60:
+		await physics_frame
+	_save("page_left_display")
+	fp.set_look_rotation(Basis.IDENTITY)
+	_cam.make_current()
+	_view = _cam
+
+
+## The cameras' green lens lights, then with the head's eyes, the chest and a shoulder
+## camera shot out.
+func _lens() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var at := _part_centre(&"chest") + basis * Vector3(0.0, 1.5, 0.0)
+	_look(at + basis * Vector3(7.0, 2.0, -16.0), at)
+	await _frames(5)
+	_save("lens_1_live")
+	var head := _part_centre(&"head")
+	for v in [["lens_head", head, Vector3(1.2, -0.5, -5.0)], ["lens_head_back", head, Vector3(-0.8, 4.0, 3.0)],
+			["lens_chest", at + basis * Vector3(-1.4, -0.4, -0.8), Vector3(-1.5, 0.5, -4.5)],
+			["lens_body_back", at + basis * Vector3(0.0, -4.0, 0.0), Vector3(-6.0, 3.0, 22.0)],
+			["lens_body_front", at + basis * Vector3(0.0, -6.0, 0.0), Vector3(4.0, 2.0, -26.0)]]:
+		_look(v[1] + basis * v[2], v[1])
+		await _frames(3)
+		_save(v[0])
+	_look(at + basis * Vector3(7.0, 2.0, -16.0), at)
+	for n in [&"main camera", &"camera 0", &"camera 2"]:
+		_kill(n)
+	await _frames(5)
+	_save("lens_2_shot_out")
+	_look(head + basis * Vector3(1.2, -0.5, -5.0), head)
+	await _frames(3)
+	_save("lens_head_shot_out")
+
+
+## A thigh cell venting (the push, the icy jet).
+func _vent() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var cell: DamageModel.Component
+	for c in _model.components:
+		if c.kind == DamageModel.Kind.TANK and c.part.name == &"thigh.R":
+			cell = c
+			break
+	var at := _model.component_position(cell)
+	_look(at + basis * Vector3(16.0, 3.0, -10.0), at)
+	_model._vent(cell, at, basis * Vector3(1.0, 0.0, -0.3))
+	for t in [0.05, 0.3, 1.0, 4.0]:
+		var target := roundi(t * 60.0)
+		for i in target - (0 if t == 0.05 else roundi([0.05, 0.3, 1.0, 4.0][[0.05, 0.3, 1.0, 4.0].find(t) - 1] * 60.0)):
+			await physics_frame
+		_save("vent_%04dms" % roundi(t * 1000.0))
+
+
+## A tank cell bursting in the backpack (steam): armour plates torn off and thrown out.
+func _panel() -> void:
+	_model.repair()
+	await _frames(20)
+	var basis := _suit.global_basis
+	var at := _part_centre(&"backpack") + basis * Vector3(1.0, 0.5, 0.4)
+	_look(at + basis * Vector3(14.0, 6.0, 14.0), at)
+	_model._burst(at, 6e8, &"steam")
+	for t in [0.05, 0.25, 0.6, 1.5]:
+		for i in roundi(t * 60.0) - (0 if t == 0.05 else 0):
+			await physics_frame
+		_save("panel_%03dms" % roundi(t * 1000.0))
+	_look(at + basis * Vector3(7.0, 3.0, 7.0), at)
+	for i in 120:
+		await physics_frame
+	_save("panel_opening")
+
+
+## The torso's insides painted magenta, the suit seen from eight sides: any magenta pixel is a
+## piece showing outside the armour. Prints the count per view.
+func _insides_case() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var paint := StandardMaterial3D.new()
+	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	paint.albedo_color = Color(1, 0, 1)
+	var saved := {}
+	for p in _model._inner:
+		for mi: MeshInstance3D in _model._inner[p]:
+			saved[mi] = mi.material_override
+			mi.material_override = paint
+	var basis := _suit.global_basis
+	var centre := _suit.global_position + basis.y * 14.0
+	var total := 0
+	for k in 8:
+		var az := k * TAU / 8.0
+		var el := 0.35 if k % 2 == 0 else -0.25
+		var d := (basis * Vector3(sin(az) * cos(el), sin(el), cos(az) * cos(el))).normalized()
+		_look(centre + d * 22.0, centre)
+		await _frames(3)
+		var img := root.get_texture().get_image()
+		var n := 0
+		for y in range(0, img.get_height(), 2):
+			for x in range(0, img.get_width(), 2):
+				var c := img.get_pixel(x, y)
+				# Tonemapped: pure magenta comes out near (0.8, 0, 0.8).
+				if c.r > 0.55 and c.b > 0.55 and c.g < 0.25:
+					n += 1
+		total += n
+		print("insides view %d: %d magenta" % [k, n])
+		await _save("insides_%d" % k)
+	print("insides total magenta: %d" % total)
+	for mi: MeshInstance3D in saved:
+		mi.material_override = saved[mi]
+	# X-ray: the chest's and pelvis's armour hidden, their insides as they are.
+	var hidden: Array[Node3D] = []
+	for n in [&"chest", &"pelvis"]:
+		var p := _model.find_part(n)
+		p.mesh.visible = false
+		hidden.append(p.mesh)
+	_look(centre + basis * Vector3(-9.0, -1.0, -12.0), centre - basis.y * 0.5)
+	await _frames(3)
+	await _save("insides_xray")
+	for m in hidden:
+		m.visible = true
+
+
+## Two beams into the same spot from different angles (the chest's lower side): how the two holes
+## join.
+func _overlap() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var basis := _suit.global_basis
+	var target := _suit.global_transform * Vector3(1.4, 14.8, -0.5)
+	for dir_body: Vector3 in [Vector3(0.0, 0.0, 1.0), Vector3(0.6, 0.25, 1.0)]:
+		var dir := (basis * dir_body).normalized()
+		await _fire(target - dir * 300.0, dir, "overlap_shot", [])
+		for i in 240:
+			_suit.linear_velocity = Vector3.ZERO
+			_suit.angular_velocity = Vector3.ZERO
+			await physics_frame
+	for k in 3:
+		var view: Vector3 = [Vector3(1, 1, -9), Vector3(6, 3, -7), Vector3(-3, -1, -8)][k]
+		_look(target + basis * view, target)
+		await _frames(3)
+		await _save("overlap_%d" % k)
+
+
+## The same two holes as `overlap`, put straight on the chest (no beam, no effects, cooled): how
+## two bores at different angles through one spot are drawn.
+func _overlap_clean() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var basis := _suit.global_basis
+	var target := _suit.global_transform * Vector3(1.3, 15.0, -0.5)
+	var chest := _model.find_part(&"chest")
+	for dir_body: Vector3 in [Vector3(0.0, 0.0, 1.0), Vector3(0.6, 0.25, 1.0)]:
+		var dir := (basis * dir_body).normalized()
+		var entry := target - dir * 3.0
+		var h := _model.holes.add_hole(chest.mesh, _skel, chest.bone, entry, dir, 0.78, 6.0)
+		h.s_drill = h.s_out
+		h.shell = _model._skin_shells(chest, entry, dir, 6.0)
+	_model.holes.now += 60.0
+	for k in 4:
+		var view: Vector3 = [Vector3(0.5, 0.5, -6), Vector3(4, 1.5, -5), Vector3(-2.5, -1, -5.5), Vector3(1, 0.2, 6)][k]
+		_look(target + basis * view, target)
+		await _frames(3)
+		await _save("overlap_clean_%d" % k)
+
+
+## The back: whole, with both pods shot off (their connectors go with them), then without the
+## bazooka (its tail, magazine and handle go with it: the backpack is only the stub).
+func _pods() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var views := [Vector3(-6, -7, 12), Vector3(5, 6, 12), Vector3(14, 1, 3)]
+	var look_at_back := func(view: Vector3) -> void:
+		var body := _suit.global_transform
+		var at := body * Vector3(0.0, 18.5, 3.0)
+		_look(at + body.basis * view, at)
+	for k in 3:
+		look_at_back.call(views[k])
+		await _frames(3)
+		await _save("pods_%d_whole" % k)
+	_model.sever(_model.find_part(&"main_pod.L"), false)
+	_model.sever(_model.find_part(&"main_pod.R"), false)
+	for i in 90:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	for k in 3:
+		look_at_back.call(views[k])
+		await _frames(3)
+		await _save("pods_%d_gone" % k)
+	var lo := _vehicle.find_component(MsLoadout) as MsLoadout
+	for eq in lo.equipment:
+		if eq.name == &"HyperBazooka":
+			lo.set_equipped(eq, false)
+	await _frames(3)
+	for k in 3:
+		look_at_back.call(views[k])
+		await _frames(3)
+		await _save("pods_%d_no_bazooka" % k)
+
+
+## Panels torn off the chest's side and back: the frame and ducts inside show.
+func _chest_panel() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var basis := _suit.global_basis
+	var body := _suit.global_transform
+	var at := body * Vector3(1.5, 17.6, 0.4)
+	_model._blow_panel(_model.find_part(&"chest"), at, basis.x, 1.3, 20.0)
+	_model._blow_panel(_model.find_part(&"chest"), body * Vector3(0.6, 17.4, 0.9), basis.z, 1.2, 20.0)
+	for i in 150:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	_look(at + basis * Vector3(9.0, 2.0, 2.0), at)
+	await _frames(3)
+	await _save("chest_panel_opening")
+	_look(at + basis * Vector3(2.5, 6.0, 7.0), at)
+	await _frames(3)
+	await _save("chest_panel_close")
+
+
+## A thigh cut through the middle (not at the hip): the stub's cut face and the piece.
+func _cut() -> void:
+	_model.repair()
+	await _frames(20)
+	var p := _model.find_part(&"thigh.R")
+	var frame := _skel.global_transform * _skel.get_bone_global_pose(p.bone)
+	var c0 := p.aabb.get_center()
+	var at := frame * Vector3(c0.x, p.aabb.position.y + p.aabb.size.y * 0.55, c0.z)
+	var basis := _suit.global_basis
+	_look(at + basis * Vector3(9.0, 2.0, -6.0), at)
+	p.last_hole = frame.affine_inverse() * at
+	p.has_hole = true
+	_model.sever(p)
+	await _frames(4)
+	_save("cut_1_now")
+	for i in 40:
+		await physics_frame
+	_save("cut_2_0.7s")
+	_look(at + basis * Vector3(3.5, 2.5, -2.5), at)
+	await _frames(3)
+	_save("cut_3_stub")
+	_look(at + basis * Vector3(3.0, -3.5, -2.0), at)
+	await _frames(3)
+	_save("cut_4_stub_below")
+	for child in current_scene.get_children():
+		if child is RigidBody3D and child.name.begins_with("Debris"):
+			var c := (child as RigidBody3D).global_transform * (child as RigidBody3D).center_of_mass
+			_look(c + basis * Vector3(5.0, 5.0, -5.0), c)
+			await _frames(3)
+			_save("cut_5_piece")
+			break
+
+
+## The panoramic screen from the seat as cameras are lost: all live; the head's eyes gone
+## (body cameras only: coarser); the rear cameras gone too, looking back (no signal); the
+## shield's camera gone (the shield shows on the screen).
+func _screen() -> void:
+	_model.repair()
+	await _frames(20)
+	var fp := _vehicle.get_cockpit().get_player_camera()
+	fp.make_current()
+	_view = fp
+	var look := func(yaw_deg: float, pitch_deg: float) -> void:
+		(fp as PilotCamera).set_look_rotation(Basis.from_euler(Vector3(deg_to_rad(pitch_deg), deg_to_rad(yaw_deg), 0.0)))
+	look.call(30.0, -35.0)
+	await _frames(10)
+	_save("screen_1_whole")
+	# Any damage: the feed draws the suit (not the shield or the funnels, until they are hit).
+	_model.part_damaged.emit(&"forearm.L")
+	await _frames(10)
+	_save("screen_2_body_shown")
+	look.call(-60.0, -30.0)
+	await _frames(10)
+	_save("screen_3_body_left")
+	# The head's cameras gone: only what the body cameras see.
+	_kill(&"main camera")
+	look.call(0.0, -10.0)
+	await _frames(10)
+	_save("screen_4_no_eyes")
+	for n in [&"rear head camera", &"camera 1", &"skirt_rear.R camera", &"skirt_rear.L camera", &"camera 5"]:
+		_kill(n)
+	look.call(-120.0, 25.0)
+	await _frames(10)
+	_save("screen_5_back_dark")
+	look.call(-60.0, -30.0)
+	_model.shield_camera_lost(_suit.find_children("*", "MsShield", true, false)[0])
+	await _frames(10)
+	_save("screen_6_shield_shown")
+	# A beam through the cockpit's edge (the pilot lives): the screen holed front and back.
+	_model.repair()
+	await _frames(5)
+	var screen := _vehicle.get_cockpit().get_panoramic_screen()
+	var right := _suit.global_basis.x
+	var fwd := -_suit.global_basis.z
+	var line_dir := (-fwd + _suit.global_basis.y * 0.05).normalized()
+	screen.add_beam_hole(screen.global_position + right * 0.6, line_dir, 0.6 * HoleSet.BEAM_GROW, _model.holes.now)
+	look.call(-30.0, 0.0)
+	await _frames(10)
+	_save("screen_7_holed")
+	_model.repair()
+	_cam.make_current()
+	_view = _cam
+
+
+func _kill(cname: StringName) -> void:
+	for c in _model.components:
+		if c.name == cname:
+			_model._kill_component(c)
+
+
+func _hole_birth() -> float:
+	var latest := -INF
+	for p in _model.parts:
+		if p.mesh != null:
+			for h in _model.holes.get_holes(p.mesh):
+				latest = maxf(latest, h.time)
+	return latest
+
+
+func _shield(charged: bool) -> void:
+	_model.repair()
+	await _frames(20)
+	var shield := _suit.find_children("*", "MsShield", true, false)[0] as MsShield
+	if not charged:
+		shield.charges = 0
+	var target := shield.global_transform * MsLoadout.local_box(shield).get_center()
+	var basis := _suit.global_basis
+	var dir := (basis * Vector3(0.8, 0.0, 0.6)).normalized()
+	_look(target + basis * Vector3(-18, 4, -16), target)
+	await _frames(3)
+	await _fire(target - dir * 300.0, dir, "shield" if charged else "bareshield", [0.02, 0.06, 0.15, 0.5, 1.5])
+	# Close up on the mark from two sides (anything that moves with the view shows here).
+	var normal := -dir
+	for k in 2:
+		var side := basis * Vector3(-1.0 if k == 0 else 1.0, 0.3, 0.0)
+		_look(target + normal * 7.0 + side * 3.0, target)
+		await _frames(3)
+		_save("%s_mark_%d" % ["shield" if charged else "bareshield", k])
+
+
+func _drone() -> void:
+	var drone := TargetDrone.new()
+	drone.behaviour = TargetDrone.Behaviour.STATIC
+	current_scene.add_child(drone)
+	var at := _suit.global_position + _suit.global_basis * Vector3(60, 25, -160)
+	drone.global_position = at
+	await _frames(5)
+	var dir := (_suit.global_basis * Vector3(0.4, 0, -1)).normalized()
+	# Off the core (4.5 m): the plain blast, not the core's flash.
+	var aim := at + _suit.global_basis * Vector3(0, 5.5, 0)
+	_look(at + _suit.global_basis * Vector3(-12, 7, 26), at)
+	await _fire(aim - dir * 300.0, dir, "drone", [0.02, 0.08, 0.3, 1.0])
+	if is_instance_valid(drone):
+		drone.queue_free()
+
+
+## The camera the pictures are taken with (ours, or the pilot's).
+var _view: Camera3D
+
+
+func _save(name: String) -> void:
+	# A death switches the game's view outside (ViewSwitcher): keep ours.
+	if root.get_camera_3d() != _view:
+		_view.make_current()
+		await process_frame
+	root.get_texture().get_image().save_png("%s/%s.png" % [_out, name])
+	print("saved ", name)
+
+
+func _frames(count: int) -> void:
+	for i in count:
+		await process_frame

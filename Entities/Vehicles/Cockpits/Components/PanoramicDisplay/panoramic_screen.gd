@@ -10,6 +10,13 @@ extends Node3D
 ## sensor_head is discovered automatically by walking up to the nearest VehicleBase.
 ## Set the export manually only when testing outside a full vehicle hierarchy.
 
+const MAX_BEAMS := 8
+## The opening in the screen against the beam's radius: glass shatters wider than metal melts.
+const OPENING := 1.15
+## The composite screens' layout (see the shader's `panel_layout`, `panel_caps`).
+const PANEL_LAYOUT := Vector4(19.0, 75.0, 145.0, -13.5)
+const PANEL_CAPS := Vector2(45.0, -61.0)
+
 const _SHADER := preload("res://Entities/Vehicles/Cockpits/Components/PanoramicDisplay/Shader/panoramic_screen.gdshader")
 
 ## Optional override — auto-discovered from the vehicle's SensorHead if left empty.
@@ -50,6 +57,16 @@ const _SHADER := preload("res://Entities/Vehicles/Cockpits/Components/PanoramicD
 @export var aperture_half_size_deg := Vector2(35.0, 35.0)
 
 var _material: ShaderMaterial
+var _damage: DamageModel
+var _damage_searched := false
+## Beams through the screen: [origin, axis (mesh space), radius, time].
+var _beams: Array = []
+## Sub-screens a cockpit hit blacked out, and ones flickering (bit composite·4 + sub).
+var _blackout := 0
+var _beam_dead := 0
+var _flicker := 0
+var _blackout_events: Array = []   ## [flicker from, until, bit, then dead]
+var _blackout_clock := 0.0
 var _hud_texture: Texture2D
 var _hud_parameters := {}
 var _aperture_amount: float = 0.0
@@ -78,15 +95,24 @@ func _ready() -> void:
 
 	_auto_discover()
 	_setup_material()
-	# Visible to the first-person cockpit camera AND to outside cameras when
-	# the cockpit door is open. Excluded from the sensor mask so the screen
-	# can never appear recursively on its own display.
-	_mesh_instance.layers = Layers.COCKPIT | Layers.VEHICLE_EXT
+	# The pilot's view: the cockpit layer only (never the sensor's, so the screen can't
+	# appear on itself). Outside cameras see a twin: dark glass with the same holes and cracks
+	# (through a beam hole in the chest), the picture only while the door is open.
+	_mesh_instance.layers = Layers.COCKPIT
+	var outside := MeshInstance3D.new()
+	outside.name = "ScreenOutside"
+	outside.mesh = _mesh_instance.mesh
+	outside.material_override = _material
+	outside.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	outside.layers = Layers.VEHICLE_EXT
+	outside.set_instance_shader_parameter(&"outside_view", true)
+	_mesh_instance.add_sibling(outside)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if sensor_head == null:
 		return
+	_step_blackout(delta)
 	_push_shader_uniforms()
 
 
@@ -128,6 +154,8 @@ func _setup_material() -> void:
 
 	_material.set_shader_parameter("segment_mask", _mask_texture)
 	_material.set_shader_parameter("panoramic_elevation_range", elevation_range)
+	_material.set_shader_parameter("panel_layout", PANEL_LAYOUT)
+	_material.set_shader_parameter("panel_caps", PANEL_CAPS)
 	_material.set_shader_parameter("aperture_center", _deg_to_rad_v2(aperture_center_deg))
 	_material.set_shader_parameter("aperture_half_size", _deg_to_rad_v2(aperture_half_size_deg))
 	_material.set_shader_parameter("aperture_amount", _aperture_amount)
@@ -148,7 +176,224 @@ func _push_shader_uniforms() -> void:
 	_material.set_shader_parameter("display_basis",    get_display_basis())
 	_material.set_shader_parameter("overlay_viewport", sensor_head.get_overlay_texture())
 	_material.set_shader_parameter("overlay_reveal",   sensor_head.overlay_reveal)
+	_push_coverage()
+	if not _beams.is_empty() and _damage != null:
+		_material.set_shader_parameter("hole_now", _damage.holes.now)
 	push_zoom_uniforms()
+
+
+## A beam went through the cockpit along `origin` + t·`dir` (world), `radius` m: the same line
+## and width as the hole it drilled in the chest. The screen opens where that cylinder crosses
+## it, its torn edge glowing and cooling with the chest's (`time` on the HoleSet's clock); every
+## sub-screen the opening touches dies and every composite screen it crosses cracks.
+func add_beam_hole(origin: Vector3, dir: Vector3, radius: float, time: float) -> void:
+	var inv := _mesh_instance.global_transform.affine_inverse()
+	var o := inv * origin
+	var a := (inv.basis * dir).normalized()
+	if _beams.size() >= MAX_BEAMS:
+		_beams.remove_at(0)
+	_beams.append([o, a, radius, time])
+	_upload_beams()
+
+
+func _on_cockpit_holed(origin: Vector3, dir: Vector3, radius: float) -> void:
+	add_beam_hole(origin, dir, radius, _damage.holes.now)
+
+
+func clear_screen_holes() -> void:
+	_beams.clear()
+	_blackout = 0
+	_flicker = 0
+	_blackout_events.clear()
+	_upload_beams()
+
+
+## A hit to the cockpit cuts the screen's power and data lines: `fraction` of the sub-screens
+## die in a random order over `over` s, each flickering a moment first; the rest flicker on
+## for a few seconds.
+func blackout(fraction: float, over: float) -> void:
+	var subs: Array[int] = []
+	for comp in 8:
+		for sub in (2 if comp == 2 else 4):
+			subs.append(comp * 4 + sub)
+	subs.shuffle()
+	var n := roundi(subs.size() * clampf(fraction, 0.0, 1.0))
+	for i in subs.size():
+		var start := over * float(i) / maxf(n, 1) if i < n else randf_range(0.0, over)
+		var end := start + (randf_range(0.08, 0.3) if i < n else randf_range(1.5, 4.0))
+		_blackout_events.append([_blackout_clock + start, _blackout_clock + end, 1 << subs[i], i < n])
+
+
+func _step_blackout(delta: float) -> void:
+	if _blackout_events.is_empty():
+		return
+	_blackout_clock += delta
+	var changed := false
+	for i in range(_blackout_events.size() - 1, -1, -1):
+		var e: Array = _blackout_events[i]
+		var bit: int = e[2]
+		if _blackout_clock >= e[1]:
+			_flicker &= ~bit
+			if e[3]:
+				_blackout |= bit
+			_blackout_events.remove_at(i)
+			changed = true
+		elif _blackout_clock >= e[0] and not (_flicker & bit):
+			_flicker |= bit
+			changed = true
+	if changed:
+		_upload_masks()
+
+
+func _upload_beams() -> void:
+	var la := PackedVector4Array()
+	var lb := PackedVector4Array()
+	var cross := PackedVector4Array()
+	var glass := PackedInt32Array()
+	var dead := 0
+	for beam: Array in _beams:
+		var o: Vector3 = beam[0]
+		var a: Vector3 = beam[1]
+		var r: float = beam[2]
+		la.append(Vector4(o.x, o.y, o.z, r))
+		lb.append(Vector4(a.x, a.y, a.z, beam[3]))
+		for c: Vector3 in _crossings(o, a, r):
+			var hit := _opening_panels(o, a, r, c)
+			dead |= hit.x
+			cross.append(Vector4(c.x, c.y, c.z, minf(r * OPENING / screen_radius, 1.2)))
+			glass.append(hit.y)
+	var n := la.size()
+	var nc := cross.size()
+	la.resize(MAX_BEAMS)
+	lb.resize(MAX_BEAMS)
+	cross.resize(MAX_BEAMS * 2)
+	glass.resize(MAX_BEAMS * 2)
+	_material.set_shader_parameter("beam_count", n)
+	_material.set_shader_parameter("beam_a", la)
+	_material.set_shader_parameter("beam_b", lb)
+	_material.set_shader_parameter("crossing_count", nc)
+	_material.set_shader_parameter("crossings", cross)
+	_material.set_shader_parameter("crossing_glass", glass)
+	_beam_dead = dead
+	_upload_masks()
+
+
+func _upload_masks() -> void:
+	_material.set_shader_parameter("dead_subs", _i32(_beam_dead | _blackout))
+	_material.set_shader_parameter("flicker_subs", _i32(_flicker))
+
+
+## A 32-bit mask as the shader's int (bit 31 is its sign).
+static func _i32(mask: int) -> int:
+	mask &= 0xFFFFFFFF
+	return mask - 0x100000000 if mask >= 0x80000000 else mask
+
+
+## Where a beam along `origin` + t·`dir` (world), `radius` m, goes through the screen (world).
+func beam_crossings(origin: Vector3, dir: Vector3, radius: float) -> Array[Vector3]:
+	var xf := _mesh_instance.global_transform
+	var inv := xf.affine_inverse()
+	var out: Array[Vector3] = []
+	for c in _crossings(inv * origin, (inv.basis * dir).normalized(), radius):
+		out.append(xf * (c * screen_radius))
+	return out
+
+
+## Where the line (mesh space) crosses the screen's sphere: unit directions. A line that only
+## grazes it (its cylinder does): the nearest point.
+func _crossings(o: Vector3, a: Vector3, r: float) -> Array[Vector3]:
+	var b := o.dot(a)
+	var disc := b * b - (o.length_squared() - screen_radius * screen_radius)
+	if disc >= 0.0:
+		var h := sqrt(disc)
+		return [(o + a * (-b - h)).normalized(), (o + a * (-b + h)).normalized()]
+	var near := o - a * b
+	if near.length() < screen_radius + r and near.length() > 1e-4:
+		return [near.normalized()]
+	return []
+
+
+## The sub-screens (bit composite·4 + sub) and composites (bit composite) the opening at
+## crossing `c` touches: the sphere sampled around it, kept where it is inside the cylinder.
+func _opening_panels(o: Vector3, a: Vector3, r: float, c: Vector3) -> Vector2i:
+	var reach := r * OPENING * 1.2 / screen_radius / maxf(absf(a.dot(c)), 0.3)
+	var e1 := c.cross(Vector3.UP if absf(c.y) < 0.9 else Vector3.RIGHT).normalized()
+	var e2 := c.cross(e1)
+	var subs := 0
+	var glass := 0
+	const N := 13
+	for i in N:
+		for j in N:
+			var u := (float(i) / (N - 1) * 2.0 - 1.0) * reach
+			var v := (float(j) / (N - 1) * 2.0 - 1.0) * reach
+			var d := (c + e1 * u + e2 * v).normalized()
+			var q := d * screen_radius - o
+			if (q - a * q.dot(a)).length() > r * OPENING * 1.15 and (i != N / 2 or j != N / 2):
+				continue
+			var panel := screen_panel(rad_to_deg(atan2(d.x, -d.z)), rad_to_deg(asin(clampf(d.y, -1.0, 1.0))))
+			subs |= 1 << (panel.x * 4 + panel.y)
+			glass |= 1 << panel.x
+	return Vector2i(subs, glass)
+
+
+## Which composite screen and sub-screen a direction (azimuth from the front, elevation, deg)
+## is on: the shader's `screen_panel`, its first two components.
+func screen_panel(az: float, el: float) -> Vector2i:
+	var layout := PANEL_LAYOUT
+	var caps := PANEL_CAPS
+	var aa := absf(az)
+	var top := caps.x + 7.0 * cos(deg_to_rad(az))
+	var bottom := caps.y + 9.0 * smoothstep(layout.x, layout.y, aa)
+	var mid := (top + bottom) * 0.5
+	if el >= top or el <= bottom:
+		var up := el >= top
+		var w := fposmod(az + (25.0 if up else 65.0), 360.0)
+		return Vector2i(0 if up else 1, int(w / 90.0))
+	var split := layout.w
+	var door := layout.x if el < split else lerpf(layout.x, layout.x * 0.65, clampf((el - split) / maxf(top - split, 1.0), 0.0, 1.0))
+	var front := layout.y + (el - mid) * 0.35
+	var side := layout.z - (el - mid) * 0.3
+	if aa <= door:
+		return Vector2i(2, 0 if el < split else 1)
+	if aa <= front:
+		var m := (door + front) * 0.5 + (el - mid) * 0.25
+		var me := mid + (aa - m) * 0.2
+		return Vector2i(3 if az < 0.0 else 4, (0 if aa < m else 1) + (0 if el < me else 2))
+	if aa <= side:
+		var m := (front + side) * 0.5 - (el - mid) * 0.2
+		var me := mid - (aa - m) * 0.18
+		return Vector2i(5 if az < 0.0 else 6, (0 if aa < m else 1) + (0 if el < me else 2))
+	var me := mid + (180.0 - aa) * 0.15
+	return Vector2i(7, (0 if az < 0.0 else 1) + (0 if el < me else 2))
+
+
+## Which directions a live camera still sees (DamageModel): the rest is no signal, and what
+## only the body cameras see comes through coarser. Without a damage model: everything.
+func _push_coverage() -> void:
+	if _damage == null:
+		if _damage_searched:
+			return
+		# Looked up once: find_component walks the whole suit.
+		_damage_searched = true
+		var vehicle := VehicleBase.find_vehicle(self)
+		_damage = vehicle.find_component(DamageModel) as DamageModel if vehicle != null else null
+		if _damage == null:
+			return
+		_damage.cockpit_holed.connect(_on_cockpit_holed)
+		_damage.repaired.connect(clear_screen_holes)
+	var cones := _damage.get_camera_cones()
+	if cones.is_empty() and not _damage.is_built():
+		_material.set_shader_parameter("camera_count", 0)
+		return
+	var dirs := PackedVector4Array()
+	dirs.resize(32)
+	var n := mini(cones.size(), 32)
+	for i in n:
+		var d: Vector3 = cones[i][0]
+		dirs[i] = Vector4(d.x, d.y, d.z, cones[i][1] + (2.0 if cones[i][2] == 0 else 0.0))
+	_material.set_shader_parameter("camera_count", n)
+	_material.set_shader_parameter("camera_cones", dirs)
+	_material.set_shader_parameter("coverage_on", 1)
 
 
 ## World orientation of the panoramic frame: screen-local direction d shows world direction

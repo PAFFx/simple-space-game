@@ -211,6 +211,20 @@ func move_part(part: StringName, placement: Transform3D, box: AABB) -> void:
 	_inertia[i] = rot * own * rot.transposed()
 
 
+## A part's propellant tank capacity (e.g. 0: the part was shot away), kg.
+func set_part_tank(part: StringName, kg: float) -> void:
+	var i := _names.find(part)
+	if i < 0:
+		return
+	_tank[i] = kg
+	_fill_joints = -1.0
+
+
+## Propellant left / capacity, 0..1.
+func get_fill() -> float:
+	return _fill
+
+
 func _part_mass(i: int) -> float:
 	return _mass[i] + _tank[i] * _fill
 

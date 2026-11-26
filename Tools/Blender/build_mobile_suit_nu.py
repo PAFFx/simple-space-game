@@ -82,12 +82,22 @@ GROUPS = {
     "calf_guard.L": ids(58, 62),
     "foot.R": ids(2, 43, 46, 49, 50),
     "foot.L": ids(3, 54, 57, 60, 61),
-    "backpack": [i for i in range(70, 109) if i not in (70, 71, 74, 75, 76, 78, 79, 81, 82, 83,
-            86, 87, 88, 94, 95, 99, 100, 106, 107, 108)],
+    # The connectors on the pods: the fin funnel rack's (left) and the beam saber's (right).
+    # Their own meshes on the backpack bone (they don't swing with the pods); Godot's
+    # DamageModel hands them to their pods (MESH_PARTS).
+    "pod_mount.L": ids(77, 85),
+    "pod_mount.R": ids(80),
+    # The backpack itself is only the stub between the pods and the bazooka's handle.
+    "backpack": [i for i in range(70, 109) if i not in (70, 71, 74, 75, 76, 77, 78, 79, 80, 81, 82,
+            83, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104,
+            105, 106, 107, 108)],
     # Weapons
     "W:BeamRifle": ids((109, 122)),
     "W:Shield": ids((128, 134)),
-    "W:HyperBazooka": ids(86, 87, 88, 94, 95, 99, 100, 106, 107),
+    # Barrel and body, and its tail over the backpack: the magazine (96, side walls 89/90)
+    # with its four rounds (101, 103-105), the tail cap (91), the handle (92), the trigger (97),
+    # the top rail along the back (93) and the two blocks joining it to the magazine (98, 102).
+    "W:HyperBazooka": ids(86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107),
     "W:BeamSaber": ids(108),
 }
 # Six fin funnels, five parts each in index order (tip, blade, tip, hinge block, blade).
@@ -97,6 +107,9 @@ for n in range(6):
 # hides each as it is fired).
 for n in range(4):
     GROUPS[f"W:ShieldMissile{n + 1}"] = [135 + n]
+
+# Groups whose mesh rides another group's bone (no bone of their own).
+MESH_BONES = {"pod_mount.L": "backpack", "pod_mount.R": "backpack"}
 
 WEAPON_FILES = {
     "BeamRifle": "nu_beam_rifle.glb",
@@ -316,16 +329,132 @@ def load_parts(path):
     return bm, materials, part
 
 
-def make_object(name, bm, materials, groups, group):
+# Parts left open: the thruster nozzles (their bells must stay open), the two hatch doors
+# (flat slabs) and the weapons.
+OPEN_GROUPS = ("main_nozzle", "hatch", "skirt_hatch")
+# The doorways the hatch doors close: their loops stay open (the door swings away from them).
+DOORS = {"chest": "hatch", "skirt_rear.R": "skirt_hatch.R"}
+
+
+def interior_material():
+    mat = bpy.data.materials.get("MS_Interior")
+    if mat is None:
+        mat = bpy.data.materials.new("MS_Interior")
+        mat.use_nodes = True
+        bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        bsdf.inputs["Base Color"].default_value = (0.045, 0.043, 0.04, 1.0)
+        bsdf.inputs["Roughness"].default_value = 0.8
+        bsdf.inputs["Metallic"].default_value = 0.6
+    return mat
+
+
+def _key(co):
+    return (round(co.x, 3), round(co.y, 3), round(co.z, 3))
+
+
+def door_points(bm, groups, door):
+    """Rounded positions of the boundary of the door part (its doorway's rim on the suit)."""
+    pts = set()
+    for f in bm.faces:
+        if groups[f.index] != door:
+            continue
+        for e in f.edges:
+            if sum(1 for g in e.link_faces if groups[g.index] == door) == 1:
+                pts.add(_key(e.verts[0].co))
+                pts.add(_key(e.verts[1].co))
+    return pts
+
+
+def _ordered(loop):
+    """The loop's vertices in order around it, or None if it isn't a simple ring."""
+    verts = {v for e in loop for v in e.verts}
+    edges = set(loop)
+    start = next(iter(verts))
+    ring = [start]
+    prev = None
+    cur = start
+    while True:
+        nxt = [e.other_vert(cur) for e in cur.link_edges if e in edges and e.other_vert(cur) != prev]
+        if len(nxt) != 1 and not (len(nxt) == 2 and prev is None):
+            return None
+        n = nxt[0]
+        if n == start:
+            break
+        if n in ring:
+            return None
+        ring.append(n)
+        prev, cur = cur, n
+    return ring if len(ring) == len(verts) else None
+
+
+def close_shell(b, material_index, keep_open):
+    """Fills every open boundary loop of a part (but doorways) with faces of the interior
+    material: the part becomes a closed shell, so a cut or a hole never looks into an empty
+    skin or through it. The new faces sit inside joints and sockets, out of sight."""
+    boundary = [e for e in b.edges if e.is_boundary]
+    seen = set()
+    filled = 0
+    for start in boundary:
+        if start in seen:
+            continue
+        loop = []
+        stack = [start]
+        seen.add(start)
+        while stack:
+            e = stack.pop()
+            loop.append(e)
+            for v in e.verts:
+                for n in v.link_edges:
+                    if n.is_boundary and n not in seen:
+                        seen.add(n)
+                        stack.append(n)
+        verts = {v for e in loop for v in e.verts}
+        if keep_open and sum(1 for v in verts if _key(v.co) in keep_open) > 0.5 * len(verts):
+            continue
+        # A loop that is one face's own outline is a one-sided panel (a strip, a decal): leave it.
+        faces = {f for e in loop for f in e.link_faces}
+        if len(faces) == 1:
+            continue
+        ring = _ordered(loop)
+        if ring is None:
+            continue
+        # A fan from the loop's centre, wound against each edge's own face (so it faces out).
+        centre = b.verts.new(sum((v.co for v in ring), mathutils.Vector()) / len(ring))
+        uv = b.loops.layers.uv.active
+        for k in range(len(ring)):
+            a = ring[k]
+            c = ring[(k + 1) % len(ring)]
+            edge = b.edges.get((a, c))
+            forward = False
+            for lp in edge.link_loops:
+                forward = lp.vert == a
+            f = b.faces.new((c, a, centre) if forward else (a, c, centre))
+            f.material_index = material_index
+            f.smooth = False
+            if uv is not None:
+                for lp in f.loops:
+                    lp[uv].uv = (0.0, 0.0)
+        filled += 1
+    return filled
+
+
+def make_object(name, bm, materials, groups, group, keep_open=None):
     b = bm.copy()
     b.faces.ensure_lookup_table()
     bmesh.ops.delete(b, geom=[f for f in b.faces if groups[f.index] != group], context="FACES")
     bmesh.ops.delete(b, geom=[v for v in b.verts if not v.link_faces], context="VERTS")
+    closed = not group.startswith("W:") and not group.startswith(OPEN_GROUPS)
+    if closed:
+        n = close_shell(b, len(materials), keep_open)
+        if n:
+            print(f"[nu] {group}: closed {n} openings")
     mesh = bpy.data.meshes.new(name)
     b.to_mesh(mesh)
     b.free()
     for m in materials:
         mesh.materials.append(m)
+    if closed:
+        mesh.materials.append(interior_material())
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(obj)
     return obj
@@ -711,12 +840,13 @@ def main():
                              + shield_mount_bone() + skirt_hatch_bone())
     suit, weapons = [], {}
     for group in list(GROUPS) + ["hatch", "skirt_hatch.R"] + [g for g, _r, _h in NOZZLE_CUPS]:
-        obj = make_object(object_name(group), bm, materials, groups, group)
+        keep = door_points(bm, groups, DOORS[group]) if group in DOORS else None
+        obj = make_object(object_name(group), bm, materials, groups, group, keep)
         if group.startswith("W:"):
             kind = group[2:].rstrip("0123456789")
             weapons.setdefault(kind, []).append(obj)
         else:
-            bind(obj, arm, group)
+            bind(obj, arm, MESH_BONES.get(group, group))
             suit.append(obj)
     bm.free()
 

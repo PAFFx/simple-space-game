@@ -8,7 +8,7 @@ extends CanvasLayer
 ##   1 static · 2 drifting · 3 jinking · 4 hard jinking · 5 evasive (dodges your shots)
 ##   6 ace (hard jinking and dodging) · 7 turret · 8 hunter turret · 9 clear all · 0 rearm
 ##   - / + nearer / farther
-## Rearm also repairs the suit (SuitDamage); the panel lists each part's armour.
+## Rearm also repairs the suit (DamageModel) and refuels it; the panel lists each part.
 
 const TOGGLE := &"debug_toggle_range_control"
 ## Panels in this group close each other: they share the number keys.
@@ -128,9 +128,14 @@ func rearm() -> void:
 	var fcs := suit.find_component(FireControl) as FireControl if suit != null else null
 	if fcs != null:
 		fcs.rearm()
-	var damage := suit.find_component(SuitDamage) as SuitDamage if suit != null else null
+	var damage := suit.find_component(DamageModel) as DamageModel if suit != null else null
 	if damage != null:
 		damage.repair()
+	# Full tanks (after the repair, which gives back any capacity lost with a holed tank).
+	var fc := suit.find_component(FlightComputer) as FlightComputer if suit != null else null
+	if fc != null:
+		fc.propellant = fc.propellant_capacity
+		fc.burst_reserve = minf(fc.burst_reserve_capacity, fc.propellant)
 	hits_taken = 0
 	hits_blocked = 0
 
@@ -232,15 +237,24 @@ func _refresh() -> void:
 	lines.append("targets  %d" % alive)
 	lines.append("hits taken  %d   blocked  %d" % [hits_taken, hits_blocked])
 	var suit := _vehicle()
-	var damage := suit.find_component(SuitDamage) as SuitDamage if suit != null else null
+	var damage := suit.find_component(DamageModel) as DamageModel if suit != null else null
 	if damage != null:
 		var parts := PackedStringArray()
-		for part: StringName in damage.max_hit_points:
-			parts.append("%s %3d%%" % [String(part).to_upper(), roundi(damage.get_fraction(part) * 100.0)])
-		parts.append("SHIELD %3d%%" % roundi(damage.get_shield_fraction() * 100.0))
+		for state in damage.get_part_states():
+			if state[1] < 0.999:
+				parts.append("%s %s" % [String(state[0]).to_upper(), "GONE" if state[1] <= 0.0 else "%3d%%" % roundi(state[1] * 100.0)])
+		var shield := suit.find_children("*", "MsShield", true, false)
 		lines.append("")
-		lines.append("ARMOUR%s" % ("  ** SUIT DOWN: 0 rearms **" if damage.destroyed else ""))
+		lines.append("DAMAGE%s" % ("  ** PILOT KIA: 0 rearms **" if damage.pilot_dead else ""))
+		if parts.is_empty():
+			lines.append("  intact")
 		for i in range(0, parts.size(), 3):
 			lines.append("  " + "   ".join(parts.slice(i, i + 3)))
+		lines.append("  thrusters out %d   cameras out %d" % [damage.count_dead(DamageModel.Kind.THRUSTER),
+				damage.count_dead(DamageModel.Kind.BODY_CAMERA) + damage.count_dead(DamageModel.Kind.EYES)])
+		if not shield.is_empty():
+			lines.append("  I-field charges %d" % (shield[0] as MsShield).charges)
+		if damage.last_event != "":
+			lines.append("  last: %s" % damage.last_event)
 	_label.text = "\n".join(lines)
 	_panel.reset_size()

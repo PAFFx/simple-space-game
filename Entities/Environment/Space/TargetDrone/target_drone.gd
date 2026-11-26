@@ -27,6 +27,11 @@ extends AnimatableBody3D
 ##             (delayed, noisy angles and range through a SensorTrack, leading with the
 ##             estimated acceleration) instead of the quarry's true state.
 
+## Beams drill it (Docs/Damage): a thin shell (`shell_areal` kg/m² per wall), a light interior
+## and a dense core (its reactor) at the centre. A beam through the core breaches it (a small
+## flash, the drone gone); through the gun arm, the gun is gone; any other hole has a chance
+## to cut its control (it goes dead and drifts); enough holes break it apart.
+
 enum Behaviour { STATIC, DRIFT, JINK, TURRET }
 
 signal destroyed(drone: TargetDrone)
@@ -37,6 +42,12 @@ signal destroyed(drone: TargetDrone)
 @export var hit_points: float = 300.0
 ## Velocity it starts with (give it the player's, so it keeps station).
 @export var velocity := Vector3.ZERO
+@export_group("Structure")
+@export var shell_areal: float = 80.0
+@export var interior_density: float = 15.0
+@export var core_radius: float = 4.5
+@export var core_density: float = 300.0
+## Chance a hole through it cuts its control.
 @export_group("Jink")
 @export var jink_accel_g: float = 3.0
 @export var jink_interval := Vector2(0.8, 2.2)
@@ -112,6 +123,14 @@ var dodges := 0
 var _cue_seen := false
 var _dodge_in := -1.0
 var _speed_limit_g := 0.0
+var _ball: MeshInstance3D
+var _holes: HoleSet
+var _drills := {}   ## shot → [kg per STEP, pos, spare, hole, chord, entry, core t, gun t, through, last, direction]
+
+var _clock := 0.0
+var _left := 1.0
+var _dead := false
+var _gun_dead := false
 var _track: SensorTrack
 var _track_due := 0.0
 var _track_queue: Array = []
@@ -158,8 +177,188 @@ func apply_hit(damage: float, _at: Vector3, _direction: Vector3, _source: Node) 
 		queue_free()
 
 
+## One tick of a beam on it (ProjectileManager).
+func beam_contact(contact: ProjectileManager.BeamContact) -> void:
+	var d: Array = _drills.get(contact.key, [])
+	if d.is_empty():
+		d = _start_drill(contact)
+		_drills[contact.key] = d
+		# Still counted as a hit (tools count hits by hit points); hit points of 1e9 and more
+		# make it a target that can't be destroyed (probes).
+		hit_points -= contact.spec.damage
+	if hit_points >= 1e8:
+		contact.absorbed = contact.energy
+		contact.front = contact.point
+		return
+	d[9] = _clock
+	var kgs: PackedFloat32Array = d[0]
+	var kg_left := contact.energy * DamageModel.COUPLING / DamageModel.REMOVAL_ENERGY
+	var pos: int = d[1]
+	var spare: float = d[2]
+	while pos < kgs.size():
+		var need := kgs[pos] - spare
+		if kg_left < need:
+			spare += kg_left
+			kg_left = 0.0
+			break
+		kg_left -= need
+		spare = 0.0
+		pos += 1
+	d[1] = pos
+	d[2] = spare
+	var t := pos * DamageModel.STEP
+	var chord: float = d[4]
+	var hole := d[3] as HoleSet.Hole
+	if hole != null:
+		hole.s_drill = chord if pos >= kgs.size() else t
+	if float(d[6]) >= 0.0 and t >= float(d[6]):
+		d[6] = -1.0
+		_breach_core()
+	if float(d[7]) >= 0.0 and t >= float(d[7]):
+		d[7] = -1.0
+		_lose_gun()
+	if pos < kgs.size():
+		contact.absorbed = contact.energy
+		contact.front = contact.point + contact.direction * t
+		return
+	contact.through = true
+	contact.absorbed = contact.energy - kg_left * DamageModel.REMOVAL_ENERGY / DamageModel.COUPLING
+	contact.exit_point = contact.point + contact.direction * (chord + 0.05)
+	if not d[8]:
+		d[8] = true
+		var fx := DamageFx.of(self)
+		if fx != null:
+			fx.blow_out(contact.point + contact.direction * chord, contact.direction, velocity, contact.radius, self)
+		_left -= 2.0 * contact.radius / (2.0 * radius) * 2.2
+		# A test drone: a beam straight through it blows it up (a dead one would be hard to tell).
+		_blow_up()
+
+
+## What lies on the beam's line through it: [kg per STEP, 0, 0, hole, chord, entry, core t, gun t, done, last].
+func _start_drill(contact: ProjectileManager.BeamContact) -> Array:
+	var dir := contact.direction.normalized()
+	var to_centre := global_position - contact.point
+	var along := to_centre.dot(dir)
+	var b := (to_centre - dir * along).length()
+	var chord := 2.0 * sqrt(maxf(radius * radius - b * b, 0.01))
+	var area := PI * contact.radius * contact.radius
+	var n := maxi(ceili(chord / DamageModel.STEP), 1)
+	var kgs := PackedFloat32Array()
+	kgs.resize(n)
+	var core_t := -1.0
+	if b < core_radius + contact.radius * 0.5:
+		core_t = along - sqrt(maxf(core_radius * core_radius - b * b, 0.0))
+	for i in n:
+		var tc := (i + 0.5) * DamageModel.STEP
+		var kg := interior_density * DamageModel.STEP * area
+		if i == 0 or i == n - 1:
+			kg += shell_areal * area
+		if core_t >= 0.0 and absf(tc - along) < sqrt(maxf(core_radius * core_radius - b * b, 0.0)):
+			kg += core_density * DamageModel.STEP * area
+		kgs[i] = kg
+	var gun_t := -1.0
+	if _gun != null and not _gun_dead:
+		var pivot := _gun.global_position + _gun.global_basis.z * -GUN_LENGTH * 0.4
+		var t := (pivot - contact.point).dot(dir)
+		if (contact.point + dir * t).distance_to(pivot) < 1.2 + contact.radius:
+			gun_t = maxf(t, 0.0)
+	var hole: HoleSet.Hole = null
+	if _ball != null:
+		if _holes == null:
+			_holes = HoleSet.new()
+			_holes.name = "Holes"
+			add_child(_holes)
+		hole = _holes.add_hole(_ball, null, -1, contact.point, dir, contact.radius, chord)
+		var fx := DamageFx.of(self)
+		if fx != null:
+			fx.drill_in(contact.point, dir, velocity, contact.radius, self)
+	_flash = 1.0
+	return [kgs, 0, 0.0, hole, chord, contact.point, core_t, gun_t, false, _clock, dir]
+
+
+## A flash's radiant fluence, J/m² (a suit's reactor going up nearby).
+func apply_radiation(fluence: float, _from: Vector3) -> void:
+	if fluence > 5e6:
+		_breach_core()
+	elif fluence > 1e6:
+		_lose_control()
+
+
+func _breach_core() -> void:
+	if hit_points <= -1e8 or hit_points >= 1e8:
+		return
+	hit_points = -1e9
+	var fx := DamageFx.of(self)
+	if fx != null:
+		fx.reactor_flash_small(global_position, velocity, radius * 8.0)
+	destroyed.emit(self)
+	queue_free()
+
+
+func _lose_gun() -> void:
+	if _gun_dead or _gun == null:
+		return
+	_gun_dead = true
+	_spool = -1.0
+	ProjectileManager.of(self).set_charge(self, _muzzle, shot, 0.0)
+	var fx := DamageFx.of(self)
+	if fx != null:
+		fx.burst(_gun.global_position, velocity, 1.2, &"electronics")
+	_gun.visible = false
+
+
+func _lose_control() -> void:
+	if _dead or hit_points >= 1e8:
+		return
+	_dead = true
+	_spool = -1.0
+	if shot != null:
+		ProjectileManager.of(self).set_charge(self, _muzzle, shot, 0.0)
+	_material.emission_energy_multiplier = 0.0
+	var fx := DamageFx.of(self)
+	if fx != null:
+		fx.burst(global_position, velocity, 1.5, &"electronics")
+
+
+## A beam went through: it explodes (not the core's flash, a plain blast).
+func _blow_up() -> void:
+	if hit_points <= -1e8 or hit_points >= 1e8:
+		return
+	hit_points = -1e9
+	ProjectileManager.of(self).explode(global_position, velocity, radius * 2.0)
+	destroyed.emit(self)
+	queue_free()
+
+
+## A beam that stopped inside (not through, not the core): deep, it still blows it up; shallow,
+## it wrecked the thrusters near the hole (jinks and dodges at half strength).
+func _drill_ended(d: Array) -> void:
+	if bool(d[8]) or _dead or hit_points >= 1e8 or not is_inside_tree():
+		return
+	var depth := int(d[1]) * DamageModel.STEP
+	var entry: Vector3 = d[5]
+	var dir: Vector3 = d[10]
+	if depth >= 1.0:
+		_blow_up()
+	elif depth > 0.05:
+		jink_accel_g *= 0.5
+		dodge_accel_g *= 0.5
+		var fx := DamageFx.of(self)
+		if fx != null:
+			fx.creak(entry, velocity, radius * 0.3)
+
+
 func _physics_process(delta: float) -> void:
 	_time += delta
+	_clock += delta
+	for key in _drills.keys():
+		if _clock - float(_drills[key][9]) > 0.3:
+			_drill_ended(_drills[key])
+			_drills.erase(key)
+	if _dead:
+		global_position += velocity * delta
+		rotate(Vector3.UP, delta * 0.3)
+		return
 	_anchor += _base_velocity * delta
 	_speed_limit_g = jink_accel_g
 	if threat != null:
@@ -172,8 +371,11 @@ func _physics_process(delta: float) -> void:
 			_jink(delta, jink_accel_g * 0.3)
 			if use_track:
 				_update_track(delta)
-			_shoot(delta)
+			if not _gun_dead:
+				_shoot(delta)
 	global_position += velocity * delta
+	if _gun_dead:
+		_spool = -1.0
 	if _flash > 0.0:
 		_flash = maxf(_flash - delta * 3.0, 0.0)
 		_material.emission_energy_multiplier = 0.4 + _flash * 6.0
@@ -533,11 +735,12 @@ func _build() -> void:
 	var mesh := SphereMesh.new()
 	mesh.radius = radius
 	mesh.height = radius * 2.0
-	mesh.radial_segments = 10
-	mesh.rings = 5
+	mesh.radial_segments = 24
+	mesh.rings = 12
 	mesh.material = _material
 	ball.mesh = mesh
 	add_child(ball)
+	_ball = ball
 	# A dark band and two pods, so its spin and size read at a distance.
 	var dark := StandardMaterial3D.new()
 	dark.albedo_color = Color(0.1, 0.1, 0.12)

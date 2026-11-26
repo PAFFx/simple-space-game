@@ -85,6 +85,8 @@ func _run() -> void:
 	fc.add_child(_input)
 	fc.input_source = _input
 	_fcs = vehicle.find_component(FireControl) as FireControl
+	# Hits are counted, the suit isn't damaged (the damage model would end the run).
+	(vehicle.find_component(DamageModel) as DamageModel).enabled = false
 	_suit.connect(&"hit_taken", func(_d: float, _p: Vector3, _dir: Vector3) -> void: _hits += 1)
 	await _ticks(60)
 	print("turret beam %.0f m/s, spool %.2f s, %d shots per case; pilot reacts %.2f s after the glow, %s %.2f s; suit %.1f t%s" % [

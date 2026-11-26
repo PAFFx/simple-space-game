@@ -33,6 +33,47 @@ uniform vec4 no_signal_color : source_color = vec4(0.02, 0.02, 0.03, 1.0);
 // Color shown when a segment is disabled (damaged panel or open door).
 uniform vec4 damaged_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 
+// Camera coverage (DamageModel): the live cameras' fields, world direction and cos of the
+// half field (+2 marks the head's main camera). Every camera gives the full picture;
+// directions none of them sees have no signal.
+uniform int coverage_on = 0;
+uniform int camera_count = 0;
+uniform vec4 camera_cones[32];
+
+// Beams through the screen (PanoramicScreen.add_beam_hole), the lines the chest's holes were
+// drilled along, in the screen mesh's space: origin and radius, axis and when (HoleSet clock).
+// The opening is that cylinder, a bit wider (glass shatters), its edge hot and cooling.
+uniform int beam_count = 0;
+uniform vec4 beam_a[8];
+uniform vec4 beam_b[8];
+uniform float hole_now = 0.0;
+// Where they cross the screen: direction and the opening's angular radius; the composite
+// screens (bits) each crossing's opening touches, whose glass cracks from it; the sub-screens
+// (bit composite·4 + sub) any opening touches, which die.
+uniform int crossing_count = 0;
+uniform vec4 crossings[16];
+uniform int crossing_glass[16];
+uniform int dead_subs = 0;
+uniform int flicker_subs = 0;
+const float OPENING = 1.15;
+const float SCREEN_PEAK = 2000.0;
+
+varying vec3 v_local;
+// The twin outside cameras see (PanoramicScreen): the picture is for the pilot's eye, so from
+// outside the screen is dark glass unless the door is open.
+instance uniform bool outside_view = false;
+// The screen is built from composite screens, each of a few sub-screens behind one glass:
+// the door (centre front, its lower half the hatch), two big ones either side of it, two
+// sides, the rear, the top and the bottom. Azimuth edges (deg from the front): door half
+// width, front screens' outer edge, sides' outer edge; the door's split elevation. Then the
+// top and bottom screens' edges (elevation, deg). A beam kills the sub-screen it goes through
+// and cracks that composite's glass. Bezels: frame between composites, a seam between subs.
+uniform vec4 panel_layout = vec4(19.0, 75.0, 145.0, -13.5);
+uniform vec2 panel_caps = vec2(45.0, -61.0);
+uniform float bezel_deg = 0.55;
+uniform float seam_deg = 0.16;
+uniform vec3 bezel_color : source_color = vec3(0.018, 0.02, 0.024);
+
 // HUD overlay drawn in equirectangular panoramic space:
 // x = azimuth (forward at 0.5, wraps at the back), y = elevation (top = +90°).
 uniform sampler2D hud_texture : source_color, hint_default_transparent, filter_linear, repeat_enable;
@@ -227,6 +268,82 @@ vec3 composite_zoom(vec3 color, vec3 local_dir) {
 }
 
 
+// 0: no camera sees `dir`, 1: a camera does (soft edge between).
+float coverage(vec3 dir) {
+	float seen = 0.0;
+	for (int i = 0; i < 32; i++) {
+		if (i >= camera_count) {
+			break;
+		}
+		vec4 c = camera_cones[i];
+		float cos_half = c.w > 1.5 ? c.w - 2.0 : c.w;
+		seen = max(seen, smoothstep(cos_half - 0.02, cos_half + 0.02, dot(dir, c.xyz)));
+	}
+	return seen;
+}
+
+float cov_hash(vec2 p) {
+	return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.7);
+}
+
+// Which composite screen and sub-screen a direction falls on (az, el in deg; az 0 front,
+// + right): vec4(composite, sub, distance to the composite's edge, distance to a sub seam),
+// distances in deg on the sphere. The screens aren't a grid: the door narrows above the hatch
+// (a trapezoid), the front screens' outer edges lean out at the top, the sides lean back, the
+// top screen's edge sits higher in front, the bottom rises toward the sides, and sub-screens
+// are split on slants.
+vec4 screen_panel(float az, float el) {
+	float aa = abs(az);
+	float ce = max(cos(radians(el)), 0.05);
+	float split = panel_layout.w;
+	float top = panel_caps.x + 7.0 * cos(radians(az));
+	float bottom = panel_caps.y + 9.0 * smoothstep(panel_layout.x, panel_layout.y, aa);
+	float mid = (top + bottom) * 0.5;
+	if (el >= top || el <= bottom) {
+		bool up = el >= top;
+		float a = mod(az + (up ? 25.0 : 65.0), 360.0);
+		float r = mod(a, 90.0);
+		return vec4(up ? 0.0 : 1.0, floor(a / 90.0), up ? el - top : bottom - el, min(r, 90.0 - r) * ce);
+	}
+	float d_el = min(top - el, el - bottom);
+	// The door: the hatch's rectangle below the split, narrowing to the top above it.
+	float door = el < split ? panel_layout.x : mix(panel_layout.x, panel_layout.x * 0.65, clamp((el - split) / max(top - split, 1.0), 0.0, 1.0));
+	float front = panel_layout.y + (el - mid) * 0.35;
+	float side = panel_layout.z - (el - mid) * 0.3;
+	if (aa <= door) {
+		return vec4(2.0, el < split ? 0.0 : 1.0, min((door - aa) * ce, d_el), abs(el - split));
+	}
+	if (aa <= front) {
+		float m = (door + front) * 0.5 + (el - mid) * 0.25;
+		float me = mid + (aa - m) * 0.2;
+		float sub = (aa < m ? 0.0 : 1.0) + (el < me ? 0.0 : 2.0);
+		return vec4(az < 0.0 ? 3.0 : 4.0, sub, min(min(aa - door, front - aa) * ce, d_el), min(abs(aa - m) * ce, abs(el - me)));
+	}
+	if (aa <= side) {
+		float m = (front + side) * 0.5 - (el - mid) * 0.2;
+		float me = mid - (aa - m) * 0.18;
+		float sub = (aa < m ? 0.0 : 1.0) + (el < me ? 0.0 : 2.0);
+		return vec4(az < 0.0 ? 5.0 : 6.0, sub, min(min(aa - front, side - aa) * ce, d_el), min(abs(aa - m) * ce, abs(el - me)));
+	}
+	float me = mid + (180.0 - aa) * 0.15;
+	float sub = (az < 0.0 ? 0.0 : 1.0) + (el < me ? 0.0 : 2.0);
+	return vec4(7.0, sub, min((aa - side) * ce, d_el), min((180.0 - aa) * ce, abs(el - me)));
+}
+
+#include "res://Entities/Vehicles/Components/Damage/Shader/hole_heat.gdshaderinc"
+
+float hole_like_noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(cov_hash(i), cov_hash(i + vec2(1.0, 0.0)), f.x),
+			mix(cov_hash(i + vec2(0.0, 1.0)), cov_hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+void vertex() {
+	v_local = VERTEX;
+}
+
 void fragment() {
 	// --- Step 1: Recover azimuth and elevation from UV2 ---
 	// UV2.x = azimuth / TAU  (absolute angle, may be negative or > 1 due to arc_offset)
@@ -252,12 +369,103 @@ void fragment() {
 		}
 	}
 
+	// --- Step 2b: Composite screens, and beam holes in them ---
+	// The sub-screen a hole is in goes dark; the glass of that composite screen cracks from
+	// the hole (thin dark breaks with a glint where they catch the light), and its other
+	// sub-screens keep their picture under the cracks, with a few dead blocks.
+	float az_deg = degrees(atan(sin(azimuth), cos(azimuth)));
+	float el_deg = degrees(elevation);
+	vec4 my_panel = screen_panel(az_deg, el_deg);
+	float panel_dead = 0.0;
+	float rim_t = 0.0;
+	float rim_w = 0.0;
+	float char_w = 0.0;
+	float crack_dark = 0.0;
+	float crack_glint = 0.0;
+	float block_dead = 0.0;
+	float glass_broken = 0.0;
+	int my_bit = int(my_panel.x) * 4 + int(my_panel.y);
+	panel_dead = float((dead_subs >> my_bit) & 1);
+	float flicker = float((flicker_subs >> my_bit) & 1);
+	if (beam_count > 0) {
+		for (int i = 0; i < 8; i++) {
+			if (i >= beam_count) {
+				break;
+			}
+			vec3 a = beam_b[i].xyz;
+			float r = beam_a[i].w;
+			vec3 q = v_local - beam_a[i].xyz;
+			vec3 radial = q - a * dot(q, a);
+			float d = length(radial);
+			if (d > r * 2.5) {
+				continue;
+			}
+			vec3 e1 = normalize(cross(a, abs(a.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+			float ang = atan(dot(radial, cross(a, e1)), dot(radial, e1));
+			float seed = float(i) * 1.73 + beam_b[i].w * 0.37;
+			// Shattered glass: a jagged outline (sharp teeth over a slow wander).
+			float teeth = abs(fract(ang * 4.5 + hole_like_noise(vec2(ang * 2.0, seed)) * 1.7) - 0.5);
+			float open_r = r * OPENING * (1.0 + 0.07 * sin(3.0 * ang + seed) + 0.06 * (hole_like_noise(vec2(ang * 6.0, seed)) - 0.5)
+					- 0.06 * teeth);
+			if (d < open_r) {
+				discard;
+			}
+			// The torn edge: a thin hot lip where the beam passed, cooling with the chest's hole,
+			// and a charred band.
+			float out_r = (d - open_r) / r;
+			float w = 1.0 - smoothstep(0.0, 0.035, out_r);
+			float t = hole_cool(SCREEN_PEAK, hole_now - beam_b[i].w);
+			if (w * t > rim_w * rim_t) {
+				rim_t = t;
+				rim_w = w;
+			}
+			char_w = max(char_w, (1.0 - smoothstep(0.02, 0.25, out_r)) * (0.75 + 0.25 * hole_like_noise(vec2(ang * 8.0, out_r * 30.0))));
+		}
+		float cel2 = cos(elevation);
+		vec3 dir_s = vec3(sin(azimuth) * cel2, sin(elevation), -cos(azimuth) * cel2);
+		for (int i = 0; i < 16; i++) {
+			if (i >= crossing_count) {
+				break;
+			}
+			if (((crossing_glass[i] >> int(my_panel.x)) & 1) == 0) {
+				continue;
+			}
+			glass_broken = 1.0;
+			// Spiderweb from the opening's edge: radial cracks (wandering) and broken rings,
+			// thinning out; distances in units of 16 deg, the opening's edge at 0.55.
+			vec3 hd = crossings[i].xyz;
+			float ang = (acos(clamp(dot(dir_s, hd), -1.0, 1.0)) - crossings[i].w) / radians(16.0) + 0.55;
+			vec3 e1 = normalize(cross(hd, abs(hd.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+			float around = atan(dot(dir_s, cross(hd, e1)), dot(dir_s, e1));
+			float seed = float(i) * 3.7;
+			float reach = 1.0 - smoothstep(2.0, 7.0, ang);
+			float wob = 0.18 * (cov_hash(vec2(floor(ang * 3.0), seed)) - 0.5) + 0.08 * sin(ang * 4.0 + seed);
+			float rays = abs(fract(around / TAU * 13.0 + wob + seed) - 0.5);
+			float ray_d = 0.5 - rays;
+			float ray_line = 1.0 - smoothstep(0.0, fwidth(ray_d) * 1.3, ray_d);
+			ray_line *= step(0.6, ang) * step(0.35, cov_hash(vec2(floor(around / TAU * 13.0 + wob + seed), seed)) + 0.4);
+			float ring_n = ang * 1.7 + 0.25 * (cov_hash(vec2(floor(around * 5.0), seed)) - 0.5);
+			float ring_d = abs(fract(ring_n) - 0.5);
+			float ring_line = (1.0 - smoothstep(0.0, fwidth(ring_n) * 1.3, 0.5 - ring_d))
+					* step(0.5, cov_hash(vec2(floor(around * 4.0), floor(ring_n) + seed)));
+			float c = max(ray_line, ring_line * (1.0 - smoothstep(0.8, 3.5, ang))) * reach;
+			crack_dark = max(crack_dark, c);
+			crack_glint = max(crack_glint, c * smoothstep(0.55, 0.9, hole_like_noise(vec2(around * 3.0, ang * 1.5) + seed)));
+			if (panel_dead < 0.5) {
+				vec2 cell = floor(vec2(azimuth, elevation) * 50.0);
+				block_dead = max(block_dead, step(0.92, cov_hash(cell + seed)) * (1.0 - smoothstep(2.0, 5.0, ang)));
+			}
+		}
+	}
+
 	// --- Step 3: Check the segment mask ---
 	// fract() wraps any arc_offset so the mask always indexes [0, 1] correctly.
 	float active = texture(segment_mask, vec2(fract(UV2.x), 0.5)).r;
 
 	vec3 color;
-	if (active < 0.5) {
+	if (outside_view && aperture_amount <= 0.0) {
+		color = vec3(0.012, 0.013, 0.016) + vec3(0.02) * hole_like_noise(vec2(azimuth, elevation) * 6.0);
+	} else if (active < 0.5) {
 		color = damaged_color.rgb;
 	} else {
 		// --- Step 4: Build the world-space direction this fragment represents ---
@@ -289,8 +497,11 @@ void fragment() {
 
 			// --- Step 6: Bounds check, then sample ---
 			if (all(greaterThanEqual(sample_uv, vec2(0.0))) && all(lessThanEqual(sample_uv, vec2(1.0)))) {
+				float cov = coverage_on == 1 ? coverage(world_dir) : 1.0;
 				color = texture(sensor_viewport, sample_uv).rgb * screen_brightness;
 				color = composite_overlay(color, sample_uv);
+				// No camera sees here: black.
+				color *= smoothstep(0.6, 1.0, cov);
 			}
 		}
 
@@ -308,6 +519,34 @@ void fragment() {
 		color = composite_zoom_frame(color, local_dir, hud_brightness, degrees(length(fwidth(local_dir))) * 0.7);
 	}
 
+	// The seams are invisible while the screen is whole; a broken composite shows its frame
+	// and its sub-screens' seams (the glass gone dull around them, the edges catching light).
+	if (glass_broken > 0.5) {
+		float fw = max(fwidth(el_deg), 0.02);
+		float frame = 1.0 - smoothstep(bezel_deg - fw, bezel_deg + fw, my_panel.z);
+		float seam = 1.0 - smoothstep(seam_deg - fw, seam_deg + fw, my_panel.w);
+		float edge_light = (1.0 - smoothstep(0.0, fw * 2.0, abs(my_panel.z - bezel_deg))) * 0.5;
+		color = mix(color, bezel_color, max(frame, seam * 0.85));
+		color += vec3(0.05, 0.055, 0.06) * edge_light;
+	}
+	if (flicker > 0.5) {
+		// A sub-screen losing its signal: stutters dark and bright, torn lines.
+		float t = floor(TIME * 24.0);
+		float on = step(0.45, cov_hash(vec2(t, float(my_bit))));
+		float tear = step(0.985, cov_hash(vec2(floor(elevation * 400.0), t + float(my_bit))));
+		color = color * (on * 1.4 + 0.04) + vec3(0.12, 0.14, 0.16) * tear * on;
+	}
+	if (beam_count > 0 || dead_subs != 0) {
+		// A dead panel is dark glass: a faint sheen of the cockpit's light across it.
+		float sheen = 0.02 + 0.025 * hole_like_noise(vec2(azimuth, elevation) * 6.0);
+		color = mix(color, vec3(0.004), block_dead);
+		color = mix(color, vec3(sheen, sheen * 1.05, sheen * 1.15), panel_dead);
+		color = mix(color, color * 0.1, crack_dark * 0.9 * (1.0 - panel_dead));
+		color += vec3(0.6, 0.65, 0.72) * crack_glint * (0.5 + 1.2 * panel_dead);
+		color += vec3(0.05, 0.055, 0.06) * crack_dark * panel_dead;
+		color = mix(color, vec3(0.006, 0.005, 0.004), char_w * 0.9);
+		color = mix(color, hole_blackbody(rim_t) * (0.3 + hole_glow(rim_t)), rim_w * smoothstep(750.0, 1100.0, rim_t));
+	}
 	ALBEDO   = color;
 	EMISSION = color;
 }

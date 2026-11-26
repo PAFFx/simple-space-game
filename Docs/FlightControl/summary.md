@@ -765,7 +765,8 @@ Clean force capability at full weight (69 t, level, limbs at rest; `Tools/Flight
 | After the side-thrust pass | 9.0 G | 1.6 G | 6.6 G | 3.9 G | 3.5–3.7 G |
 | With the mass model (centre of mass 1.2 m lower, 0.6 m left) | 9.0 G | 1.6 G | 6.1 G | 4.3 G | 3.6–3.7 G |
 | All thrust ×1.5 (Nov 2026, `thrust_sizing.md`) | 13.5 G | 2.4 G | 9.7 G | 6.5 G | 5.4–5.6 G |
-| All thrust ×1.2 (Nov 2026, headroom; current) | 11.1 G | 1.9 G | 7.7 G | 5.2 G | 4.3–4.5 G |
+| All thrust ×1.2 (Nov 2026, headroom) | 11.1 G | 1.9 G | 7.7 G | 5.2 G | 4.3–4.5 G |
+| Reactor moved to the pelvis (centre of mass 0.1 m lower; current) | 11.1 G | 1.9 G | 7.6 G | 5.2 G | 4.3–4.5 G |
 
 Clean torque 19 / 8 / 20 MN·m (pitch / yaw / roll), about twice what it was before the side-thrust pass (30 / 12 / 30 after the ×1.5, 24 / 10 / 24 at the current ×1.2). Sideways gains
 come from the bigger shoulder, skirt and shin ports and the sole's wider cone; the stronger shoulder tops (down) are what let the mains push sideways
