@@ -433,3 +433,11 @@ no live thruster sits inside a severed part.
 - [ ] **Two holes into one spot from different angles** (user unsure it looks wrong): a render
   of two bores through the chest side (snapshot `overlap_clean`) shows them joined into one
   rough opening, nothing odd seen yet. Needs a screenshot of the case if it still looks wrong.
+- [x] **The pilot is seen through a breached cockpit's holes** (drawn for outside cameras once
+  the gimbal is jammed, like the cockpit around them).
+- [x] **Pieces knocked off showed as outlines on the screen** (the fin funnels). Debris copied
+  the equipment's sensor outline meshes too; it takes hardware only now (`_debris_worthy`), and
+  the fuzz's `own` rule fails on any sensor-only mesh on debris.
+- [x] **The screen's tear was blocked by molten metal.** The tear is wider than the beam hole,
+  so the cockpit shell right behind it showed its molten rim through it. The cockpit's meshes
+  open 1.5× the hole now, wider than the tear's jagged edge.

@@ -3,7 +3,8 @@ extends SceneTree
 ## Random damage, checked by rules instead of by eye. Each round repairs the suit, then lands a
 ## random sequence of real rifle beams (random parts, random directions), severs and joint
 ## hits, lets it settle and checks:
-##   own       nothing shows on a part that is gone (or past a cut through it)
+##   own       nothing shows on a part that is gone (or past a cut through it); debris carries
+##             no sensor outlines
 ##   thrust    a dead thruster gives no thrust and shows no plume, even commanded to full; the
 ##             thrusters of a severed part (or one with under 30% of its section) are dead
 ##   control   a severed part, or one with a joint shot or its lines cut on its way to the torso
@@ -218,6 +219,13 @@ func _check(log: Array[String]) -> void:
 			var local := (_skel.global_transform * FinalPoses.of(_skel).pose(part.bone)).affine_inverse() * vi.global_position
 			if local.y > part.cut_y + 0.3 and _model._followers.get(part, []).any(func(f: Node) -> bool: return f == vi or f.is_ancestor_of(vi)):
 				_fail("own", "%s shows past the cut on %s" % [(_vehicle as Node).get_path_to(vi), part.name], log)
+	# own: a piece knocked off carries hardware only (a sensor outline stands in for equipment
+	# on the suit; on a loose piece it would draw on the screen).
+	for d in get_nodes_in_group(DamageModel.DEBRIS_GROUP):
+		for m in (d as Node).find_children("*", "MeshInstance3D", true, false):
+			var dm := m as MeshInstance3D
+			if dm.visible and (dm.layers & (Layers.VEHICLE_EXT | Layers.WORLD)) == 0:
+				_fail("own", "debris %s carries a sensor-only mesh %s" % [d.name, dm.name], log)
 	# thrust
 	for c in _model.components:
 		if c.kind != DamageModel.Kind.THRUSTER:

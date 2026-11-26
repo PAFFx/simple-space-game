@@ -1832,6 +1832,9 @@ func _hole_cockpit(origin: Vector3, dir: Vector3, radius: float) -> void:
 	if cockpit == null:
 		return
 	var screen := cockpit.get_panoramic_screen()
+	# Wider than the screen's tear (its jagged edge reaches ~1.3× the hole): seen through it
+	# from the seat, the shell behind is open all round, not a molten rim across the view.
+	radius *= PanoramicScreen.OPENING * 1.3
 	for node in cockpit.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
 		if mi.mesh == null or not mi.is_visible_in_tree() or (screen != null and screen.is_ancestor_of(mi)):
@@ -2946,7 +2949,7 @@ func _take_followers(p: Part, body: RigidBody3D, cut_y := -INF) -> void:
 			var meshes: Array = [f] if f is MeshInstance3D else f.find_children("*", "MeshInstance3D", true, false)
 			for m in meshes:
 				var mi := m as MeshInstance3D
-				if mi.mesh == null or not mi.is_visible_in_tree() or _is_fx(mi):
+				if mi.mesh == null or not mi.is_visible_in_tree() or _is_fx(mi) or not _debris_worthy(mi):
 					continue
 				var copy: MeshInstance3D
 				if mi.skin != null:
@@ -2963,6 +2966,13 @@ func _take_followers(p: Part, body: RigidBody3D, cut_y := -INF) -> void:
 					copy.global_transform = mi.global_transform
 		f.visible = false
 		_hidden_nodes.append(f)
+
+
+## Whether `mi` is hardware a broken-off piece takes along: not a sensor outline (only the
+## sensor sees those; they stand in for equipment still on the suit) nor anything else drawn
+## for the sensor alone.
+static func _debris_worthy(mi: MeshInstance3D) -> bool:
+	return not mi.has_meta(&"sensor_outline") and (mi.layers & (Layers.VEHICLE_EXT | Layers.WORLD)) != 0
 
 
 ## A thruster's plume or glow (not hardware).
@@ -3190,7 +3200,7 @@ func _make_debris_body(group: Array[Part], equip: Array[MsEquipment], push: floa
 				continue
 			for child in arm.find_children("*", "MeshInstance3D", true, false):
 				var src := child as MeshInstance3D
-				if src.mesh == null or not src.is_visible_in_tree():
+				if src.mesh == null or not src.is_visible_in_tree() or not _debris_worthy(src):
 					continue
 				var copy := MeshInstance3D.new()
 				copy.mesh = src.mesh
@@ -3226,7 +3236,7 @@ func _make_debris_body(group: Array[Part], equip: Array[MsEquipment], push: floa
 	for eq in equip:
 		for node in eq.find_children("*", "MeshInstance3D", true, false):
 			var src := node as MeshInstance3D
-			if not src.is_visible_in_tree():
+			if src.mesh == null or not src.is_visible_in_tree() or not _debris_worthy(src):
 				continue
 			var mi := MeshInstance3D.new()
 			mi.mesh = src.mesh
