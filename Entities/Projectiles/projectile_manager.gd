@@ -368,7 +368,7 @@ func beam_splash(spec: ProjectileSpec, position: Vector3, velocity := Vector3.ZE
 ## Something going up: a sphere of light `size` m in radius swells out of a white flash,
 ## and smaller balls bubble out around it one after another.
 func explode(position: Vector3, velocity: Vector3, size: float, color := Color(1.0, 0.62, 0.3)) -> void:
-	flash(position, Color.WHITE.lerp(color, 0.2), size * 0.1, size * 0.5, 0.18, 18.0, 3.0, size * 10.0, velocity, 1.0)
+	world_sized(flash(position, Color.WHITE.lerp(color, 0.2), size * 0.1, size * 0.5, 0.18, 18.0, 3.0, size * 10.0, velocity, 1.0))
 	ball(position, velocity, size, 1.1, color, 0.0, 2.5, size * 6.0)
 	for i in 5:
 		var offset := Vector3(randfn(0.0, 1.0), randfn(0.0, 1.0), randfn(0.0, 1.0)).normalized() * size * randf_range(0.55, 0.95)
@@ -386,15 +386,16 @@ func ball(position: Vector3, velocity: Vector3, radius: float, duration: float, 
 	f.ball = true
 	f.delay = delay
 	f.sprite.set_instance_shader_parameter(&"flash_ball", 1.0)
-	f.sprite.set_instance_shader_parameter(&"flash_max_angle", 0.9)
+	world_sized(f)
 	_place_flash(f)
 	return f
 
 
-## `f` keeps its size in the world at any distance it is seen from (a big explosion): without
-## this a flash is capped to an angular size, so it would grow as the camera pulls back.
+## `f` keeps its size in the world at any distance it is seen from (an explosion): a flash is
+## otherwise capped to an angular size, so it would grow as the camera pulls back and stop
+## short of filling the view up close.
 static func world_sized(f: Flash) -> Flash:
-	f.sprite.set_instance_shader_parameter(&"flash_max_angle", 1.25)
+	f.sprite.set_instance_shader_parameter(&"flash_max_angle", 1000.0)
 	return f
 
 

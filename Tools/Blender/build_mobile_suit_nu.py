@@ -82,12 +82,22 @@ GROUPS = {
     "calf_guard.L": ids(58, 62),
     "foot.R": ids(2, 43, 46, 49, 50),
     "foot.L": ids(3, 54, 57, 60, 61),
-    "backpack": [i for i in range(70, 109) if i not in (70, 71, 74, 75, 76, 78, 79, 81, 82, 83,
-            86, 87, 88, 94, 95, 99, 100, 106, 107, 108)],
+    # The connectors on the pods: the fin funnel rack's (left) and the beam saber's (right).
+    # Their own meshes on the backpack bone (they don't swing with the pods); Godot's
+    # DamageModel hands them to their pods (MESH_PARTS).
+    "pod_mount.L": ids(77, 85),
+    "pod_mount.R": ids(80),
+    # The backpack itself is only the stub between the pods and the bazooka's handle.
+    "backpack": [i for i in range(70, 109) if i not in (70, 71, 74, 75, 76, 77, 78, 79, 80, 81, 82,
+            83, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104,
+            105, 106, 107, 108)],
     # Weapons
     "W:BeamRifle": ids((109, 122)),
     "W:Shield": ids((128, 134)),
-    "W:HyperBazooka": ids(86, 87, 88, 94, 95, 99, 100, 106, 107),
+    # Barrel and body, and its tail over the backpack: the magazine (96, side walls 89/90)
+    # with its four rounds (101, 103-105), the tail cap (91), the handle (92), the trigger (97),
+    # the top rail along the back (93) and the two blocks joining it to the magazine (98, 102).
+    "W:HyperBazooka": ids(86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107),
     "W:BeamSaber": ids(108),
 }
 # Six fin funnels, five parts each in index order (tip, blade, tip, hinge block, blade).
@@ -97,6 +107,9 @@ for n in range(6):
 # hides each as it is fired).
 for n in range(4):
     GROUPS[f"W:ShieldMissile{n + 1}"] = [135 + n]
+
+# Groups whose mesh rides another group's bone (no bone of their own).
+MESH_BONES = {"pod_mount.L": "backpack", "pod_mount.R": "backpack"}
 
 WEAPON_FILES = {
     "BeamRifle": "nu_beam_rifle.glb",
@@ -833,7 +846,7 @@ def main():
             kind = group[2:].rstrip("0123456789")
             weapons.setdefault(kind, []).append(obj)
         else:
-            bind(obj, arm, group)
+            bind(obj, arm, MESH_BONES.get(group, group))
             suit.append(obj)
     bm.free()
 

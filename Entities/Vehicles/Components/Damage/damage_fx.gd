@@ -548,15 +548,15 @@ func stump(anchor: Node3D, at: Vector3, axis: Vector3, radius: float, velocity: 
 func reactor_flash(at: Vector3, velocity: Vector3) -> void:
 	var pm := ProjectileManager.of(self)
 	ProjectileManager.world_sized(pm.flash(at, Color(1.0, 0.98, 0.95), 20.0, 260.0, 0.35, 30.0, 6.0, 4000.0, velocity, 1.0))
-	ProjectileManager.world_sized(pm.ball(at, velocity, 200.0, 3.2, Color(1.0, 0.85, 0.6), 0.0, 5.0, 3000.0))
-	ProjectileManager.world_sized(pm.ball(at, velocity, 120.0, 1.6, Color(1.0, 0.95, 0.9), 0.05, 3.0, 0.0))
+	pm.ball(at, velocity, 200.0, 3.2, Color(1.0, 0.85, 0.6), 0.0, 5.0, 3000.0)
+	pm.ball(at, velocity, 120.0, 1.6, Color(1.0, 0.95, 0.9), 0.05, 3.0, 0.0)
 	_spray(at, Vector3.ZERO, velocity, 400, 180.0, 160.0, 0.6, 3.0, 0.6, 260.0)
 
 
 ## A small reactor (a drone's core) going up: a ball of light `size` m in radius.
 func reactor_flash_small(at: Vector3, velocity: Vector3, size: float) -> void:
 	var pm := ProjectileManager.of(self)
-	pm.flash(at, Color(1.0, 0.97, 0.92), size * 0.1, size * 1.2, 0.25, 20.0, 4.0, size * 15.0, velocity, 1.0)
+	ProjectileManager.world_sized(pm.flash(at, Color(1.0, 0.97, 0.92), size * 0.1, size * 1.2, 0.25, 20.0, 4.0, size * 15.0, velocity, 1.0))
 	pm.ball(at, velocity, size, 2.0, Color(1.0, 0.82, 0.55), 0.0, 3.5, size * 10.0)
 	_spray(at, Vector3.ZERO, velocity, 200, 180.0, 60.0, 0.5, 2.2, 0.3, 160.0)
 

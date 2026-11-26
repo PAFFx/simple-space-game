@@ -81,9 +81,13 @@ void fragment() {
 	if (h.inside) {
 		// Bore wall or crater floor: re-melted metal, drawn where it really is. Melt runs
 		// streak it along the beam's axis; cooler slag crusts over in patches.
-		vec3 view_hit = VERTEX + normalize(VERTEX) * h.depth;
-		vec4 clip = PROJECTION_MATRIX * vec4(view_hit, 1.0);
-		depth = clip.z / clip.w;
+		// A cut face drawn on a back face lies in front of it (negative depth): it keeps the back
+		// face's own depth, so nothing that really covers the part (a skirt) is drawn under it.
+		if (h.depth > 0.0) {
+			vec3 view_hit = VERTEX + normalize(VERTEX) * h.depth;
+			vec4 clip = PROJECTION_MATRIX * vec4(view_hit, 1.0);
+			depth = clip.z / clip.w;
+		}
 		NORMAL = normalize((VIEW_MATRIX * MODEL_MATRIX * part_to_model * vec4(h.normal_part, 0.0)).xyz);
 		NORMAL = melt_bump(NORMAL, dpdx, dpdy, dhx, dhy);
 		// Melt and slag in patches, a little fine grain; deeper in the bore the wall is seen

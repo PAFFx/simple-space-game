@@ -75,8 +75,6 @@ var _zoom_camera: Camera3D
 var _zoom_wanted := 0.0
 var _zoom_point := Vector3.ZERO
 
-var _home := Vector3.INF   ## where it sat before `move_to`
-
 var _dbg_last_vfov: float = 0.0
 var _dbg_last_hfov: float = 0.0
 var _dbg_last_viewport: Vector2i = Vector2i.ZERO
@@ -105,7 +103,17 @@ func _process(_delta: float) -> void:
 ## Shows these layers (Layers.SENSOR_COMBAT, SENSOR_BODY_PARTS; 0 = none) as the suit's own
 ## overlay. A change breaks the old one up first, then resolves the new one in.
 func set_overlay(layers: int) -> void:
-	_overlay_target = layers
+	_overlay_wanted = layers
+	_overlay_target = 0 if body_shown else layers
+
+
+## The feed draws the suit's own body (it is damaged, DamageModel): its outlines would only
+## double it, so the overlay goes.
+var body_shown := false:
+	set(v):
+		body_shown = v
+		_overlay_target = 0 if v else _overlay_wanted
+var _overlay_wanted := 0
 
 
 func get_overlay_texture() -> ViewportTexture:
@@ -379,23 +387,6 @@ func _update_camera_fallback(viewer: Camera3D) -> void:
 
 
 # --- Sensor data accessors (called by PanoramicScreen each frame) ---
-
-## The picture is taken from `world` instead (the head's cameras are gone: a camera on the
-## chest), until `move_home`.
-func move_to(world: Vector3) -> void:
-	if _home == Vector3.INF:
-		_home = position
-	global_position = world
-	reset_physics_interpolation()
-
-
-func move_home() -> void:
-	if _home == Vector3.INF:
-		return
-	position = _home
-	_home = Vector3.INF
-	reset_physics_interpolation()
-
 
 func get_viewport_texture() -> ViewportTexture:
 	return _viewport.get_texture()

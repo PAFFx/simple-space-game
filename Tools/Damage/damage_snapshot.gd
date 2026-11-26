@@ -68,6 +68,9 @@ func _run(cases: PackedStringArray) -> void:
 			"fire": await _fire_case()
 			"breach": await _breach_case()
 			"chest_panel": await _chest_panel()
+			"overlap": await _overlap()
+			"overlap_clean": await _overlap_clean()
+			"pods": await _pods()
 			"insides": await _insides_case()
 			"backpack_breach": await _backpack_breach_case()
 			"hole": await _hole()
@@ -472,6 +475,93 @@ func _insides_case() -> void:
 		m.visible = true
 
 
+## Two beams into the same spot from different angles (the chest's lower side): how the two holes
+## join.
+func _overlap() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var basis := _suit.global_basis
+	var target := _suit.global_transform * Vector3(1.4, 14.8, -0.5)
+	for dir_body: Vector3 in [Vector3(0.0, 0.0, 1.0), Vector3(0.6, 0.25, 1.0)]:
+		var dir := (basis * dir_body).normalized()
+		await _fire(target - dir * 300.0, dir, "overlap_shot", [])
+		for i in 240:
+			_suit.linear_velocity = Vector3.ZERO
+			_suit.angular_velocity = Vector3.ZERO
+			await physics_frame
+	for k in 3:
+		var view: Vector3 = [Vector3(1, 1, -9), Vector3(6, 3, -7), Vector3(-3, -1, -8)][k]
+		_look(target + basis * view, target)
+		await _frames(3)
+		await _save("overlap_%d" % k)
+
+
+## The same two holes as `overlap`, put straight on the chest (no beam, no effects, cooled): how
+## two bores at different angles through one spot are drawn.
+func _overlap_clean() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var basis := _suit.global_basis
+	var target := _suit.global_transform * Vector3(1.3, 15.0, -0.5)
+	var chest := _model.find_part(&"chest")
+	for dir_body: Vector3 in [Vector3(0.0, 0.0, 1.0), Vector3(0.6, 0.25, 1.0)]:
+		var dir := (basis * dir_body).normalized()
+		var entry := target - dir * 3.0
+		var h := _model.holes.add_hole(chest.mesh, _skel, chest.bone, entry, dir, 0.78, 6.0)
+		h.s_drill = h.s_out
+		h.shell = _model._skin_shells(chest, entry, dir, 6.0)
+	_model.holes.now += 60.0
+	for k in 4:
+		var view: Vector3 = [Vector3(0.5, 0.5, -6), Vector3(4, 1.5, -5), Vector3(-2.5, -1, -5.5), Vector3(1, 0.2, 6)][k]
+		_look(target + basis * view, target)
+		await _frames(3)
+		await _save("overlap_clean_%d" % k)
+
+
+## The back: whole, with both pods shot off (their connectors go with them), then without the
+## bazooka (its tail, magazine and handle go with it: the backpack is only the stub).
+func _pods() -> void:
+	_model.repair()
+	for i in 20:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	var views := [Vector3(-6, -7, 12), Vector3(5, 6, 12), Vector3(14, 1, 3)]
+	var look_at_back := func(view: Vector3) -> void:
+		var body := _suit.global_transform
+		var at := body * Vector3(0.0, 18.5, 3.0)
+		_look(at + body.basis * view, at)
+	for k in 3:
+		look_at_back.call(views[k])
+		await _frames(3)
+		await _save("pods_%d_whole" % k)
+	_model.sever(_model.find_part(&"main_pod.L"), false)
+	_model.sever(_model.find_part(&"main_pod.R"), false)
+	for i in 90:
+		_suit.linear_velocity = Vector3.ZERO
+		_suit.angular_velocity = Vector3.ZERO
+		await physics_frame
+	for k in 3:
+		look_at_back.call(views[k])
+		await _frames(3)
+		await _save("pods_%d_gone" % k)
+	var lo := _vehicle.find_component(MsLoadout) as MsLoadout
+	for eq in lo.equipment:
+		if eq.name == &"HyperBazooka":
+			lo.set_equipped(eq, false)
+	await _frames(3)
+	for k in 3:
+		look_at_back.call(views[k])
+		await _frames(3)
+		await _save("pods_%d_no_bazooka" % k)
+
+
 ## Panels torn off the chest's side and back: the frame and ducts inside show.
 func _chest_panel() -> void:
 	_model.repair()
@@ -550,11 +640,11 @@ func _screen() -> void:
 	look.call(-60.0, -30.0)
 	await _frames(10)
 	_save("screen_3_body_left")
-	# The head's cameras gone: the picture comes from the left chest camera.
+	# The head's cameras gone: only what the body cameras see.
 	_kill(&"main camera")
 	look.call(0.0, -10.0)
 	await _frames(10)
-	_save("screen_4_chest_camera")
+	_save("screen_4_no_eyes")
 	for n in [&"rear head camera", &"camera 1", &"skirt_rear.R camera", &"skirt_rear.L camera", &"camera 5"]:
 		_kill(n)
 	look.call(-120.0, 25.0)

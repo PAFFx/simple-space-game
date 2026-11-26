@@ -20,7 +20,8 @@ uniform vec4 hole_b[HOLE_MAX];   // axis.xyz, s_in
 uniform vec4 hole_c[HOLE_MAX];   // s_drill, s_out, time it formed, peak temperature (K)
 // Where the part's real skin is along the axis (its hull is convex, its skin is not): the beam
 // enters it at x and leaves it at y. The bore is drawn solid between (the parts are closed shells
-// with machinery inside); past y there is no part: a through hole is open there.
+// with machinery inside); past y there is no part: a through hole is open there. Between z and w
+// there is a cavity (the cockpit in the chest): open too.
 uniform vec4 hole_d[HOLE_MAX];
 uniform mat4 part_to_model = mat4(1.0);
 uniform mat4 model_to_part = mat4(1.0);
@@ -330,7 +331,7 @@ HoleHit hole_fragment(vec3 p, vec3 cam, bool front_facing) {
 			// hull deeper than its skin) is closed by a floor of re-melted metal at the skin.
 			bool l_thru = hole_c[last].x >= hole_c[last].y - 1e-3;
 			float l_hs = dot(p + rd * t_hit - lo, la);
-			bool past = l_hs > hole_d[last].y;
+			bool past = l_hs > hole_d[last].y || (l_thru && l_hs > hole_d[last].z && l_hs < hole_d[last].w);
 			if (l_thru && (kind > 1.5 || past)) {
 				h.discard_it = true;
 				return h;

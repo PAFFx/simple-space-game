@@ -404,3 +404,32 @@ part that carries it while stowed (`MsEquipment.damage_part`): the fin funnels' 
 left main pod and goes with it; the beam saber's on the right main pod. The fuzz checks that
 no live thruster sits inside a severed part.
 
+
+## L. Play-test (2026-11-28)
+
+- [x] **The cockpit stays closed from outside.** A beam through the chest and cockpit was open
+  from the seat, but outside the bore was drawn solid where it crossed the cockpit. *Fix:* a
+  hole knows where its line crosses the capsule (`Hole.cavity`, `COCKPIT_CAVITY` 1.4 m): no metal
+  there, a through hole is open across it.
+- [x] **Torn panel openings looked into the empty shell** (hollow at some angles, burnt at
+  others). The opening is now a crater with a floor of torn metal, not through.
+- [x] **Damage showed through solid parts in front** (a cut joint seen through an intact skirt).
+  *Cause:* a cut face drawn on a back face wrote a depth in front of it, ahead of what really
+  covered it. It keeps the back face's depth now.
+- [x] **No switch to the chest camera** when the head's cameras are gone: only what the body
+  cameras cover, black elsewhere.
+- [x] **No outlines over the drawn body.** Once the suit is damaged the arms' overlay is off
+  (`SensorHead.body_shown`), and a drawn thing's outlines go with it (they had been put on the
+  drawn layer with their meshes).
+- [x] **Explosions keep their world size at any distance and zoom** (every ball and explosion
+  flash: no angular cap; up close it fills the view).
+- [x] **The backpack is only the stub between the pods.** In the source model, the bazooka's
+  tail (magazine with its four rounds, tail cap, handle, trigger, top rail and the two blocks
+  joining the rail to the magazine) had been counted as backpack, and was left 1 m off the
+  bazooka when the bazooka was moved back for the widened pods: now part of the bazooka (gone
+  with it, its rounds go off with it). The fin funnel connector and the beam saber connector are
+  their own meshes (`PodMountL`/`R`, on the backpack bone so they don't swing) that go with
+  their pods (`MESH_PARTS`; the fuzz's `own` rule checks them).
+- [ ] **Two holes into one spot from different angles** (user unsure it looks wrong): a render
+  of two bores through the chest side (snapshot `overlap_clean`) shows them joined into one
+  rough opening, nothing odd seen yet. Needs a screenshot of the case if it still looks wrong.

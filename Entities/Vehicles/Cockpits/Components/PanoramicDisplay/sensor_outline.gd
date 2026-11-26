@@ -175,6 +175,7 @@ func _add_instance(source: MeshInstance3D, instance_name: String, mesh: Mesh, ma
 	mi.layers = sensor_layer
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.extra_cull_margin = 1.0
+	mi.set_meta(&"sensor_outline", true)
 	source.add_child(mi)
 	if source.skin != null:
 		# Deforms with the same skeleton as its source (the suit's arms).

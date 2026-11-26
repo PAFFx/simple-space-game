@@ -202,10 +202,14 @@ func _check(log: Array[String]) -> void:
 			continue
 		if not (vi.layers & (Layers.VEHICLE_EXT | Layers.WORLD)):
 			continue
-		var b := _bone_of(vi)
-		if b < 0:
-			continue
-		var part := _model._part_of_bone(b)
+		var part: DamageModel.Part = null
+		if vi is MeshInstance3D and (vi as MeshInstance3D).skin != null and vi.get_parent() == _skel:
+			part = _model.mesh_owner(vi as MeshInstance3D)
+		else:
+			var b := _bone_of(vi)
+			if b < 0:
+				continue
+			part = _model._part_of_bone(b)
 		if part == null:
 			continue
 		if part.severed and part.mesh != vi:

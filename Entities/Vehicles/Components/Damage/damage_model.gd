@@ -53,6 +53,11 @@ const BACKPACK_YIELD := 3.0e9
 ## A part whose Minovsky lines ruptured has them cut through this often (nothing beyond it
 ## gets power or pressure).
 const LINES_CUT_CHANCE := 0.5
+## The cockpit capsule's room in the chest (radius around its centre, m): no metal there.
+const COCKPIT_CAVITY := 1.4
+## Meshes that ride one bone but belong to another part: the connectors on the backpack's pods
+## (the fin funnel rack's, the beam saber's) go when their pod goes.
+const MESH_PARTS := {&"PodMountL": &"main_pod.L", &"PodMountR": &"main_pod.R"}
 ## Debris from any suit (DamageModel._add_debris): a reactor blast throws it.
 const DEBRIS_GROUP := &"damage_debris"
 ## How far a reactor blast throws loose debris, m.
@@ -458,6 +463,22 @@ static func _inner_material(color: Color, metallic: float, roughness: float) -> 
 	m.metallic = metallic
 	m.roughness = roughness
 	return m
+
+
+## Where the line from `entry` along `dir` crosses the cockpit's capsule, if it sits in `p`:
+## (in, out) along the line; else an empty span. The capsule is a cavity in the chest.
+func _cavity(p: Part, entry: Vector3, dir: Vector3) -> Vector2:
+	for c in components:
+		if c.kind != Kind.COCKPIT or c.part != p:
+			continue
+		var centre := component_position(c)
+		var along := (centre - entry).dot(dir)
+		var miss := (entry + dir * along).distance_to(centre)
+		if miss >= COCKPIT_CAVITY:
+			break
+		var half := sqrt(COCKPIT_CAVITY * COCKPIT_CAVITY - miss * miss)
+		return Vector2(along - half, along + half)
+	return Vector2(1e6, -1e6)
 
 
 ## A beam into `p` from `entry` along `dir`: its insides on the line are holed with it (their own
@@ -943,12 +964,16 @@ func get_camera_cones() -> Array:
 
 
 ## `node`'s meshes (it too) show on the panoramic screen (no camera sees past it any more), or
-## not. Plumes and glows never do.
+## not. Plumes and glows never do; its sensor outlines go while it is drawn.
 func set_opaque(node: Node, opaque: bool) -> void:
 	var list := node.find_children("*", "VisualInstance3D", true, false)
 	if node is VisualInstance3D:
 		list.append(node)
 	for child in list:
+		if child.has_meta(&"sensor_outline"):
+			# An outline stands in for the thing on the screen: drawn, it goes.
+			(child as VisualInstance3D).visible = not opaque
+			continue
 		if _is_fx(child):
 			continue
 		var vi := child as VisualInstance3D
@@ -977,7 +1002,8 @@ func _on_damaged(part_name: StringName) -> void:
 	var hit := find_part(part_name) if part_name != &"" else null
 	if hit != null and hit.equipment != null:
 		set_opaque(hit.equipment, true)
-	_update_feed_origin()
+	if _sensor_head() != null:
+		_sensor.body_shown = true
 
 
 ## Equipment the feed keeps see-through until it is hit: it would block the view.
@@ -992,23 +1018,6 @@ func _in_head(bone: int) -> bool:
 			return true
 		bone = _skel.get_bone_parent(bone)
 	return false
-
-
-## The feed's viewpoint: the head's cameras; with them gone the left chest camera; with that
-## gone too it stays at the head's place (only what the sub cameras still see has a picture).
-func _update_feed_origin() -> void:
-	var head := _sensor_head()
-	if head == null:
-		return
-	var eyes := _find_component(&"main camera")
-	if eyes == null or (eyes.alive and not (eyes.part != null and eyes.part.severed)):
-		head.move_home()
-		return
-	var chest := _find_component(&"camera 0")
-	if chest != null and chest.alive and chest.node is Node3D:
-		head.move_to((chest.node as Node3D).global_position)
-	else:
-		head.move_home()
 
 
 func _sensor_head() -> SensorHead:
@@ -1362,6 +1371,7 @@ func _advance(d: Drill, t: float) -> void:
 			_hole_inner(p, entry, xf.basis * d.dir_body, d.radius * HoleSet.BEAM_GROW, chord)
 			_knock_stubs(p, entry, xf.basis * d.dir_body, chord, d.radius)
 			(seg[3] as HoleSet.Hole).shell = _skin_shells(p, entry, xf.basis * d.dir_body, chord)
+			(seg[3] as HoleSet.Hole).cavity = _cavity(p, entry, xf.basis * d.dir_body)
 			part_damaged.emit(p.name)
 			var fx := DamageFx.of(self)
 			if fx != null:
@@ -1907,7 +1917,9 @@ func _blow_panel_body(p: Part, inside: Vector3, out: Vector3, radius: float, spe
 	var skin: float = found[0]
 	var thickness := 0.35
 	var h := holes.add_hole(p.mesh, _skel, p.bone, inside + out * (skin + thickness), -out, radius, thickness * 2.0, 1150.0)
-	h.s_drill = h.s_out
+	# Not through: the opening ends in a floor of torn metal (what lies under the plate), never
+	# a view into the shell.
+	h.s_drill = h.s_out * 0.97
 	h.shell = _skin_shells(p, inside + out * (skin + thickness), -out, thickness * 2.0)
 	for k in range(1, found.size()):
 		_launch_plate(found[k], out, speed)
@@ -2888,10 +2900,17 @@ func _build_followers() -> void:
 		var mi := node as MeshInstance3D
 		if mi == null or part_meshes.has(mi) or mi.skin == null or mi.mesh == null:
 			continue
-		var b := _dominant_bone(mi)
-		var p := _part_of_bone(b)
+		var p := mesh_owner(mi)
 		if p != null:
 			_followers[p] = _followers.get(p, []) + [mi]
+
+
+## The part a non-part mesh of the suit goes with: MESH_PARTS by name, else the part of the bone
+## it mostly rides.
+func mesh_owner(mi: MeshInstance3D) -> Part:
+	if MESH_PARTS.has(mi.name):
+		return find_part(MESH_PARTS[mi.name])
+	return _part_of_bone(_dominant_bone(mi))
 
 
 func _dominant_bone(mi: MeshInstance3D) -> int:
@@ -3660,7 +3679,7 @@ func repair() -> void:
 		fc.pilot_lost = false
 	_capability_changed()
 	if _sensor_head() != null:
-		_sensor.move_home()
+		_sensor.body_shown = false
 	_breaching = null
 	for p in parts:
 		p.lines_cut = false
