@@ -313,6 +313,24 @@ func _cockpit_view() -> void:
 	_look(target - dir * 9.0 + basis.y * 1.0, target)
 	await _frames(5)
 	_save("cockpit_6_outside")
+	# Into the hole at the pilot.
+	var hole_at := target - dir * 2.6
+	_look(hole_at + (hole_at - eye).normalized() * 5.0 + basis.y * 0.5, eye)
+	await _frames(5)
+	_save("cockpit_7_pilot_through_hole")
+	for i in 600:
+		await physics_frame
+	# Effects hidden: just what is in the hole.
+	for n in get_nodes_in_group(DamageFx.ATTACHED_GROUP):
+		(n as Node3D).visible = false
+	var dfx := DamageFx.of(_suit)
+	if dfx != null:
+		dfx.visible = false
+	_look(hole_at + (hole_at - eye).normalized() * 5.0 + basis.y * 0.5, eye)
+	await _frames(5)
+	_save("cockpit_8_pilot_after_fire")
+	if dfx != null:
+		dfx.visible = true
 	print("pilot alive: ", not _model.pilot_dead)
 	_cam.make_current()
 	_view = _cam

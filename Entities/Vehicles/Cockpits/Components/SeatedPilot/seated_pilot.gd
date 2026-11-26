@@ -61,6 +61,7 @@ var _pose: SeatedPilotPose
 var _body: RigidBody3D
 var _hatch: CockpitHatch
 var _camera: PilotCamera
+var _gimbal: CockpitGimbal
 var _prev_velocity := Vector3.ZERO
 var _lean_velocity := Vector2.ZERO
 var _outside_visible := false
@@ -93,12 +94,15 @@ func _ready() -> void:
 		_hatch = vehicle.find_component(CockpitHatch) as CockpitHatch
 		if vehicle.get_cockpit() != null:
 			_camera = vehicle.get_cockpit().get_player_camera() as PilotCamera
+			var gimbals := vehicle.get_cockpit().find_children("*", "CockpitGimbal", true, false)
+			_gimbal = gimbals[0] as CockpitGimbal if not gimbals.is_empty() else null
 	if _body != null:
 		_prev_velocity = _body.linear_velocity
 
 
 func _process(_delta: float) -> void:
-	var outside := _hatch != null and _hatch.is_unsealed()
+	# Breached by a beam (the gimbal jammed), the pilot is seen through the holes too.
+	var outside := (_hatch != null and _hatch.is_unsealed()) or (_gimbal != null and _gimbal.jammed)
 	let_go = smoothstep(0.0, let_go_by, _hatch.amount) if _hatch != null else 0.0
 	if outside != _outside_visible:
 		_outside_visible = outside
@@ -145,7 +149,7 @@ func _collect_meshes() -> void:
 
 
 ## Drawn for the pilot's eye (without the head) always, for outside cameras only while
-## the hatch is unsealed, like the cockpit around it.
+## the hatch is unsealed or the cockpit is breached, like the cockpit around it.
 func _apply_layers() -> void:
 	var outside := Layers.VEHICLE_EXT if _outside_visible else 0
 	for mesh in _meshes:
